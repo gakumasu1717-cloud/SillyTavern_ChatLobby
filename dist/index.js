@@ -89,29 +89,37 @@
             }
             
             const avatars = await response.json();
-            console.log('[Chat Lobby] Persona avatars loaded:', avatars);
+            console.log('[Chat Lobby] Raw avatars from API:', avatars);
             
             if (!Array.isArray(avatars)) {
                 return [];
             }
             
-            // power_user.personas에서 이름 매핑
-            const powerUser = window.power_user || {};
-            const personaNames = powerUser.personas || {};
+            // power_user를 import해서 페르소나 이름 가져오기
+            let personaNames = {};
+            let sortOrder = 'asc';
+            try {
+                const powerUserModule = await import('../../../../power-user.js');
+                personaNames = powerUserModule.power_user?.personas || {};
+                sortOrder = powerUserModule.power_user?.persona_sort_order || 'asc';
+                console.log('[Chat Lobby] power_user.personas:', personaNames);
+            } catch (e) {
+                console.log('[Chat Lobby] Could not import power_user:', e);
+            }
             
-            const personas = avatars.map(avatarId => ({
-                key: avatarId,
-                name: personaNames[avatarId] || avatarId.replace('.png', '').replace('.jpg', '').replace('.webp', '')
-            }));
+            const personas = avatars.map(avatarId => {
+                const name = personaNames[avatarId] || avatarId.replace('.png', '').replace('.jpg', '').replace('.webp', '');
+                return { key: avatarId, name: name };
+            });
             
             // SillyTavern 설정과 동일하게 이름순 정렬
-            const sortOrder = powerUser.persona_sort_order || 'asc';
             personas.sort((a, b) => {
                 return sortOrder === 'asc' 
                     ? a.name.localeCompare(b.name) 
                     : b.name.localeCompare(a.name);
             });
             
+            console.log('[Chat Lobby] Final sorted personas:', personas);
             return personas;
         } catch (error) {
             console.error('[Chat Lobby] Failed to load personas:', error);
