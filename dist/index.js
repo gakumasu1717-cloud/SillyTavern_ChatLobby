@@ -162,46 +162,42 @@
             
             console.log('[Chat Lobby] Changing persona to:', personaKey);
             
-            // 방법 1: SillyTavern의 setUserAvatar 함수 직접 호출
+            // 방법 1: SillyTavern personas 모듈 직접 import
+            try {
+                const personasModule = await import('../../../personas.js');
+                if (typeof personasModule.setUserAvatar === 'function') {
+                    await personasModule.setUserAvatar(personaKey);
+                    console.log('[Chat Lobby] Persona changed via import');
+                    return;
+                }
+            } catch (e) {
+                console.log('[Chat Lobby] Could not import personas module:', e);
+            }
+            
+            // 방법 2: jQuery 이벤트 트리거 (SillyTavern이 사용하는 방식)
+            const $avatarBlock = $(`#user_avatar_block .avatar-container[data-avatar-id="${personaKey}"]`);
+            if ($avatarBlock.length > 0) {
+                $avatarBlock.trigger('click');
+                console.log('[Chat Lobby] Persona changed via jQuery trigger');
+                return;
+            }
+            
+            // 방법 3: 네이티브 클릭 이벤트
+            const avatarElement = document.querySelector(`#user_avatar_block .avatar-container[data-avatar-id="${personaKey}"]`);
+            if (avatarElement) {
+                avatarElement.click();
+                console.log('[Chat Lobby] Persona changed via native click');
+                return;
+            }
+            
+            // 방법 4: SillyTavern context
             if (typeof window.SillyTavern?.getContext?.()?.setUserAvatar === 'function') {
                 await window.SillyTavern.getContext().setUserAvatar(personaKey);
                 console.log('[Chat Lobby] Persona changed via context');
                 return;
             }
             
-            // 방법 2: DOM에서 아바타 블록 찾아서 클릭
-            const avatarBlock = document.querySelector(`#user_avatar_block .avatar-container[imgfile="${personaKey}"]`);
-            if (avatarBlock) {
-                avatarBlock.click();
-                console.log('[Chat Lobby] Persona changed via avatar-container click');
-                return;
-            }
-            
-            // 방법 3: data 속성으로 찾기
-            const avatarByData = document.querySelector(`[data-avatar-id="${personaKey}"]`);
-            if (avatarByData) {
-                avatarByData.click();
-                console.log('[Chat Lobby] Persona changed via data-avatar-id click');
-                return;
-            }
-            
-            // 방법 4: API 직접 호출
-            const response = await fetch('/api/personas/select', {
-                method: 'POST',
-                headers: getRequestHeaders(),
-                body: JSON.stringify({ avatar: personaKey })
-            });
-            
-            if (response.ok) {
-                console.log('[Chat Lobby] Persona changed via API');
-                // 페이지 새로고침 없이 UI 업데이트
-                if (window.SillyTavern?.getContext) {
-                    const ctx = window.SillyTavern.getContext();
-                    ctx.user_avatar = personaKey;
-                }
-            } else {
-                console.warn('[Chat Lobby] API call failed:', response.status);
-            }
+            console.warn('[Chat Lobby] All persona change methods failed for:', personaKey);
             
         } catch (error) {
             console.error('[Chat Lobby] Failed to change persona:', error);
