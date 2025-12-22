@@ -402,14 +402,101 @@
     border-color: var(--SmartThemeQuoteColor, #6a9fb5);
 }
 
-/* 상단바 로비 버튼 */
+/* 상단바 로비 버튼 - 사용 안함 */
 #chat-lobby-btn {
-    cursor: pointer;
-    transition: opacity 0.2s;
-    position: relative;
-    z-index: 99999;
+    display: none !important;
 }
 
-#chat-lobby-btn:hover {
-    opacity: 0.8;
+/* 채팅 패널 닫기 버튼 */
+#chat-lobby-chats-close {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeBodyColor, #fff);
+    font-size: 1.3em;
+    cursor: pointer;
+    padding: 5px 10px;
+    margin-right: 5px;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+    /* FAB 버튼 위치 조정 - 메뉴 안 가리게 */
+    #chat-lobby-fab {
+        bottom: 20px;
+        right: 15px;
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+    
+    /* 헤더 작게 */
+    #chat-lobby-header {
+        padding: 10px 15px;
+    }
+    
+    #chat-lobby-header h2 {
+        font-size: 1.2em;
+    }
+    
+    /* 페르소나 바 */
+    #chat-lobby-persona-bar {
+        padding: 8px 10px;
+        gap: 10px;
+    }
+    
+    .persona-avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    /* 검색창 */
+    #chat-lobby-search {
+        padding: 8px 15px;
+    }
+    
+    /* 캐릭터 그리드 - 모바일 최적화 */
+    #chat-lobby-characters {
+        padding: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+    }
+    
+    .lobby-char-card {
+        padding: 8px;
+    }
+    
+    .lobby-char-avatar {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .lobby-char-name {
+        font-size: 0.85em;
+        margin-top: 5px;
+    }
+    
+    /* 채팅 패널 - 모바일에서 전체화면 */
+    #chat-lobby-chats {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 2147483647;
+        border-left: none;
+    }
+    
+    #chat-lobby-chats-close {
+        display: block;
+    }
+    
+    #chat-lobby-chats-header {
+        padding: 10px 15px;
+    }
+    
+    #chat-lobby-new-chat {
+        padding: 6px 10px;
+        font-size: 0.8em;
+    }
 }

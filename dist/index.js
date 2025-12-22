@@ -52,6 +52,7 @@
                     </div>
                     <div id="chat-lobby-chats">
                         <div id="chat-lobby-chats-header">
+                            <button id="chat-lobby-chats-close" title="닫기">←</button>
                             <img src="" alt="avatar" id="chat-panel-avatar">
                             <div class="char-info">
                                 <div class="char-name" id="chat-panel-name">캐릭터 선택</div>
@@ -606,32 +607,7 @@
         return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
     }
 
-    // 로비 버튼 추가 (상단바)
-    function addLobbyButton() {
-        const existingBtn = document.getElementById('chat-lobby-btn');
-        if (existingBtn) existingBtn.remove();
 
-        const topBar = document.getElementById('top-bar');
-        if (topBar) {
-            const btn = document.createElement('div');
-            btn.id = 'chat-lobby-btn';
-            btn.className = 'fa-solid fa-comments';
-            btn.title = 'Chat Lobby';
-            btn.style.cssText = 'font-size: 1.2em; padding: 5px 10px; cursor: pointer; z-index: 99999;';
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openLobby();
-            });
-
-            const firstChild = topBar.firstChild;
-            if (firstChild) {
-                topBar.insertBefore(btn, firstChild);
-            } else {
-                topBar.appendChild(btn);
-            }
-            console.log('[Chat Lobby] Button added');
-        }
-    }
 
     // 초기화
     function init() {
@@ -649,6 +625,14 @@
         
         // FAB 버튼 클릭
         document.getElementById('chat-lobby-fab').addEventListener('click', openLobby);
+        
+        // 채팅 패널 닫기 버튼 (모바일용)
+        document.getElementById('chat-lobby-chats-close').addEventListener('click', () => {
+            const chatsPanel = document.getElementById('chat-lobby-chats');
+            if (chatsPanel) {
+                chatsPanel.classList.remove('visible');
+            }
+        });
 
         // 검색 기능
         const searchInput = document.getElementById('chat-lobby-search-input');
@@ -670,9 +654,6 @@
             }
         });
 
-        // 상단바 로비 버튼 추가
-        addLobbyButton();
-
         console.log('[Chat Lobby] Extension initialized');
 
         // 자동 실행
@@ -687,16 +668,5 @@
     } else {
         setTimeout(init, 1000);
     }
-
-    // 버튼 재추가 감시
-    const observer = new MutationObserver(() => {
-        const topBar = document.getElementById('top-bar');
-        const lobbyBtn = document.getElementById('chat-lobby-btn');
-        if (topBar && !lobbyBtn) {
-            addLobbyButton();
-        }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
 
 })();
