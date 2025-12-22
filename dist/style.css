@@ -140,8 +140,8 @@
 }
 
 .persona-avatar {
-    width: 60px;
-    height: 60px;
+    width: 65px;
+    height: 65px;
     border-radius: 50%;
     object-fit: cover;
     background: var(--SmartThemeBorderColor, #333);
@@ -316,6 +316,33 @@
     margin-bottom: 10px;
     cursor: pointer;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.lobby-chat-item .chat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeQuoteColor, #888);
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    opacity: 0.5;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.chat-delete-btn:hover {
+    opacity: 1;
+    background: rgba(255, 80, 80, 0.2);
+    color: #ff5050;
 }
 
 .lobby-chat-item:hover {

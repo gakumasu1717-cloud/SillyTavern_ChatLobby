@@ -39,7 +39,6 @@
                     <button id="chat-lobby-close">✕</button>
                 </div>
                 <div id="chat-lobby-persona-bar">
-                    <span class="persona-label">페르소나</span>
                     <div id="chat-lobby-persona-list">
                         <div class="lobby-loading">로딩 중...</div>
                     </div>
@@ -323,12 +322,15 @@
 
         return `
         <div class="lobby-chat-item" data-file-name="${escapeHtml(fileName)}" data-char-avatar="${safeAvatar}" data-chat-index="${chatIndex}">
-            <div class="chat-name">${escapeHtml(displayName)}</div>
-            <div class="chat-preview">${escapeHtml(truncateText(preview, 100))}</div>
-            <div class="chat-meta">
-                ${messageCount > 0 ? `<span>💬 ${messageCount}개</span>` : '<span></span>'}
-                <span>${lastDate} ${fileSize}</span>
+            <div class="chat-content">
+                <div class="chat-name">${escapeHtml(displayName)}</div>
+                <div class="chat-preview">${escapeHtml(truncateText(preview, 100))}</div>
+                <div class="chat-meta">
+                    ${messageCount > 0 ? `<span>💬 ${messageCount}개</span>` : '<span></span>'}
+                    <span>${lastDate} ${fileSize}</span>
+                </div>
             </div>
+            <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
         </div>
         `;
     }
@@ -488,7 +490,14 @@
 
         // 채팅 아이템 클릭 이벤트
         chatsList.querySelectorAll('.lobby-chat-item').forEach(item => {
-            item.addEventListener('click', () => openChat(item));
+            // 채팅 열기 (컨텐츠 클릭)
+            item.querySelector('.chat-content').addEventListener('click', () => openChat(item));
+            
+            // 삭제 버튼
+            item.querySelector('.chat-delete-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteChat(item);
+            });
         });
     }
 
@@ -526,6 +535,63 @@
 
         } catch (error) {
             console.error('[Chat Lobby] Failed to open chat:', error);
+        }
+    }
+
+    // 채팅 삭제
+    async function deleteChat(chatElement) {
+        const fileName = chatElement.dataset.fileName;
+        const charAvatar = chatElement.dataset.charAvatar;
+        
+        if (!fileName || !charAvatar) {
+            console.error('[Chat Lobby] Missing chat data for delete');
+            return;
+        }
+
+        // 확인창
+        if (!confirm(`"${fileName.replace('.jsonl', '')}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/chats/delete', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({
+                    chatfile: fileName,
+                    avatar_url: charAvatar
+                }),
+            });
+
+            if (response.ok) {
+                // 삭제 성공 - UI에서 제거
+                chatElement.remove();
+                
+                // 채팅 카운트 업데이트
+                const chatsList = document.getElementById('chat-lobby-chats-list');
+                const remainingChats = chatsList.querySelectorAll('.lobby-chat-item').length;
+                document.getElementById('chat-panel-count').textContent = `${remainingChats}개 채팅`;
+                
+                // 채팅이 없으면 빈 상태 표시
+                if (remainingChats === 0) {
+                    document.getElementById('chat-panel-count').textContent = '채팅 없음';
+                    chatsList.innerHTML = `
+                        <div class="lobby-empty-state">
+                            <i>💬</i>
+                            <div>채팅 기록이 없습니다</div>
+                            <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
+                        </div>
+                    `;
+                }
+                
+                console.log('[Chat Lobby] Chat deleted:', fileName);
+            } else {
+                console.error('[Chat Lobby] Failed to delete chat:', response.status);
+                alert('채팅 삭제에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('[Chat Lobby] Error deleting chat:', error);
+            alert('채팅 삭제 중 오류가 발생했습니다.');
         }
     }
 
@@ -574,6 +640,11 @@
 
         if (!charIndex || !charAvatar) {
             console.error('[Chat Lobby] No character selected');
+            return;
+        }
+
+        // 확인창
+        if (!confirm('새 채팅을 시작하시겠습니까?')) {
             return;
         }
 
