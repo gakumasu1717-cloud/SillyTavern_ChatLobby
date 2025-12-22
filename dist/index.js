@@ -452,6 +452,8 @@
 
         if (!chats || (Array.isArray(chats) && chats.length === 0) || (typeof chats === 'object' && Object.keys(chats).length === 0)) {
             document.getElementById('chat-panel-count').textContent = '채팅 없음';
+            // 채팅이 없음을 표시
+            document.getElementById('chat-lobby-new-chat').dataset.hasChats = 'false';
             chatsList.innerHTML = `
                 <div class="lobby-empty-state">
                     <i>💬</i>
@@ -461,6 +463,9 @@
             `;
             return;
         }
+        
+        // 채팅이 있음을 표시
+        document.getElementById('chat-lobby-new-chat').dataset.hasChats = 'true';
 
         // 채팅 목록을 배열로 변환
         let chatArray = [];
@@ -700,6 +705,7 @@
         const btn = document.getElementById('chat-lobby-new-chat');
         const charIndex = btn.dataset.charIndex;
         const charAvatar = btn.dataset.charAvatar;
+        const hasChats = btn.dataset.hasChats === 'true';
 
         if (!charIndex || !charAvatar) {
             console.error('[Chat Lobby] No character selected');
@@ -709,13 +715,16 @@
         closeLobby();
         await selectCharacterByIndex(parseInt(charIndex));
 
-        // SillyTavern의 새 채팅 버튼 클릭 (자체 확인창 있음)
-        setTimeout(() => {
-            const newChatBtn = document.getElementById('option_start_new_chat');
-            if (newChatBtn) {
-                newChatBtn.click();
-            }
-        }, 300);
+        // 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
+        // (채팅이 없으면 SillyTavern이 자동으로 새 채팅 시작)
+        if (hasChats) {
+            setTimeout(() => {
+                const newChatBtn = document.getElementById('option_start_new_chat');
+                if (newChatBtn) {
+                    newChatBtn.click();
+                }
+            }, 300);
+        }
     }
 
     // 로비 열기
