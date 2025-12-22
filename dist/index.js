@@ -342,10 +342,9 @@
         
         const safeAvatar = (characterAvatar || '').replace(/"/g, '&quot;');
         
-        // 메타 정보 구성
+        // 메타 정보 구성 (메시지 수, 날짜만)
         const metaItems = [];
         if (messageCount > 0) metaItems.push(`💬 ${messageCount}개`);
-        if (fileSize) metaItems.push(`📄 ${fileSize}`);
         if (lastDate) metaItems.push(`📅 ${lastDate}`);
 
         return `
