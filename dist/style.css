@@ -37,12 +37,12 @@
     background: var(--SmartThemeQuoteColor, #6a9fb5);
     color: #fff;
     font-size: 24px;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    z-index: 2147483647;
+    z-index: 999999;
     pointer-events: auto;
     transition: transform 0.2s, box-shadow 0.2s;
 }

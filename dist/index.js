@@ -289,19 +289,27 @@
     }
 
     // 캐릭터 그리드 업데이트
-    async function updateCharacterGrid(searchTerm = '') {
+    async function updateCharacterGrid(searchTerm = '', retryCount = 0) {
         const container = document.getElementById('chat-lobby-characters');
         if (!container) return;
 
         container.innerHTML = '<div class="lobby-loading">캐릭터 로딩 중...</div>';
 
-        const characters = await loadCharacters();
+        let characters = await loadCharacters();
+        
+        // 캐릭터가 없고 재시도 횟수가 3번 미만이면 재시도
+        if (characters.length === 0 && retryCount < 3) {
+            console.log('[Chat Lobby] No characters found, retrying...', retryCount + 1);
+            setTimeout(() => updateCharacterGrid(searchTerm, retryCount + 1), 500);
+            return;
+        }
 
         if (characters.length === 0) {
             container.innerHTML = `
                 <div class="lobby-empty-state">
                     <i>👥</i>
                     <div>캐릭터가 없습니다</div>
+                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
                 </div>
             `;
             return;
@@ -544,16 +552,24 @@
             overlay.style.display = 'flex';
             if (container) container.style.display = 'flex';
             if (fab) fab.style.display = 'none';
-            updateCharacterGrid();
-            updatePersonaSelect();
+            
+            // 캐릭터 로딩 (약간의 딜레이 후 시도)
+            setTimeout(() => {
+                updateCharacterGrid();
+                updatePersonaSelect();
+            }, 100);
             
             // 디버그: context 정보 출력
             const ctx = getContext();
             console.log('[Chat Lobby] Context available:', !!ctx);
             console.log('[Chat Lobby] Characters count:', ctx?.characters?.length || 0);
-            console.log('[Chat Lobby] getRequestHeaders available:', typeof ctx?.getRequestHeaders);
         }
     }
+    
+    // 전역 새로고침 함수
+    window.chatLobbyRefresh = function() {
+        updateCharacterGrid();
+    };
 
     // 로비 닫기
     function closeLobby() {
