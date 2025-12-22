@@ -210,13 +210,16 @@
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to fetch chats');
+            if (!response.ok) {
+                console.error('[Chat Lobby] HTTP error:', response.status);
+                return []; // 에러 시 빈 배열 반환
+            }
             const data = await response.json();
             console.log('[Chat Lobby] Raw chat data:', JSON.stringify(data).substring(0, 500));
             return data || [];
         } catch (error) {
             console.error('[Chat Lobby] Failed to load chats:', error);
-            return [];
+            return []; // 에러 시 빈 배열 반환
         }
     }
 
@@ -633,8 +636,16 @@
         // 기존 UI 제거
         const existingOverlay = document.getElementById('chat-lobby-overlay');
         if (existingOverlay) existingOverlay.remove();
+        const existingFab = document.getElementById('chat-lobby-fab');
+        if (existingFab) existingFab.remove();
 
         document.body.insertAdjacentHTML('beforeend', createLobbyHTML());
+        
+        // FAB 버튼 초기 표시
+        const fab = document.getElementById('chat-lobby-fab');
+        if (fab) {
+            fab.style.display = 'flex';
+        }
 
         // 이벤트 리스너
         document.getElementById('chat-lobby-close').addEventListener('click', closeLobby);
@@ -670,6 +681,9 @@
                 }
             }
         });
+        
+        // SillyTavern 옵션 메뉴에 로비 버튼 추가
+        addLobbyToOptionsMenu();
 
         console.log('[Chat Lobby] Extension initialized');
 
@@ -677,6 +691,39 @@
         setTimeout(() => {
             openLobby();
         }, 100);
+    }
+    
+    // SillyTavern 옵션 메뉴에 로비 버튼 추가
+    function addLobbyToOptionsMenu() {
+        // 옵션 팝업 메뉴 찾기
+        const optionsMenu = document.getElementById('options');
+        if (!optionsMenu) {
+            console.log('[Chat Lobby] Options menu not found, retrying...');
+            setTimeout(addLobbyToOptionsMenu, 1000);
+            return;
+        }
+        
+        // 이미 추가되었는지 확인
+        if (document.getElementById('option_chat_lobby')) return;
+        
+        // 로비 버튼 생성
+        const lobbyOption = document.createElement('a');
+        lobbyOption.id = 'option_chat_lobby';
+        lobbyOption.innerHTML = '<i class="fa-solid fa-comments"></i> Chat Lobby';
+        lobbyOption.style.cssText = 'cursor: pointer;';
+        lobbyOption.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 옵션 메뉴 닫기
+            const optionsBtn = document.getElementById('options_button');
+            if (optionsBtn) optionsBtn.click();
+            // 로비 열기
+            setTimeout(openLobby, 100);
+        });
+        
+        // 메뉴 맨 앞에 추가
+        optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
+        console.log('[Chat Lobby] Added to options menu');
     }
 
     // DOM 로드 후 초기화

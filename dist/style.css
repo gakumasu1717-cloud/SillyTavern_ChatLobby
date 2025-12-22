@@ -411,6 +411,27 @@
     display: none !important;
 }
 
+/* 옵션 메뉴의 Chat Lobby 버튼 */
+#option_chat_lobby {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    color: var(--SmartThemeBodyColor, #fff);
+    background: linear-gradient(135deg, #6a9fb5 0%, #4a7f95 100%);
+    border-radius: 5px;
+    margin: 5px;
+    font-weight: 500;
+}
+
+#option_chat_lobby:hover {
+    opacity: 0.9;
+}
+
+#option_chat_lobby i {
+    font-size: 1.1em;
+}
+
 /* 채팅 패널 닫기 버튼 */
 #chat-lobby-chats-close {
     display: none;
