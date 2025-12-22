@@ -164,7 +164,7 @@
             
             // personas.js의 setUserAvatar 직접 import (페이지네이션과 무관하게 작동)
             try {
-                const personasModule = await import('../../../personas.js');
+                const personasModule = await import('../../../../personas.js');
                 if (typeof personasModule.setUserAvatar === 'function') {
                     await personasModule.setUserAvatar(personaKey);
                     console.log('[Chat Lobby] Persona changed via setUserAvatar');
