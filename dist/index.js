@@ -264,6 +264,12 @@
             }
             const data = await response.json();
             console.log('[Chat Lobby] Raw chat data:', JSON.stringify(data).substring(0, 500));
+            
+            // error 응답 처리
+            if (data && data.error === true) {
+                return [];
+            }
+            
             return data || [];
         } catch (error) {
             console.error('[Chat Lobby] Failed to load chats:', error);
