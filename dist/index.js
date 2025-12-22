@@ -342,10 +342,8 @@
         
         const safeAvatar = (characterAvatar || '').replace(/"/g, '&quot;');
         
-        // 메타 정보 구성 (메시지 수, 날짜만)
-        const metaItems = [];
-        if (messageCount > 0) metaItems.push(`💬 ${messageCount}개`);
-        if (lastDate) metaItems.push(`📅 ${lastDate}`);
+        // 메타 정보 구성 (메시지 수만)
+        const metaInfo = messageCount > 0 ? `💬 ${messageCount}개` : '';
 
         return `
         <div class="lobby-chat-item" data-file-name="${escapeHtml(fileName)}" data-char-avatar="${safeAvatar}" data-chat-index="${chatIndex}">
@@ -353,7 +351,7 @@
                 <div class="chat-name">${escapeHtml(displayName)}</div>
                 <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
                 <div class="chat-meta">
-                    ${metaItems.length > 0 ? metaItems.map(item => `<span>${item}</span>`).join('') : '<span>정보 없음</span>'}
+                    ${metaInfo ? `<span>${metaInfo}</span>` : ''}
                 </div>
             </div>
             <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
