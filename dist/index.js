@@ -99,10 +99,20 @@
             const powerUser = window.power_user || {};
             const personaNames = powerUser.personas || {};
             
-            return avatars.map(avatarId => ({
+            const personas = avatars.map(avatarId => ({
                 key: avatarId,
                 name: personaNames[avatarId] || avatarId.replace('.png', '').replace('.jpg', '').replace('.webp', '')
             }));
+            
+            // SillyTavern 설정과 동일하게 이름순 정렬
+            const sortOrder = powerUser.persona_sort_order || 'asc';
+            personas.sort((a, b) => {
+                return sortOrder === 'asc' 
+                    ? a.name.localeCompare(b.name) 
+                    : b.name.localeCompare(a.name);
+            });
+            
+            return personas;
         } catch (error) {
             console.error('[Chat Lobby] Failed to load personas:', error);
             return [];
