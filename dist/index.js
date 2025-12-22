@@ -311,7 +311,8 @@
         
         // 메시지 수 - 다양한 필드명 시도
         let messageCount = 0;
-        if (typeof chat.message_count === 'number') messageCount = chat.message_count;
+        if (typeof chat.chat_items === 'number') messageCount = chat.chat_items;
+        else if (typeof chat.message_count === 'number') messageCount = chat.message_count;
         else if (typeof chat.chat_size === 'number') messageCount = chat.chat_size;
         else if (typeof chat.mes_count === 'number') messageCount = chat.mes_count;
         else if (typeof chat.count === 'number') messageCount = chat.count;
@@ -331,7 +332,14 @@
             }
         }
         
-        const fileSize = chat.file_size ? formatFileSize(chat.file_size) : '';
+        // 파일 크기 - 문자열이면 그대로 사용
+        let fileSize = '';
+        if (typeof chat.file_size === 'string') {
+            fileSize = chat.file_size;
+        } else if (typeof chat.file_size === 'number') {
+            fileSize = formatFileSize(chat.file_size);
+        }
+        
         const safeAvatar = (characterAvatar || '').replace(/"/g, '&quot;');
         
         // 메타 정보 구성

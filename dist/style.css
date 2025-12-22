@@ -60,8 +60,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 25px;
-    background: linear-gradient(180deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.98) 100%);
+    padding: 15px 25px;
+    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
     border-bottom: 1px solid var(--SmartThemeBorderColor, #444);
     gap: 15px;
 }
@@ -69,10 +69,8 @@
 #chat-lobby-header h2 {
     margin: 0;
     color: var(--SmartThemeBodyColor, #fff);
-    font-size: 1.4em;
-    font-weight: 600;
+    font-size: 1.5em;
     flex-shrink: 0;
-    letter-spacing: 0.5px;
 }
 
 /* 페르소나 가로 스크롤 바 */
