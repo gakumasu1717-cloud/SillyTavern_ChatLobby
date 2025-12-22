@@ -458,6 +458,29 @@
             });
         }
         
+        // 유효한 채팅만 필터링 (실제 파일명이 있는 것)
+        chatArray = chatArray.filter(chat => {
+            const fileName = chat?.file_name || chat?.fileName || '';
+            // 유효한 파일명: .jsonl 확장자 또는 날짜 패턴 포함
+            return fileName && 
+                   (fileName.includes('.jsonl') || fileName.match(/\d{4}-\d{2}-\d{2}/)) &&
+                   !fileName.startsWith('chat_') &&
+                   fileName.toLowerCase() !== 'error';
+        });
+        
+        // 필터링 후 채팅이 없으면 빈 상태 표시
+        if (chatArray.length === 0) {
+            document.getElementById('chat-panel-count').textContent = '채팅 없음';
+            chatsList.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>💬</i>
+                    <div>채팅 기록이 없습니다</div>
+                    <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
+                </div>
+            `;
+            return;
+        }
+        
         // 최신순 정렬 (가장 최근 채팅이 맨 위)
         chatArray.sort((a, b) => {
             let dateA = 0, dateB = 0;
@@ -594,7 +617,23 @@
                 console.log('[Chat Lobby] Chat deleted:', fileName);
             } else {
                 console.error('[Chat Lobby] Failed to delete chat:', response.status);
-                alert('채팅 삭제에 실패했습니다.');
+                // 서버에서 삭제 실패 - 파일이 없을 수 있음, UI에서만 제거할지 확인
+                if (confirm('채팅 파일을 찾을 수 없습니다.\n목록에서 제거하시겠습니까?')) {
+                    chatElement.remove();
+                    const chatsList = document.getElementById('chat-lobby-chats-list');
+                    const remainingChats = chatsList.querySelectorAll('.lobby-chat-item').length;
+                    document.getElementById('chat-panel-count').textContent = remainingChats > 0 ? `${remainingChats}개 채팅` : '채팅 없음';
+                    
+                    if (remainingChats === 0) {
+                        chatsList.innerHTML = `
+                            <div class="lobby-empty-state">
+                                <i>💬</i>
+                                <div>채팅 기록이 없습니다</div>
+                                <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
+                            </div>
+                        `;
+                    }
+                }
             }
         } catch (error) {
             console.error('[Chat Lobby] Error deleting chat:', error);
