@@ -240,7 +240,7 @@
                                 <div>캐릭터를 선택하세요</div>
                             </div>
                         </div>
-                        <div id="chat-lobby-batch-toolbar" style="display:none;">
+                        <div id="chat-lobby-batch-toolbar">
                             <span id="batch-selected-count">0개 선택</span>
                             <select id="batch-move-folder">
                                 <option value="">이동할 폴더...</option>
@@ -619,34 +619,6 @@
                 (char.name || '').toLowerCase().includes(term)
             );
         }
-        
-        // 캐릭터 정렬: 즐겨찾기 먼저 → 특수문자/숫자 → 영어 → 한글
-        filtered.sort((a, b) => {
-            const aIsFav = !!(a.fav === true || a.fav === 'true' || a.data?.extensions?.fav);
-            const bIsFav = !!(b.fav === true || b.fav === 'true' || b.data?.extensions?.fav);
-            
-            // 즐겨찾기 우선
-            if (aIsFav !== bIsFav) return aIsFav ? -1 : 1;
-            
-            // 이름 정렬: 특수문자/숫자 → 영어 → 한글
-            const aName = (a.name || '').trim();
-            const bName = (b.name || '').trim();
-            
-            const getCharType = (str) => {
-                if (!str) return 99;
-                const c = str.charAt(0);
-                if (/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(c)) return 0; // 숫자/특수문자
-                if (/[a-zA-Z]/.test(c)) return 1; // 영어
-                if (/[\u3131-\u314e\u314f-\u3163\uac00-\ud7a3]/.test(c)) return 2; // 한글
-                return 3; // 기타
-            };
-            
-            const typeA = getCharType(aName);
-            const typeB = getCharType(bName);
-            if (typeA !== typeB) return typeA - typeB;
-            
-            return aName.localeCompare(bName, 'ko');
-        });
 
         if (filtered.length === 0) {
             container.innerHTML = `
