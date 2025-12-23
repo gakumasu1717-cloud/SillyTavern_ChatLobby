@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Lobby - SillyTavern Extension</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e4e4e4;
+            line-height: 1.7;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        .logo {
+            font-size: 3.5em;
+            margin-bottom: 10px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(90deg, #6a9fb5, #a8d8ea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #888;
+            font-size: 1.1em;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .card h2 {
+            color: #6a9fb5;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card p {
+            color: #ccc;
+            margin-bottom: 15px;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-list .icon {
+            font-size: 1.2em;
+            flex-shrink: 0;
+        }
+        
+        .feature-list .text {
+            flex: 1;
+        }
+        
+        .feature-list .text strong {
+            color: #fff;
+        }
+        
+        .install-box {
+            background: rgba(106, 159, 181, 0.1);
+            border: 1px solid rgba(106, 159, 181, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .install-box code {
+            display: block;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #a8d8ea;
+            word-break: break-all;
+            margin-top: 10px;
+        }
+        
+        .btn-github {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #6a9fb5 0%, #5a8fa5 100%);
+            color: #fff;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(106, 159, 181, 0.3);
+        }
+        
+        .btn-github:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(106, 159, 181, 0.4);
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin-top: 40px;
+        }
+        
+        .screenshots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .screenshot-placeholder {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .tag {
+            display: inline-block;
+            background: rgba(106, 159, 181, 0.2);
+            color: #a8d8ea;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            margin: 30px 0;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 50px;
+        }
+        
+        @media (max-width: 600px) {
+            h1 { font-size: 1.8em; }
+            .logo { font-size: 2.5em; }
+            .card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); min-height: 100vh; width: 100%; margin: 0; padding: 40px 20px; color: #e4e4e4; line-height: 1.7;">
+        <div class="container">
+            <div class="header">
+            <h1>Chat Lobby</h1>
+            <p class="subtitle">SillyTavern을 위한 채팅방 관리 확장</p>
+        </div>
+
+        <div class="card">
+            <h2>📌 소개</h2>
+            <p>
+                SillyTavern에서 캐릭터별 채팅방을 한눈에 관리할 수 있는 확장 프로그램임. 
+                기존에 캐릭터 선택 → 채팅 선택 → 열기 이 과정이 번거로웠는데, 
+                로비 화면에서 바로 원하는 채팅으로 들어갈 수 있음.
+            </p>
+            <p>
+                PC/모바일 모두 지원하고, 페르소나 전환도 가능함.
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag">SillyTavern</span>
+                <span class="tag">Extension</span>
+                <span class="tag">Chat Manager</span>
+                <span class="tag">PC/Mobile</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>✨ 주요 기능</h2>
+            <ul class="feature-list">
+                <li>
+                    <span class="icon">🎯</span>
+                    <span class="text"><strong>원클릭 채팅 접근</strong> - 캐릭터 선택하면 해당 캐릭터의 모든 채팅 목록이 바로 보임. 클릭 한 번으로 원하는 채팅으로 이동.</span>
+                </li>
+                <li>
+                    <span class="icon">👤</span>
+                    <span class="text"><strong>페르소나 전환</strong> - 상단에서 페르소나를 바로 변경 가능. 현재 선택된 페르소나 표시됨.</span>
+                </li>
+                <li>
+                    <span class="icon">🔍</span>
+                    <span class="text"><strong>캐릭터 검색</strong> - 캐릭터가 많아도 검색으로 빠르게 찾을 수 있음.</span>
+                </li>
+                <li>
+                    <span class="icon">📱</span>
+                    <span class="text"><strong>모바일 지원</strong> - 반응형 디자인으로 모바일에서도 사용 가능. 햄버거 메뉴에서 접근.</span>
+                </li>
+                <li>
+                    <span class="icon">🗑️</span>
+                    <span class="text"><strong>채팅 삭제</strong> - 채팅 목록에서 바로 삭제 가능. 확인창 있음.</span>
+                </li>
+                <li>
+                    <span class="icon">➕</span>
+                    <span class="text"><strong>새 채팅 시작</strong> - 캐릭터 선택 후 바로 새 채팅 시작 가능.</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>📥 설치 방법</h2>
+            <p>SillyTavern의 확장 프로그램 메뉴에서 아래 링크를 입력하면 됨:</p>
+            <div class="install-box">
+                <strong>Download Extensions → Install from URL</strong>
+                <code>https://github.com/gakumasu1717-cloud/SillyTavern_ChatLobby</code>
+            </div>
+            <p style="color: #888; font-size: 0.9em;">
+                설치 후 새로고침하면 우측 하단에 💬 버튼이 생김. 모바일은 햄버거 메뉴(≡)에서 "Chat Lobby" 선택.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>💡 사용법</h2>
+            <ul class="feature-list">
+                <li>
+                    <span class="icon">1️⃣</span>
+                    <span class="text">💬 버튼 클릭 (또는 모바일 메뉴에서 선택)</span>
+                </li>
+                <li>
+                    <span class="icon">2️⃣</span>
+                    <span class="text">상단에서 페르소나 선택 (선택사항)</span>
+                </li>
+                <li>
+                    <span class="icon">3️⃣</span>
+                    <span class="text">캐릭터 카드 클릭 → 채팅 목록 표시됨</span>
+                </li>
+                <li>
+                    <span class="icon">4️⃣</span>
+                    <span class="text">원하는 채팅 클릭하면 바로 이동</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>⚙️ 요구사항</h2>
+            <p>
+                • SillyTavern 최신 버전<br>
+                • 다른 확장 프로그램 의존성 없음 (독립 실행)
+            </p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="footer">
+            <p>깡갤 내 공유 및 수정 자유. 갤밖 공유 금지</p>
+            <p style="margin-top: 10px; opacity: 0.5;">Made for SillyTavern Community</p>
+        </div>
+    </div>
+    </div>
+</body>
+</html>

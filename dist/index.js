@@ -1,5 +1,5 @@
 // Chat Lobby Extension for SillyTavern
-// 캐릭터 기반 채팅방 선택 UI + 페르소나 선택
+// 캐릭터 기반 채팅방 선택 UI + 페르소나 선택 + 폴더/분류 관리
 
 (function() {
     'use strict';
@@ -8,8 +8,158 @@
 
     const extensionName = 'Chat Lobby';
     const extensionFolderPath = 'third-party/SillyTavern-ChatLobby';
+    const STORAGE_KEY = 'chatLobby_data';
 
+    // ============================================
+    // 폴더/분류 데이터 관리
+    // ============================================
+    
+    // 기본 데이터 구조
+    const defaultData = {
+        folders: [
+            { id: 'favorites', name: '⭐ 즐겨찾기', isSystem: true, order: 0 },
+            { id: 'uncategorized', name: '📁 미분류', isSystem: true, order: 999 }
+        ],
+        chatAssignments: {}, // { "캐릭터avatar_채팅파일명": "폴더id" }
+        favorites: [], // ["캐릭터avatar_채팅파일명", ...]
+        sortOption: 'recent', // recent, created, name, favorites
+        filterFolder: 'all', // all, favorites, 폴더id
+        collapsedFolders: [], // 접힌 폴더 목록
+        autoFavoriteRules: {
+            recentDays: 0, // 0 = 비활성화, 3 = 최근 3일 사용 시 자동 즐겨찾기
+        }
+    };
+
+    // 데이터 로드
+    function loadLobbyData() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const data = JSON.parse(saved);
+                // 기본값과 병합 (누락된 필드 보완)
+                return { ...defaultData, ...data };
+            }
+        } catch (e) {
+            console.error('[Chat Lobby] Failed to load data:', e);
+        }
+        return { ...defaultData };
+    }
+
+    // 데이터 저장
+    function saveLobbyData(data) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch (e) {
+            console.error('[Chat Lobby] Failed to save data:', e);
+        }
+    }
+
+    // 채팅 키 생성 (캐릭터avatar_채팅파일명)
+    function getChatKey(charAvatar, chatFileName) {
+        return `${charAvatar}_${chatFileName}`;
+    }
+
+    // 폴더 추가
+    function addFolder(name) {
+        const data = loadLobbyData();
+        const id = 'folder_' + Date.now();
+        const maxOrder = Math.max(...data.folders.filter(f => !f.isSystem || f.id !== 'uncategorized').map(f => f.order), 0);
+        data.folders.push({ id, name, isSystem: false, order: maxOrder + 1 });
+        saveLobbyData(data);
+        return id;
+    }
+
+    // 폴더 삭제
+    function deleteFolder(folderId) {
+        const data = loadLobbyData();
+        const folder = data.folders.find(f => f.id === folderId);
+        if (!folder || folder.isSystem) return false;
+        
+        // 해당 폴더의 채팅들을 미분류로 이동
+        Object.keys(data.chatAssignments).forEach(key => {
+            if (data.chatAssignments[key] === folderId) {
+                data.chatAssignments[key] = 'uncategorized';
+            }
+        });
+        
+        data.folders = data.folders.filter(f => f.id !== folderId);
+        saveLobbyData(data);
+        return true;
+    }
+
+    // 폴더 이름 변경
+    function renameFolder(folderId, newName) {
+        const data = loadLobbyData();
+        const folder = data.folders.find(f => f.id === folderId);
+        if (!folder || folder.isSystem) return false;
+        folder.name = newName;
+        saveLobbyData(data);
+        return true;
+    }
+
+    // 채팅을 폴더에 할당
+    function assignChatToFolder(charAvatar, chatFileName, folderId) {
+        const data = loadLobbyData();
+        const key = getChatKey(charAvatar, chatFileName);
+        data.chatAssignments[key] = folderId;
+        saveLobbyData(data);
+    }
+
+    // 채팅의 폴더 가져오기
+    function getChatFolder(charAvatar, chatFileName) {
+        const data = loadLobbyData();
+        const key = getChatKey(charAvatar, chatFileName);
+        return data.chatAssignments[key] || 'uncategorized';
+    }
+
+    // 즐겨찾기 토글
+    function toggleFavorite(charAvatar, chatFileName) {
+        const data = loadLobbyData();
+        const key = getChatKey(charAvatar, chatFileName);
+        const index = data.favorites.indexOf(key);
+        if (index > -1) {
+            data.favorites.splice(index, 1);
+        } else {
+            data.favorites.push(key);
+        }
+        saveLobbyData(data);
+        return index === -1; // 새로 추가되었으면 true
+    }
+
+    // 즐겨찾기 여부 확인
+    function isFavorite(charAvatar, chatFileName) {
+        const data = loadLobbyData();
+        const key = getChatKey(charAvatar, chatFileName);
+        return data.favorites.includes(key);
+    }
+
+    // 정렬 옵션 설정
+    function setSortOption(option) {
+        const data = loadLobbyData();
+        data.sortOption = option;
+        saveLobbyData(data);
+    }
+
+    // 필터 폴더 설정
+    function setFilterFolder(folderId) {
+        const data = loadLobbyData();
+        data.filterFolder = folderId;
+        saveLobbyData(data);
+    }
+
+    // 다중 채팅 이동
+    function moveChatsBatch(chatKeys, targetFolderId) {
+        const data = loadLobbyData();
+        chatKeys.forEach(key => {
+            data.chatAssignments[key] = targetFolderId;
+        });
+        saveLobbyData(data);
+    }
+
+    // ============================================
     // SillyTavern API 접근
+    // ============================================
+    
     const getContext = () => window.SillyTavern?.getContext?.() || null;
     
     // SillyTavern 요청 헤더 가져오기
@@ -27,6 +177,13 @@
             'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
         };
     };
+
+    // 폴더 목록 HTML 생성
+    function getFoldersHTML() {
+        const data = loadLobbyData();
+        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+        return sorted.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+    }
 
     // 로비 UI HTML
     function createLobbyHTML() {
@@ -60,13 +217,55 @@
                             </div>
                             <button id="chat-lobby-new-chat">+ 새 채팅</button>
                         </div>
+                        <div id="chat-lobby-folder-bar">
+                            <div class="folder-filter">
+                                <select id="chat-lobby-folder-filter">
+                                    <option value="all">📁 전체</option>
+                                    <option value="favorites">⭐ 즐겨찾기</option>
+                                </select>
+                                <select id="chat-lobby-sort">
+                                    <option value="recent">🕐 최근 사용</option>
+                                    <option value="created">📅 생성일</option>
+                                    <option value="name">🔤 이름순</option>
+                                    <option value="favorites">⭐ 즐겨찾기 먼저</option>
+                                </select>
+                            </div>
+                            <div class="folder-actions">
+                                <button id="chat-lobby-batch-mode" title="다중 선택">☑️</button>
+                                <button id="chat-lobby-folder-manage" title="폴더 관리">📁</button>
+                            </div>
+                        </div>
                         <div id="chat-lobby-chats-list">
                             <div class="lobby-empty-state">
                                 <i>💬</i>
                                 <div>캐릭터를 선택하세요</div>
                             </div>
                         </div>
+                        <div id="chat-lobby-batch-toolbar" style="display:none;">
+                            <span id="batch-selected-count">0개 선택</span>
+                            <select id="batch-move-folder">
+                                <option value="">이동할 폴더...</option>
+                            </select>
+                            <button id="batch-move-btn">이동</button>
+                            <button id="batch-cancel-btn">취소</button>
+                        </div>
                     </div>
+                </div>
+            </div>
+        </div>
+        <!-- 폴더 관리 모달 -->
+        <div id="chat-lobby-folder-modal" style="display:none;">
+            <div class="folder-modal-content">
+                <div class="folder-modal-header">
+                    <h3>📁 폴더 관리</h3>
+                    <button id="folder-modal-close">✕</button>
+                </div>
+                <div class="folder-modal-body">
+                    <div class="folder-add-row">
+                        <input type="text" id="new-folder-name" placeholder="새 폴더 이름...">
+                        <button id="add-folder-btn">추가</button>
+                    </div>
+                    <div id="folder-list"></div>
                 </div>
             </div>
         </div>
@@ -348,16 +547,32 @@
         
         const safeAvatar = (characterAvatar || '').replace(/"/g, '&quot;');
         
+        // 즐겨찾기 상태 확인
+        const isFav = isFavorite(characterAvatar, fileName);
+        const favIcon = isFav ? '⭐' : '☆';
+        const favClass = isFav ? 'is-favorite' : '';
+        
+        // 폴더 정보
+        const folderId = getChatFolder(characterAvatar, fileName);
+        const data = loadLobbyData();
+        const folder = data.folders.find(f => f.id === folderId);
+        const folderName = folder ? folder.name : '';
+        
         // 메타 정보 구성 (메시지 수만)
         const metaInfo = messageCount > 0 ? `💬 ${messageCount}개` : '';
 
         return `
-        <div class="lobby-chat-item" data-file-name="${escapeHtml(fileName)}" data-char-avatar="${safeAvatar}" data-chat-index="${chatIndex}">
+        <div class="lobby-chat-item ${favClass}" data-file-name="${escapeHtml(fileName)}" data-char-avatar="${safeAvatar}" data-chat-index="${chatIndex}" data-folder-id="${folderId}">
+            <div class="chat-checkbox" style="display:none;">
+                <input type="checkbox" class="chat-select-cb">
+            </div>
+            <button class="chat-fav-btn" title="즐겨찾기">${favIcon}</button>
             <div class="chat-content">
                 <div class="chat-name">${escapeHtml(displayName)}</div>
                 <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
                 <div class="chat-meta">
                     ${metaInfo ? `<span>${metaInfo}</span>` : ''}
+                    ${folderName && folderId !== 'uncategorized' ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ''}
                 </div>
             </div>
             <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
@@ -519,10 +734,25 @@
         }
         
         // 최신순 정렬 (가장 최근 채팅이 맨 위)
+        const lobbyData = loadLobbyData();
+        const currentSort = lobbyData.sortOption || 'recent';
+        const currentFilter = lobbyData.filterFolder || 'all';
+        
+        // 폴더 필터 적용
+        if (currentFilter !== 'all') {
+            chatArray = chatArray.filter(chat => {
+                const fn = chat.file_name || chat.fileName || '';
+                const key = getChatKey(charAvatar, fn);
+                if (currentFilter === 'favorites') {
+                    return lobbyData.favorites.includes(key);
+                }
+                const assigned = lobbyData.chatAssignments[key] || 'uncategorized';
+                return assigned === currentFilter;
+            });
+        }
+        
+        // 정렬
         chatArray.sort((a, b) => {
-            let dateA = 0, dateB = 0;
-            
-            // 파일명에서 날짜 추출 (예: 서진욱 - 2025-12-22@11h31m00s.jsonl)
             const fnA = a.file_name || '';
             const fnB = b.file_name || '';
             
@@ -541,14 +771,28 @@
                 return 0;
             }
             
-            dateA = parseDate(fnA);
-            dateB = parseDate(fnB);
+            // 즐겨찾기 먼저 정렬
+            if (currentSort === 'favorites') {
+                const keyA = getChatKey(charAvatar, fnA);
+                const keyB = getChatKey(charAvatar, fnB);
+                const favA = lobbyData.favorites.includes(keyA) ? 0 : 1;
+                const favB = lobbyData.favorites.includes(keyB) ? 0 : 1;
+                if (favA !== favB) return favA - favB;
+            }
+            
+            if (currentSort === 'name') {
+                // 이름순 정렬
+                return fnA.localeCompare(fnB, 'ko');
+            }
+            
+            // 날짜순 (최신 또는 생성일)
+            let dateA = parseDate(fnA);
+            let dateB = parseDate(fnB);
             
             // 파일명에서 못 찾으면 다른 필드 시도
             if (!dateA && a.last_mes) dateA = typeof a.last_mes === 'number' ? a.last_mes : new Date(a.last_mes).getTime();
             if (!dateB && b.last_mes) dateB = typeof b.last_mes === 'number' ? b.last_mes : new Date(b.last_mes).getTime();
             
-            console.log('[Chat Lobby] Sort:', fnA, dateA, 'vs', fnB, dateB);
             return dateB - dateA; // 내림차순 (최신이 위)
         });
 
@@ -560,12 +804,204 @@
             // 채팅 열기 (컨텐츠 클릭)
             item.querySelector('.chat-content').addEventListener('click', () => openChat(item));
             
+            // 즐겨찾기 버튼
+            item.querySelector('.chat-fav-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fn = item.dataset.fileName;
+                const ca = item.dataset.charAvatar;
+                const isNowFav = toggleFavorite(ca, fn);
+                item.querySelector('.chat-fav-btn').textContent = isNowFav ? '⭐' : '☆';
+                item.classList.toggle('is-favorite', isNowFav);
+            });
+            
             // 삭제 버튼
             item.querySelector('.chat-delete-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 deleteChat(item);
             });
         });
+        
+        // 폴더 필터 드롭다운 업데이트
+        updateFolderFilterDropdown();
+        
+        // 정렬 드롭다운 값 설정
+        const sortSelect = document.getElementById('chat-lobby-sort');
+        if (sortSelect) sortSelect.value = currentSort;
+        
+        const filterSelect = document.getElementById('chat-lobby-folder-filter');
+        if (filterSelect) filterSelect.value = currentFilter;
+    }
+    
+    // 폴더 필터 드롭다운 업데이트
+    function updateFolderFilterDropdown() {
+        const filterSelect = document.getElementById('chat-lobby-folder-filter');
+        if (!filterSelect) return;
+        
+        const data = loadLobbyData();
+        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+        
+        let html = '<option value="all">📁 전체</option>';
+        html += '<option value="favorites">⭐ 즐겨찾기만</option>';
+        sorted.forEach(f => {
+            if (f.id !== 'favorites') {
+                html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
+            }
+        });
+        filterSelect.innerHTML = html;
+        filterSelect.value = data.filterFolder || 'all';
+    }
+    
+    // 폴더 관리 모달 열기
+    function openFolderModal() {
+        const modal = document.getElementById('chat-lobby-folder-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        refreshFolderList();
+    }
+    
+    // 폴더 관리 모달 닫기
+    function closeFolderModal() {
+        const modal = document.getElementById('chat-lobby-folder-modal');
+        if (modal) modal.style.display = 'none';
+    }
+    
+    // 폴더 목록 새로고침
+    function refreshFolderList() {
+        const container = document.getElementById('folder-list');
+        if (!container) return;
+        
+        const data = loadLobbyData();
+        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+        
+        let html = '';
+        sorted.forEach(f => {
+            const isSystem = f.isSystem ? 'system' : '';
+            const deleteBtn = f.isSystem ? '' : `<button class="folder-delete-btn" data-id="${f.id}">🗑️</button>`;
+            const editBtn = f.isSystem ? '' : `<button class="folder-edit-btn" data-id="${f.id}">✏️</button>`;
+            
+            // 해당 폴더의 채팅 수 계산
+            let count = 0;
+            if (f.id === 'favorites') {
+                count = data.favorites.length;
+            } else {
+                count = Object.values(data.chatAssignments).filter(v => v === f.id).length;
+            }
+            
+            html += `
+            <div class="folder-item ${isSystem}" data-id="${f.id}">
+                <span class="folder-name">${escapeHtml(f.name)}</span>
+                <span class="folder-count">${count}개</span>
+                ${editBtn}
+                ${deleteBtn}
+            </div>`;
+        });
+        container.innerHTML = html;
+        
+        // 이벤트 연결
+        container.querySelectorAll('.folder-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (confirm('이 폴더를 삭제하시겠습니까? 내부 채팅은 미분류로 이동됩니다.')) {
+                    deleteFolder(btn.dataset.id);
+                    refreshFolderList();
+                    updateFolderFilterDropdown();
+                }
+            });
+        });
+        
+        container.querySelectorAll('.folder-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                const data = loadLobbyData();
+                const folder = data.folders.find(f => f.id === id);
+                if (!folder) return;
+                const newName = prompt('새 폴더 이름:', folder.name);
+                if (newName && newName.trim()) {
+                    renameFolder(id, newName.trim());
+                    refreshFolderList();
+                    updateFolderFilterDropdown();
+                }
+            });
+        });
+    }
+    
+    // 배치 모드 토글
+    let batchModeActive = false;
+    function toggleBatchMode() {
+        batchModeActive = !batchModeActive;
+        const chatsList = document.getElementById('chat-lobby-chats-list');
+        const toolbar = document.getElementById('chat-lobby-batch-toolbar');
+        const batchBtn = document.getElementById('chat-lobby-batch-mode');
+        
+        if (batchModeActive) {
+            chatsList.classList.add('batch-mode');
+            toolbar.style.display = 'flex';
+            batchBtn.classList.add('active');
+            chatsList.querySelectorAll('.chat-checkbox').forEach(cb => cb.style.display = 'block');
+            updateBatchMoveDropdown();
+        } else {
+            chatsList.classList.remove('batch-mode');
+            toolbar.style.display = 'none';
+            batchBtn.classList.remove('active');
+            chatsList.querySelectorAll('.chat-checkbox').forEach(cb => {
+                cb.style.display = 'none';
+                cb.querySelector('input').checked = false;
+            });
+        }
+        updateBatchCount();
+    }
+    
+    // 배치 이동 드롭다운 업데이트
+    function updateBatchMoveDropdown() {
+        const select = document.getElementById('batch-move-folder');
+        if (!select) return;
+        const data = loadLobbyData();
+        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+        let html = '<option value="">이동할 폴더...</option>';
+        sorted.forEach(f => {
+            if (f.id !== 'favorites') {
+                html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
+            }
+        });
+        select.innerHTML = html;
+    }
+    
+    // 선택된 채팅 수 업데이트
+    function updateBatchCount() {
+        const count = document.querySelectorAll('.chat-select-cb:checked').length;
+        const countSpan = document.getElementById('batch-selected-count');
+        if (countSpan) countSpan.textContent = `${count}개 선택`;
+    }
+    
+    // 배치 이동 실행
+    function executeBatchMove() {
+        const targetFolder = document.getElementById('batch-move-folder').value;
+        if (!targetFolder) {
+            alert('이동할 폴더를 선택하세요.');
+            return;
+        }
+        
+        const checked = document.querySelectorAll('.chat-select-cb:checked');
+        const keys = [];
+        checked.forEach(cb => {
+            const item = cb.closest('.lobby-chat-item');
+            if (item) {
+                const key = getChatKey(item.dataset.charAvatar, item.dataset.fileName);
+                keys.push(key);
+                item.dataset.folderId = targetFolder;
+            }
+        });
+        
+        if (keys.length === 0) {
+            alert('이동할 채팅을 선택하세요.');
+            return;
+        }
+        
+        moveChatsBatch(keys, targetFolder);
+        toggleBatchMode(); // 배치 모드 해제
+        
+        // 현재 캐릭터 다시 선택하여 목록 새로고침
+        const selectedCard = document.querySelector('.lobby-char-card.selected');
+        if (selectedCard) selectCharacter(selectedCard);
     }
 
     // 채팅 열기
@@ -834,6 +1270,8 @@
         if (existingOverlay) existingOverlay.remove();
         const existingFab = document.getElementById('chat-lobby-fab');
         if (existingFab) existingFab.remove();
+        const existingModal = document.getElementById('chat-lobby-folder-modal');
+        if (existingModal) existingModal.remove();
 
         document.body.insertAdjacentHTML('beforeend', createLobbyHTML());
         
@@ -857,6 +1295,61 @@
                 chatsPanel.classList.remove('visible');
             }
         });
+        
+        // 폴더 필터 변경
+        document.getElementById('chat-lobby-folder-filter').addEventListener('change', (e) => {
+            setFilterFolder(e.target.value);
+            const selectedCard = document.querySelector('.lobby-char-card.selected');
+            if (selectedCard) selectCharacter(selectedCard);
+        });
+        
+        // 정렬 변경
+        document.getElementById('chat-lobby-sort').addEventListener('change', (e) => {
+            setSortOption(e.target.value);
+            const selectedCard = document.querySelector('.lobby-char-card.selected');
+            if (selectedCard) selectCharacter(selectedCard);
+        });
+        
+        // 배치 모드 버튼
+        document.getElementById('chat-lobby-batch-mode').addEventListener('click', toggleBatchMode);
+        
+        // 폴더 관리 버튼
+        document.getElementById('chat-lobby-folder-manage').addEventListener('click', openFolderModal);
+        
+        // 폴더 모달 닫기
+        document.getElementById('folder-modal-close').addEventListener('click', closeFolderModal);
+        
+        // 폴더 추가
+        document.getElementById('add-folder-btn').addEventListener('click', () => {
+            const input = document.getElementById('new-folder-name');
+            const name = input.value.trim();
+            if (name) {
+                addFolder(name);
+                input.value = '';
+                refreshFolderList();
+                updateFolderFilterDropdown();
+            }
+        });
+        
+        // Enter 키로 폴더 추가
+        document.getElementById('new-folder-name').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('add-folder-btn').click();
+            }
+        });
+        
+        // 배치 이동 버튼
+        document.getElementById('batch-move-btn').addEventListener('click', executeBatchMove);
+        
+        // 배치 취소 버튼
+        document.getElementById('batch-cancel-btn').addEventListener('click', toggleBatchMode);
+        
+        // 채팅 체크박스 변경 감지 (이벤트 위임)
+        document.getElementById('chat-lobby-chats-list').addEventListener('change', (e) => {
+            if (e.target.classList.contains('chat-select-cb')) {
+                updateBatchCount();
+            }
+        });
 
         // 검색 기능
         const searchInput = document.getElementById('chat-lobby-search-input');
@@ -871,6 +1364,11 @@
         // ESC 키로 닫기
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                const modal = document.getElementById('chat-lobby-folder-modal');
+                if (modal && modal.style.display !== 'none') {
+                    closeFolderModal();
+                    return;
+                }
                 const container = document.getElementById('chat-lobby-container');
                 if (container && container.style.display !== 'none') {
                     closeLobby();
