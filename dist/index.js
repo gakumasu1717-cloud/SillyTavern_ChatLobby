@@ -219,6 +219,7 @@
                                 <div class="char-name" id="chat-panel-name">캐릭터 선택</div>
                                 <div class="chat-count" id="chat-panel-count">채팅 목록</div>
                             </div>
+                            <button id="chat-lobby-delete-char" title="캐릭터 삭제">🗑️</button>
                             <button id="chat-lobby-new-chat">+ 새 채팅</button>
                         </div>
                         <div id="chat-lobby-folder-bar">
@@ -363,7 +364,7 @@
         
         console.log('[Chat Lobby] Current persona:', currentPersona);
         
-        // 모든 페르소나 아바타 + 이름 표시
+        // 모든 페르소나 아바타 + 이름 + 삭제 버튼 표시
         let html = '';
         personas.forEach(persona => {
             const isSelected = persona.key === currentPersona ? 'selected' : '';
@@ -371,21 +372,70 @@
             html += `<div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
                 <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>👤</div>'">
                 <span class="persona-name">${escapeHtml(persona.name)}</span>
+                <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="페르소나 삭제">×</button>
             </div>`;
         });
         
         container.innerHTML = html;
         
-        // 클릭 이벤트
+        // 클릭 이벤트 - 페르소나 선택
         container.querySelectorAll('.persona-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                // 삭제 버튼 클릭은 무시
+                if (e.target.classList.contains('persona-delete-btn')) return;
                 container.querySelectorAll('.persona-item').forEach(el => el.classList.remove('selected'));
                 item.classList.add('selected');
                 changePersona(item.dataset.persona);
             });
         });
         
+        // 페르소나 삭제 버튼 이벤트
+        container.querySelectorAll('.persona-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const personaKey = btn.dataset.persona;
+                const personaName = btn.closest('.persona-item').title;
+                deletePersona(personaKey, personaName);
+            });
+        });
+        
         console.log('[Chat Lobby] Persona list updated with', personas.length, 'items');
+    }
+
+    // 페르소나 삭제
+    async function deletePersona(personaKey, personaName) {
+        if (!confirm(`"${personaName}" 페르소나를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+        
+        try {
+            // 페르소나 관리 열고 해당 페르소나 선택 후 삭제
+            closeLobby();
+            setTimeout(() => {
+                const personaDrawer = document.getElementById('persona-management-button');
+                if (personaDrawer) {
+                    personaDrawer.click();
+                    setTimeout(() => {
+                        // 해당 페르소나 아바타 클릭하여 선택
+                        const avatarItems = document.querySelectorAll('#user_avatar_block .avatar-container');
+                        for (const item of avatarItems) {
+                            const img = item.querySelector('img');
+                            if (img && img.src.includes(encodeURIComponent(personaKey))) {
+                                item.click();
+                                // 삭제 버튼 클릭 (SillyTavern ID: persona_delete_button)
+                                setTimeout(() => {
+                                    const deleteBtn = document.getElementById('persona_delete_button');
+                                    if (deleteBtn) {
+                                        deleteBtn.click();
+                                    }
+                                }, 300);
+                                break;
+                            }
+                        }
+                    }, 400);
+                }
+            }, 100);
+        } catch (error) {
+            console.error('[Chat Lobby] Failed to delete persona:', error);
+        }
     }
 
     // 페르소나 변경
@@ -1599,47 +1649,56 @@
         
         // 캐릭터 임포트 버튼 (PNG 파일 가져오기) - 로비 위에서 작동
         document.getElementById('chat-lobby-import-char').addEventListener('click', () => {
-            // 로비를 숨기지 않고 파일 선택 다이얼로그 열기
+            // 파일 input 직접 트리거 (SillyTavern ID: character_import_file)
             const fileInput = document.getElementById('character_import_file');
             if (fileInput) {
                 fileInput.click();
             } else {
-                // 대체: 버튼 클릭
-                const importBtn = document.getElementById('character_import_button');
-                if (importBtn) importBtn.click();
+                console.log('[Chat Lobby] character_import_file not found');
             }
         });
         
-        // 페르소나 추가 버튼 (새 페르소나 생성)
+        // 페르소나 추가 버튼 (SillyTavern ID: persona-management-button, create_dummy_persona)
         document.getElementById('chat-lobby-add-persona').addEventListener('click', () => {
-            // 로비 닫고 페르소나 관리 열기
             closeLobby();
             setTimeout(() => {
-                // 페르소나 관리 버튼 찾기 (여러 선택자 시도)
-                const personaBtn = document.getElementById('persona_management_button') ||
-                                   document.querySelector('#user_avatar_block .avatar_button') ||
-                                   document.querySelector('.drawer-icon[title*="Persona"]');
-                if (personaBtn) {
-                    personaBtn.click();
-                    // Create 버튼 클릭 (여러 선택자 시도)
+                // 페르소나 관리 drawer 클릭 (SillyTavern ID: persona-management-button)
+                const personaDrawer = document.getElementById('persona-management-button');
+                if (personaDrawer) {
+                    personaDrawer.click();
+                    // Create 버튼 클릭 (SillyTavern ID: create_dummy_persona)
                     setTimeout(() => {
-                        const createBtn = document.querySelector('#persona_create_button') ||
-                                         document.querySelector('.persona_create') ||
-                                         document.querySelector('#user-settings-block button.menu_button[title*="Create"]') ||
-                                         document.querySelector('.menu_button.fa-plus') ||
-                                         document.querySelector('button[title="Create"]') ||
-                                         document.querySelector('.drawer-content button:has(.fa-plus)');
+                        const createBtn = document.getElementById('create_dummy_persona');
                         if (createBtn) {
-                            console.log('[Chat Lobby] Found Create button:', createBtn);
+                            console.log('[Chat Lobby] Found create_dummy_persona');
                             createBtn.click();
                         } else {
-                            console.log('[Chat Lobby] Create button not found');
+                            console.log('[Chat Lobby] create_dummy_persona not found');
                         }
-                    }, 500);
+                    }, 400);
                 } else {
-                    console.log('[Chat Lobby] Persona management button not found');
+                    console.log('[Chat Lobby] persona-management-button not found');
                 }
             }, 100);
+        });
+        
+        // 캐릭터 삭제 버튼 (SillyTavern ID: delete_button)
+        document.getElementById('chat-lobby-delete-char').addEventListener('click', async () => {
+            const selectedCard = document.querySelector('.lobby-char-card.selected');
+            if (!selectedCard) return;
+            
+            const charName = document.getElementById('chat-panel-name').textContent;
+            if (!confirm(`"${charName}" 캐릭터를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+            
+            const charIndex = selectedCard.dataset.charIndex;
+            closeLobby();
+            await selectCharacterByIndex(parseInt(charIndex));
+            setTimeout(() => {
+                const deleteBtn = document.getElementById('delete_button');
+                if (deleteBtn) {
+                    deleteBtn.click();
+                }
+            }, 300);
         });
         
         // 폴더 필터 변경 - 데스크톱 + 모바일
