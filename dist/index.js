@@ -1235,13 +1235,13 @@
         
         if (batchModeActive) {
             chatsList.classList.add('batch-mode');
-            toolbar.style.display = 'flex';
+            toolbar.classList.add('visible');
             batchBtn.classList.add('active');
             chatsList.querySelectorAll('.chat-checkbox').forEach(cb => cb.style.display = 'block');
             updateBatchMoveDropdown();
         } else {
             chatsList.classList.remove('batch-mode');
-            toolbar.style.display = 'none';
+            toolbar.classList.remove('visible');
             batchBtn.classList.remove('active');
             chatsList.querySelectorAll('.chat-checkbox').forEach(cb => {
                 cb.style.display = 'none';
@@ -1497,7 +1497,7 @@
                 const toolbar = document.getElementById('chat-lobby-batch-toolbar');
                 const batchBtn = document.getElementById('chat-lobby-batch-mode');
                 if (chatsList) chatsList.classList.remove('batch-mode');
-                if (toolbar) toolbar.style.display = 'none';
+                if (toolbar) toolbar.classList.remove('visible');
                 if (batchBtn) batchBtn.classList.remove('active');
             }
             
