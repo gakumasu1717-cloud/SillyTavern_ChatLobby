@@ -462,14 +462,24 @@
         console.log('[Chat Lobby] openPersonaManagement called');
         closeLobby();
         
-        // 딥레이 후 버튼 클릭
+        // 딥레이 후 drawer-icon 클릭
         setTimeout(() => {
-            // 페르소나 관리 drawer 클릭 (SillyTavern ID: persona-management-button)
-            const personaBtn = document.getElementById('persona-management-button');
-            console.log('[Chat Lobby] persona-management-button:', personaBtn);
-            if (personaBtn) {
-                personaBtn.click();
-                console.log('[Chat Lobby] Clicked persona-management-button');
+            // 페르소나 관리 drawer 내부의 drawer-icon 클릭 (스마일 이모지)
+            const personaDrawer = document.getElementById('persona-management-button');
+            if (personaDrawer) {
+                const drawerIcon = personaDrawer.querySelector('.drawer-icon');
+                console.log('[Chat Lobby] drawer-icon:', drawerIcon);
+                if (drawerIcon) {
+                    drawerIcon.click();
+                    console.log('[Chat Lobby] Clicked drawer-icon');
+                } else {
+                    // fallback: drawer-toggle 클릭
+                    const drawerToggle = personaDrawer.querySelector('.drawer-toggle');
+                    if (drawerToggle) {
+                        drawerToggle.click();
+                        console.log('[Chat Lobby] Clicked drawer-toggle');
+                    }
+                }
             } else {
                 console.log('[Chat Lobby] persona-management-button not found');
             }
@@ -1735,7 +1745,7 @@
             }
         });
         
-        // 페르소나 추가 버튼 - create_dummy_persona 클릭으로 이름 입력 팝업
+        // 페르소나 추가 버튼 - drawer-icon 클릭하고 create_dummy_persona 클릭
         document.getElementById('chat-lobby-add-persona').addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1743,24 +1753,27 @@
             
             closeLobby();
             
-            // 페르소나 관리 drawer 열고 create_dummy_persona 클릭
+            // 페르소나 관리 drawer-icon 클릭
             setTimeout(() => {
-                const personaBtn = document.getElementById('persona-management-button');
-                console.log('[Chat Lobby] persona-management-button:', personaBtn);
-                if (personaBtn) {
-                    personaBtn.click();
-                    
-                    // drawer 열린 후 create_dummy_persona 클릭
-                    setTimeout(() => {
-                        const createBtn = document.getElementById('create_dummy_persona');
-                        console.log('[Chat Lobby] create_dummy_persona:', createBtn);
-                        if (createBtn) {
-                            createBtn.click();
-                            console.log('[Chat Lobby] Clicked create_dummy_persona');
-                        } else {
-                            console.log('[Chat Lobby] create_dummy_persona not found');
-                        }
-                    }, 400);
+                const personaDrawer = document.getElementById('persona-management-button');
+                if (personaDrawer) {
+                    const drawerIcon = personaDrawer.querySelector('.drawer-icon');
+                    console.log('[Chat Lobby] drawer-icon for add:', drawerIcon);
+                    if (drawerIcon) {
+                        drawerIcon.click();
+                        
+                        // drawer 열린 후 create_dummy_persona 클릭
+                        setTimeout(() => {
+                            const createBtn = document.getElementById('create_dummy_persona');
+                            console.log('[Chat Lobby] create_dummy_persona:', createBtn);
+                            if (createBtn) {
+                                createBtn.click();
+                                console.log('[Chat Lobby] Clicked create_dummy_persona');
+                            } else {
+                                console.log('[Chat Lobby] create_dummy_persona not found');
+                            }
+                        }, 400);
+                    }
                 }
             }, 200);
         });
