@@ -1577,6 +1577,16 @@
             }
         });
         
+        // 봇 프사 클릭 시 해당 봇 화면으로 이동
+        document.getElementById('chat-panel-avatar').addEventListener('click', async () => {
+            const selectedCard = document.querySelector('.lobby-char-card.selected');
+            if (selectedCard) {
+                const charIndex = selectedCard.dataset.charIndex;
+                closeLobby();
+                await selectCharacterByIndex(parseInt(charIndex));
+            }
+        });
+        
         // 폴더 필터 변경 - 데스크톱 + 모바일
         const folderFilter = document.getElementById('chat-lobby-folder-filter');
         folderFilter.addEventListener('change', (e) => {

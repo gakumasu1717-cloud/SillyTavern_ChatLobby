@@ -287,6 +287,17 @@
     height: 40px;
     border-radius: 8px;
     object-fit: cover;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#chat-lobby-chats-header img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(106, 159, 181, 0.5);
+}
+
+#chat-lobby-chats-header img:active {
+    transform: scale(0.95);
 }
 
 #chat-lobby-chats-header .char-info {
@@ -991,20 +1002,29 @@
     
     #chat-lobby-batch-toolbar {
         flex-wrap: wrap;
-        padding: 15px;
-        padding-bottom: calc(20px + env(safe-area-inset-bottom, 20px));
+        padding: 12px 15px;
+        padding-bottom: calc(15px + env(safe-area-inset-bottom, 30px));
+        gap: 8px;
     }
     
     #chat-lobby-batch-toolbar span {
         flex-basis: 100%;
-        margin-bottom: 8px;
-        font-size: 1em;
+        margin-bottom: 5px;
+        font-size: 0.95em;
         font-weight: 600;
+        text-align: center;
     }
     
-    #chat-lobby-batch-toolbar select,
+    #chat-lobby-batch-toolbar select {
+        flex: 2;
+        min-height: 42px;
+        font-size: 14px;
+    }
+    
     #chat-lobby-batch-toolbar button {
         flex: 1;
-        min-height: 44px;
+        min-height: 42px;
+        padding: 8px 12px;
+        font-size: 14px;
     }
 }
