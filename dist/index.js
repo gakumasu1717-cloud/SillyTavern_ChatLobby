@@ -193,7 +193,11 @@
             <div id="chat-lobby-container">
                 <div id="chat-lobby-header">
                     <h2>Chat Lobby</h2>
-                    <button id="chat-lobby-close">✕</button>
+                    <div class="header-actions">
+                        <button id="chat-lobby-import-char" title="캐릭터 임포트">📥</button>
+                        <button id="chat-lobby-add-persona" title="페르소나 추가">👤</button>
+                        <button id="chat-lobby-close">✕</button>
+                    </div>
                 </div>
                 <div id="chat-lobby-persona-bar">
                     <div id="chat-lobby-persona-list">
@@ -210,7 +214,7 @@
                     <div id="chat-lobby-chats">
                         <div id="chat-lobby-chats-header">
                             <button id="chat-lobby-chats-close" title="닫기">←</button>
-                            <img src="" alt="avatar" id="chat-panel-avatar">
+                            <img src="" alt="avatar" id="chat-panel-avatar" title="캐릭터 설정">
                             <div class="char-info">
                                 <div class="char-name" id="chat-panel-name">캐릭터 선택</div>
                                 <div class="chat-count" id="chat-panel-count">채팅 목록</div>
@@ -229,19 +233,19 @@
                                 <button id="chat-lobby-folder-manage" title="폴더 관리">📁</button>
                             </div>
                         </div>
+                        <div id="chat-lobby-batch-toolbar">
+                            <span id="batch-selected-count">0개 선택</span>
+                            <select id="batch-move-folder">
+                                <option value="">폴더 선택...</option>
+                            </select>
+                            <button id="batch-move-btn">이동</button>
+                            <button id="batch-cancel-btn">취소</button>
+                        </div>
                         <div id="chat-lobby-chats-list">
                             <div class="lobby-empty-state">
                                 <i>💬</i>
                                 <div>캐릭터를 선택하세요</div>
                             </div>
-                        </div>
-                        <div id="chat-lobby-batch-toolbar">
-                            <span id="batch-selected-count">0개 선택</span>
-                            <select id="batch-move-folder">
-                                <option value="">이동할 폴더...</option>
-                            </select>
-                            <button id="batch-move-btn">이동</button>
-                            <button id="batch-cancel-btn">취소</button>
                         </div>
                     </div>
                 </div>
@@ -1577,14 +1581,39 @@
             }
         });
         
-        // 봇 프사 클릭 시 해당 봇 화면으로 이동
+        // 봇 프사 클릭 시 캐릭터 편집 화면으로 이동
         document.getElementById('chat-panel-avatar').addEventListener('click', async () => {
             const selectedCard = document.querySelector('.lobby-char-card.selected');
             if (selectedCard) {
                 const charIndex = selectedCard.dataset.charIndex;
                 closeLobby();
                 await selectCharacterByIndex(parseInt(charIndex));
+                // 캐릭터 편집 버튼 클릭
+                setTimeout(() => {
+                    const editBtn = document.getElementById('character_popup_text_h3');
+                    if (editBtn) editBtn.click();
+                }, 300);
             }
+        });
+        
+        // 캐릭터 임포트 버튼
+        document.getElementById('chat-lobby-import-char').addEventListener('click', () => {
+            closeLobby();
+            // SillyTavern 캐릭터 임포트 버튼 클릭
+            setTimeout(() => {
+                const importBtn = document.getElementById('external_import_button');
+                if (importBtn) importBtn.click();
+            }, 100);
+        });
+        
+        // 페르소나 추가 버튼
+        document.getElementById('chat-lobby-add-persona').addEventListener('click', () => {
+            closeLobby();
+            // SillyTavern 페르소나 관리 화면 열기
+            setTimeout(() => {
+                const personaBtn = document.getElementById('persona_management_button') || document.querySelector('[data-i18n="Persona Management"]');
+                if (personaBtn) personaBtn.click();
+            }, 100);
         });
         
         // 폴더 필터 변경 - 데스크톱 + 모바일

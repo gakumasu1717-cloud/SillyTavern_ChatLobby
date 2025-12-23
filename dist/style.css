@@ -73,6 +73,33 @@
     flex-shrink: 0;
 }
 
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.header-actions button {
+    background: transparent;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    color: var(--SmartThemeBodyColor, #fff);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.header-actions button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--SmartThemeQuoteColor, #6a9fb5);
+}
+
+#chat-lobby-close {
+    font-size: 1.3em !important;
+    padding: 6px 12px !important;
+}
+
 /* 페르소나 가로 스크롤 바 */
 #chat-lobby-persona-bar {
     display: flex;
@@ -334,7 +361,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 10px;
-    padding-bottom: calc(100px + env(safe-area-inset-bottom, 20px)); /* 배치 툴바 + 하단 네비 공간 */
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 10px));
 }
 
 .lobby-chat-item {
@@ -776,20 +803,14 @@
     margin-right: 5px;
 }
 
-/* 배치 도구바 - 하단 고정 */
+/* 배치 도구바 - 폴더바 아래 상단 위치 */
 #chat-lobby-batch-toolbar {
     display: none;
     align-items: center;
-    gap: 10px;
-    padding: 12px 15px;
-    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
-    border-top: 2px solid var(--SmartThemeQuoteColor, #6a9fb5);
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 2147483648;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    gap: 8px;
+    padding: 10px 15px;
+    background: var(--SmartThemeQuoteColor, rgba(106, 159, 181, 0.15));
+    border-bottom: 1px solid var(--SmartThemeQuoteColor, #6a9fb5);
 }
 
 #chat-lobby-batch-toolbar.visible {
@@ -798,21 +819,21 @@
 
 #chat-lobby-batch-toolbar span {
     color: var(--SmartThemeBodyColor, #fff);
-    font-size: 0.9em;
+    font-size: 0.85em;
     flex-shrink: 0;
+    font-weight: 600;
 }
 
 #chat-lobby-batch-toolbar select {
     background: var(--SmartThemeBlurTintColor, rgba(40, 40, 40, 0.9));
     border: 1px solid var(--SmartThemeBorderColor, #444);
     color: var(--SmartThemeBodyColor, #ddd);
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 6px;
-    font-size: 16px; /* 모바일 확대 방지 */
+    font-size: 14px;
     cursor: pointer;
     flex: 1;
-    min-width: 120px;
-    min-height: 40px;
+    min-width: 100px;
     -webkit-appearance: none;
     appearance: none;
 }
@@ -821,13 +842,11 @@
     background: var(--SmartThemeQuoteColor, #6a9fb5);
     border: none;
     color: #fff;
-    padding: 10px 16px;
+    padding: 6px 12px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 0.9em;
-    min-height: 40px;
-    min-width: 60px;
-    touch-action: manipulation;
+    font-size: 0.85em;
+    white-space: nowrap;
 }
 
 #chat-lobby-batch-toolbar button:hover {
@@ -979,6 +998,19 @@
 
 /* 모바일 폴더 스타일 조정 */
 @media (max-width: 768px) {
+    #chat-lobby-header {
+        padding: 12px 15px;
+    }
+    
+    #chat-lobby-header h2 {
+        font-size: 1.2em;
+    }
+    
+    .header-actions button {
+        padding: 6px 10px;
+        font-size: 1.1em;
+    }
+    
     #chat-lobby-folder-bar {
         padding: 8px 10px;
         flex-wrap: wrap;
@@ -1002,29 +1034,23 @@
     
     #chat-lobby-batch-toolbar {
         flex-wrap: wrap;
-        padding: 12px 15px;
-        padding-bottom: calc(15px + env(safe-area-inset-bottom, 30px));
-        gap: 8px;
+        gap: 6px;
+        padding: 8px 10px;
     }
     
     #chat-lobby-batch-toolbar span {
-        flex-basis: 100%;
-        margin-bottom: 5px;
-        font-size: 0.95em;
-        font-weight: 600;
-        text-align: center;
+        font-size: 0.85em;
     }
     
     #chat-lobby-batch-toolbar select {
         flex: 2;
-        min-height: 42px;
-        font-size: 14px;
+        font-size: 13px;
+        padding: 5px 8px;
     }
     
     #chat-lobby-batch-toolbar button {
         flex: 1;
-        min-height: 42px;
-        padding: 8px 12px;
-        font-size: 14px;
+        padding: 5px 10px;
+        font-size: 13px;
     }
 }
