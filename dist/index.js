@@ -1478,6 +1478,7 @@
             setTimeout(() => {
                 updateCharacterGrid();
                 updatePersonaSelect();
+                updateFolderFilterDropdown(); // 폴더 드롭다운 초기화
             }, 100);
             
             // 디버그: context 정보 출력
@@ -1596,39 +1597,47 @@
             }
         });
         
-        // 캐릭터 임포트 버튼 (PNG 파일 가져오기)
+        // 캐릭터 임포트 버튼 (PNG 파일 가져오기) - 로비 위에서 작동
         document.getElementById('chat-lobby-import-char').addEventListener('click', () => {
-            closeLobby();
-            // SillyTavern 캐릭터 PNG 임포트 (파일 선택 다이얼로그)
-            setTimeout(() => {
-                // character_import_button 클릭하면 파일 선택창 열림
+            // 로비를 숨기지 않고 파일 선택 다이얼로그 열기
+            const fileInput = document.getElementById('character_import_file');
+            if (fileInput) {
+                fileInput.click();
+            } else {
+                // 대체: 버튼 클릭
                 const importBtn = document.getElementById('character_import_button');
-                if (importBtn) {
-                    importBtn.click();
-                } else {
-                    // 대체: 파일 input 직접 트리거
-                    const fileInput = document.getElementById('character_import_file');
-                    if (fileInput) fileInput.click();
-                }
-            }, 100);
+                if (importBtn) importBtn.click();
+            }
         });
         
         // 페르소나 추가 버튼 (새 페르소나 생성)
         document.getElementById('chat-lobby-add-persona').addEventListener('click', () => {
+            // 로비 닫고 페르소나 관리 열기
             closeLobby();
-            // SillyTavern 페르소나 관리 패널 열고 생성 버튼 클릭
             setTimeout(() => {
-                // 페르소나 관리 버튼 클릭
-                const personaBtn = document.getElementById('persona_management_button');
+                // 페르소나 관리 버튼 찾기 (여러 선택자 시도)
+                const personaBtn = document.getElementById('persona_management_button') ||
+                                   document.querySelector('#user_avatar_block .avatar_button') ||
+                                   document.querySelector('.drawer-icon[title*="Persona"]');
                 if (personaBtn) {
                     personaBtn.click();
-                    // 패널 열린 후 Create 버튼 클릭
+                    // Create 버튼 클릭 (여러 선택자 시도)
                     setTimeout(() => {
-                        const createBtn = document.getElementById('persona_create_button') || 
-                                         document.querySelector('#persona_management .menu_button:has(.fa-plus)') ||
-                                         document.querySelector('[data-i18n="Create"]');
-                        if (createBtn) createBtn.click();
-                    }, 300);
+                        const createBtn = document.querySelector('#persona_create_button') ||
+                                         document.querySelector('.persona_create') ||
+                                         document.querySelector('#user-settings-block button.menu_button[title*="Create"]') ||
+                                         document.querySelector('.menu_button.fa-plus') ||
+                                         document.querySelector('button[title="Create"]') ||
+                                         document.querySelector('.drawer-content button:has(.fa-plus)');
+                        if (createBtn) {
+                            console.log('[Chat Lobby] Found Create button:', createBtn);
+                            createBtn.click();
+                        } else {
+                            console.log('[Chat Lobby] Create button not found');
+                        }
+                    }, 500);
+                } else {
+                    console.log('[Chat Lobby] Persona management button not found');
                 }
             }, 100);
         });
