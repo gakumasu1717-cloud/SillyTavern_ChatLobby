@@ -1596,23 +1596,40 @@
             }
         });
         
-        // 캐릭터 임포트 버튼
+        // 캐릭터 임포트 버튼 (PNG 파일 가져오기)
         document.getElementById('chat-lobby-import-char').addEventListener('click', () => {
             closeLobby();
-            // SillyTavern 캐릭터 임포트 버튼 클릭
+            // SillyTavern 캐릭터 PNG 임포트 (파일 선택 다이얼로그)
             setTimeout(() => {
-                const importBtn = document.getElementById('external_import_button');
-                if (importBtn) importBtn.click();
+                // character_import_button 클릭하면 파일 선택창 열림
+                const importBtn = document.getElementById('character_import_button');
+                if (importBtn) {
+                    importBtn.click();
+                } else {
+                    // 대체: 파일 input 직접 트리거
+                    const fileInput = document.getElementById('character_import_file');
+                    if (fileInput) fileInput.click();
+                }
             }, 100);
         });
         
-        // 페르소나 추가 버튼
+        // 페르소나 추가 버튼 (새 페르소나 생성)
         document.getElementById('chat-lobby-add-persona').addEventListener('click', () => {
             closeLobby();
-            // SillyTavern 페르소나 관리 화면 열기
+            // SillyTavern 페르소나 관리 패널 열고 생성 버튼 클릭
             setTimeout(() => {
-                const personaBtn = document.getElementById('persona_management_button') || document.querySelector('[data-i18n="Persona Management"]');
-                if (personaBtn) personaBtn.click();
+                // 페르소나 관리 버튼 클릭
+                const personaBtn = document.getElementById('persona_management_button');
+                if (personaBtn) {
+                    personaBtn.click();
+                    // 패널 열린 후 Create 버튼 클릭
+                    setTimeout(() => {
+                        const createBtn = document.getElementById('persona_create_button') || 
+                                         document.querySelector('#persona_management .menu_button:has(.fa-plus)') ||
+                                         document.querySelector('[data-i18n="Create"]');
+                        if (createBtn) createBtn.click();
+                    }, 300);
+                }
             }, 100);
         });
         
