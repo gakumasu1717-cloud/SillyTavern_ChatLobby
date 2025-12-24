@@ -803,6 +803,11 @@
         padding: 10px 15px;
     }
     
+    /* 뒤로 가기 버튼 표시 */
+    #chat-lobby-chats-back {
+        display: block !important;
+    }
+    
     #chat-lobby-new-chat {
         padding: 6px 10px;
         font-size: 0.8em;
