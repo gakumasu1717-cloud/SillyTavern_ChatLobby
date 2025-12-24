@@ -10,6 +10,22 @@
     const extensionFolderPath = 'third-party/SillyTavern-ChatLobby';
     const STORAGE_KEY = 'chatLobby_data';
     
+    // 모바일 감지
+    const isMobile = () => window.innerWidth <= 768 || ('ontouchstart' in window);
+    
+    // 디바운스 헬퍼
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
     // 페르소나 선택 상태 추적 (전역)
     let isProcessingPersona = false;
 
@@ -685,12 +701,25 @@
         }
     }
 
+    // 채팅 캐시 (모바일 최적화)
+    const chatsCache = new Map();
+    let chatsCacheTime = 0;
+    const CHATS_CACHE_DURATION = 30000; // 30초
+
     // 캐릭터의 채팅 목록 로드
-    async function loadChatsForCharacter(characterAvatar) {
+    async function loadChatsForCharacter(characterAvatar, forceRefresh = false) {
         console.log('[Chat Lobby] Fetching chats for:', characterAvatar);
         if (!characterAvatar) return [];
 
         try {
+            // 캐시 확인 (forceRefresh가 아닐 때)
+            const now = Date.now();
+            const cacheKey = characterAvatar;
+            if (!forceRefresh && now - chatsCacheTime < CHATS_CACHE_DURATION && chatsCache.has(cacheKey)) {
+                console.log('[Chat Lobby] Using cached chats');
+                return chatsCache.get(cacheKey);
+            }
+            
             const response = await fetch('/api/characters/chats', {
                 method: 'POST',
                 headers: getRequestHeaders(),
@@ -702,20 +731,33 @@
 
             if (!response.ok) {
                 console.error('[Chat Lobby] HTTP error:', response.status);
-                return []; // 에러 시 빈 배열 반환
+                return [];
             }
             const data = await response.json();
-            console.log('[Chat Lobby] Raw chat data:', JSON.stringify(data).substring(0, 500));
+            console.log('[Chat Lobby] Raw chat data count:', Array.isArray(data) ? data.length : 'not array');
             
-            // error 응답 처리
             if (data && data.error === true) {
                 return [];
             }
             
-            return data || [];
+            // 캐시 저장
+            const result = data || [];
+            chatsCache.set(cacheKey, result);
+            chatsCacheTime = now;
+            
+            return result;
         } catch (error) {
             console.error('[Chat Lobby] Failed to load chats:', error);
-            return []; // 에러 시 빈 배열 반환
+            return [];
+        }
+    }
+    
+    // 캐시 무효화 (새 채팅, 삭제 등)
+    function invalidateChatsCache(characterAvatar) {
+        if (characterAvatar) {
+            chatsCache.delete(characterAvatar);
+        } else {
+            chatsCache.clear();
         }
     }
 
@@ -940,9 +982,39 @@
             return renderCharacterCard(char, originalIndex);
         }).join('');
 
-        // 캐릭터 카드 클릭 이벤트
+        // 캐릭터 카드 클릭 이벤트 - 터치/클릭 중복 방지
         container.querySelectorAll('.lobby-char-card').forEach(card => {
-            card.addEventListener('click', () => selectCharacter(card));
+            let touchHandled = false;
+            let touchStartY = 0;
+            let isScrolling = false;
+            
+            card.addEventListener('touchstart', (e) => {
+                touchHandled = false;
+                isScrolling = false;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+            
+            card.addEventListener('touchmove', (e) => {
+                if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+                    isScrolling = true;
+                }
+            }, { passive: true });
+            
+            card.addEventListener('touchend', (e) => {
+                if (!isScrolling) {
+                    e.preventDefault();
+                    touchHandled = true;
+                    selectCharacter(card);
+                }
+                isScrolling = false;
+            });
+            
+            card.addEventListener('click', () => {
+                if (!touchHandled) {
+                    selectCharacter(card);
+                }
+                touchHandled = false;
+            });
         });
     }
 
@@ -1274,7 +1346,19 @@
         
         chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
         
-        const chats = await loadChatsForCharacter(charAvatar);
+        // forceRefresh로 캐시 무시
+        const chats = await loadChatsForCharacter(charAvatar, true);
+        
+        // 현재 정렬 옵션 가져오기 (최신값)
+        const lobbyData = loadLobbyData();
+        const currentSort = lobbyData.sortOption || 'recent';
+        console.log('[Chat Lobby] reloadChatsWithFilter - sort:', currentSort, 'filter:', filterValue);
+        
+        // 정렬 드롭다운 값 동기화
+        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
+        if (chatSortSelect && chatSortSelect.value !== currentSort) {
+            chatSortSelect.value = currentSort;
+        }
         
         // 빈 채팅 체크
         const hasNoChats = !chats || 
@@ -1315,9 +1399,6 @@
                    !fileName.startsWith('chat_') &&
                    fileName.toLowerCase() !== 'error';
         });
-        
-        const lobbyData = loadLobbyData();
-        const currentSort = lobbyData.sortOption || 'recent';
         
         // 폴더 필터 적용
         if (filterValue !== 'all') {
@@ -1708,6 +1789,8 @@
                 }
                 
                 console.log('[Chat Lobby] Chat deleted:', fileName);
+                // 캐시 무효화
+                invalidateChatsCache(charAvatar);
             } else {
                 console.error('[Chat Lobby] Failed to delete chat:', response.status);
                 // 서버에서 삭제 실패 - 파일이 없을 수 있음, UI에서만 제거할지 확인
@@ -1812,6 +1895,9 @@
             console.error('[Chat Lobby] No character selected');
             return;
         }
+        
+        // 캐시 무효화 (새 채팅 생성됨)
+        invalidateChatsCache(charAvatar);
 
         closeLobby();
         await selectCharacterByIndex(parseInt(charIndex));
