@@ -578,6 +578,18 @@
             const drawerIcon = personaDrawer.querySelector('.drawer-icon');
             const drawerContent = personaDrawer.querySelector('.drawer-content');
             
+            // 현재 drawer 상태 확인
+            const isDrawerOpen = drawerContent && drawerContent.classList.contains('openDrawer');
+            const isIconOpen = drawerIcon && drawerIcon.classList.contains('openIcon');
+            console.log('[Chat Lobby] Drawer state - isDrawerOpen:', isDrawerOpen, 'isIconOpen:', isIconOpen);
+            
+            // 이미 열려있으면 아무것도 안 함
+            if (isDrawerOpen || isIconOpen) {
+                console.log('[Chat Lobby] Drawer already open, skipping');
+                console.log('[Chat Lobby] === openPersonaManagement END ===');
+                return;
+            }
+            
             // ST-CustomTheme이 drawer를 이동시켰는지 확인
             const isSTMoved = personaDrawer.classList.contains('st-hamburger-moved-drawer');
             console.log('[Chat Lobby] ST-CustomTheme moved drawer:', isSTMoved);
@@ -585,18 +597,14 @@
             if (isSTMoved) {
                 // ST-CustomTheme 환경: hamburger 아이콘 클릭으로 패널 열기
                 const hamburgerIcon = document.getElementById('leftNavDrawerIcon');
-                console.log('[Chat Lobby] hamburgerIcon:', hamburgerIcon);
                 
                 if (hamburgerIcon) {
                     // hamburger가 닫혀있으면 클릭해서 열기
-                    const isOpen = hamburgerIcon.classList.contains('openIcon');
-                    console.log('[Chat Lobby] hamburger isOpen:', isOpen);
+                    const isHamburgerOpen = hamburgerIcon.classList.contains('openIcon');
                     
-                    if (!isOpen) {
+                    if (!isHamburgerOpen) {
                         console.log('[Chat Lobby] Clicking hamburger icon to open panel');
                         hamburgerIcon.click();
-                        
-                        // 패널 열린 후 drawer 열기
                         await new Promise(resolve => setTimeout(resolve, 300));
                     }
                 }
@@ -618,12 +626,10 @@
                 return;
             }
             
-            // 일반 환경: drawer-icon 클릭
-            if (drawerIcon) {
-                console.log('[Chat Lobby] Clicking drawer-icon');
+            // 일반 환경: drawer가 닫혀있을 때만 클릭
+            if (drawerIcon && !isIconOpen) {
+                console.log('[Chat Lobby] Clicking drawer-icon to open');
                 drawerIcon.click();
-                console.log('[Chat Lobby] === openPersonaManagement END ===');
-                return;
             }
         }
 
