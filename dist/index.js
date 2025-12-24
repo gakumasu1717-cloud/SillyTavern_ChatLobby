@@ -583,8 +583,23 @@
             console.log('[Chat Lobby] ST-CustomTheme moved drawer:', isSTMoved);
             
             if (isSTMoved) {
-                // ST-CustomTheme 환경: 직접 클래스 조작으로 drawer 열기
-                console.log('[Chat Lobby] Force opening drawer via class manipulation');
+                // ST-CustomTheme 환경: hamburger 아이콘 클릭으로 패널 열기
+                const hamburgerIcon = document.getElementById('leftNavDrawerIcon');
+                console.log('[Chat Lobby] hamburgerIcon:', hamburgerIcon);
+                
+                if (hamburgerIcon) {
+                    // hamburger가 닫혀있으면 클릭해서 열기
+                    const isOpen = hamburgerIcon.classList.contains('openIcon');
+                    console.log('[Chat Lobby] hamburger isOpen:', isOpen);
+                    
+                    if (!isOpen) {
+                        console.log('[Chat Lobby] Clicking hamburger icon to open panel');
+                        hamburgerIcon.click();
+                        
+                        // 패널 열린 후 drawer 열기
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                }
                 
                 // drawer-icon 클래스 변경
                 if (drawerIcon) {
@@ -597,18 +612,6 @@
                     drawerContent.classList.remove('closedDrawer');
                     drawerContent.classList.add('openDrawer');
                     drawerContent.style.display = 'block';
-                }
-                
-                // left-nav-panel 열기 (hamburger 메뉴)
-                const leftNav = document.getElementById('left-nav-panel');
-                if (leftNav) {
-                    leftNav.classList.add('open');
-                    // hamburger icon도 열린 상태로
-                    const hamburger = document.getElementById('leftNavDrawerIcon');
-                    if (hamburger) {
-                        hamburger.classList.remove('closedIcon');
-                        hamburger.classList.add('openIcon');
-                    }
                 }
                 
                 console.log('[Chat Lobby] === openPersonaManagement END ===');
