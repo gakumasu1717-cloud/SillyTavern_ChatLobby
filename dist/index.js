@@ -917,6 +917,14 @@
         const lobbyData = loadLobbyData();
         const charSortOption = sortOverride || lobbyData.charSortOption || 'recent';
         
+        // 드롭다운 UI 동기화 (값이 다를 때만)
+        const sortSelect = document.getElementById('chat-lobby-char-sort');
+        if (sortSelect && sortSelect.value !== charSortOption) {
+            sortSelect.value = charSortOption;
+        }
+        
+        console.log('[Chat Lobby] updateCharacterGrid - sortOption:', charSortOption);
+        
         // 캐릭터 정렬 (즐겨찾기 우선 + 선택된 정렬 기준)
         if (charSortOption === 'name') {
             // 이름순 정렬
@@ -1345,14 +1353,10 @@
         // forceRefresh로 캐시 무시
         const chats = await loadChatsForCharacter(charAvatar, true);
         
-        // 정렬 옵션: sortOverride가 있으면 사용, 아니면 localStorage에서 가져오기
-        let currentSort;
-        if (sortOverride) {
-            currentSort = sortOverride;
-        } else {
-            const lobbyData = loadLobbyData();
-            currentSort = lobbyData.sortOption || 'recent';
-        }
+        // 현재 정렬 옵션 가져오기 (sortOverride가 있으면 우선 사용)
+        const lobbyData = loadLobbyData();
+        const currentSort = sortOverride || lobbyData.sortOption || 'recent';
+        
         console.log('[Chat Lobby] reloadChatsWithFilter - sort:', currentSort, 'filter:', filterValue);
         
         // 정렬 드롭다운 값 동기화
@@ -1864,8 +1868,9 @@
                         
                         console.log(`[Chat Lobby] Item ${i}:`, itemText.substring(0, 50));
                         
-                        // 파일명 비교
-                        if (itemText.includes(cleanFileName)) {
+                        // 파일명 비교 - 정확한 매칭 (부분 일치 대신)
+                        const itemClean = itemText.replace('.jsonl', '').trim();
+                        if (itemClean === cleanFileName || itemText.includes(cleanFileName + '.jsonl') || itemClean.endsWith(cleanFileName)) {
                             console.log('[Chat Lobby] FOUND at index:', i);
                             item.click();
                             found = true;
