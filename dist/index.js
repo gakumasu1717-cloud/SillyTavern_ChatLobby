@@ -262,6 +262,7 @@
                     <!-- 오른쪽 패널: 채팅 목록 (항상 표시) -->
                     <div id="chat-lobby-chats">
                         <div id="chat-lobby-chats-header">
+                            <button id="chat-lobby-chats-back" title="뒤로">←</button>
                             <img src="" alt="avatar" id="chat-panel-avatar" title="캐릭터 설정" style="display:none;">
                             <div class="char-info">
                                 <div class="char-name" id="chat-panel-name">캐릭터를 선택하세요</div>
@@ -560,34 +561,46 @@
     async function openPersonaManagement() {
         console.log('[Chat Lobby] openPersonaManagement called');
         
-        // 먼저 로비 닫기
-        closeLobby();
-
-        // 약간의 지연 후 페르소나 관리 열기
-        setTimeout(() => {
-            // SillyTavern의 페르소나 관리 drawer 찾기
-            const personaDrawer = document.getElementById('persona-management-button');
+        // 페르소나 관리 drawer 찾기
+        const personaDrawer = document.getElementById('persona-management-button');
+        let clicked = false;
+        
+        if (personaDrawer) {
+            // drawer-content가 이미 열려있는지 확인
+            const drawerContent = personaDrawer.querySelector('.drawer-content');
+            const isAlreadyOpen = drawerContent && window.getComputedStyle(drawerContent).display !== 'none';
             
-            if (personaDrawer) {
+            if (!isAlreadyOpen) {
                 // .drawer-toggle 찾기 (drawer를 여는 버튼)
                 const toggle = personaDrawer.querySelector('.drawer-toggle');
                 if (toggle) {
                     console.log('[Chat Lobby] Opening persona management via drawer-toggle');
                     toggle.click();
-                    return;
+                    clicked = true;
                 }
+            } else {
+                clicked = true; // 이미 열려있음
             }
+        }
 
-            // ST-CustomTheme 사이드바 체크
+        // ST-CustomTheme 사이드바 체크
+        if (!clicked) {
             const sidebarBtn = document.querySelector('[data-btn-id="persona-management-button"]');
             if (sidebarBtn) {
                 console.log('[Chat Lobby] Opening persona management via sidebar');
                 sidebarBtn.click();
-                return;
+                clicked = true;
             }
+        }
 
+        if (!clicked) {
             console.warn('[Chat Lobby] Could not find persona management button');
-        }, 150);
+        }
+        
+        // drawer 클릭 후 로비 닫기
+        setTimeout(() => {
+            closeLobby();
+        }, 50);
     }
 
     // 페르소나 변경
@@ -1825,8 +1838,11 @@
         const chatsList = document.getElementById('chat-lobby-chats-list');
         if (!chatsList) return;
 
-        const isDesktop = () => window.innerWidth > 768 && window.matchMedia('(pointer: fine)').matches;
+        // 터치 디바이스가 아니면 데스크톱으로 간주
+        const isDesktop = () => !('ontouchstart' in window) || window.innerWidth > 1024;
         let activeTooltip = null;
+        
+        console.log('[Chat Lobby] Tooltip setup - isDesktop:', isDesktop());
 
         const hideTooltip = () => {
             if (activeTooltip) {
@@ -1945,6 +1961,18 @@
         
         // FAB 버튼 클릭
         document.getElementById('chat-lobby-fab').addEventListener('click', openLobby);
+        
+        // 채팅 패널 뒤로 가기 버튼 (좁은 화면용)
+        document.getElementById('chat-lobby-chats-back').addEventListener('click', () => {
+            const chatsPanel = document.getElementById('chat-lobby-chats');
+            if (chatsPanel) {
+                chatsPanel.classList.remove('visible');
+            }
+            // 캐릭터 선택 해제
+            document.querySelectorAll('.lobby-char-card.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+        });
         
         // 봇 프사 클릭 시 캐릭터 정보/편집 화면으로 이동 (설명, 인사말 등)
         document.getElementById('chat-panel-avatar').addEventListener('click', async () => {
