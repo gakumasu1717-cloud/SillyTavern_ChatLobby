@@ -572,55 +572,99 @@
         // 지연 후 클릭
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // 방법 1: drawer-icon 클릭 (가장 일반적)
         const personaDrawer = document.getElementById('persona-management-button');
+        console.log('[Chat Lobby] personaDrawer:', personaDrawer);
+        
+        if (personaDrawer) {
+            // 모든 자식 요소 로그
+            console.log('[Chat Lobby] personaDrawer children:', personaDrawer.innerHTML.substring(0, 500));
+            console.log('[Chat Lobby] personaDrawer classes:', personaDrawer.className);
+            
+            // drawer-icon 찾기
+            const drawerIcon = personaDrawer.querySelector('.drawer-icon');
+            console.log('[Chat Lobby] drawer-icon:', drawerIcon);
+            
+            // drawer-toggle 찾기
+            const drawerToggle = personaDrawer.querySelector('.drawer-toggle');
+            console.log('[Chat Lobby] drawer-toggle:', drawerToggle);
+            
+            // drawer-content 찾기
+            const drawerContent = personaDrawer.querySelector('.drawer-content');
+            console.log('[Chat Lobby] drawer-content:', drawerContent);
+        }
+        
+        // 방법 1: SillyTavern의 doToggleDrawer 함수 사용 시도
+        try {
+            if (personaDrawer && typeof window.doToggleDrawer === 'function') {
+                console.log('[Chat Lobby] Using doToggleDrawer');
+                window.doToggleDrawer(personaDrawer.querySelector('.drawer-icon'));
+                console.log('[Chat Lobby] === openPersonaManagement END ===');
+                return;
+            }
+        } catch (e) {
+            console.log('[Chat Lobby] doToggleDrawer failed:', e);
+        }
+        
+        // 방법 2: jQuery trigger 시도
+        try {
+            if (personaDrawer && window.jQuery) {
+                const $icon = window.jQuery(personaDrawer).find('.drawer-icon');
+                if ($icon.length) {
+                    console.log('[Chat Lobby] Using jQuery trigger click');
+                    $icon.trigger('click');
+                    console.log('[Chat Lobby] === openPersonaManagement END ===');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('[Chat Lobby] jQuery click failed:', e);
+        }
+        
+        // 방법 3: 네이티브 클릭 이벤트 생성
         if (personaDrawer) {
             const drawerIcon = personaDrawer.querySelector('.drawer-icon');
             if (drawerIcon) {
-                console.log('[Chat Lobby] Clicking drawer-icon');
-                drawerIcon.click();
+                console.log('[Chat Lobby] Creating native click event');
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window
+                });
+                drawerIcon.dispatchEvent(clickEvent);
                 console.log('[Chat Lobby] === openPersonaManagement END ===');
                 return;
             }
         }
         
-        // 방법 2: ST-CustomTheme 사이드바 버튼
-        const stSidebarSelectors = [
-            '[data-btn-id="persona-management-button"]',
-            '.st-custom-sidebar [data-i18n="Persona Management"]',
-            '.custom-sidebar-btn[data-btn-id="persona-management-button"]',
-            'button[data-i18n="Persona Management"]'
-        ];
-        
-        for (const sel of stSidebarSelectors) {
-            const stButton = document.querySelector(sel);
-            if (stButton) {
-                console.log('[Chat Lobby] Found ST button:', sel);
-                stButton.click();
-                console.log('[Chat Lobby] === openPersonaManagement END ===');
-                return;
-            }
-        }
-        
-        // 방법 3: drawer-toggle 클릭
+        // 방법 4: drawer-toggle 클릭
         if (personaDrawer) {
             const drawerToggle = personaDrawer.querySelector('.drawer-toggle');
             if (drawerToggle) {
-                console.log('[Chat Lobby] Clicking drawer-toggle');
+                console.log('[Chat Lobby] Clicking drawer-toggle directly');
                 drawerToggle.click();
                 console.log('[Chat Lobby] === openPersonaManagement END ===');
                 return;
             }
         }
         
-        // 방법 4: 직접 클래스 토글
+        // 방법 5: 강제로 drawer 열기 (클래스 + 스타일)
         if (personaDrawer) {
-            console.log('[Chat Lobby] Directly toggling drawer classes');
+            console.log('[Chat Lobby] Force opening drawer');
             personaDrawer.classList.remove('closedDrawer');
             personaDrawer.classList.add('openDrawer');
+            
             const content = personaDrawer.querySelector('.drawer-content');
             if (content) {
                 content.style.display = 'block';
+                content.style.maxHeight = 'calc(100vh - 200px)';
+                content.style.overflow = 'auto';
+            }
+            
+            // left-nav-panel 열기 (ST-CustomTheme이 숨길 수 있음)
+            const leftNav = document.getElementById('left-nav-panel');
+            if (leftNav) {
+                leftNav.classList.add('open');
+                leftNav.style.display = 'flex';
             }
         }
 
