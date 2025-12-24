@@ -595,14 +595,37 @@
             console.log('[Chat Lobby] Clicking ST-CustomTheme sidebar button');
             stButton.click();
         } else if (personaDrawer) {
-            // drawer-toggle 클릭
+            console.log('[Chat Lobby] personaDrawer classList:', personaDrawer.classList.toString());
+            
+            // 방법 1: openDrawer 클래스 직접 토글
+            if (!personaDrawer.classList.contains('openDrawer')) {
+                console.log('[Chat Lobby] Adding openDrawer class');
+                personaDrawer.classList.add('openDrawer');
+            } else {
+                console.log('[Chat Lobby] openDrawer class already present');
+            }
+            
+            // 방법 2: drawer-toggle 클릭
             const drawerToggle = personaDrawer.querySelector('.drawer-toggle');
             if (drawerToggle) {
                 console.log('[Chat Lobby] Clicking drawer-toggle');
                 drawerToggle.click();
-            } else {
-                console.warn('[Chat Lobby] drawer-toggle not found');
             }
+            
+            // 방법 3: 100ms 후 drawer-content 직접 표시
+            setTimeout(() => {
+                const drawerContent = personaDrawer.querySelector('.drawer-content');
+                if (drawerContent) {
+                    const computedStyle = window.getComputedStyle(drawerContent);
+                    console.log('[Chat Lobby] drawer-content display:', computedStyle.display);
+                    console.log('[Chat Lobby] drawer-content height:', computedStyle.height);
+                    
+                    if (computedStyle.display === 'none' || computedStyle.height === '0px') {
+                        console.log('[Chat Lobby] Forcing drawer-content visible');
+                        drawerContent.style.cssText = 'display: block !important; height: auto !important; max-height: 50vh !important; overflow: auto !important;';
+                    }
+                }
+            }, 100);
         } else {
             console.warn('[Chat Lobby] No persona management button found');
         }
@@ -1036,6 +1059,11 @@
         const lobbyData = loadLobbyData();
         const currentSort = lobbyData.sortOption || 'recent';
         const currentFilter = lobbyData.filterFolder || 'all';
+        
+        console.log('[Chat Lobby] === Sorting chats ===');
+        console.log('[Chat Lobby] Sort option:', currentSort);
+        console.log('[Chat Lobby] Filter:', currentFilter);
+        console.log('[Chat Lobby] Chats before sort:', chatArray.length);
         
         // 폴더 필터 적용
         if (currentFilter !== 'all') {
@@ -1720,26 +1748,37 @@
 
     // 파일명으로 채팅 열기
     async function openChatByFileName(fileName, charAvatar) {
+        console.log('[Chat Lobby] === openChatByFileName START ===');
+        console.log('[Chat Lobby] Target fileName:', fileName);
+        
         try {
             // 채팅 관리 버튼 클릭
             const manageChatsBtn = document.getElementById('option_select_chat');
+            console.log('[Chat Lobby] manageChatsBtn found:', !!manageChatsBtn);
+            
             if (manageChatsBtn) {
                 manageChatsBtn.click();
 
                 // 채팅 목록에서 해당 파일명 찾기
                 setTimeout(() => {
                     const chatItems = document.querySelectorAll('.select_chat_block');
+                    console.log('[Chat Lobby] Chat items count:', chatItems.length);
                     let found = false;
                     
-                    for (const item of chatItems) {
+                    const cleanFileName = fileName.replace('.jsonl', '');
+                    console.log('[Chat Lobby] Searching for:', cleanFileName);
+                    
+                    for (let i = 0; i < chatItems.length; i++) {
+                        const item = chatItems[i];
                         // 파일명이 포함된 요소 찾기
                         const nameEl = item.querySelector('.select_chat_block_filename, .ch_name');
                         const itemText = nameEl?.textContent || item.textContent || '';
                         
-                        // 파일명 비교 (확장자 제거 후 비교)
-                        const cleanFileName = fileName.replace('.jsonl', '');
+                        console.log(`[Chat Lobby] Item ${i}:`, itemText.substring(0, 50));
+                        
+                        // 파일명 비교
                         if (itemText.includes(cleanFileName)) {
-                            console.log('[Chat Lobby] Found chat item:', cleanFileName);
+                            console.log('[Chat Lobby] FOUND at index:', i);
                             item.click();
                             found = true;
                             break;
@@ -1747,13 +1786,11 @@
                     }
                     
                     if (!found) {
-                        console.warn('[Chat Lobby] Could not find chat:', fileName);
-                        // 폴백: 첫 번째 채팅 선택
-                        if (chatItems.length > 0) {
-                            chatItems[0].click();
-                        }
+                        console.warn('[Chat Lobby] NOT FOUND:', fileName);
                     }
-                }, 200);
+                    
+                    console.log('[Chat Lobby] === openChatByFileName END ===');
+                }, 300);
             }
         } catch (error) {
             console.error('[Chat Lobby] Failed to open specific chat:', error);
