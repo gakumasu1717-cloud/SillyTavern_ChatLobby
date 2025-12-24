@@ -1336,7 +1336,7 @@
     }
     
     // 채팅만 다시 로드 (필터/정렬 변경 시)
-    async function reloadChatsWithFilter(cardElement, filterValue) {
+    async function reloadChatsWithFilter(cardElement, filterValue, sortOverride = null) {
         const charAvatar = cardElement.dataset.charAvatar;
         const chatsList = document.getElementById('chat-lobby-chats-list');
         
@@ -1345,9 +1345,14 @@
         // forceRefresh로 캐시 무시
         const chats = await loadChatsForCharacter(charAvatar, true);
         
-        // 현재 정렬 옵션 가져오기 (최신값)
-        const lobbyData = loadLobbyData();
-        const currentSort = lobbyData.sortOption || 'recent';
+        // 정렬 옵션: sortOverride가 있으면 사용, 아니면 localStorage에서 가져오기
+        let currentSort;
+        if (sortOverride) {
+            currentSort = sortOverride;
+        } else {
+            const lobbyData = loadLobbyData();
+            currentSort = lobbyData.sortOption || 'recent';
+        }
         console.log('[Chat Lobby] reloadChatsWithFilter - sort:', currentSort, 'filter:', filterValue);
         
         // 정렬 드롭다운 값 동기화
@@ -2288,13 +2293,15 @@
             const newSort = chatSortSelect.value;
             if (newSort === lastChatSortValue) return;
             
+            console.log('[Chat Lobby] Applying chat sort:', newSort);
             lastChatSortValue = newSort;
             setSortOption(newSort);
             
             const selectedCard = document.querySelector('.lobby-char-card.selected');
             if (selectedCard) {
                 const currentFilter = document.getElementById('chat-lobby-folder-filter')?.value || 'all';
-                reloadChatsWithFilter(selectedCard, currentFilter);
+                // 정렬값을 직접 전달하여 타이밍 문제 방지
+                reloadChatsWithFilter(selectedCard, currentFilter, newSort);
             }
         };
         
