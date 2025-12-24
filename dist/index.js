@@ -1,2589 +1,1837 @@
-// Chat Lobby Extension for SillyTavern
-// 캐릭터 기반 채팅방 선택 UI + 페르소나 선택 + 폴더/분류 관리
-
-(function() {
-    'use strict';
-
-    console.log('[Chat Lobby] Loading extension...');
-
-    const extensionName = 'Chat Lobby';
-    const extensionFolderPath = 'third-party/SillyTavern-ChatLobby';
-    const STORAGE_KEY = 'chatLobby_data';
-    
-    // 모바일 감지
-    const isMobile = () => window.innerWidth <= 768 || ('ontouchstart' in window);
-    
-    // 디바운스 헬퍼
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
+(() => {
+  var __create = Object.create;
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getProtoOf = Object.getPrototypeOf;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+  }) : x)(function(x) {
+    if (typeof require !== "undefined") return require.apply(this, arguments);
+    throw Error('Dynamic require of "' + x + '" is not supported');
+  });
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  };
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
     }
-    
-    // 페르소나 선택 상태 추적 (전역)
-    let isProcessingPersona = false;
+    return to;
+  };
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+    // If the importer is in node compatibility mode or this is not an ESM
+    // file that has been converted to a CommonJS file using a Babel-
+    // compatible transform (i.e. "__esModule" has not been set), then set
+    // "default" to the CommonJS "module.exports" for node compatibility.
+    isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+    mod
+  ));
 
-    // ============================================
-    // 폴더/분류 데이터 관리
-    // ============================================
-    
-    // 기본 데이터 구조
-    const defaultData = {
+  // src/config.js
+  var CONFIG, DEFAULT_DATA;
+  var init_config = __esm({
+    "src/config.js"() {
+      CONFIG = {
+        extensionName: "Chat Lobby",
+        extensionFolderPath: "third-party/SillyTavern-ChatLobby",
+        storageKey: "chatLobby_data",
+        // 캐시 설정
+        cache: {
+          chatsDuration: 3e4,
+          // 채팅 목록 캐시 30초
+          chatCountDuration: 6e4,
+          // 채팅 수 캐시 1분
+          personasDuration: 6e4,
+          // 페르소나 캐시 1분
+          charactersDuration: 3e4
+          // 캐릭터 캐시 30초
+        },
+        // UI 설정
+        ui: {
+          mobileBreakpoint: 768,
+          debounceWait: 300,
+          retryCount: 3,
+          retryDelay: 500
+        }
+      };
+      DEFAULT_DATA = {
         folders: [
-            { id: 'favorites', name: '⭐ 즐겨찾기', isSystem: true, order: 0 },
-            { id: 'uncategorized', name: '📁 미분류', isSystem: true, order: 999 }
+          { id: "favorites", name: "\u2B50 \uC990\uACA8\uCC3E\uAE30", isSystem: true, order: 0 },
+          { id: "uncategorized", name: "\u{1F4C1} \uBBF8\uBD84\uB958", isSystem: true, order: 999 }
         ],
-        chatAssignments: {}, // { "캐릭터avatar_채팅파일명": "폴더id" }
-        favorites: [], // ["캐릭터avatar_채팅파일명", ...]
-        sortOption: 'recent', // recent, created, name, favorites
-        filterFolder: 'all', // all, favorites, 폴더id
-        collapsedFolders: [], // 접힌 폴더 목록
-        charSortOption: 'recent', // recent, name, created, chats - 캐릭터 정렬 옵션
+        chatAssignments: {},
+        favorites: [],
+        sortOption: "recent",
+        filterFolder: "all",
+        collapsedFolders: [],
+        charSortOption: "recent",
         autoFavoriteRules: {
-            recentDays: 0, // 0 = 비활성화, 3 = 최근 3일 사용 시 자동 즐겨찾기
+          recentDays: 0
         }
-    };
+      };
+    }
+  });
 
-    // 데이터 로드
-    function loadLobbyData() {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY);
+  // src/data/cache.js
+  var CacheManager, cache;
+  var init_cache = __esm({
+    "src/data/cache.js"() {
+      init_config();
+      CacheManager = class {
+        constructor() {
+          this.stores = {
+            chats: /* @__PURE__ */ new Map(),
+            // 캐릭터별 채팅 목록
+            chatCounts: /* @__PURE__ */ new Map(),
+            // 캐릭터별 채팅 수
+            personas: null,
+            // 페르소나 목록
+            characters: null
+            // 캐릭터 목록
+          };
+          this.timestamps = {
+            chats: /* @__PURE__ */ new Map(),
+            chatCounts: 0,
+            personas: 0,
+            characters: 0
+          };
+          this.preloadStatus = {
+            personas: false,
+            characters: false
+          };
+          this.pendingRequests = /* @__PURE__ */ new Map();
+        }
+        // ============================================
+        // 범용 캐시 메서드
+        // ============================================
+        isValid(type, key = null) {
+          const duration = CONFIG.cache[`${type}Duration`];
+          const now = Date.now();
+          if (key !== null) {
+            const timestamp = this.timestamps[type].get(key);
+            return timestamp && now - timestamp < duration;
+          } else {
+            return this.timestamps[type] && now - this.timestamps[type] < duration;
+          }
+        }
+        get(type, key = null) {
+          if (key !== null) {
+            return this.stores[type].get(key);
+          }
+          return this.stores[type];
+        }
+        set(type, data, key = null) {
+          const now = Date.now();
+          if (key !== null) {
+            this.stores[type].set(key, data);
+            this.timestamps[type].set(key, now);
+          } else {
+            this.stores[type] = data;
+            this.timestamps[type] = now;
+          }
+        }
+        invalidate(type, key = null) {
+          if (key !== null) {
+            this.stores[type].delete(key);
+            this.timestamps[type].delete(key);
+          } else if (type) {
+            if (this.stores[type] instanceof Map) {
+              this.stores[type].clear();
+              this.timestamps[type].clear();
+            } else {
+              this.stores[type] = null;
+              this.timestamps[type] = 0;
+            }
+          }
+        }
+        invalidateAll() {
+          Object.keys(this.stores).forEach((type) => {
+            this.invalidate(type);
+          });
+        }
+        // ============================================
+        // 중복 요청 방지 (같은 요청이 진행 중이면 그 Promise 반환)
+        // ============================================
+        async getOrFetch(key, fetchFn) {
+          if (this.pendingRequests.has(key)) {
+            return this.pendingRequests.get(key);
+          }
+          const promise = fetchFn().finally(() => {
+            this.pendingRequests.delete(key);
+          });
+          this.pendingRequests.set(key, promise);
+          return promise;
+        }
+        // ============================================
+        // 프리로딩 (백그라운드에서 미리 로딩)
+        // ============================================
+        async preloadAll(api2) {
+          console.log("[Cache] Starting preload...");
+          const promises = [];
+          if (!this.preloadStatus.personas) {
+            promises.push(
+              this.preloadPersonas(api2).then(() => {
+                this.preloadStatus.personas = true;
+                console.log("[Cache] Personas preloaded");
+              })
+            );
+          }
+          if (!this.preloadStatus.characters) {
+            promises.push(
+              this.preloadCharacters(api2).then(() => {
+                this.preloadStatus.characters = true;
+                console.log("[Cache] Characters preloaded");
+              })
+            );
+          }
+          await Promise.all(promises);
+          console.log("[Cache] Preload complete");
+        }
+        async preloadPersonas(api2) {
+          if (this.isValid("personas")) return;
+          try {
+            const personas = await api2.fetchPersonas();
+            this.set("personas", personas);
+          } catch (e) {
+            console.error("[Cache] Failed to preload personas:", e);
+          }
+        }
+        async preloadCharacters(api2) {
+          if (this.isValid("characters")) return;
+          try {
+            const characters = await api2.fetchCharacters();
+            this.set("characters", characters);
+          } catch (e) {
+            console.error("[Cache] Failed to preload characters:", e);
+          }
+        }
+        // 자주 사용하는 캐릭터의 채팅 목록도 프리로딩
+        async preloadRecentChats(api2, recentCharacters) {
+          const promises = recentCharacters.slice(0, 5).map(async (char) => {
+            if (!this.isValid("chats", char.avatar)) {
+              try {
+                const chats = await api2.fetchChatsForCharacter(char.avatar);
+                this.set("chats", chats, char.avatar);
+              } catch (e) {
+              }
+            }
+          });
+          await Promise.all(promises);
+        }
+      };
+      cache = new CacheManager();
+    }
+  });
+
+  // src/data/storage.js
+  var StorageManager, storage;
+  var init_storage = __esm({
+    "src/data/storage.js"() {
+      init_config();
+      StorageManager = class {
+        constructor() {
+          this._data = null;
+        }
+        // 데이터 로드 (메모리 캐시 우선)
+        load() {
+          if (this._data) return this._data;
+          try {
+            const saved = localStorage.getItem(CONFIG.storageKey);
             if (saved) {
-                const data = JSON.parse(saved);
-                // 기본값과 병합 (누락된 필드 보완)
-                return { ...defaultData, ...data };
+              const data = JSON.parse(saved);
+              this._data = { ...DEFAULT_DATA, ...data };
+              return this._data;
             }
-        } catch (e) {
-            console.error('[Chat Lobby] Failed to load data:', e);
+          } catch (e) {
+            console.error("[Storage] Failed to load:", e);
+          }
+          this._data = { ...DEFAULT_DATA };
+          return this._data;
         }
-        return { ...defaultData };
-    }
-
-    // 데이터 저장
-    function saveLobbyData(data) {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        } catch (e) {
-            console.error('[Chat Lobby] Failed to save data:', e);
+        // 데이터 저장
+        save(data) {
+          try {
+            this._data = data;
+            localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
+          } catch (e) {
+            console.error("[Storage] Failed to save:", e);
+          }
         }
-    }
-
-    // 채팅 키 생성 (캐릭터avatar_채팅파일명)
-    function getChatKey(charAvatar, chatFileName) {
-        return `${charAvatar}_${chatFileName}`;
-    }
-
-    // 폴더 추가
-    function addFolder(name) {
-        const data = loadLobbyData();
-        const id = 'folder_' + Date.now();
-        const maxOrder = Math.max(...data.folders.filter(f => !f.isSystem || f.id !== 'uncategorized').map(f => f.order), 0);
-        data.folders.push({ id, name, isSystem: false, order: maxOrder + 1 });
-        saveLobbyData(data);
-        return id;
-    }
-
-    // 폴더 삭제
-    function deleteFolder(folderId) {
-        const data = loadLobbyData();
-        const folder = data.folders.find(f => f.id === folderId);
-        if (!folder || folder.isSystem) return false;
-        
-        // 해당 폴더의 채팅들을 미분류로 이동
-        Object.keys(data.chatAssignments).forEach(key => {
-            if (data.chatAssignments[key] === folderId) {
-                data.chatAssignments[key] = 'uncategorized';
+        // 데이터 업데이트 (load → update → save 한번에)
+        update(updater) {
+          const data = this.load();
+          const result = updater(data);
+          this.save(data);
+          return result;
+        }
+        // 캐시 초기화 (다시 localStorage에서 읽게)
+        invalidate() {
+          this._data = null;
+        }
+        // ============================================
+        // 헬퍼 메서드
+        // ============================================
+        getChatKey(charAvatar, chatFileName) {
+          return `${charAvatar}_${chatFileName}`;
+        }
+        // 폴더 관련
+        getFolders() {
+          return this.load().folders;
+        }
+        addFolder(name) {
+          return this.update((data) => {
+            const id = "folder_" + Date.now();
+            const maxOrder = Math.max(
+              ...data.folders.filter((f) => !f.isSystem || f.id !== "uncategorized").map((f) => f.order),
+              0
+            );
+            data.folders.push({ id, name, isSystem: false, order: maxOrder + 1 });
+            return id;
+          });
+        }
+        deleteFolder(folderId) {
+          return this.update((data) => {
+            const folder = data.folders.find((f) => f.id === folderId);
+            if (!folder || folder.isSystem) return false;
+            Object.keys(data.chatAssignments).forEach((key) => {
+              if (data.chatAssignments[key] === folderId) {
+                data.chatAssignments[key] = "uncategorized";
+              }
+            });
+            data.folders = data.folders.filter((f) => f.id !== folderId);
+            return true;
+          });
+        }
+        renameFolder(folderId, newName) {
+          return this.update((data) => {
+            const folder = data.folders.find((f) => f.id === folderId);
+            if (!folder || folder.isSystem) return false;
+            folder.name = newName;
+            return true;
+          });
+        }
+        // 채팅-폴더 할당
+        assignChatToFolder(charAvatar, chatFileName, folderId) {
+          this.update((data) => {
+            const key = this.getChatKey(charAvatar, chatFileName);
+            data.chatAssignments[key] = folderId;
+          });
+        }
+        getChatFolder(charAvatar, chatFileName) {
+          const data = this.load();
+          const key = this.getChatKey(charAvatar, chatFileName);
+          return data.chatAssignments[key] || "uncategorized";
+        }
+        // 즐겨찾기
+        toggleFavorite(charAvatar, chatFileName) {
+          return this.update((data) => {
+            const key = this.getChatKey(charAvatar, chatFileName);
+            const index = data.favorites.indexOf(key);
+            if (index > -1) {
+              data.favorites.splice(index, 1);
+              return false;
             }
-        });
-        
-        data.folders = data.folders.filter(f => f.id !== folderId);
-        saveLobbyData(data);
-        return true;
-    }
-
-    // 폴더 이름 변경
-    function renameFolder(folderId, newName) {
-        const data = loadLobbyData();
-        const folder = data.folders.find(f => f.id === folderId);
-        if (!folder || folder.isSystem) return false;
-        folder.name = newName;
-        saveLobbyData(data);
-        return true;
-    }
-
-    // 채팅을 폴더에 할당
-    function assignChatToFolder(charAvatar, chatFileName, folderId) {
-        const data = loadLobbyData();
-        const key = getChatKey(charAvatar, chatFileName);
-        data.chatAssignments[key] = folderId;
-        saveLobbyData(data);
-    }
-
-    // 채팅의 폴더 가져오기
-    function getChatFolder(charAvatar, chatFileName) {
-        const data = loadLobbyData();
-        const key = getChatKey(charAvatar, chatFileName);
-        return data.chatAssignments[key] || 'uncategorized';
-    }
-
-    // 즐겨찾기 토글
-    function toggleFavorite(charAvatar, chatFileName) {
-        const data = loadLobbyData();
-        const key = getChatKey(charAvatar, chatFileName);
-        const index = data.favorites.indexOf(key);
-        if (index > -1) {
-            data.favorites.splice(index, 1);
-        } else {
             data.favorites.push(key);
+            return true;
+          });
         }
-        saveLobbyData(data);
-        return index === -1; // 새로 추가되었으면 true
-    }
-
-    // 즐겨찾기 여부 확인
-    function isFavorite(charAvatar, chatFileName) {
-        const data = loadLobbyData();
-        const key = getChatKey(charAvatar, chatFileName);
-        return data.favorites.includes(key);
-    }
-
-    // 정렬 옵션 설정
-    function setSortOption(option) {
-        const data = loadLobbyData();
-        data.sortOption = option;
-        saveLobbyData(data);
-    }
-
-    // 캐릭터 정렬 옵션 설정
-    function setCharSortOption(option) {
-        const data = loadLobbyData();
-        data.charSortOption = option;
-        saveLobbyData(data);
-    }
-
-    // 캐릭터별 채팅 수 캐시 (성능 최적화)
-    const chatCountCache = new Map();
-    let chatCountCacheTime = 0;
-    const CACHE_DURATION = 60000; // 1분
-
-    // 캐릭터별 채팅 수 가져오기
-    async function getCharacterChatCount(characterAvatar) {
-        // 캐시 확인
-        const now = Date.now();
-        if (now - chatCountCacheTime > CACHE_DURATION) {
-            chatCountCache.clear();
-            chatCountCacheTime = now;
+        isFavorite(charAvatar, chatFileName) {
+          const data = this.load();
+          const key = this.getChatKey(charAvatar, chatFileName);
+          return data.favorites.includes(key);
         }
-        if (chatCountCache.has(characterAvatar)) {
-            return chatCountCache.get(characterAvatar);
+        // 정렬/필터 옵션
+        getSortOption() {
+          return this.load().sortOption || "recent";
         }
-        
-        try {
-            const chats = await loadChatsForCharacter(characterAvatar);
-            const count = Array.isArray(chats) ? chats.length : Object.keys(chats || {}).length;
-            chatCountCache.set(characterAvatar, count);
-            return count;
-        } catch (e) {
-            return 0;
+        setSortOption(option) {
+          this.update((data) => {
+            data.sortOption = option;
+          });
         }
-    }
-
-    // 필터 폴더 설정
-    function setFilterFolder(folderId) {
-        const data = loadLobbyData();
-        data.filterFolder = folderId;
-        saveLobbyData(data);
-    }
-
-    // 다중 채팅 이동
-    function moveChatsBatch(chatKeys, targetFolderId) {
-        const data = loadLobbyData();
-        chatKeys.forEach(key => {
-            data.chatAssignments[key] = targetFolderId;
-        });
-        saveLobbyData(data);
-    }
-
-    // ============================================
-    // SillyTavern API 접근
-    // ============================================
-    
-    const getContext = () => window.SillyTavern?.getContext?.() || null;
-    
-    // SillyTavern 요청 헤더 가져오기
-    const getRequestHeaders = () => {
-        // SillyTavern의 getRequestHeaders 함수 사용
-        if (window.SillyTavern?.getContext) {
-            const context = window.SillyTavern.getContext();
-            if (context.getRequestHeaders) {
-                return context.getRequestHeaders();
-            }
+        getCharSortOption() {
+          return this.load().charSortOption || "recent";
         }
-        // 대체 방법: 직접 헤더 구성
-        return {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
-        };
-    };
-
-    // 폴더 목록 HTML 생성
-    function getFoldersHTML() {
-        const data = loadLobbyData();
-        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
-        return sorted.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-    }
-
-    // 로비 UI HTML - 3칸 그리드 레이아웃 (왼쪽: 페르소나+캐릭터, 오른쪽: 채팅목록)
-    function createLobbyHTML() {
-        return `
-        <div id="chat-lobby-fab" title="Chat Lobby 열기">💬</div>
-        <div id="chat-lobby-overlay" style="display: none;">
-            <div id="chat-lobby-container">
-                <div id="chat-lobby-header">
-                    <h2>Chat Lobby</h2>
-                    <div class="header-actions">
-                        <button id="chat-lobby-refresh" title="새로고침">🔄</button>
-                        <button id="chat-lobby-import-char" title="캐릭터 임포트">📥</button>
-                        <button id="chat-lobby-add-persona" title="페르소나 추가">👤</button>
-                        <button id="chat-lobby-close">✕</button>
-                    </div>
-                </div>
-                <div id="chat-lobby-main">
-                    <!-- 왼쪽 패널: 페르소나 + 캐릭터 -->
-                    <div id="chat-lobby-left">
-                        <div id="chat-lobby-persona-bar">
-                            <div id="chat-lobby-persona-list">
-                                <div class="lobby-loading">로딩 중...</div>
-                            </div>
-                        </div>
-                        <div id="chat-lobby-search">
-                            <input type="text" id="chat-lobby-search-input" placeholder="캐릭터 검색...">
-                            <select id="chat-lobby-char-sort" title="캐릭터 정렬">
-                                <option value="recent">🕒 최근 채팅순</option>
-                                <option value="name">🔤 이름순</option>
-                                <option value="created">📅 생성일순</option>
-                                <option value="chats">💬 채팅 수</option>
-                            </select>
-                        </div>
-                        <div id="chat-lobby-characters">
-                            <div class="lobby-loading">캐릭터 로딩 중...</div>
-                        </div>
-                    </div>
-                    <!-- 오른쪽 패널: 채팅 목록 (항상 표시) -->
-                    <div id="chat-lobby-chats">
-                        <div id="chat-lobby-chats-header">
-                            <button id="chat-lobby-chats-back" title="뒤로">←</button>
-                            <img src="" alt="avatar" id="chat-panel-avatar" title="캐릭터 설정" style="display:none;">
-                            <div class="char-info">
-                                <div class="char-name" id="chat-panel-name">캐릭터를 선택하세요</div>
-                                <div class="chat-count" id="chat-panel-count"></div>
-                            </div>
-                            <button id="chat-lobby-delete-char" title="캐릭터 삭제" style="display:none;">🗑️</button>
-                            <button id="chat-lobby-new-chat" style="display:none;">+ 새 채팅</button>
-                        </div>
-                        <div id="chat-lobby-folder-bar" style="display:none;">
-                            <div class="folder-filter">
-                                <select id="chat-lobby-folder-filter">
-                                    <option value="all">📁 전체</option>
-                                    <option value="favorites">⭐ 즐겨찾기</option>
-                                </select>
-                                <select id="chat-lobby-chat-sort">
-                                    <option value="recent">🕐 최신순</option>
-                                    <option value="name">🔤 이름순</option>
-                                    <option value="messages">💬 메시지수</option>
-                                </select>
-                            </div>
-                            <div class="folder-actions">
-                                <button id="chat-lobby-batch-mode" title="다중 선택">☑️</button>
-                                <button id="chat-lobby-folder-manage" title="폴더 관리">📁</button>
-                            </div>
-                        </div>
-                        <div id="chat-lobby-batch-toolbar" style="display:none;">
-                            <span id="batch-selected-count">0개 선택</span>
-                            <select id="batch-move-folder">
-                                <option value="">폴더 선택...</option>
-                            </select>
-                            <button id="batch-move-btn">이동</button>
-                            <button id="batch-cancel-btn">취소</button>
-                        </div>
-                        <div id="chat-lobby-chats-list">
-                            <div class="lobby-empty-state">
-                                <i>💬</i>
-                                <div>캐릭터를 선택하세요</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- 폴더 관리 모달 -->
-        <div id="chat-lobby-folder-modal" style="display:none;">
-            <div class="folder-modal-content">
-                <div class="folder-modal-header">
-                    <h3>📁 폴더 관리</h3>
-                    <button id="folder-modal-close">✕</button>
-                </div>
-                <div class="folder-modal-body">
-                    <div class="folder-add-row">
-                        <input type="text" id="new-folder-name" placeholder="새 폴더 이름...">
-                        <button id="add-folder-btn">추가</button>
-                    </div>
-                    <div id="folder-list"></div>
-                </div>
-            </div>
-        </div>
-        `;
-    }
-
-    // 페르소나 목록 로드
-    async function loadPersonas() {
-        try {
-            // API를 통해 페르소나 아바타 목록 가져오기
-            const response = await fetch('/api/avatars/get', {
-                method: 'POST',
-                headers: getRequestHeaders(),
+        setCharSortOption(option) {
+          this.update((data) => {
+            data.charSortOption = option;
+          });
+        }
+        getFilterFolder() {
+          return this.load().filterFolder || "all";
+        }
+        setFilterFolder(folderId) {
+          this.update((data) => {
+            data.filterFolder = folderId;
+          });
+        }
+        // 다중 채팅 이동
+        moveChatsBatch(chatKeys, targetFolderId) {
+          this.update((data) => {
+            chatKeys.forEach((key) => {
+              data.chatAssignments[key] = targetFolderId;
             });
-            
-            if (!response.ok) {
-                console.error('[Chat Lobby] Failed to fetch personas:', response.status);
-                return [];
-            }
-            
-            const avatars = await response.json();
-            console.log('[Chat Lobby] Raw avatars from API:', avatars);
-            
-            if (!Array.isArray(avatars)) {
-                return [];
-            }
-            
-            // power_user를 import해서 페르소나 이름 가져오기
-            let personaNames = {};
-            let sortOrder = 'asc';
+          });
+        }
+      };
+      storage = new StorageManager();
+    }
+  });
+
+  // src/api/sillyTavern.js
+  var SillyTavernAPI, api;
+  var init_sillyTavern = __esm({
+    "src/api/sillyTavern.js"() {
+      init_cache();
+      SillyTavernAPI = class {
+        constructor() {
+          this._context = null;
+        }
+        // ============================================
+        // 기본 유틸
+        // ============================================
+        getContext() {
+          if (!this._context) {
+            this._context = window.SillyTavern?.getContext?.() || null;
+          }
+          return this._context;
+        }
+        getRequestHeaders() {
+          const context = this.getContext();
+          if (context?.getRequestHeaders) {
+            return context.getRequestHeaders();
+          }
+          return {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || ""
+          };
+        }
+        // ============================================
+        // 페르소나 API
+        // ============================================
+        async fetchPersonas() {
+          if (cache.isValid("personas")) {
+            return cache.get("personas");
+          }
+          return cache.getOrFetch("personas", async () => {
             try {
-                const powerUserModule = await import('../../../../power-user.js');
+              const response = await fetch("/api/avatars/get", {
+                method: "POST",
+                headers: this.getRequestHeaders()
+              });
+              if (!response.ok) {
+                console.error("[API] Failed to fetch personas:", response.status);
+                return [];
+              }
+              const avatars = await response.json();
+              if (!Array.isArray(avatars)) return [];
+              let personaNames = {};
+              try {
+                const powerUserModule = await import("../../../../power-user.js");
                 personaNames = powerUserModule.power_user?.personas || {};
-                sortOrder = powerUserModule.power_user?.persona_sort_order || 'asc';
-                console.log('[Chat Lobby] power_user.personas:', personaNames);
-            } catch (e) {
-                console.log('[Chat Lobby] Could not import power_user:', e);
-            }
-            
-            const personas = avatars.map(avatarId => {
-                const name = personaNames[avatarId] || avatarId.replace('.png', '').replace('.jpg', '').replace('.webp', '');
-                return { key: avatarId, name: name };
-            });
-            
-            // 숫자 → 영문 → 한글 순 정렬
-            personas.sort((a, b) => {
+              } catch (e) {
+                console.log("[API] Could not import power_user");
+              }
+              const personas = avatars.map((avatarId) => ({
+                key: avatarId,
+                name: personaNames[avatarId] || avatarId.replace(/\.(png|jpg|webp)$/i, "")
+              }));
+              personas.sort((a, b) => {
                 const aName = a.name.toLowerCase();
                 const bName = b.name.toLowerCase();
-                
-                // 첫 글자 타입 판별 (숫자=0, 영문=1, 한글=2, 기타=3)
                 const getType = (str) => {
-                    const c = str.charAt(0);
-                    if (/[0-9]/.test(c)) return 0;
-                    if (/[a-z]/.test(c)) return 1;
-                    if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(c)) return 2;
-                    return 3;
+                  const c = str.charAt(0);
+                  if (/[0-9]/.test(c)) return 0;
+                  if (/[a-z]/.test(c)) return 1;
+                  if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(c)) return 2;
+                  return 3;
                 };
-                
                 const typeA = getType(aName);
                 const typeB = getType(bName);
-                
                 if (typeA !== typeB) return typeA - typeB;
-                return aName.localeCompare(bName, 'ko');
-            });
-            
-            console.log('[Chat Lobby] Final sorted personas:', personas);
-            return personas;
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to load personas:', error);
-            return [];
-        }
-    }
-
-    // 페르소나 선택 UI 업데이트 (가로 스크롤 - 아바타만)
-    async function updatePersonaSelect() {
-        const container = document.getElementById('chat-lobby-persona-list');
-        if (!container) return;
-
-        container.innerHTML = '<div class="lobby-loading">로딩 중...</div>';
-        
-        const personas = await loadPersonas();
-        
-        // 현재 페르소나 가져오기 - personas.js에서 직접 import
-        let currentPersona = '';
-        try {
-            const personasModule = await import('../../../../personas.js');
-            currentPersona = personasModule.user_avatar || '';
-        } catch (e) {
-            console.log('[Chat Lobby] Could not get user_avatar:', e);
-        }
-
-        if (personas.length === 0) {
-            container.innerHTML = '<div class="persona-empty">페르소나 없음</div>';
-            console.log('[Chat Lobby] No personas found');
-            return;
-        }
-        
-        console.log('[Chat Lobby] Current persona:', currentPersona);
-        
-        // 모든 페르소나 아바타 + 이름 + 삭제 버튼 표시
-        let html = '';
-        personas.forEach(persona => {
-            const isSelected = persona.key === currentPersona ? 'selected' : '';
-            const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
-            html += `<div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
-                <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>👤</div>'">
-                <span class="persona-name">${escapeHtml(persona.name)}</span>
-                <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="페르소나 삭제">×</button>
-            </div>`;
-        });
-        
-        container.innerHTML = html;
-        
-        // 클릭 이벤트 - 페르소나 선택 / 아바타 클릭 시 페르소나 관리
-        container.querySelectorAll('.persona-item').forEach(item => {
-            // 아바타 이미지 클릭 → 페르소나 관리 화면 (선택된 페르소나만)
-            const avatarImg = item.querySelector('.persona-avatar');
-            if (avatarImg) {
-                // 터치 이벤트도 처리
-                let avatarTouchHandled = false;
-                
-                const handleAvatarClick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    
-                    // 중복 처리 방지
-                    if (isProcessingPersona) {
-                        console.log('[Chat Lobby] Already processing persona action, ignoring');
-                        return false;
-                    }
-                    
-                    // 현재 실제로 selected 클래스가 있는지 다시 확인
-                    const isCurrentlySelected = item.classList.contains('selected');
-                    console.log('[Chat Lobby] Avatar clicked, isSelected:', isCurrentlySelected);
-                    
-                    if (isCurrentlySelected) {
-                        console.log('[Chat Lobby] Selected persona avatar clicked, opening management');
-                        openPersonaManagement();
-                    } else {
-                        // 선택되지 않은 페르소나 아바타 클릭 → 해당 페르소나 선택
-                        console.log('[Chat Lobby] Unselected persona avatar clicked, selecting persona');
-                        isProcessingPersona = true;
-                        container.querySelectorAll('.persona-item').forEach(el => el.classList.remove('selected'));
-                        item.classList.add('selected');
-                        changePersona(item.dataset.persona).finally(() => {
-                            isProcessingPersona = false;
-                        });
-                    }
-                    return false;
-                };
-                
-                avatarImg.addEventListener('touchstart', () => { avatarTouchHandled = false; }, { passive: true });
-                avatarImg.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    avatarTouchHandled = true;
-                    handleAvatarClick(e);
-                }, { capture: true });
-                avatarImg.addEventListener('click', (e) => {
-                    if (!avatarTouchHandled) {
-                        handleAvatarClick(e);
-                    }
-                    avatarTouchHandled = false;
-                }, { capture: true });
-                avatarImg.style.cursor = 'pointer';
-            }
-            
-            // 이름 클릭 → 페르소나 선택 (이미 선택된 경우 무시)
-            const nameSpan = item.querySelector('.persona-name');
-            if (nameSpan) {
-                nameSpan.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    // 이미 선택된 페르소나면 무시
-                    if (item.classList.contains('selected')) return;
-                    if (isProcessingPersona) return;
-                    isProcessingPersona = true;
-                    container.querySelectorAll('.persona-item').forEach(el => el.classList.remove('selected'));
-                    item.classList.add('selected');
-                    changePersona(item.dataset.persona).finally(() => {
-                        isProcessingPersona = false;
-                    });
-                });
-                nameSpan.style.cursor = 'pointer';
-            }
-            
-            // 전체 아이템 클릭 → 페르소나 선택 (삭제 버튼, 아바타 제외, 이미 선택된 경우 무시)
-            item.addEventListener('click', (e) => {
-                if (e.target.classList.contains('persona-delete-btn')) return;
-                if (e.target.classList.contains('persona-avatar')) return;
-                if (e.target.tagName === 'IMG') return; // img 태그도 제외
-                // 이미 선택된 페르소나면 무시
-                if (item.classList.contains('selected')) return;
-                if (isProcessingPersona) return;
-                isProcessingPersona = true;
-                container.querySelectorAll('.persona-item').forEach(el => el.classList.remove('selected'));
-                item.classList.add('selected');
-                changePersona(item.dataset.persona).finally(() => {
-                    isProcessingPersona = false;
-                });
-            });
-        });
-        
-        // 페르소나 삭제 버튼 이벤트
-        container.querySelectorAll('.persona-delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const personaKey = btn.dataset.persona;
-                const personaName = btn.closest('.persona-item').title;
-                deletePersona(personaKey, personaName);
-            });
-        });
-        
-        console.log('[Chat Lobby] Persona list updated with', personas.length, 'items');
-    }
-
-    // 페르소나 삭제 (로비 열린 상태에서 API로 직접 삭제)
-    async function deletePersona(personaKey, personaName) {
-        if (!confirm(`"${personaName}" 페르소나를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
-        
-        try {
-            // API로 직접 페르소나 삭제
-            const response = await fetch('/api/avatars/delete', {
-                method: 'POST',
-                headers: getRequestHeaders(),
-                body: JSON.stringify({ avatar: personaKey })
-            });
-            
-            if (response.ok) {
-                console.log('[Chat Lobby] Persona deleted:', personaKey);
-                // 페르소나 목록 새로고침
-                await updatePersonaSelect();
-            } else {
-                console.error('[Chat Lobby] Failed to delete persona:', response.status);
-                alert('페르소나 삭제에 실패했습니다.');
-            }
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to delete persona:', error);
-            alert('페르소나 삭제 중 오류가 발생했습니다.');
-        }
-    }
-    
-    // 페르소나 관리 화면으로 이동 (페르소나 아바타 클릭 시)
-    async function openPersonaManagement() {
-        console.log('[Chat Lobby] === openPersonaManagement START ===' );
-        
-        // 로비 닫기
-        closeLobby();
-        
-        // 지연 후 클릭
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        const personaDrawer = document.getElementById('persona-management-button');
-        
-        if (personaDrawer) {
-            const drawerIcon = personaDrawer.querySelector('.drawer-icon');
-            const drawerContent = personaDrawer.querySelector('.drawer-content');
-            
-            // 현재 drawer 상태 확인
-            const isDrawerOpen = drawerContent && drawerContent.classList.contains('openDrawer');
-            const isIconOpen = drawerIcon && drawerIcon.classList.contains('openIcon');
-            console.log('[Chat Lobby] Drawer state - isDrawerOpen:', isDrawerOpen, 'isIconOpen:', isIconOpen);
-            
-            // 이미 열려있으면 아무것도 안 함
-            if (isDrawerOpen || isIconOpen) {
-                console.log('[Chat Lobby] Drawer already open, skipping');
-                console.log('[Chat Lobby] === openPersonaManagement END ===');
-                return;
-            }
-            
-            // ST-CustomTheme이 drawer를 이동시켰는지 확인
-            const isSTMoved = personaDrawer.classList.contains('st-hamburger-moved-drawer');
-            console.log('[Chat Lobby] ST-CustomTheme moved drawer:', isSTMoved);
-            
-            if (isSTMoved) {
-                // ST-CustomTheme 환경: hamburger 아이콘 클릭으로 패널 열기
-                const hamburgerIcon = document.getElementById('leftNavDrawerIcon');
-                
-                if (hamburgerIcon) {
-                    // hamburger가 닫혀있으면 클릭해서 열기
-                    const isHamburgerOpen = hamburgerIcon.classList.contains('openIcon');
-                    
-                    if (!isHamburgerOpen) {
-                        console.log('[Chat Lobby] Clicking hamburger icon to open panel');
-                        hamburgerIcon.click();
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                    }
-                }
-                
-                // drawer-icon 클래스 변경
-                if (drawerIcon) {
-                    drawerIcon.classList.remove('closedIcon');
-                    drawerIcon.classList.add('openIcon');
-                }
-                
-                // drawer-content 클래스 변경 및 표시
-                if (drawerContent) {
-                    drawerContent.classList.remove('closedDrawer');
-                    drawerContent.classList.add('openDrawer');
-                    drawerContent.style.display = 'block';
-                }
-                
-                console.log('[Chat Lobby] === openPersonaManagement END ===');
-                return;
-            }
-            
-            // 일반 환경: drawer가 닫혀있을 때만 클릭
-            if (drawerIcon && !isIconOpen) {
-                console.log('[Chat Lobby] Clicking drawer-icon to open');
-                drawerIcon.click();
-            }
-        }
-
-        console.log('[Chat Lobby] === openPersonaManagement END ===');
-    }
-
-    // 페르소나 변경
-    async function changePersona(personaKey) {
-        try {
-            if (!personaKey) {
-                console.log('[Chat Lobby] No persona selected');
-                return;
-            }
-            
-            console.log('[Chat Lobby] Changing persona to:', personaKey);
-            
-            // personas.js의 setUserAvatar 직접 import (페이지네이션과 무관하게 작동)
-            try {
-                const personasModule = await import('../../../../personas.js');
-                if (typeof personasModule.setUserAvatar === 'function') {
-                    await personasModule.setUserAvatar(personaKey);
-                    console.log('[Chat Lobby] Persona changed via setUserAvatar');
-                    return; // 성공하면 종료 - UI 새로고침 안 함 (깜빡임 방지)
-                }
-            } catch (e) {
-                console.log('[Chat Lobby] Could not use setUserAvatar:', e);
-            }
-            
-            // 폴백: SillyTavern context
-            if (typeof window.SillyTavern?.getContext?.()?.setUserAvatar === 'function') {
-                await window.SillyTavern.getContext().setUserAvatar(personaKey);
-                console.log('[Chat Lobby] Persona changed via context');
-            }
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to change persona:', error);
-        }
-    }
-
-    // 캐릭터 목록 로드
-    async function loadCharacters() {
-        const context = getContext();
-        if (!context) {
-            console.error('[Chat Lobby] Context not available');
-            return [];
-        }
-
-        try {
-            const characters = context.characters || [];
-            return characters;
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to load characters:', error);
-            return [];
-        }
-    }
-
-    // 채팅 캐시 (모바일 최적화)
-    const chatsCache = new Map();
-    let chatsCacheTime = 0;
-    const CHATS_CACHE_DURATION = 30000; // 30초
-
-    // 캐릭터의 채팅 목록 로드
-    async function loadChatsForCharacter(characterAvatar, forceRefresh = false) {
-        console.log('[Chat Lobby] Fetching chats for:', characterAvatar);
-        if (!characterAvatar) return [];
-
-        try {
-            // 캐시 확인 (forceRefresh가 아닐 때)
-            const now = Date.now();
-            const cacheKey = characterAvatar;
-            if (!forceRefresh && now - chatsCacheTime < CHATS_CACHE_DURATION && chatsCache.has(cacheKey)) {
-                console.log('[Chat Lobby] Using cached chats');
-                return chatsCache.get(cacheKey);
-            }
-            
-            const response = await fetch('/api/characters/chats', {
-                method: 'POST',
-                headers: getRequestHeaders(),
-                body: JSON.stringify({
-                    avatar_url: characterAvatar,
-                    simple: false
-                }),
-            });
-
-            if (!response.ok) {
-                console.error('[Chat Lobby] HTTP error:', response.status);
-                return [];
-            }
-            const data = await response.json();
-            console.log('[Chat Lobby] Raw chat data count:', Array.isArray(data) ? data.length : 'not array');
-            
-            if (data && data.error === true) {
-                return [];
-            }
-            
-            // 캐시 저장
-            const result = data || [];
-            chatsCache.set(cacheKey, result);
-            chatsCacheTime = now;
-            
-            return result;
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to load chats:', error);
-            return [];
-        }
-    }
-    
-    // 캐시 무효화 (새 채팅, 삭제 등)
-    function invalidateChatsCache(characterAvatar) {
-        if (characterAvatar) {
-            chatsCache.delete(characterAvatar);
-        } else {
-            chatsCache.clear();
-        }
-    }
-
-    // 캐릭터 카드 렌더링
-    function renderCharacterCard(char, index) {
-        const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : '/img/ai4.png';
-        const name = char.name || 'Unknown';
-        const safeAvatar = (char.avatar || '').replace(/"/g, '&quot;');
-        
-        // SillyTavern 캐릭터 즐겨찾기 체크
-        const isFav = !!(char.fav === true || char.fav === 'true' || char.data?.extensions?.fav);
-        const favBadge = isFav ? '<span class="char-fav-badge">⭐</span>' : '';
-
-        return `
-        <div class="lobby-char-card ${isFav ? 'is-char-fav' : ''}" data-char-index="${index}" data-char-avatar="${safeAvatar}" data-is-fav="${isFav}">
-            ${favBadge}
-            <img class="lobby-char-avatar" src="${avatarUrl}" alt="${name}" onerror="this.src='/img/ai4.png'">
-            <div class="lobby-char-name">${escapeHtml(name)}</div>
-        </div>
-        `;
-    }
-
-    // 채팅 아이템 렌더링
-    function renderChatItem(chat, characterAvatar, chatIndex) {
-        if (!chat) return '';
-        
-        // 파일명 추출
-        let fileName = '';
-        if (typeof chat === 'object') {
-            fileName = chat.file_name || chat.fileName || chat.name || '';
-            if (!fileName && chat[0]) {
-                // 배열 형태일 경우
-                fileName = chat[0].file_name || chat[0].fileName || '';
-            }
-        }
-        if (!fileName) fileName = `chat_${chatIndex}`;
-        
-        const displayName = fileName.replace('.jsonl', '');
-        
-        // 미리보기 텍스트
-        let preview = '';
-        if (chat.preview) preview = chat.preview;
-        else if (chat.mes) preview = chat.mes;
-        else if (chat.last_message) preview = chat.last_message;
-        else preview = '채팅 기록';
-        
-        // 메시지 수 - 다양한 필드명 시도
-        let messageCount = 0;
-        if (typeof chat.chat_items === 'number') messageCount = chat.chat_items;
-        else if (typeof chat.message_count === 'number') messageCount = chat.message_count;
-        else if (typeof chat.chat_size === 'number') messageCount = chat.chat_size;
-        else if (typeof chat.mes_count === 'number') messageCount = chat.mes_count;
-        else if (typeof chat.count === 'number') messageCount = chat.count;
-        else if (Array.isArray(chat.messages)) messageCount = chat.messages.length;
-        else if (Array.isArray(chat)) messageCount = chat.length;
-
-        // 날짜 포맷
-        let lastDate = '';
-        if (chat.last_mes) lastDate = formatDate(chat.last_mes);
-        else if (chat.last_message_date) lastDate = formatDate(chat.last_message_date);
-        else if (chat.date) lastDate = formatDate(chat.date);
-        else {
-            // 파일명에서 날짜 추출 (YYYY-MM-DD)
-            const dateMatch = fileName.match(/(\d{4})-(\d{2})-(\d{2})/);
-            if (dateMatch) {
-                lastDate = `${dateMatch[1]}.${dateMatch[2]}.${dateMatch[3]}`;
-            }
-        }
-        
-        // 파일 크기 - 문자열이면 그대로 사용
-        let fileSize = '';
-        if (typeof chat.file_size === 'string') {
-            fileSize = chat.file_size;
-        } else if (typeof chat.file_size === 'number') {
-            fileSize = formatFileSize(chat.file_size);
-        }
-        
-        const safeAvatar = (characterAvatar || '').replace(/"/g, '&quot;');
-        
-        // 즐겨찾기 상태 확인
-        const isFav = isFavorite(characterAvatar, fileName);
-        const favIcon = isFav ? '⭐' : '☆';
-        const favClass = isFav ? 'is-favorite' : '';
-        
-        // 폴더 정보
-        const folderId = getChatFolder(characterAvatar, fileName);
-        const data = loadLobbyData();
-        const folder = data.folders.find(f => f.id === folderId);
-        const folderName = folder ? folder.name : '';
-        
-        // 메타 정보 구성 (메시지 수만)
-        const metaInfo = messageCount > 0 ? `💬 ${messageCount}개` : '';
-        
-        // 툴팁용 긴 미리보기 (500자)
-        const tooltipPreview = truncateText(preview, 500);
-
-        return `
-        <div class="lobby-chat-item ${favClass}" data-file-name="${escapeHtml(fileName)}" data-char-avatar="${safeAvatar}" data-chat-index="${chatIndex}" data-folder-id="${folderId}" data-tooltip="${escapeHtml(tooltipPreview).replace(/"/g, '&quot;')}">
-            <div class="chat-checkbox" style="display:none;">
-                <input type="checkbox" class="chat-select-cb">
-            </div>
-            <button class="chat-fav-btn" title="즐겨찾기">${favIcon}</button>
-            <div class="chat-content">
-                <div class="chat-name">${escapeHtml(displayName)}</div>
-                <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
-                <div class="chat-meta">
-                    ${metaInfo ? `<span>${metaInfo}</span>` : ''}
-                    ${folderName && folderId !== 'uncategorized' ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ''}
-                </div>
-            </div>
-            <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
-            <div class="chat-tooltip">
-                <div class="chat-tooltip-header">📝 마지막 메시지</div>
-                <div class="chat-tooltip-content">${escapeHtml(tooltipPreview)}</div>
-            </div>
-        </div>
-        `;
-    }
-
-    // 캐릭터 그리드 업데이트
-    async function updateCharacterGrid(searchTerm = '', retryCount = 0, sortOverride = null) {
-        const container = document.getElementById('chat-lobby-characters');
-        if (!container) return;
-
-        container.innerHTML = '<div class="lobby-loading">캐릭터 로딩 중...</div>';
-
-        let characters = await loadCharacters();
-        
-        // 캐릭터가 없고 재시도 횟수가 3번 미만이면 재시도
-        if (characters.length === 0 && retryCount < 3) {
-            console.log('[Chat Lobby] No characters found, retrying...', retryCount + 1);
-            setTimeout(() => updateCharacterGrid(searchTerm, retryCount + 1, sortOverride), 500);
-            return;
-        }
-
-        if (characters.length === 0) {
-            container.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>👥</i>
-                    <div>캐릭터가 없습니다</div>
-                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
-                </div>
-            `;
-            return;
-        }
-
-        // 검색 필터링
-        let filtered = [...characters]; // 원본 보호
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(char =>
-                (char.name || '').toLowerCase().includes(term)
-            );
-        }
-        
-        // 캐릭터 정렬 옵션 가져오기 (sortOverride가 있으면 우선 사용)
-        const lobbyData = loadLobbyData();
-        const charSortOption = sortOverride || lobbyData.charSortOption || 'recent';
-        
-        // 드롭다운 UI 동기화 (값이 다를 때만)
-        const sortSelect = document.getElementById('chat-lobby-char-sort');
-        if (sortSelect && sortSelect.value !== charSortOption) {
-            sortSelect.value = charSortOption;
-        }
-        
-        console.log('[Chat Lobby] updateCharacterGrid - sortOption:', charSortOption);
-        
-        // 캐릭터 정렬 (즐겨찾기 우선 + 선택된 정렬 기준)
-        if (charSortOption === 'name') {
-            // 이름순 정렬
-            filtered.sort((a, b) => {
-                const aIsFav = !!(a.fav === true || a.fav === 'true' || a.data?.extensions?.fav);
-                const bIsFav = !!(b.fav === true || b.fav === 'true' || b.data?.extensions?.fav);
-                if (aIsFav !== bIsFav) return aIsFav ? -1 : 1;
-                return (a.name || '').localeCompare(b.name || '', 'ko');
-            });
-        } else if (charSortOption === 'created') {
-            // 생성일순 정렬 (최신 먼저)
-            filtered.sort((a, b) => {
-                const aIsFav = !!(a.fav === true || a.fav === 'true' || a.data?.extensions?.fav);
-                const bIsFav = !!(b.fav === true || b.fav === 'true' || b.data?.extensions?.fav);
-                if (aIsFav !== bIsFav) return aIsFav ? -1 : 1;
-                const aDate = a.create_date || a.date_added || 0;
-                const bDate = b.create_date || b.date_added || 0;
-                return bDate - aDate;
-            });
-        } else if (charSortOption === 'chats') {
-            // 채팅 수 순 정렬 - 비동기로 처리
-            const chatCounts = await Promise.all(
-                filtered.map(async (char) => {
-                    const count = await getCharacterChatCount(char.avatar);
-                    return { char, count };
-                })
-            );
-            chatCounts.sort((a, b) => {
-                const aIsFav = !!(a.char.fav === true || a.char.fav === 'true' || a.char.data?.extensions?.fav);
-                const bIsFav = !!(b.char.fav === true || b.char.fav === 'true' || b.char.data?.extensions?.fav);
-                if (aIsFav !== bIsFav) return aIsFav ? -1 : 1;
-                return b.count - a.count;
-            });
-            filtered = chatCounts.map(item => item.char);
-        } else {
-            // 최근 채팅순 (기본) - date_last_chat 기준
-            filtered.sort((a, b) => {
-                const aIsFav = !!(a.fav === true || a.fav === 'true' || a.data?.extensions?.fav);
-                const bIsFav = !!(b.fav === true || b.fav === 'true' || b.data?.extensions?.fav);
-                if (aIsFav !== bIsFav) return aIsFav ? -1 : 1;
-                const aDate = a.date_last_chat || a.last_mes || 0;
-                const bDate = b.date_last_chat || b.last_mes || 0;
-                return bDate - aDate;
-            });
-        }
-
-        if (filtered.length === 0) {
-            container.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>🔍</i>
-                    <div>검색 결과가 없습니다</div>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = filtered.map((char, idx) => {
-            const originalIndex = characters.indexOf(char);
-            return renderCharacterCard(char, originalIndex);
-        }).join('');
-
-        // 캐릭터 카드 클릭 이벤트 - 터치/클릭 중복 방지
-        container.querySelectorAll('.lobby-char-card').forEach(card => {
-            let touchHandled = false;
-            let touchStartY = 0;
-            let isScrolling = false;
-            
-            card.addEventListener('touchstart', (e) => {
-                touchHandled = false;
-                isScrolling = false;
-                touchStartY = e.touches[0].clientY;
-            }, { passive: true });
-            
-            card.addEventListener('touchmove', (e) => {
-                if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
-                    isScrolling = true;
-                }
-            }, { passive: true });
-            
-            card.addEventListener('touchend', (e) => {
-                if (!isScrolling) {
-                    e.preventDefault();
-                    touchHandled = true;
-                    selectCharacter(card);
-                }
-                isScrolling = false;
-            });
-            
-            card.addEventListener('click', () => {
-                if (!touchHandled) {
-                    selectCharacter(card);
-                }
-                touchHandled = false;
-            });
-        });
-    }
-
-    // 캐릭터 선택
-    async function selectCharacter(cardElement) {
-        // 기존 선택 해제
-        document.querySelectorAll('.lobby-char-card.selected').forEach(el => {
-            el.classList.remove('selected');
-        });
-
-        // 새로 선택
-        cardElement.classList.add('selected');
-
-        const charIndex = cardElement.dataset.charIndex;
-        const charAvatar = cardElement.dataset.charAvatar;
-        const charName = cardElement.querySelector('.lobby-char-name').textContent;
-        const avatarSrc = cardElement.querySelector('.lobby-char-avatar').src;
-
-        // 채팅 패널 UI 요소들 표시
-        const chatsPanel = document.getElementById('chat-lobby-chats');
-        chatsPanel.classList.add('visible');
-        
-        // 헤더 요소들 표시
-        const avatarImg = document.getElementById('chat-panel-avatar');
-        avatarImg.style.display = 'block';
-        avatarImg.src = avatarSrc;
-        
-        document.getElementById('chat-panel-name').textContent = charName;
-        document.getElementById('chat-panel-count').textContent = '채팅 로딩 중...';
-        document.getElementById('chat-lobby-delete-char').style.display = 'block';
-        document.getElementById('chat-lobby-new-chat').style.display = 'block';
-        document.getElementById('chat-lobby-folder-bar').style.display = 'flex';
-        
-        // 정렬 옵션 select 값 설정
-        const lobbyDataForSort = loadLobbyData();
-        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
-        if (chatSortSelect) chatSortSelect.value = lobbyDataForSort.sortOption || 'recent';
-
-        // 새 채팅 버튼 데이터 설정
-        document.getElementById('chat-lobby-new-chat').dataset.charIndex = charIndex;
-        document.getElementById('chat-lobby-new-chat').dataset.charAvatar = charAvatar;
-
-        // 채팅 목록 로드
-        const chatsList = document.getElementById('chat-lobby-chats-list');
-        chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
-
-        const chats = await loadChatsForCharacter(charAvatar);
-        
-        // 채팅이 없는 경우 체크 (빈 배열, 빈 객체, error 응답 등)
-        const hasNoChats = !chats || 
-            (Array.isArray(chats) && chats.length === 0) || 
-            (typeof chats === 'object' && !Array.isArray(chats) && (Object.keys(chats).length === 0 || chats.error === true));
-        
-        console.log('[Chat Lobby] hasNoChats:', hasNoChats, 'chats:', chats);
-
-        if (hasNoChats) {
-            document.getElementById('chat-panel-count').textContent = '채팅 없음';
-            // 채팅이 없음을 표시
-            document.getElementById('chat-lobby-new-chat').dataset.hasChats = 'false';
-            console.log('[Chat Lobby] Set hasChats = false');
-            chatsList.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>💬</i>
-                    <div>채팅 기록이 없습니다</div>
-                    <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
-                </div>
-            `;
-            return;
-        }
-        
-        // 채팅이 있음을 표시
-        document.getElementById('chat-lobby-new-chat').dataset.hasChats = 'true';
-        console.log('[Chat Lobby] Set hasChats = true');
-
-        // 채팅 목록을 배열로 변환
-        let chatArray = [];
-        if (Array.isArray(chats)) {
-            chatArray = chats;
-        } else if (typeof chats === 'object') {
-            chatArray = Object.entries(chats).map(([key, value]) => {
-                if (typeof value === 'object') {
-                    return { ...value, file_name: value.file_name || key };
-                }
-                return { file_name: key, ...value };
-            });
-        }
-        
-        // 유효한 채팅만 필터링 (실제 파일명이 있는 것)
-        chatArray = chatArray.filter(chat => {
-            const fileName = chat?.file_name || chat?.fileName || '';
-            // 유효한 파일명: .jsonl 확장자 또는 날짜 패턴 포함 (공백 허용)
-            const hasJsonl = fileName.includes('.jsonl');
-            const hasDatePattern = /\d{4}-\d{2}-\d{2}/.test(fileName);
-            const isValidName = fileName && 
-                   (hasJsonl || hasDatePattern) &&
-                   !fileName.startsWith('chat_') &&
-                   fileName.toLowerCase() !== 'error';
-            
-            console.log('[Chat Lobby] Filter check:', fileName, 'hasJsonl:', hasJsonl, 'hasDate:', hasDatePattern, 'valid:', isValidName);
-            return isValidName;
-        });
-        
-        // 필터링 후 채팅이 없으면 빈 상태 표시
-        if (chatArray.length === 0) {
-            document.getElementById('chat-panel-count').textContent = '채팅 없음';
-            chatsList.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>💬</i>
-                    <div>채팅 기록이 없습니다</div>
-                    <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
-                </div>
-            `;
-            return;
-        }
-        
-        // 최신순 정렬 (가장 최근 채팅이 맨 위)
-        const lobbyData = loadLobbyData();
-        const currentSort = lobbyData.sortOption || 'recent';
-        const currentFilter = lobbyData.filterFolder || 'all';
-        
-        console.log('[Chat Lobby] === Sorting chats ===');
-        console.log('[Chat Lobby] Sort option:', currentSort);
-        console.log('[Chat Lobby] Filter:', currentFilter);
-        console.log('[Chat Lobby] Chats before sort:', chatArray.length);
-        
-        // 폴더 필터 적용
-        if (currentFilter !== 'all') {
-            chatArray = chatArray.filter(chat => {
-                const fn = chat.file_name || chat.fileName || '';
-                const key = getChatKey(charAvatar, fn);
-                if (currentFilter === 'favorites') {
-                    return lobbyData.favorites.includes(key);
-                }
-                const assigned = lobbyData.chatAssignments[key] || 'uncategorized';
-                return assigned === currentFilter;
-            });
-        }
-        
-        // 정렬
-        chatArray.sort((a, b) => {
-            const fnA = a.file_name || '';
-            const fnB = b.file_name || '';
-            
-            // 항상 즐겨찾기 우선 (모든 정렬 모드에서)
-            const keyA = getChatKey(charAvatar, fnA);
-            const keyB = getChatKey(charAvatar, fnB);
-            const favA = lobbyData.favorites.includes(keyA) ? 0 : 1;
-            const favB = lobbyData.favorites.includes(keyB) ? 0 : 1;
-            if (favA !== favB) return favA - favB;
-            
-            // 날짜 파싱 함수
-            function parseDate(filename) {
-                // 형식: YYYY-MM-DD@HHhMMmSSs (공백 없음)
-                const m = filename.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
-                if (m) {
-                    return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]).getTime();
-                }
-                // 형식: YYYY-MM-DD @HHh MMm SSs (공백 있음) - "2025-10-26 @05h 32m 18s"
-                const m2 = filename.match(/(\d{4})-(\d{2})-(\d{2})\s*@\s*(\d{2})h\s*(\d{2})m\s*(\d{2})s/);
-                if (m2) {
-                    return new Date(+m2[1], +m2[2]-1, +m2[3], +m2[4], +m2[5], +m2[6]).getTime();
-                }
-                // 형식: YYYY-MM-DD만 있는 경우
-                const m3 = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
-                if (m3) {
-                    return new Date(+m3[1], +m3[2]-1, +m3[3]).getTime();
-                }
-                return 0;
-            }
-            
-            if (currentSort === 'name') {
-                // 이름순 정렬
-                return fnA.localeCompare(fnB, 'ko');
-            }
-            
-            // 메시지 수 순 정렬
-            if (currentSort === 'messages') {
-                const msgA = a.message_count || a.mes_count || 0;
-                const msgB = b.message_count || b.mes_count || 0;
-                return msgB - msgA;
-            }
-            
-            // 날짜순 (최신 또는 생성일)
-            let dateA = parseDate(fnA);
-            let dateB = parseDate(fnB);
-            
-            // 파일명에서 못 찾으면 다른 필드 시도
-            if (!dateA && a.last_mes) dateA = typeof a.last_mes === 'number' ? a.last_mes : new Date(a.last_mes).getTime();
-            if (!dateB && b.last_mes) dateB = typeof b.last_mes === 'number' ? b.last_mes : new Date(b.last_mes).getTime();
-            
-            return dateB - dateA; // 내림차순 (최신이 위)
-        });
-
-        document.getElementById('chat-panel-count').textContent = `${chatArray.length}개 채팅`;
-        chatsList.innerHTML = chatArray.map((chat, idx) => renderChatItem(chat, charAvatar, idx)).join('');
-
-        // 채팅 아이템 클릭 이벤트
-        chatsList.querySelectorAll('.lobby-chat-item').forEach(item => {
-            // 스크롤 감지를 위한 변수
-            let touchStartY = 0;
-            let isScrolling = false;
-            let touchHandled = false;
-            
-            const handleItemClick = (e) => {
-                // 스크롤 중이면 무시
-                if (isScrolling) return;
-                
-                // 배치 모드일 때는 체크박스 토글
-                if (batchModeActive) {
-                    const cb = item.querySelector('.chat-select-cb');
-                    if (cb && e.target !== cb) {
-                        cb.checked = !cb.checked;
-                        updateBatchCount();
-                    }
-                    return;
-                }
-                // 일반 모드: 채팅 열기
-                openChat(item);
-            };
-            
-            // 채팅 열기 (컨텐츠 클릭)
-            const chatContent = item.querySelector('.chat-content');
-            chatContent.addEventListener('touchstart', (e) => {
-                touchHandled = false;
-                isScrolling = false;
-                touchStartY = e.touches[0].clientY;
-            }, { passive: true });
-            chatContent.addEventListener('touchmove', (e) => {
-                // 10px 이상 이동하면 스크롤로 판단
-                if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
-                    isScrolling = true;
-                }
-            }, { passive: true });
-            chatContent.addEventListener('touchend', (e) => {
-                if (!isScrolling) {
-                    e.preventDefault();
-                    touchHandled = true;
-                    handleItemClick(e);
-                }
-                isScrolling = false;
-            });
-            chatContent.addEventListener('click', (e) => {
-                if (!touchHandled) handleItemClick(e);
-                touchHandled = false;
-            });
-            
-            // 즐겨찾기 버튼
-            const favBtn = item.querySelector('.chat-fav-btn');
-            let favTouchStartY = 0;
-            let favIsScrolling = false;
-            let favTouchHandled = false;
-            const handleFav = (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                const fn = item.dataset.fileName;
-                const ca = item.dataset.charAvatar;
-                const isNowFav = toggleFavorite(ca, fn);
-                favBtn.textContent = isNowFav ? '⭐' : '☆';
-                item.classList.toggle('is-favorite', isNowFav);
-            };
-            favBtn.addEventListener('touchstart', (e) => {
-                favTouchHandled = false;
-                favIsScrolling = false;
-                favTouchStartY = e.touches[0].clientY;
-            }, { passive: true });
-            favBtn.addEventListener('touchmove', (e) => {
-                if (Math.abs(e.touches[0].clientY - favTouchStartY) > 10) {
-                    favIsScrolling = true;
-                }
-            }, { passive: true });
-            favBtn.addEventListener('touchend', (e) => {
-                if (!favIsScrolling) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    favTouchHandled = true;
-                    handleFav(e);
-                }
-                favIsScrolling = false;
-            });
-            favBtn.addEventListener('click', (e) => {
-                if (!favTouchHandled) handleFav(e);
-                favTouchHandled = false;
-            });
-            
-            // 삭제 버튼
-            const delBtn = item.querySelector('.chat-delete-btn');
-            let delTouchStartY = 0;
-            let delIsScrolling = false;
-            let delTouchHandled = false;
-            const handleDel = (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                deleteChat(item);
-            };
-            delBtn.addEventListener('touchstart', (e) => {
-                delTouchHandled = false;
-                delIsScrolling = false;
-                delTouchStartY = e.touches[0].clientY;
-            }, { passive: true });
-            delBtn.addEventListener('touchmove', (e) => {
-                if (Math.abs(e.touches[0].clientY - delTouchStartY) > 10) {
-                    delIsScrolling = true;
-                }
-            }, { passive: true });
-            delBtn.addEventListener('touchend', (e) => {
-                if (!delIsScrolling) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    delTouchHandled = true;
-                    handleDel(e);
-                }
-                delIsScrolling = false;
-            });
-            delBtn.addEventListener('click', (e) => {
-                if (!delTouchHandled) handleDel(e);
-                delTouchHandled = false;
-            });
-        });
-        
-        // 폴더 필터 드롭다운 값 설정
-        const filterSelect = document.getElementById('chat-lobby-folder-filter');
-        if (filterSelect) filterSelect.value = currentFilter;
-    }
-    
-    // 채팅만 다시 로드 (필터/정렬 변경 시)
-    async function reloadChatsWithFilter(cardElement, filterValue, sortOverride = null) {
-        const charAvatar = cardElement.dataset.charAvatar;
-        const chatsList = document.getElementById('chat-lobby-chats-list');
-        
-        chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
-        
-        // forceRefresh로 캐시 무시
-        const chats = await loadChatsForCharacter(charAvatar, true);
-        
-        // 현재 정렬 옵션 가져오기 (sortOverride가 있으면 우선 사용)
-        const lobbyData = loadLobbyData();
-        const currentSort = sortOverride || lobbyData.sortOption || 'recent';
-        
-        console.log('[Chat Lobby] reloadChatsWithFilter - sort:', currentSort, 'filter:', filterValue);
-        
-        // 정렬 드롭다운 값 동기화
-        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
-        if (chatSortSelect && chatSortSelect.value !== currentSort) {
-            chatSortSelect.value = currentSort;
-        }
-        
-        // 빈 채팅 체크
-        const hasNoChats = !chats || 
-            (Array.isArray(chats) && chats.length === 0) || 
-            (typeof chats === 'object' && !Array.isArray(chats) && (Object.keys(chats).length === 0 || chats.error === true));
-        
-        if (hasNoChats) {
-            document.getElementById('chat-panel-count').textContent = '채팅 없음';
-            chatsList.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>💬</i>
-                    <div>채팅 기록이 없습니다</div>
-                </div>
-            `;
-            return;
-        }
-        
-        // 배열 변환
-        let chatArray = [];
-        if (Array.isArray(chats)) {
-            chatArray = chats;
-        } else if (typeof chats === 'object') {
-            chatArray = Object.entries(chats).map(([key, value]) => {
-                if (typeof value === 'object') {
-                    return { ...value, file_name: value.file_name || key };
-                }
-                return { file_name: key, ...value };
-            });
-        }
-        
-        // 유효한 채팅만 필터링
-        chatArray = chatArray.filter(chat => {
-            const fileName = chat?.file_name || chat?.fileName || '';
-            const hasJsonl = fileName.includes('.jsonl');
-            const hasDatePattern = /\d{4}-\d{2}-\d{2}/.test(fileName);
-            return fileName && 
-                   (hasJsonl || hasDatePattern) &&
-                   !fileName.startsWith('chat_') &&
-                   fileName.toLowerCase() !== 'error';
-        });
-        
-        // 폴더 필터 적용
-        if (filterValue !== 'all') {
-            chatArray = chatArray.filter(chat => {
-                const fn = chat.file_name || chat.fileName || '';
-                const key = getChatKey(charAvatar, fn);
-                if (filterValue === 'favorites') {
-                    return lobbyData.favorites.includes(key);
-                }
-                const assigned = lobbyData.chatAssignments[key] || 'uncategorized';
-                return assigned === filterValue;
-            });
-        }
-        
-        // 정렬 적용
-        chatArray.sort((a, b) => {
-            const fnA = a.file_name || '';
-            const fnB = b.file_name || '';
-            
-            // 항상 즐겨찾기 우선
-            const keyA = getChatKey(charAvatar, fnA);
-            const keyB = getChatKey(charAvatar, fnB);
-            const favA = lobbyData.favorites.includes(keyA) ? 0 : 1;
-            const favB = lobbyData.favorites.includes(keyB) ? 0 : 1;
-            if (favA !== favB) return favA - favB;
-            
-            function parseDate(filename) {
-                // 형식: YYYY-MM-DD@HHhMMmSSs (공백 없음)
-                const m = filename.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
-                if (m) return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]).getTime();
-                // 형식: YYYY-MM-DD @HHh MMm SSs (공백 있음)
-                const m2 = filename.match(/(\d{4})-(\d{2})-(\d{2})\s*@\s*(\d{2})h\s*(\d{2})m\s*(\d{2})s/);
-                if (m2) return new Date(+m2[1], +m2[2]-1, +m2[3], +m2[4], +m2[5], +m2[6]).getTime();
-                // 형식: YYYY-MM-DD만
-                const m3 = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
-                if (m3) return new Date(+m3[1], +m3[2]-1, +m3[3]).getTime();
-                return 0;
-            }
-            
-            if (currentSort === 'name') return fnA.localeCompare(fnB, 'ko');
-            
-            // 메시지 수 순 정렬
-            if (currentSort === 'messages') {
-                const msgA = a.message_count || a.mes_count || 0;
-                const msgB = b.message_count || b.mes_count || 0;
-                return msgB - msgA; // 많은 순
-            }
-            
-            let dateA = parseDate(fnA);
-            let dateB = parseDate(fnB);
-            if (!dateA && a.last_mes) dateA = typeof a.last_mes === 'number' ? a.last_mes : new Date(a.last_mes).getTime();
-            if (!dateB && b.last_mes) dateB = typeof b.last_mes === 'number' ? b.last_mes : new Date(b.last_mes).getTime();
-            return dateB - dateA;
-        });
-        
-        document.getElementById('chat-panel-count').textContent = `${chatArray.length}개 채팅`;
-        chatsList.innerHTML = chatArray.map((chat, idx) => renderChatItem(chat, charAvatar, idx)).join('');
-        
-        // 이벤트 재연결
-        bindChatItemEvents(chatsList, charAvatar);
-        
-        // 드롭다운 값 유지
-        const filterSelect = document.getElementById('chat-lobby-folder-filter');
-        if (filterSelect) filterSelect.value = filterValue;
-    }
-    
-    // 채팅 아이템 이벤트 바인딩 (재사용)
-    function bindChatItemEvents(chatsList, charAvatar) {
-        chatsList.querySelectorAll('.lobby-chat-item').forEach(item => {
-            let touchStartY = 0;
-            let isScrolling = false;
-            let touchHandled = false;
-            
-            const handleItemClick = (e) => {
-                if (isScrolling) return;
-                if (batchModeActive) {
-                    const cb = item.querySelector('.chat-select-cb');
-                    if (cb && e.target !== cb) {
-                        cb.checked = !cb.checked;
-                        updateBatchCount();
-                    }
-                    return;
-                }
-                openChat(item);
-            };
-            
-            const chatContent = item.querySelector('.chat-content');
-            chatContent.addEventListener('touchstart', (e) => {
-                touchHandled = false; isScrolling = false;
-                touchStartY = e.touches[0].clientY;
-            }, { passive: true });
-            chatContent.addEventListener('touchmove', (e) => {
-                if (Math.abs(e.touches[0].clientY - touchStartY) > 10) isScrolling = true;
-            }, { passive: true });
-            chatContent.addEventListener('touchend', (e) => {
-                if (!isScrolling) { e.preventDefault(); touchHandled = true; handleItemClick(e); }
-                isScrolling = false;
-            });
-            chatContent.addEventListener('click', (e) => {
-                if (!touchHandled) handleItemClick(e);
-                touchHandled = false;
-            });
-            
-            // 즐겨찾기/삭제 버튼도 동일하게
-            const favBtn = item.querySelector('.chat-fav-btn');
-            let favStartY = 0, favScrolling = false, favHandled = false;
-            favBtn.addEventListener('touchstart', (e) => { favHandled = false; favScrolling = false; favStartY = e.touches[0].clientY; }, { passive: true });
-            favBtn.addEventListener('touchmove', (e) => { if (Math.abs(e.touches[0].clientY - favStartY) > 10) favScrolling = true; }, { passive: true });
-            favBtn.addEventListener('touchend', (e) => {
-                if (!favScrolling) {
-                    e.preventDefault(); e.stopPropagation(); favHandled = true;
-                    const isNowFav = toggleFavorite(item.dataset.charAvatar, item.dataset.fileName);
-                    favBtn.textContent = isNowFav ? '⭐' : '☆';
-                    item.classList.toggle('is-favorite', isNowFav);
-                }
-                favScrolling = false;
-            });
-            favBtn.addEventListener('click', (e) => { if (!favHandled) { e.stopPropagation(); const isNowFav = toggleFavorite(item.dataset.charAvatar, item.dataset.fileName); favBtn.textContent = isNowFav ? '⭐' : '☆'; item.classList.toggle('is-favorite', isNowFav); } favHandled = false; });
-            
-            const delBtn = item.querySelector('.chat-delete-btn');
-            let delStartY = 0, delScrolling = false, delHandled = false;
-            delBtn.addEventListener('touchstart', (e) => { delHandled = false; delScrolling = false; delStartY = e.touches[0].clientY; }, { passive: true });
-            delBtn.addEventListener('touchmove', (e) => { if (Math.abs(e.touches[0].clientY - delStartY) > 10) delScrolling = true; }, { passive: true });
-            delBtn.addEventListener('touchend', (e) => { if (!delScrolling) { e.preventDefault(); e.stopPropagation(); delHandled = true; deleteChat(item); } delScrolling = false; });
-            delBtn.addEventListener('click', (e) => { if (!delHandled) { e.stopPropagation(); deleteChat(item); } delHandled = false; });
-        });
-    }
-    
-    // 폴더 필터 드롭다운 업데이트
-    function updateFolderFilterDropdown(selectedValue) {
-        const filterSelect = document.getElementById('chat-lobby-folder-filter');
-        if (!filterSelect) return;
-        
-        // 현재 선택된 값 기억 (매개변수 우선)
-        const currentValue = selectedValue || filterSelect.value || 'all';
-        
-        const data = loadLobbyData();
-        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
-        
-        let html = '<option value="all">📁 전체</option>';
-        html += '<option value="favorites">⭐ 즐겨찾기만</option>';
-        sorted.forEach(f => {
-            if (f.id !== 'favorites') {
-                html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
-            }
-        });
-        filterSelect.innerHTML = html;
-        
-        // 선택된 값 복원
-        filterSelect.value = currentValue;
-    }
-    
-    // 폴더 관리 모달 열기
-    function openFolderModal() {
-        const modal = document.getElementById('chat-lobby-folder-modal');
-        if (!modal) return;
-        modal.style.display = 'flex';
-        refreshFolderList();
-    }
-    
-    // 폴더 관리 모달 닫기
-    function closeFolderModal() {
-        const modal = document.getElementById('chat-lobby-folder-modal');
-        if (modal) modal.style.display = 'none';
-    }
-    
-    // 폴더 목록 새로고침
-    function refreshFolderList() {
-        const container = document.getElementById('folder-list');
-        if (!container) return;
-        
-        const data = loadLobbyData();
-        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
-        
-        let html = '';
-        sorted.forEach(f => {
-            const isSystem = f.isSystem ? 'system' : '';
-            const deleteBtn = f.isSystem ? '' : `<button class="folder-delete-btn" data-id="${f.id}">🗑️</button>`;
-            const editBtn = f.isSystem ? '' : `<button class="folder-edit-btn" data-id="${f.id}">✏️</button>`;
-            
-            // 해당 폴더의 채팅 수 계산
-            let count = 0;
-            if (f.id === 'favorites') {
-                count = data.favorites.length;
-            } else {
-                count = Object.values(data.chatAssignments).filter(v => v === f.id).length;
-            }
-            
-            html += `
-            <div class="folder-item ${isSystem}" data-id="${f.id}">
-                <span class="folder-name">${escapeHtml(f.name)}</span>
-                <span class="folder-count">${count}개</span>
-                ${editBtn}
-                ${deleteBtn}
-            </div>`;
-        });
-        container.innerHTML = html;
-        
-        // 이벤트 연결
-        container.querySelectorAll('.folder-delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (confirm('이 폴더를 삭제하시겠습니까? 내부 채팅은 미분류로 이동됩니다.')) {
-                    deleteFolder(btn.dataset.id);
-                    refreshFolderList();
-                    updateFolderFilterDropdown();
-                }
-            });
-        });
-        
-        container.querySelectorAll('.folder-edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = btn.dataset.id;
-                const data = loadLobbyData();
-                const folder = data.folders.find(f => f.id === id);
-                if (!folder) return;
-                const newName = prompt('새 폴더 이름:', folder.name);
-                if (newName && newName.trim()) {
-                    renameFolder(id, newName.trim());
-                    refreshFolderList();
-                    updateFolderFilterDropdown();
-                }
-            });
-        });
-    }
-    
-    // 배치 모드 토글
-    let batchModeActive = false;
-    function toggleBatchMode() {
-        batchModeActive = !batchModeActive;
-        const chatsList = document.getElementById('chat-lobby-chats-list');
-        const toolbar = document.getElementById('chat-lobby-batch-toolbar');
-        const batchBtn = document.getElementById('chat-lobby-batch-mode');
-        
-        if (batchModeActive) {
-            chatsList.classList.add('batch-mode');
-            toolbar.classList.add('visible');
-            batchBtn.classList.add('active');
-            chatsList.querySelectorAll('.chat-checkbox').forEach(cb => cb.style.display = 'block');
-            updateBatchMoveDropdown();
-        } else {
-            chatsList.classList.remove('batch-mode');
-            toolbar.classList.remove('visible');
-            batchBtn.classList.remove('active');
-            chatsList.querySelectorAll('.chat-checkbox').forEach(cb => {
-                cb.style.display = 'none';
-                cb.querySelector('input').checked = false;
-            });
-        }
-        updateBatchCount();
-    }
-    
-    // 배치 이동 드롭다운 업데이트
-    function updateBatchMoveDropdown() {
-        const select = document.getElementById('batch-move-folder');
-        if (!select) return;
-        const data = loadLobbyData();
-        const sorted = [...data.folders].sort((a, b) => a.order - b.order);
-        let html = '<option value="">이동할 폴더...</option>';
-        sorted.forEach(f => {
-            if (f.id !== 'favorites') {
-                html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
-            }
-        });
-        select.innerHTML = html;
-    }
-    
-    // 선택된 채팅 수 업데이트
-    function updateBatchCount() {
-        const count = document.querySelectorAll('.chat-select-cb:checked').length;
-        const countSpan = document.getElementById('batch-selected-count');
-        if (countSpan) countSpan.textContent = `${count}개 선택`;
-    }
-    
-    // 배치 이동 실행
-    function executeBatchMove() {
-        const targetFolder = document.getElementById('batch-move-folder').value;
-        if (!targetFolder) {
-            alert('이동할 폴더를 선택하세요.');
-            return;
-        }
-        
-        const checked = document.querySelectorAll('.chat-select-cb:checked');
-        const keys = [];
-        checked.forEach(cb => {
-            const item = cb.closest('.lobby-chat-item');
-            if (item) {
-                const key = getChatKey(item.dataset.charAvatar, item.dataset.fileName);
-                keys.push(key);
-                item.dataset.folderId = targetFolder;
-            }
-        });
-        
-        if (keys.length === 0) {
-            alert('이동할 채팅을 선택하세요.');
-            return;
-        }
-        
-        moveChatsBatch(keys, targetFolder);
-        toggleBatchMode(); // 배치 모드 해제
-        
-        // 현재 캐릭터 다시 선택하여 목록 새로고침
-        const selectedCard = document.querySelector('.lobby-char-card.selected');
-        if (selectedCard) selectCharacter(selectedCard);
-    }
-
-    // 채팅 열기
-    async function openChat(chatElement) {
-        const fileName = chatElement.dataset.fileName;
-        const charAvatar = chatElement.dataset.charAvatar;
-
-        console.log('[Chat Lobby] openChat called, fileName:', fileName);
-
-        if (!charAvatar || !fileName) {
-            console.error('[Chat Lobby] Missing chat data');
-            return;
-        }
-
-        try {
-            const context = getContext();
-            const characters = context.characters || [];
-            const charIndex = characters.findIndex(c => c.avatar === charAvatar);
-
-            if (charIndex === -1) {
-                console.error('[Chat Lobby] Character not found');
-                return;
-            }
-
-            // 로비 닫기 (FAB 버튼은 표시)
-            closeLobby();
-
-            // 캐릭터 선택
-            await selectCharacterByIndex(charIndex);
-
-            // 채팅 열기 - 파일명으로
-            setTimeout(async () => {
-                await openChatByFileName(fileName, charAvatar);
-            }, 300);
-
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to open chat:', error);
-        }
-    }
-
-    // 채팅 삭제
-    async function deleteChat(chatElement) {
-        const fileName = chatElement.dataset.fileName;
-        const charAvatar = chatElement.dataset.charAvatar;
-        
-        if (!fileName || !charAvatar) {
-            console.error('[Chat Lobby] Missing chat data for delete');
-            return;
-        }
-
-        // 확인창
-        if (!confirm(`"${fileName.replace('.jsonl', '')}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/chats/delete', {
-                method: 'POST',
-                headers: getRequestHeaders(),
-                body: JSON.stringify({
-                    chatfile: fileName,
-                    avatar_url: charAvatar
-                }),
-            });
-
-            if (response.ok) {
-                // 삭제 성공 - UI에서 제거
-                chatElement.remove();
-                
-                // 채팅 카운트 업데이트
-                const chatsList = document.getElementById('chat-lobby-chats-list');
-                const remainingChats = chatsList.querySelectorAll('.lobby-chat-item').length;
-                document.getElementById('chat-panel-count').textContent = `${remainingChats}개 채팅`;
-                
-                // 채팅이 없으면 빈 상태 표시
-                if (remainingChats === 0) {
-                    document.getElementById('chat-panel-count').textContent = '채팅 없음';
-                    chatsList.innerHTML = `
-                        <div class="lobby-empty-state">
-                            <i>💬</i>
-                            <div>채팅 기록이 없습니다</div>
-                            <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
-                        </div>
-                    `;
-                }
-                
-                console.log('[Chat Lobby] Chat deleted:', fileName);
-                // 캐시 무효화
-                invalidateChatsCache(charAvatar);
-            } else {
-                console.error('[Chat Lobby] Failed to delete chat:', response.status);
-                // 서버에서 삭제 실패 - 파일이 없을 수 있음, UI에서만 제거할지 확인
-                if (confirm('채팅 파일을 찾을 수 없습니다.\n목록에서 제거하시겠습니까?')) {
-                    chatElement.remove();
-                    const chatsList = document.getElementById('chat-lobby-chats-list');
-                    const remainingChats = chatsList.querySelectorAll('.lobby-chat-item').length;
-                    document.getElementById('chat-panel-count').textContent = remainingChats > 0 ? `${remainingChats}개 채팅` : '채팅 없음';
-                    
-                    if (remainingChats === 0) {
-                        chatsList.innerHTML = `
-                            <div class="lobby-empty-state">
-                                <i>💬</i>
-                                <div>채팅 기록이 없습니다</div>
-                                <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
-                            </div>
-                        `;
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('[Chat Lobby] Error deleting chat:', error);
-            alert('채팅 삭제 중 오류가 발생했습니다.');
-        }
-    }
-
-    // 인덱스로 캐릭터 선택
-    async function selectCharacterByIndex(index) {
-        const context = getContext();
-        if (context && typeof context.selectCharacterById === 'function') {
-            await context.selectCharacterById(String(index));
-        } else {
-            const characterList = document.getElementById('rm_print_characters_block');
-            if (characterList) {
-                const charItems = characterList.querySelectorAll('.character_select');
-                if (charItems[index]) {
-                    charItems[index].click();
-                }
-            }
-        }
-    }
-
-    // 파일명으로 채팅 열기
-    async function openChatByFileName(fileName, charAvatar) {
-        console.log('[Chat Lobby] === openChatByFileName START ===');
-        console.log('[Chat Lobby] Target fileName:', fileName);
-        
-        try {
-            // 채팅 관리 버튼 클릭
-            const manageChatsBtn = document.getElementById('option_select_chat');
-            console.log('[Chat Lobby] manageChatsBtn found:', !!manageChatsBtn);
-            
-            if (manageChatsBtn) {
-                manageChatsBtn.click();
-
-                // 채팅 목록에서 해당 파일명 찾기
-                setTimeout(() => {
-                    const chatItems = document.querySelectorAll('.select_chat_block');
-                    console.log('[Chat Lobby] Chat items count:', chatItems.length);
-                    let found = false;
-                    
-                    const cleanFileName = fileName.replace('.jsonl', '');
-                    console.log('[Chat Lobby] Searching for:', cleanFileName);
-                    
-                    for (let i = 0; i < chatItems.length; i++) {
-                        const item = chatItems[i];
-                        // 파일명이 포함된 요소 찾기
-                        const nameEl = item.querySelector('.select_chat_block_filename, .ch_name');
-                        const itemText = nameEl?.textContent || item.textContent || '';
-                        
-                        console.log(`[Chat Lobby] Item ${i}:`, itemText.substring(0, 50));
-                        
-                        // 파일명 비교 - 정확한 매칭 (부분 일치 대신)
-                        const itemClean = itemText.replace('.jsonl', '').trim();
-                        if (itemClean === cleanFileName || itemText.includes(cleanFileName + '.jsonl') || itemClean.endsWith(cleanFileName)) {
-                            console.log('[Chat Lobby] FOUND at index:', i);
-                            item.click();
-                            found = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!found) {
-                        console.warn('[Chat Lobby] NOT FOUND:', fileName);
-                    }
-                    
-                    console.log('[Chat Lobby] === openChatByFileName END ===');
-                }, 300);
-            }
-        } catch (error) {
-            console.error('[Chat Lobby] Failed to open specific chat:', error);
-        }
-    }
-
-    // 새 채팅 시작
-    async function startNewChat() {
-        const btn = document.getElementById('chat-lobby-new-chat');
-        const charIndex = btn.dataset.charIndex;
-        const charAvatar = btn.dataset.charAvatar;
-        const hasChats = btn.dataset.hasChats === 'true';
-
-        if (!charIndex || !charAvatar) {
-            console.error('[Chat Lobby] No character selected');
-            return;
-        }
-        
-        // 캐시 무효화 (새 채팅 생성됨)
-        invalidateChatsCache(charAvatar);
-
-        closeLobby();
-        await selectCharacterByIndex(parseInt(charIndex));
-
-        // 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
-        // (채팅이 없으면 SillyTavern이 자동으로 새 채팅 시작)
-        if (hasChats) {
-            setTimeout(() => {
-                const newChatBtn = document.getElementById('option_start_new_chat');
-                if (newChatBtn) {
-                    newChatBtn.click();
-                }
-            }, 300);
-        }
-    }
-
-    // 로비 열기
-    function openLobby() {
-        const overlay = document.getElementById('chat-lobby-overlay');
-        const container = document.getElementById('chat-lobby-container');
-        const fab = document.getElementById('chat-lobby-fab');
-        
-        if (overlay) {
-            overlay.style.display = 'flex';
-            if (container) container.style.display = 'flex';
-            if (fab) fab.style.display = 'none';
-            
-            // 배치 모드 리셋
-            if (batchModeActive) {
-                batchModeActive = false;
-                const chatsList = document.getElementById('chat-lobby-chats-list');
-                const toolbar = document.getElementById('chat-lobby-batch-toolbar');
-                const batchBtn = document.getElementById('chat-lobby-batch-mode');
-                if (chatsList) chatsList.classList.remove('batch-mode');
-                if (toolbar) toolbar.classList.remove('visible');
-                if (batchBtn) batchBtn.classList.remove('active');
-            }
-            
-            // 캐릭터 로딩 (약간의 딜레이 후 시도)
-            setTimeout(() => {
-                updateCharacterGrid();
-                updatePersonaSelect();
-                updateFolderFilterDropdown(); // 폴더 드롭다운 초기화
-            }, 100);
-            
-            // 디버그: context 정보 출력
-            const ctx = getContext();
-            console.log('[Chat Lobby] Context available:', !!ctx);
-            console.log('[Chat Lobby] Characters count:', ctx?.characters?.length || 0);
-        }
-    }
-    
-    // 전역 새로고침 함수
-    window.chatLobbyRefresh = function() {
-        updateCharacterGrid();
-    };
-
-    // 로비 닫기
-    function closeLobby() {
-        const container = document.getElementById('chat-lobby-container');
-        const fab = document.getElementById('chat-lobby-fab');
-        const overlay = document.getElementById('chat-lobby-overlay');
-        
-        if (container) container.style.display = 'none';
-        if (fab) fab.style.display = 'flex';
-        
-        // 채팅 패널 숨기기
-        const chatsPanel = document.getElementById('chat-lobby-chats');
-        if (chatsPanel) {
-            chatsPanel.classList.remove('visible');
-        }
-    }
-
-    // 유틸리티 함수들
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function truncateText(text, maxLength) {
-        if (!text) return '';
-        if (text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + '...';
-    }
-
-    function formatDate(timestamp) {
-        if (!timestamp) return '';
-        try {
-            const date = new Date(timestamp);
-            if (isNaN(date.getTime())) return '';
-            return date.toLocaleDateString('ko-KR', {
-                month: 'short',
-                day: 'numeric'
-            });
-        } catch {
-            return '';
-        }
-    }
-
-    function formatFileSize(bytes) {
-        if (bytes === undefined || bytes === null || isNaN(bytes)) return '';
-        bytes = Number(bytes);
-        if (bytes < 1024) return bytes + 'B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
-    }
-
-    // 툴팁 위치 계산 및 표시 (PC 전용) - 단순 이벤트 위임
-    function setupTooltipPositioning() {
-        const chatsList = document.getElementById('chat-lobby-chats-list');
-        if (!chatsList) return;
-
-        // 터치 디바이스 체크
-        const isDesktop = () => !('ontouchstart' in window) && !navigator.maxTouchPoints;
-        
-        // 전역 툴팁 요소 생성 (body에 직접 추가)
-        let globalTooltip = document.getElementById('chat-lobby-global-tooltip');
-        if (!globalTooltip) {
-            globalTooltip = document.createElement('div');
-            globalTooltip.id = 'chat-lobby-global-tooltip';
-            globalTooltip.className = 'chat-global-tooltip';
-            globalTooltip.innerHTML = '<div class="tooltip-header">📝 마지막 메시지</div><div class="tooltip-content"></div>';
-            document.body.appendChild(globalTooltip);
-        }
-        
-        const tooltipContent = globalTooltip.querySelector('.tooltip-content');
-        let hoverTimer = null;
-        let currentTarget = null;
-
-        const hideTooltip = () => {
-            globalTooltip.style.display = 'none';
-            currentTarget = null;
-            if (hoverTimer) {
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-            }
-        };
-
-        const showTooltip = (text, x, y) => {
-            if (!text) return;
-            
-            tooltipContent.textContent = text;
-            globalTooltip.style.display = 'block';
-            
-            // 마우스 오른쪽에 표시
-            let left = x + 20;
-            let top = y - 100;
-
-            // 화면 밖으로 나가면 조정
-            if (top < 10) top = 10;
-            if (top > window.innerHeight - 220) top = window.innerHeight - 220;
-
-            globalTooltip.style.left = left + 'px';
-            globalTooltip.style.top = top + 'px';
-        };
-
-        // 이벤트 위임 - mouseover/mouseout 사용
-        chatsList.addEventListener('mouseover', (e) => {
-            if (!isDesktop()) return;
-            
-            const chatItem = e.target.closest('.lobby-chat-item');
-            if (!chatItem) return;
-            
-            // 같은 아이템이면 무시
-            if (chatItem === currentTarget) return;
-            
-            // 이전 타이머 취소
-            if (hoverTimer) clearTimeout(hoverTimer);
-            hideTooltip();
-            
-            currentTarget = chatItem;
-            const tooltipText = chatItem.dataset.tooltip;
-            const mouseX = e.clientX;
-            const mouseY = e.clientY;
-            
-            console.log('[Chat Lobby] Hover on chat item, tooltip:', tooltipText ? 'yes' : 'no');
-            
-            // 0.2초 후 표시
-            hoverTimer = setTimeout(() => {
-                if (tooltipText && currentTarget === chatItem) {
-                    showTooltip(tooltipText, mouseX, mouseY);
-                }
-            }, 200);
-        });
-        
-        chatsList.addEventListener('mouseout', (e) => {
-            if (!isDesktop()) return;
-            
-            const chatItem = e.target.closest('.lobby-chat-item');
-            if (!chatItem) return;
-            
-            // 다른 채팅 아이템으로 이동하는지 체크
-            const relatedTarget = e.relatedTarget;
-            const toItem = relatedTarget ? relatedTarget.closest('.lobby-chat-item') : null;
-            
-            // 아이템 밖으로 나갔거나 다른 아이템으로 이동
-            if (!toItem || toItem !== chatItem) {
-                hideTooltip();
-            }
-        });
-
-        // 스크롤 시 숨김
-        chatsList.addEventListener('scroll', hideTooltip);
-    }
-
-    // 초기화
-    function init() {
-        console.log('[Chat Lobby] Initializing...');
-        
-        // 기존 UI 제거
-        const existingOverlay = document.getElementById('chat-lobby-overlay');
-        if (existingOverlay) existingOverlay.remove();
-        const existingFab = document.getElementById('chat-lobby-fab');
-        if (existingFab) existingFab.remove();
-        const existingModal = document.getElementById('chat-lobby-folder-modal');
-        if (existingModal) existingModal.remove();
-
-        document.body.insertAdjacentHTML('beforeend', createLobbyHTML());
-        
-        // FAB 버튼 초기 표시
-        const fab = document.getElementById('chat-lobby-fab');
-        if (fab) {
-            fab.style.display = 'flex';
-        }
-        
-        // 툴팁 위치 계산 설정
-        setupTooltipPositioning();
-
-        // 이벤트 리스너
-        document.getElementById('chat-lobby-close').addEventListener('click', closeLobby);
-        document.getElementById('chat-lobby-new-chat').addEventListener('click', startNewChat);
-        
-        // FAB 버튼 클릭
-        document.getElementById('chat-lobby-fab').addEventListener('click', openLobby);
-        
-        // 채팅 패널 뒤로 가기 버튼 (좁은 화면용)
-        document.getElementById('chat-lobby-chats-back').addEventListener('click', () => {
-            const chatsPanel = document.getElementById('chat-lobby-chats');
-            if (chatsPanel) {
-                chatsPanel.classList.remove('visible');
-            }
-            // 캐릭터 선택 해제
-            document.querySelectorAll('.lobby-char-card.selected').forEach(el => {
-                el.classList.remove('selected');
-            });
-        });
-        
-        // 봇 프사 클릭 시 캐릭터 정보/편집 화면으로 이동 (설명, 인사말 등)
-        document.getElementById('chat-panel-avatar').addEventListener('click', async () => {
-            const selectedCard = document.querySelector('.lobby-char-card.selected');
-            if (selectedCard) {
-                const charIndex = selectedCard.dataset.charIndex;
-                closeLobby();
-                await selectCharacterByIndex(parseInt(charIndex));
-                // 캐릭터 선택 후 우측 패널의 캐릭터 정보 화면 열기
-                setTimeout(() => {
-                    // 우측 drawer 열기
-                    const rightDrawer = document.getElementById('rightNavDrawerIcon');
-                    if (rightDrawer) {
-                        rightDrawer.click();
-                    }
-                }, 300);
-            }
-        });
-        
-        // 새로고침 버튼
-        document.getElementById('chat-lobby-refresh').addEventListener('click', () => {
-            updateCharacterGrid();
-            updatePersonaSelect();
-            // 현재 선택된 캐릭터의 채팅도 새로고침
-            const selectedCard = document.querySelector('.lobby-char-card.selected');
-            if (selectedCard) {
-                selectCharacter(selectedCard);
-            }
-        });
-        
-        // 캐릭터 임포트 버튼 (PNG 파일 가져오기) - 로비 위에서 작동
-        document.getElementById('chat-lobby-import-char').addEventListener('click', () => {
-            // 파일 input 직접 트리거 (SillyTavern ID: character_import_file)
-            const fileInput = document.getElementById('character_import_file');
-            if (fileInput) {
-                // 파일 선택 후 로비 새로고침을 위한 이벤트 리스너 추가
-                const refreshOnImport = () => {
-                    setTimeout(() => {
-                        updateCharacterGrid();
-                    }, 1000);
-                    fileInput.removeEventListener('change', refreshOnImport);
-                };
-                fileInput.addEventListener('change', refreshOnImport);
-                fileInput.click();
-            } else {
-                console.log('[Chat Lobby] character_import_file not found');
-            }
-        });
-        
-        // 페르소나 추가 버튼 - drawer-icon 클릭하고 create_dummy_persona 클릭
-        document.getElementById('chat-lobby-add-persona').addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[Chat Lobby] Add persona button clicked');
-            
-            closeLobby();
-            
-            // 페르소나 관리 drawer-icon 클릭
-            setTimeout(() => {
-                const personaDrawer = document.getElementById('persona-management-button');
-                if (personaDrawer) {
-                    const drawerIcon = personaDrawer.querySelector('.drawer-icon');
-                    console.log('[Chat Lobby] drawer-icon for add:', drawerIcon);
-                    if (drawerIcon) {
-                        drawerIcon.click();
-                        
-                        // drawer 열린 후 create_dummy_persona 클릭
-                        setTimeout(() => {
-                            const createBtn = document.getElementById('create_dummy_persona');
-                            console.log('[Chat Lobby] create_dummy_persona:', createBtn);
-                            if (createBtn) {
-                                createBtn.click();
-                                console.log('[Chat Lobby] Clicked create_dummy_persona');
-                            } else {
-                                console.log('[Chat Lobby] create_dummy_persona not found');
-                            }
-                        }, 400);
-                    }
-                }
-            }, 200);
-        });
-        
-        // 캐릭터 삭제 버튼 - API로 직접 삭제 (로비 열린 상태)
-        document.getElementById('chat-lobby-delete-char').addEventListener('click', async () => {
-            const selectedCard = document.querySelector('.lobby-char-card.selected');
-            if (!selectedCard) return;
-            
-            const charName = document.getElementById('chat-panel-name').textContent;
-            const charAvatar = selectedCard.dataset.charAvatar;
-            
-            if (!confirm(`"${charName}" 캐릭터를 삭제하시겠습니까?\n\n모든 채팅 기록도 함께 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.`)) return;
-            
-            // 채팅도 삭제할지 추가 확인
-            const deleteChats = confirm('채팅 기록도 함께 삭제하시겠습니까?\n\n취소를 누르면 캐릭터만 삭제됩니다.');
-            
-            try {
-                const response = await fetch('/api/characters/delete', {
-                    method: 'POST',
-                    headers: getRequestHeaders(),
-                    body: JSON.stringify({
-                        avatar_url: charAvatar,
-                        delete_chats: deleteChats
-                    })
-                });
-                
-                if (response.ok) {
-                    console.log('[Chat Lobby] Character deleted:', charName);
-                    // 채팅 패널 닫기
-                    const chatsPanel = document.getElementById('chat-lobby-chats');
-                    if (chatsPanel) chatsPanel.classList.remove('visible');
-                    // 캐릭터 목록 새로고침
-                    await updateCharacterGrid();
-                } else {
-                    console.error('[Chat Lobby] Failed to delete character:', response.status);
-                    alert('캐릭터 삭제에 실패했습니다.');
-                }
+                return aName.localeCompare(bName, "ko");
+              });
+              cache.set("personas", personas);
+              return personas;
             } catch (error) {
-                console.error('[Chat Lobby] Error deleting character:', error);
-                alert('캐릭터 삭제 중 오류가 발생했습니다.');
+              console.error("[API] Failed to load personas:", error);
+              return [];
             }
-        });
-        
-        // 폴더 필터 변경 - 데스크톱 + 모바일
-        const folderFilter = document.getElementById('chat-lobby-folder-filter');
-        folderFilter.addEventListener('change', (e) => {
-            const newValue = e.target.value;
-            console.log('[Chat Lobby] Filter changed to:', newValue);
-            setFilterFolder(newValue);
-            // 선택된 캐릭터 다시 로드 (필터값 유지)
-            const selectedCard = document.querySelector('.lobby-char-card.selected');
-            if (selectedCard) {
-                // selectCharacter를 직접 호출하지 않고 채팅만 다시 로드
-                reloadChatsWithFilter(selectedCard, newValue);
-            }
-        });
-        
-        // 채팅 정렬 변경 - 모바일: polling 방식 사용
-        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
-        let lastChatSortValue = loadLobbyData().sortOption || 'recent';
-        chatSortSelect.value = lastChatSortValue;
-        let chatSortPollInterval = null;
-        
-        const applyChatSort = () => {
-            const newSort = chatSortSelect.value;
-            if (newSort === lastChatSortValue) return;
-            
-            console.log('[Chat Lobby] Applying chat sort:', newSort);
-            lastChatSortValue = newSort;
-            setSortOption(newSort);
-            
-            const selectedCard = document.querySelector('.lobby-char-card.selected');
-            if (selectedCard) {
-                const currentFilter = document.getElementById('chat-lobby-folder-filter')?.value || 'all';
-                // 정렬값을 직접 전달하여 타이밍 문제 방지
-                reloadChatsWithFilter(selectedCard, currentFilter, newSort);
-            }
-        };
-        
-        // 모든 가능한 이벤트에 리스너 추가
-        chatSortSelect.addEventListener('change', applyChatSort);
-        chatSortSelect.addEventListener('blur', () => {
-            applyChatSort();
-            if (chatSortPollInterval) {
-                clearInterval(chatSortPollInterval);
-                chatSortPollInterval = null;
-            }
-        });
-        
-        // 모바일: focus 시 polling 시작
-        chatSortSelect.addEventListener('focus', () => {
-            if (chatSortPollInterval) clearInterval(chatSortPollInterval);
-            chatSortPollInterval = setInterval(applyChatSort, 200);
-        });
-        
-        // click으로도 polling 시작 (모바일 대응)
-        chatSortSelect.addEventListener('click', () => {
-            if (chatSortPollInterval) clearInterval(chatSortPollInterval);
-            chatSortPollInterval = setInterval(applyChatSort, 200);
-            // 3초 후 자동 종료
-            setTimeout(() => {
-                if (chatSortPollInterval) {
-                    clearInterval(chatSortPollInterval);
-                    chatSortPollInterval = null;
-                }
-            }, 3000);
-        });
-        
-        // 배치 모드 버튼 - 터치 중복 방지
-        const batchModeBtn = document.getElementById('chat-lobby-batch-mode');
-        let batchTouchHandled = false;
-        const handleBatchMode = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleBatchMode();
-        };
-        batchModeBtn.addEventListener('touchstart', () => { batchTouchHandled = false; }, { passive: true });
-        batchModeBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            batchTouchHandled = true;
-            handleBatchMode(e);
-        });
-        batchModeBtn.addEventListener('click', (e) => {
-            if (!batchTouchHandled) handleBatchMode(e);
-            batchTouchHandled = false;
-        });
-        
-        // 폴더 관리 버튼 - 터치 중복 방지
-        const folderManageBtn = document.getElementById('chat-lobby-folder-manage');
-        let folderManageTouchHandled = false;
-        const handleFolderManage = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            openFolderModal();
-        };
-        folderManageBtn.addEventListener('touchstart', () => { folderManageTouchHandled = false; }, { passive: true });
-        folderManageBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            folderManageTouchHandled = true;
-            handleFolderManage(e);
-        });
-        folderManageBtn.addEventListener('click', (e) => {
-            if (!folderManageTouchHandled) handleFolderManage(e);
-            folderManageTouchHandled = false;
-        });
-        
-        // 폴더 모달 닫기
-        document.getElementById('folder-modal-close').addEventListener('click', closeFolderModal);
-        
-        // 폴더 추가 - 터치 중복 방지
-        const addFolderBtn = document.getElementById('add-folder-btn');
-        let addFolderTouchHandled = false;
-        const handleAddFolder = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const input = document.getElementById('new-folder-name');
-            const name = input.value.trim();
-            if (name) {
-                addFolder(name);
-                input.value = '';
-                refreshFolderList();
-                updateFolderFilterDropdown();
-            }
-        };
-        addFolderBtn.addEventListener('touchstart', () => { addFolderTouchHandled = false; }, { passive: true });
-        addFolderBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            addFolderTouchHandled = true;
-            handleAddFolder(e);
-        });
-        addFolderBtn.addEventListener('click', (e) => {
-            if (!addFolderTouchHandled) handleAddFolder(e);
-            addFolderTouchHandled = false;
-        });
-        
-        // Enter 키로 폴더 추가
-        document.getElementById('new-folder-name').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('add-folder-btn').click();
-            }
-        });
-        
-        // 배치 이동 버튼 - 터치 중복 방지
-        const batchMoveBtn = document.getElementById('batch-move-btn');
-        let batchMoveTouchHandled = false;
-        const handleBatchMove = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            executeBatchMove();
-        };
-        batchMoveBtn.addEventListener('touchstart', () => { batchMoveTouchHandled = false; }, { passive: true });
-        batchMoveBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            batchMoveTouchHandled = true;
-            handleBatchMove(e);
-        });
-        batchMoveBtn.addEventListener('click', (e) => {
-            if (!batchMoveTouchHandled) handleBatchMove(e);
-            batchMoveTouchHandled = false;
-        });
-        
-        // 배치 취소 버튼 - 터치 중복 방지
-        const batchCancelBtn = document.getElementById('batch-cancel-btn');
-        let batchCancelTouchHandled = false;
-        const handleBatchCancel = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleBatchMode();
-        };
-        batchCancelBtn.addEventListener('touchstart', () => { batchCancelTouchHandled = false; }, { passive: true });
-        batchCancelBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            batchCancelTouchHandled = true;
-            handleBatchCancel(e);
-        });
-        batchCancelBtn.addEventListener('click', (e) => {
-            if (!batchCancelTouchHandled) handleBatchCancel(e);
-            batchCancelTouchHandled = false;
-        });
-        
-        // 채팅 체크박스 변경 감지 (이벤트 위임)
-        document.getElementById('chat-lobby-chats-list').addEventListener('change', (e) => {
-            if (e.target.classList.contains('chat-select-cb')) {
-                updateBatchCount();
-            }
-        });
-
-        // 검색 기능
-        const searchInput = document.getElementById('chat-lobby-search-input');
-        let searchTimeout;
-        searchInput.addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                updateCharacterGrid(e.target.value);
-            }, 300);
-        });
-        
-        // 캐릭터 정렬 드롭다운 변경 이벤트 - 모바일: polling 방식 사용
-        const charSortSelect = document.getElementById('chat-lobby-char-sort');
-        let lastCharSortValue = loadLobbyData().charSortOption || 'recent';
-        charSortSelect.value = lastCharSortValue;
-        let charSortPollInterval = null;
-        
-        const applyCharSort = () => {
-            const newSort = charSortSelect.value;
-            if (newSort === lastCharSortValue) return;
-            
-            console.log('[Chat Lobby] Applying char sort:', newSort);
-            lastCharSortValue = newSort;
-            setCharSortOption(newSort);
-            const currentSearch = searchInput.value;
-            // 정렬값을 직접 전달하여 타이밍 문제 방지
-            updateCharacterGrid(currentSearch, 0, newSort);
-        };
-        
-        // 모든 가능한 이벤트에 리스너 추가
-        charSortSelect.addEventListener('change', applyCharSort);
-        charSortSelect.addEventListener('blur', () => {
-            applyCharSort();
-            if (charSortPollInterval) {
-                clearInterval(charSortPollInterval);
-                charSortPollInterval = null;
-            }
-        });
-        
-        // 모바일: focus 시 polling 시작
-        charSortSelect.addEventListener('focus', () => {
-            if (charSortPollInterval) clearInterval(charSortPollInterval);
-            charSortPollInterval = setInterval(applyCharSort, 200);
-        });
-        
-        // click으로도 polling 시작 (모바일 대응)
-        charSortSelect.addEventListener('click', () => {
-            if (charSortPollInterval) clearInterval(charSortPollInterval);
-            charSortPollInterval = setInterval(applyCharSort, 200);
-            // 3초 후 자동 종료
-            setTimeout(() => {
-                if (charSortPollInterval) {
-                    clearInterval(charSortPollInterval);
-                    charSortPollInterval = null;
-                }
-            }, 3000);
-        });
-
-        // ESC 키로 닫기
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const modal = document.getElementById('chat-lobby-folder-modal');
-                if (modal && modal.style.display !== 'none') {
-                    closeFolderModal();
-                    return;
-                }
-                const container = document.getElementById('chat-lobby-container');
-                if (container && container.style.display !== 'none') {
-                    closeLobby();
-                }
-            }
-        });
-        
-        // SillyTavern 옵션 메뉴에 로비 버튼 추가
-        addLobbyToOptionsMenu();
-
-        console.log('[Chat Lobby] Extension initialized');
-
-        // 자동 실행
-        setTimeout(() => {
-            openLobby();
-        }, 100);
-    }
-    
-    // SillyTavern 옵션 메뉴에 로비 버튼 추가
-    function addLobbyToOptionsMenu() {
-        // 옵션 팝업 메뉴 찾기
-        const optionsMenu = document.getElementById('options');
-        if (!optionsMenu) {
-            console.log('[Chat Lobby] Options menu not found, retrying...');
-            setTimeout(addLobbyToOptionsMenu, 1000);
-            return;
+          });
         }
-        
-        // 이미 추가되었는지 확인
-        if (document.getElementById('option_chat_lobby')) return;
-        
-        // 로비 버튼 생성
-        const lobbyOption = document.createElement('a');
-        lobbyOption.id = 'option_chat_lobby';
-        lobbyOption.innerHTML = '<i class="fa-solid fa-comments"></i> Chat Lobby';
-        lobbyOption.style.cssText = 'cursor: pointer;';
-        lobbyOption.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // 옵션 메뉴 닫기
-            const optionsBtn = document.getElementById('options_button');
-            if (optionsBtn) optionsBtn.click();
-            // 로비 열기
-            setTimeout(openLobby, 100);
-        });
-        
-        // 메뉴 맨 앞에 추가
-        optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
-        console.log('[Chat Lobby] Added to options menu');
+        async getCurrentPersona() {
+          try {
+            const personasModule = await import("../../../../personas.js");
+            return personasModule.user_avatar || "";
+          } catch (e) {
+            return "";
+          }
+        }
+        async setPersona(personaKey) {
+          try {
+            const personasModule = await import("../../../../personas.js");
+            if (typeof personasModule.setUserAvatar === "function") {
+              await personasModule.setUserAvatar(personaKey);
+              return true;
+            }
+          } catch (e) {
+            const context = this.getContext();
+            if (typeof context?.setUserAvatar === "function") {
+              await context.setUserAvatar(personaKey);
+              return true;
+            }
+          }
+          return false;
+        }
+        async deletePersona(personaKey) {
+          const response = await fetch("/api/avatars/delete", {
+            method: "POST",
+            headers: this.getRequestHeaders(),
+            body: JSON.stringify({ avatar: personaKey })
+          });
+          if (response.ok) {
+            cache.invalidate("personas");
+          }
+          return response.ok;
+        }
+        // ============================================
+        // 캐릭터 API
+        // ============================================
+        async fetchCharacters() {
+          if (cache.isValid("characters")) {
+            return cache.get("characters");
+          }
+          const context = this.getContext();
+          if (!context) {
+            console.error("[API] Context not available");
+            return [];
+          }
+          const characters = context.characters || [];
+          cache.set("characters", characters);
+          return characters;
+        }
+        async selectCharacterById(index) {
+          const context = this.getContext();
+          if (context?.selectCharacterById) {
+            await context.selectCharacterById(String(index));
+          }
+        }
+        async deleteCharacter(charAvatar) {
+          const response = await fetch("/api/characters/delete", {
+            method: "POST",
+            headers: this.getRequestHeaders(),
+            body: JSON.stringify({
+              avatar_url: charAvatar,
+              delete_chats: true
+            })
+          });
+          if (response.ok) {
+            cache.invalidate("characters");
+            cache.invalidate("chats", charAvatar);
+          }
+          return response.ok;
+        }
+        // ============================================
+        // 채팅 API
+        // ============================================
+        async fetchChatsForCharacter(characterAvatar, forceRefresh = false) {
+          if (!characterAvatar) return [];
+          if (!forceRefresh && cache.isValid("chats", characterAvatar)) {
+            console.log("[API] Using cached chats for:", characterAvatar);
+            return cache.get("chats", characterAvatar);
+          }
+          return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
+            try {
+              const response = await fetch("/api/characters/chats", {
+                method: "POST",
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                  avatar_url: characterAvatar,
+                  simple: false
+                })
+              });
+              if (!response.ok) {
+                console.error("[API] HTTP error:", response.status);
+                return [];
+              }
+              const data = await response.json();
+              if (data?.error === true) return [];
+              const result = data || [];
+              cache.set("chats", result, characterAvatar);
+              return result;
+            } catch (error) {
+              console.error("[API] Failed to load chats:", error);
+              return [];
+            }
+          });
+        }
+        async deleteChat(fileName, charAvatar) {
+          const response = await fetch("/api/chats/delete", {
+            method: "POST",
+            headers: this.getRequestHeaders(),
+            body: JSON.stringify({
+              chatfile: fileName,
+              avatar_url: charAvatar
+            })
+          });
+          if (response.ok) {
+            cache.invalidate("chats", charAvatar);
+          }
+          return response.ok;
+        }
+        // 채팅 수 가져오기 (캐시 활용)
+        async getChatCount(characterAvatar) {
+          if (cache.isValid("chatCounts", characterAvatar)) {
+            return cache.get("chatCounts", characterAvatar);
+          }
+          try {
+            const chats = await this.fetchChatsForCharacter(characterAvatar);
+            const count = Array.isArray(chats) ? chats.length : Object.keys(chats || {}).length;
+            cache.set("chatCounts", count, characterAvatar);
+            return count;
+          } catch (e) {
+            return 0;
+          }
+        }
+      };
+      api = new SillyTavernAPI();
     }
+  });
 
-    // DOM 로드 후 초기화
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+  // src/utils/textUtils.js
+  function escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  function truncateText(text, maxLength) {
+    if (!text) return "";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  }
+  var init_textUtils = __esm({
+    "src/utils/textUtils.js"() {
+    }
+  });
+
+  // src/utils/eventHelpers.js
+  function debounce(func, wait = CONFIG.ui.debounceWait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+  function createTouchClickHandler(element, handler, options = {}) {
+    const { preventDefault = true, stopPropagation = true, scrollThreshold = 10 } = options;
+    let touchStartY = 0;
+    let isScrolling = false;
+    let touchHandled = false;
+    const wrappedHandler = (e) => {
+      if (isScrolling) return;
+      if (preventDefault) e.preventDefault();
+      if (stopPropagation) e.stopPropagation();
+      handler(e);
+    };
+    element.addEventListener("touchstart", (e) => {
+      touchHandled = false;
+      isScrolling = false;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    element.addEventListener("touchmove", (e) => {
+      if (Math.abs(e.touches[0].clientY - touchStartY) > scrollThreshold) {
+        isScrolling = true;
+      }
+    }, { passive: true });
+    element.addEventListener("touchend", (e) => {
+      if (!isScrolling) {
+        touchHandled = true;
+        wrappedHandler(e);
+      }
+      isScrolling = false;
+    });
+    element.addEventListener("click", (e) => {
+      if (!touchHandled) {
+        wrappedHandler(e);
+      }
+      touchHandled = false;
+    });
+  }
+  var isMobile;
+  var init_eventHelpers = __esm({
+    "src/utils/eventHelpers.js"() {
+      init_config();
+      isMobile = () => window.innerWidth <= CONFIG.ui.mobileBreakpoint || "ontouchstart" in window;
+    }
+  });
+
+  // src/ui/characterGrid.js
+  var characterGrid_exports = {};
+  __export(characterGrid_exports, {
+    handleSearch: () => handleSearch,
+    handleSortChange: () => handleSortChange,
+    renderCharacterGrid: () => renderCharacterGrid,
+    setCharacterSelectHandler: () => setCharacterSelectHandler
+  });
+  function setCharacterSelectHandler(handler) {
+    onCharacterSelect = handler;
+  }
+  async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
+    const container = document.getElementById("chat-lobby-characters");
+    if (!container) return;
+    const cachedCharacters = cache.get("characters");
+    if (cachedCharacters && cachedCharacters.length > 0) {
+      renderCharacterList(container, cachedCharacters, searchTerm, sortOverride);
     } else {
-        setTimeout(init, 1000);
+      container.innerHTML = '<div class="lobby-loading">\uCE90\uB9AD\uD130 \uB85C\uB529 \uC911...</div>';
     }
+    const characters = await api.fetchCharacters();
+    if (characters.length === 0) {
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F465}</i>
+                <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uC0C8\uB85C\uACE0\uCE68</button>
+            </div>
+        `;
+      return;
+    }
+    renderCharacterList(container, characters, searchTerm, sortOverride);
+  }
+  async function renderCharacterList(container, characters, searchTerm, sortOverride) {
+    let filtered = [...characters];
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (char) => (char.name || "").toLowerCase().includes(term)
+      );
+    }
+    const sortOption = sortOverride || storage.getCharSortOption();
+    filtered = await sortCharacters(filtered, sortOption);
+    const sortSelect = document.getElementById("chat-lobby-char-sort");
+    if (sortSelect && sortSelect.value !== sortOption) {
+      sortSelect.value = sortOption;
+    }
+    if (filtered.length === 0) {
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F50D}</i>
+                <div>\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+            </div>
+        `;
+      return;
+    }
+    const originalCharacters = cache.get("characters") || characters;
+    container.innerHTML = filtered.map((char) => {
+      const originalIndex = originalCharacters.indexOf(char);
+      return renderCharacterCard(char, originalIndex);
+    }).join("");
+    bindCharacterEvents(container);
+  }
+  function renderCharacterCard(char, index) {
+    const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
+    const name = char.name || "Unknown";
+    const safeAvatar = (char.avatar || "").replace(/"/g, "&quot;");
+    const isFav = !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
+    const favBadge = isFav ? '<span class="char-fav-badge">\u2B50</span>' : "";
+    return `
+    <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
+         data-char-index="${index}" 
+         data-char-avatar="${safeAvatar}" 
+         data-is-fav="${isFav}">
+        ${favBadge}
+        <img class="lobby-char-avatar" src="${avatarUrl}" alt="${name}" onerror="this.src='/img/ai4.png'">
+        <div class="lobby-char-name">${escapeHtml(name)}</div>
+    </div>
+    `;
+  }
+  async function sortCharacters(characters, sortOption) {
+    const isFav = (char) => !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
+    if (sortOption === "chats") {
+      const chatCounts = await Promise.all(
+        characters.map(async (char) => {
+          const count = await api.getChatCount(char.avatar);
+          return { char, count };
+        })
+      );
+      chatCounts.sort((a, b) => {
+        if (isFav(a.char) !== isFav(b.char)) return isFav(a.char) ? -1 : 1;
+        return b.count - a.count;
+      });
+      return chatCounts.map((item) => item.char);
+    }
+    const sorted = [...characters];
+    sorted.sort((a, b) => {
+      if (isFav(a) !== isFav(b)) return isFav(a) ? -1 : 1;
+      if (sortOption === "name") {
+        return (a.name || "").localeCompare(b.name || "", "ko");
+      }
+      if (sortOption === "created") {
+        const aDate2 = a.create_date || a.date_added || 0;
+        const bDate2 = b.create_date || b.date_added || 0;
+        return bDate2 - aDate2;
+      }
+      const aDate = a.date_last_chat || a.last_mes || 0;
+      const bDate = b.date_last_chat || b.last_mes || 0;
+      return bDate - aDate;
+    });
+    return sorted;
+  }
+  function bindCharacterEvents(container) {
+    container.querySelectorAll(".lobby-char-card").forEach((card) => {
+      createTouchClickHandler(card, () => {
+        container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
+          el.classList.remove("selected");
+        });
+        card.classList.add("selected");
+        if (onCharacterSelect) {
+          onCharacterSelect({
+            index: card.dataset.charIndex,
+            avatar: card.dataset.charAvatar,
+            name: card.querySelector(".lobby-char-name").textContent,
+            avatarSrc: card.querySelector(".lobby-char-avatar").src
+          });
+        }
+      }, { preventDefault: false, stopPropagation: false });
+    });
+  }
+  function handleSortChange(sortOption) {
+    storage.setCharSortOption(sortOption);
+    const searchInput = document.getElementById("chat-lobby-search-input");
+    const searchTerm = searchInput?.value || "";
+    renderCharacterGrid(searchTerm, sortOption);
+  }
+  var onCharacterSelect, handleSearch;
+  var init_characterGrid = __esm({
+    "src/ui/characterGrid.js"() {
+      init_sillyTavern();
+      init_cache();
+      init_storage();
+      init_textUtils();
+      init_eventHelpers();
+      init_config();
+      onCharacterSelect = null;
+      handleSearch = debounce((searchTerm) => {
+        renderCharacterGrid(searchTerm);
+      }, CONFIG.ui.debounceWait);
+    }
+  });
 
+  // src/index.js
+  init_config();
+  init_cache();
+  init_storage();
+  init_sillyTavern();
+
+  // src/ui/templates.js
+  init_storage();
+  function createLobbyHTML() {
+    return `
+    <div id="chat-lobby-fab" title="Chat Lobby \uC5F4\uAE30">\u{1F4AC}</div>
+    <div id="chat-lobby-overlay" style="display: none;">
+        <div id="chat-lobby-container">
+            <div id="chat-lobby-header">
+                <h2>Chat Lobby</h2>
+                <div class="header-actions">
+                    <button id="chat-lobby-refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
+                    <button id="chat-lobby-import-char" title="\uCE90\uB9AD\uD130 \uC784\uD3EC\uD2B8">\u{1F4E5}</button>
+                    <button id="chat-lobby-add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
+                    <button id="chat-lobby-close">\u2715</button>
+                </div>
+            </div>
+            <div id="chat-lobby-main">
+                <!-- \uC67C\uCABD \uD328\uB110: \uD398\uB974\uC18C\uB098 + \uCE90\uB9AD\uD130 -->
+                <div id="chat-lobby-left">
+                    <div id="chat-lobby-persona-bar">
+                        <div id="chat-lobby-persona-list">
+                            <div class="lobby-loading">\uB85C\uB529 \uC911...</div>
+                        </div>
+                    </div>
+                    <div id="chat-lobby-search">
+                        <input type="text" id="chat-lobby-search-input" placeholder="\uCE90\uB9AD\uD130 \uAC80\uC0C9...">
+                        <select id="chat-lobby-char-sort" title="\uCE90\uB9AD\uD130 \uC815\uB82C">
+                            <option value="recent">\u{1F552} \uCD5C\uADFC \uCC44\uD305\uC21C</option>
+                            <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
+                            <option value="created">\u{1F4C5} \uC0DD\uC131\uC77C\uC21C</option>
+                            <option value="chats">\u{1F4AC} \uCC44\uD305 \uC218</option>
+                        </select>
+                    </div>
+                    <div id="chat-lobby-characters">
+                        <div class="lobby-loading">\uCE90\uB9AD\uD130 \uB85C\uB529 \uC911...</div>
+                    </div>
+                </div>
+                <!-- \uC624\uB978\uCABD \uD328\uB110: \uCC44\uD305 \uBAA9\uB85D -->
+                <div id="chat-lobby-chats">
+                    <div id="chat-lobby-chats-header">
+                        <button id="chat-lobby-chats-back" title="\uB4A4\uB85C">\u2190</button>
+                        <img src="" alt="avatar" id="chat-panel-avatar" title="\uCE90\uB9AD\uD130 \uC124\uC815" style="display:none;">
+                        <div class="char-info">
+                            <div class="char-name" id="chat-panel-name">\uCE90\uB9AD\uD130\uB97C \uC120\uD0DD\uD558\uC138\uC694</div>
+                            <div class="chat-count" id="chat-panel-count"></div>
+                        </div>
+                        <button id="chat-lobby-delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
+                        <button id="chat-lobby-new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
+                    </div>
+                    <div id="chat-lobby-folder-bar" style="display:none;">
+                        <div class="folder-filter">
+                            <select id="chat-lobby-folder-filter">
+                                <option value="all">\u{1F4C1} \uC804\uCCB4</option>
+                                <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
+                            </select>
+                            <select id="chat-lobby-chat-sort">
+                                <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
+                                <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
+                                <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
+                            </select>
+                        </div>
+                        <div class="folder-actions">
+                            <button id="chat-lobby-batch-mode" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
+                            <button id="chat-lobby-folder-manage" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                        </div>
+                    </div>
+                    <div id="chat-lobby-batch-toolbar" style="display:none;">
+                        <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
+                        <select id="batch-move-folder">
+                            <option value="">\uD3F4\uB354 \uC120\uD0DD...</option>
+                        </select>
+                        <button id="batch-move-btn">\uC774\uB3D9</button>
+                        <button id="batch-cancel-btn">\uCDE8\uC18C</button>
+                    </div>
+                    <div id="chat-lobby-chats-list">
+                        <div class="lobby-empty-state">
+                            <i>\u{1F4AC}</i>
+                            <div>\uCE90\uB9AD\uD130\uB97C \uC120\uD0DD\uD558\uC138\uC694</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- \uD3F4\uB354 \uAD00\uB9AC \uBAA8\uB2EC -->
+    <div id="chat-lobby-folder-modal" style="display:none;">
+        <div class="folder-modal-content">
+            <div class="folder-modal-header">
+                <h3>\u{1F4C1} \uD3F4\uB354 \uAD00\uB9AC</h3>
+                <button id="folder-modal-close">\u2715</button>
+            </div>
+            <div class="folder-modal-body">
+                <div class="folder-add-row">
+                    <input type="text" id="new-folder-name" placeholder="\uC0C8 \uD3F4\uB354 \uC774\uB984...">
+                    <button id="add-folder-btn">\uCD94\uAC00</button>
+                </div>
+                <div id="folder-list"></div>
+            </div>
+        </div>
+    </div>
+    `;
+  }
+  function getBatchFoldersHTML() {
+    const data = storage.load();
+    const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+    let html = '<option value="">\uC774\uB3D9\uD560 \uD3F4\uB354...</option>';
+    sorted.forEach((f) => {
+      if (f.id !== "favorites") {
+        html += `<option value="${f.id}">${f.name}</option>`;
+      }
+    });
+    return html;
+  }
+
+  // src/ui/personaBar.js
+  init_sillyTavern();
+  init_cache();
+  init_textUtils();
+  init_eventHelpers();
+  var isProcessingPersona = false;
+  async function renderPersonaBar() {
+    const container = document.getElementById("chat-lobby-persona-list");
+    if (!container) return;
+    const cachedPersonas = cache.get("personas");
+    if (cachedPersonas && cachedPersonas.length > 0) {
+      await renderPersonaList(container, cachedPersonas);
+    } else {
+      container.innerHTML = '<div class="lobby-loading">\uB85C\uB529 \uC911...</div>';
+    }
+    const personas = await api.fetchPersonas();
+    if (personas.length === 0) {
+      container.innerHTML = '<div class="persona-empty">\uD398\uB974\uC18C\uB098 \uC5C6\uC74C</div>';
+      return;
+    }
+    await renderPersonaList(container, personas);
+  }
+  async function renderPersonaList(container, personas) {
+    const currentPersona = await api.getCurrentPersona();
+    let html = "";
+    personas.forEach((persona) => {
+      const isSelected = persona.key === currentPersona ? "selected" : "";
+      const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
+      html += `
+        <div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
+            <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>\u{1F464}</div>'">
+            <span class="persona-name">${escapeHtml(persona.name)}</span>
+            <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
+        </div>`;
+    });
+    container.innerHTML = html;
+    bindPersonaEvents(container);
+  }
+  function bindPersonaEvents(container) {
+    container.querySelectorAll(".persona-item").forEach((item) => {
+      const avatarImg = item.querySelector(".persona-avatar");
+      const nameSpan = item.querySelector(".persona-name");
+      const deleteBtn = item.querySelector(".persona-delete-btn");
+      if (avatarImg) {
+        createTouchClickHandler(avatarImg, async () => {
+          if (isProcessingPersona) return;
+          if (item.classList.contains("selected")) {
+            openPersonaManagement();
+          } else {
+            await selectPersona(container, item);
+          }
+        });
+        avatarImg.style.cursor = "pointer";
+      }
+      if (nameSpan) {
+        createTouchClickHandler(nameSpan, async () => {
+          if (item.classList.contains("selected")) return;
+          await selectPersona(container, item);
+        });
+        nameSpan.style.cursor = "pointer";
+      }
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await deletePersona(deleteBtn.dataset.persona, item.title);
+        });
+      }
+    });
+  }
+  async function selectPersona(container, item) {
+    if (isProcessingPersona) return;
+    isProcessingPersona = true;
+    try {
+      container.querySelectorAll(".persona-item").forEach((el) => el.classList.remove("selected"));
+      item.classList.add("selected");
+      await api.setPersona(item.dataset.persona);
+    } finally {
+      isProcessingPersona = false;
+    }
+  }
+  async function deletePersona(personaKey, personaName) {
+    if (!confirm(`"${personaName}" \uD398\uB974\uC18C\uB098\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`)) {
+      return;
+    }
+    const success = await api.deletePersona(personaKey);
+    if (success) {
+      await renderPersonaBar();
+    } else {
+      alert("\uD398\uB974\uC18C\uB098 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+    }
+  }
+  function openPersonaManagement() {
+    const container = document.getElementById("chat-lobby-container");
+    const fab = document.getElementById("chat-lobby-fab");
+    if (container) container.style.display = "none";
+    if (fab) fab.style.display = "flex";
+    setTimeout(() => {
+      const personaDrawer = document.getElementById("persona-management-button");
+      if (personaDrawer) {
+        const drawerIcon = personaDrawer.querySelector(".drawer-icon");
+        if (drawerIcon && !drawerIcon.classList.contains("openIcon")) {
+          drawerIcon.click();
+        }
+      }
+    }, 300);
+  }
+
+  // src/index.js
+  init_characterGrid();
+
+  // src/ui/chatList.js
+  init_sillyTavern();
+  init_cache();
+  init_storage();
+  init_textUtils();
+
+  // src/utils/dateUtils.js
+  function parseDateFromFilename(filename) {
+    const m = filename.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
+    if (m) {
+      return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    }
+    const m2 = filename.match(/(\d{4})-(\d{2})-(\d{2})\s*@\s*(\d{2})h\s*(\d{2})m\s*(\d{2})s/);
+    if (m2) {
+      return new Date(+m2[1], +m2[2] - 1, +m2[3], +m2[4], +m2[5], +m2[6]).getTime();
+    }
+    const m3 = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m3) {
+      return new Date(+m3[1], +m3[2] - 1, +m3[3]).getTime();
+    }
+    return 0;
+  }
+  function getTimestamp(chat) {
+    const fileName = chat.file_name || chat.fileName || "";
+    let ts = parseDateFromFilename(fileName);
+    if (!ts && chat.last_mes) {
+      ts = typeof chat.last_mes === "number" ? chat.last_mes : new Date(chat.last_mes).getTime();
+    }
+    return ts || 0;
+  }
+
+  // src/ui/chatList.js
+  init_eventHelpers();
+  var currentCharacter = null;
+  var batchModeActive = false;
+  var onChatOpen = null;
+  var onChatDelete = null;
+  function setChatHandlers(handlers) {
+    onChatOpen = handlers.onOpen;
+    onChatDelete = handlers.onDelete;
+  }
+  function getCurrentCharacter() {
+    return currentCharacter;
+  }
+  async function renderChatList(character) {
+    currentCharacter = character;
+    const chatsPanel = document.getElementById("chat-lobby-chats");
+    const chatsList = document.getElementById("chat-lobby-chats-list");
+    if (!chatsPanel || !chatsList) return;
+    chatsPanel.classList.add("visible");
+    updateChatHeader(character);
+    showFolderBar(true);
+    const cachedChats = cache.get("chats", character.avatar);
+    if (cachedChats && cachedChats.length > 0) {
+      renderChats(chatsList, cachedChats, character.avatar);
+    } else {
+      chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
+    }
+    const chats = await api.fetchChatsForCharacter(character.avatar);
+    if (!chats || chats.length === 0) {
+      updateChatCount(0);
+      chatsList.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F4AC}</i>
+                <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                <div style="font-size: 0.9em; margin-top: 5px;">\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD574\uBCF4\uC138\uC694!</div>
+            </div>
+        `;
+      return;
+    }
+    renderChats(chatsList, chats, character.avatar);
+  }
+  function renderChats(container, rawChats, charAvatar) {
+    let chatArray = normalizeChats(rawChats);
+    chatArray = filterValidChats(chatArray);
+    if (chatArray.length === 0) {
+      updateChatCount(0);
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F4AC}</i>
+                <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+            </div>
+        `;
+      return;
+    }
+    const filterFolder = storage.getFilterFolder();
+    if (filterFolder !== "all") {
+      chatArray = filterByFolder(chatArray, charAvatar, filterFolder);
+    }
+    const sortOption = storage.getSortOption();
+    chatArray = sortChats(chatArray, charAvatar, sortOption);
+    updateChatCount(chatArray.length);
+    container.innerHTML = chatArray.map(
+      (chat, idx) => renderChatItem(chat, charAvatar, idx)
+    ).join("");
+    bindChatEvents(container, charAvatar);
+    syncDropdowns(filterFolder, sortOption);
+  }
+  function normalizeChats(chats) {
+    if (Array.isArray(chats)) return chats;
+    if (typeof chats === "object") {
+      return Object.entries(chats).map(([key, value]) => {
+        if (typeof value === "object") {
+          return { ...value, file_name: value.file_name || key };
+        }
+        return { file_name: key, ...value };
+      });
+    }
+    return [];
+  }
+  function filterValidChats(chats) {
+    return chats.filter((chat) => {
+      const fileName = chat?.file_name || chat?.fileName || "";
+      const hasJsonl = fileName.includes(".jsonl");
+      const hasDatePattern = /\d{4}-\d{2}-\d{2}/.test(fileName);
+      return fileName && (hasJsonl || hasDatePattern) && !fileName.startsWith("chat_") && fileName.toLowerCase() !== "error";
+    });
+  }
+  function filterByFolder(chats, charAvatar, filterFolder) {
+    const data = storage.load();
+    return chats.filter((chat) => {
+      const fn = chat.file_name || chat.fileName || "";
+      const key = storage.getChatKey(charAvatar, fn);
+      if (filterFolder === "favorites") {
+        return data.favorites.includes(key);
+      }
+      const assigned = data.chatAssignments[key] || "uncategorized";
+      return assigned === filterFolder;
+    });
+  }
+  function sortChats(chats, charAvatar, sortOption) {
+    const data = storage.load();
+    return [...chats].sort((a, b) => {
+      const fnA = a.file_name || "";
+      const fnB = b.file_name || "";
+      const keyA = storage.getChatKey(charAvatar, fnA);
+      const keyB = storage.getChatKey(charAvatar, fnB);
+      const favA = data.favorites.includes(keyA) ? 0 : 1;
+      const favB = data.favorites.includes(keyB) ? 0 : 1;
+      if (favA !== favB) return favA - favB;
+      if (sortOption === "name") {
+        return fnA.localeCompare(fnB, "ko");
+      }
+      if (sortOption === "messages") {
+        const msgA = a.message_count || a.mes_count || a.chat_items || 0;
+        const msgB = b.message_count || b.mes_count || b.chat_items || 0;
+        return msgB - msgA;
+      }
+      return getTimestamp(b) - getTimestamp(a);
+    });
+  }
+  function renderChatItem(chat, charAvatar, index) {
+    const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
+    const displayName = fileName.replace(".jsonl", "");
+    const preview = chat.preview || chat.mes || chat.last_message || "\uCC44\uD305 \uAE30\uB85D";
+    const messageCount = chat.chat_items || chat.message_count || chat.mes_count || 0;
+    const isFav = storage.isFavorite(charAvatar, fileName);
+    const folderId = storage.getChatFolder(charAvatar, fileName);
+    const data = storage.load();
+    const folder = data.folders.find((f) => f.id === folderId);
+    const folderName = folder?.name || "";
+    const tooltipPreview = truncateText(preview, 500);
+    const safeAvatar = (charAvatar || "").replace(/"/g, "&quot;");
+    return `
+    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
+         data-file-name="${escapeHtml(fileName)}" 
+         data-char-avatar="${safeAvatar}" 
+         data-chat-index="${index}" 
+         data-folder-id="${folderId}">
+        <div class="chat-checkbox" style="display:none;">
+            <input type="checkbox" class="chat-select-cb">
+        </div>
+        <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
+        <div class="chat-content">
+            <div class="chat-name">${escapeHtml(displayName)}</div>
+            <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
+            <div class="chat-meta">
+                ${messageCount > 0 ? `<span>\u{1F4AC} ${messageCount}\uAC1C</span>` : ""}
+                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
+            </div>
+        </div>
+        <button class="chat-delete-btn" title="\uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F</button>
+    </div>
+    `;
+  }
+  function bindChatEvents(container, charAvatar) {
+    container.querySelectorAll(".lobby-chat-item").forEach((item) => {
+      const chatContent = item.querySelector(".chat-content");
+      const favBtn = item.querySelector(".chat-fav-btn");
+      const delBtn = item.querySelector(".chat-delete-btn");
+      createTouchClickHandler(chatContent, () => {
+        if (batchModeActive) {
+          const cb = item.querySelector(".chat-select-cb");
+          if (cb) {
+            cb.checked = !cb.checked;
+            updateBatchCount();
+          }
+          return;
+        }
+        if (onChatOpen) {
+          onChatOpen({
+            fileName: item.dataset.fileName,
+            charAvatar: item.dataset.charAvatar,
+            charIndex: currentCharacter?.index
+          });
+        }
+      }, { preventDefault: false });
+      createTouchClickHandler(favBtn, () => {
+        const fn = item.dataset.fileName;
+        const isNowFav = storage.toggleFavorite(charAvatar, fn);
+        favBtn.textContent = isNowFav ? "\u2B50" : "\u2606";
+        item.classList.toggle("is-favorite", isNowFav);
+      });
+      createTouchClickHandler(delBtn, () => {
+        if (onChatDelete) {
+          onChatDelete({
+            fileName: item.dataset.fileName,
+            charAvatar: item.dataset.charAvatar,
+            element: item
+          });
+        }
+      });
+    });
+  }
+  function updateChatHeader(character) {
+    const avatarImg = document.getElementById("chat-panel-avatar");
+    const nameEl = document.getElementById("chat-panel-name");
+    const deleteBtn = document.getElementById("chat-lobby-delete-char");
+    const newChatBtn = document.getElementById("chat-lobby-new-chat");
+    if (avatarImg) {
+      avatarImg.style.display = "block";
+      avatarImg.src = character.avatarSrc;
+    }
+    if (nameEl) nameEl.textContent = character.name;
+    if (deleteBtn) deleteBtn.style.display = "block";
+    if (newChatBtn) {
+      newChatBtn.style.display = "block";
+      newChatBtn.dataset.charIndex = character.index;
+      newChatBtn.dataset.charAvatar = character.avatar;
+    }
+    document.getElementById("chat-panel-count").textContent = "\uCC44\uD305 \uB85C\uB529 \uC911...";
+  }
+  function updateChatCount(count) {
+    const el = document.getElementById("chat-panel-count");
+    if (el) el.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
+    const newChatBtn = document.getElementById("chat-lobby-new-chat");
+    if (newChatBtn) newChatBtn.dataset.hasChats = count > 0 ? "true" : "false";
+  }
+  function showFolderBar(visible) {
+    const bar = document.getElementById("chat-lobby-folder-bar");
+    if (bar) bar.style.display = visible ? "flex" : "none";
+  }
+  function syncDropdowns(filterValue, sortValue) {
+    const filterSelect = document.getElementById("chat-lobby-folder-filter");
+    const sortSelect = document.getElementById("chat-lobby-chat-sort");
+    if (filterSelect) filterSelect.value = filterValue;
+    if (sortSelect) sortSelect.value = sortValue;
+  }
+  function handleFilterChange(filterValue) {
+    storage.setFilterFolder(filterValue);
+    if (currentCharacter) {
+      renderChatList(currentCharacter);
+    }
+  }
+  function handleSortChange2(sortValue) {
+    storage.setSortOption(sortValue);
+    if (currentCharacter) {
+      renderChatList(currentCharacter);
+    }
+  }
+  function toggleBatchMode() {
+    batchModeActive = !batchModeActive;
+    const chatsList = document.getElementById("chat-lobby-chats-list");
+    const toolbar = document.getElementById("chat-lobby-batch-toolbar");
+    const batchBtn = document.getElementById("chat-lobby-batch-mode");
+    if (batchModeActive) {
+      chatsList?.classList.add("batch-mode");
+      toolbar?.classList.add("visible");
+      batchBtn?.classList.add("active");
+      chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => cb.style.display = "block");
+    } else {
+      chatsList?.classList.remove("batch-mode");
+      toolbar?.classList.remove("visible");
+      batchBtn?.classList.remove("active");
+      chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => {
+        cb.style.display = "none";
+        cb.querySelector("input").checked = false;
+      });
+    }
+    updateBatchCount();
+  }
+  function updateBatchCount() {
+    const count = document.querySelectorAll(".chat-select-cb:checked").length;
+    const countSpan = document.getElementById("batch-selected-count");
+    if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
+  }
+  function executeBatchMove(targetFolder) {
+    if (!targetFolder) {
+      alert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    const checked = document.querySelectorAll(".chat-select-cb:checked");
+    const keys = [];
+    checked.forEach((cb) => {
+      const item = cb.closest(".lobby-chat-item");
+      if (item) {
+        const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
+        keys.push(key);
+      }
+    });
+    if (keys.length === 0) {
+      alert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    storage.moveChatsBatch(keys, targetFolder);
+    toggleBatchMode();
+    if (currentCharacter) {
+      renderChatList(currentCharacter);
+    }
+  }
+  async function refreshChatList() {
+    if (currentCharacter) {
+      cache.invalidate("chats", currentCharacter.avatar);
+      await renderChatList(currentCharacter);
+    }
+  }
+  function closeChatPanel() {
+    const chatsPanel = document.getElementById("chat-lobby-chats");
+    if (chatsPanel) chatsPanel.classList.remove("visible");
+    currentCharacter = null;
+  }
+
+  // src/handlers/chatHandlers.js
+  init_sillyTavern();
+  init_cache();
+  init_storage();
+  async function openChat(chatInfo) {
+    const { fileName, charAvatar, charIndex } = chatInfo;
+    if (!charAvatar || !fileName) {
+      console.error("[ChatLobby] Missing chat data");
+      return;
+    }
+    try {
+      const context = api.getContext();
+      const characters = context?.characters || [];
+      const index = characters.findIndex((c) => c.avatar === charAvatar);
+      if (index === -1) {
+        console.error("[ChatLobby] Character not found");
+        return;
+      }
+      closeLobby();
+      await api.selectCharacterById(index);
+      setTimeout(async () => {
+        await openChatByFileName(fileName);
+      }, 300);
+    } catch (error) {
+      console.error("[ChatLobby] Failed to open chat:", error);
+    }
+  }
+  async function openChatByFileName(fileName) {
+    const manageChatsBtn = document.getElementById("option_select_chat");
+    if (manageChatsBtn) {
+      manageChatsBtn.click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const chatItems = document.querySelectorAll(".select_chat_block .ch_name, .past_chat_block, .select_chat_block");
+      for (const item of chatItems) {
+        const itemText = item.textContent || item.dataset?.fileName || "";
+        if (itemText.includes(fileName.replace(".jsonl", "")) || itemText.includes(fileName)) {
+          item.click();
+          console.log("[ChatLobby] Chat selected:", fileName);
+          return;
+        }
+      }
+      console.log("[ChatLobby] Chat not found in list:", fileName);
+    }
+  }
+  async function deleteChat(chatInfo) {
+    const { fileName, charAvatar, element } = chatInfo;
+    if (!fileName || !charAvatar) {
+      console.error("[ChatLobby] Missing chat data for delete");
+      return;
+    }
+    if (!confirm(`"${fileName.replace(".jsonl", "")}" \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`)) {
+      return;
+    }
+    try {
+      const success = await api.deleteChat(fileName, charAvatar);
+      if (success) {
+        const data = storage.load();
+        const key = storage.getChatKey(charAvatar, fileName);
+        delete data.chatAssignments[key];
+        const favIndex = data.favorites.indexOf(key);
+        if (favIndex > -1) {
+          data.favorites.splice(favIndex, 1);
+        }
+        storage.save(data);
+        if (element) {
+          element.style.transition = "opacity 0.3s, transform 0.3s";
+          element.style.opacity = "0";
+          element.style.transform = "translateX(20px)";
+          setTimeout(() => {
+            element.remove();
+            updateChatCountAfterDelete();
+          }, 300);
+        } else {
+          await refreshChatList();
+        }
+      } else {
+        alert("\uCC44\uD305 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+      }
+    } catch (error) {
+      console.error("[ChatLobby] Error deleting chat:", error);
+      alert("\uCC44\uD305 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.");
+    }
+  }
+  function updateChatCountAfterDelete() {
+    const remaining = document.querySelectorAll(".lobby-chat-item").length;
+    const countEl = document.getElementById("chat-panel-count");
+    if (countEl) {
+      countEl.textContent = remaining > 0 ? `${remaining}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
+    }
+    if (remaining === 0) {
+      const chatsList = document.getElementById("chat-lobby-chats-list");
+      if (chatsList) {
+        chatsList.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>\u{1F4AC}</i>
+                    <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                </div>
+            `;
+      }
+    }
+  }
+  async function startNewChat() {
+    const btn = document.getElementById("chat-lobby-new-chat");
+    const charIndex = btn?.dataset.charIndex;
+    const charAvatar = btn?.dataset.charAvatar;
+    const hasChats = btn?.dataset.hasChats === "true";
+    if (!charIndex || !charAvatar) {
+      console.error("[ChatLobby] No character selected");
+      return;
+    }
+    cache.invalidate("chats", charAvatar);
+    closeLobby();
+    await api.selectCharacterById(parseInt(charIndex));
+    if (hasChats) {
+      setTimeout(() => {
+        const newChatBtn = document.getElementById("option_start_new_chat");
+        if (newChatBtn) newChatBtn.click();
+      }, 300);
+    }
+  }
+  async function deleteCharacter() {
+    const char = getCurrentCharacter();
+    if (!char) return;
+    if (!confirm(`"${char.name}" \uCE90\uB9AD\uD130\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uBAA8\uB4E0 \uCC44\uD305 \uAE30\uB85D\uB3C4 \uD568\uAED8 \uC0AD\uC81C\uB429\uB2C8\uB2E4.
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`)) {
+      return;
+    }
+    const success = await api.deleteCharacter(char.avatar);
+    if (success) {
+      const data = storage.load();
+      const prefix = char.avatar + "_";
+      Object.keys(data.chatAssignments).forEach((key) => {
+        if (key.startsWith(prefix)) {
+          delete data.chatAssignments[key];
+        }
+      });
+      data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
+      storage.save(data);
+      closeChatPanel();
+      const { renderCharacterGrid: renderCharacterGrid2 } = await Promise.resolve().then(() => (init_characterGrid(), characterGrid_exports));
+      await renderCharacterGrid2();
+    } else {
+      alert("\uCE90\uB9AD\uD130 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+    }
+  }
+  function closeLobby() {
+    const container = document.getElementById("chat-lobby-container");
+    const fab = document.getElementById("chat-lobby-fab");
+    if (container) container.style.display = "none";
+    if (fab) fab.style.display = "flex";
+    closeChatPanel();
+  }
+
+  // src/handlers/folderHandlers.js
+  init_storage();
+  init_textUtils();
+  function openFolderModal() {
+    const modal = document.getElementById("chat-lobby-folder-modal");
+    if (!modal) return;
+    modal.style.display = "flex";
+    refreshFolderList();
+  }
+  function closeFolderModal() {
+    const modal = document.getElementById("chat-lobby-folder-modal");
+    if (modal) modal.style.display = "none";
+  }
+  function addFolder() {
+    const input = document.getElementById("new-folder-name");
+    const name = input?.value.trim();
+    if (!name) return;
+    storage.addFolder(name);
+    input.value = "";
+    refreshFolderList();
+    updateFolderDropdowns();
+  }
+  function refreshFolderList() {
+    const container = document.getElementById("folder-list");
+    if (!container) return;
+    const data = storage.load();
+    const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+    let html = "";
+    sorted.forEach((f) => {
+      const isSystem = f.isSystem ? "system" : "";
+      const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}">\u{1F5D1}\uFE0F</button>`;
+      const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}">\u270F\uFE0F</button>`;
+      let count = 0;
+      if (f.id === "favorites") {
+        count = data.favorites.length;
+      } else {
+        count = Object.values(data.chatAssignments).filter((v) => v === f.id).length;
+      }
+      html += `
+        <div class="folder-item ${isSystem}" data-id="${f.id}">
+            <span class="folder-name">${escapeHtml(f.name)}</span>
+            <span class="folder-count">${count}\uAC1C</span>
+            ${editBtn}
+            ${deleteBtn}
+        </div>`;
+    });
+    container.innerHTML = html;
+    bindFolderEvents(container);
+  }
+  function bindFolderEvents(container) {
+    container.querySelectorAll(".folder-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const folderId = btn.dataset.id;
+        if (confirm("\uC774 \uD3F4\uB354\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?\n\uD3F4\uB354 \uC548\uC758 \uCC44\uD305\uB4E4\uC740 \uBBF8\uBD84\uB958\uB85C \uC774\uB3D9\uB429\uB2C8\uB2E4.")) {
+          storage.deleteFolder(folderId);
+          refreshFolderList();
+          updateFolderDropdowns();
+          refreshChatList();
+        }
+      });
+    });
+    container.querySelectorAll(".folder-edit-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const folderId = btn.dataset.id;
+        const folderItem = btn.closest(".folder-item");
+        const nameSpan = folderItem.querySelector(".folder-name");
+        const currentName = nameSpan.textContent;
+        const newName = prompt("\uC0C8 \uD3F4\uB354 \uC774\uB984:", currentName);
+        if (newName && newName.trim() && newName !== currentName) {
+          storage.renameFolder(folderId, newName.trim());
+          refreshFolderList();
+          updateFolderDropdowns();
+        }
+      });
+    });
+  }
+  function updateFolderDropdowns() {
+    const data = storage.load();
+    const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+    const filterSelect = document.getElementById("chat-lobby-folder-filter");
+    if (filterSelect) {
+      const currentValue = filterSelect.value;
+      let html = '<option value="all">\u{1F4C1} \uC804\uCCB4</option>';
+      html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
+      sorted.forEach((f) => {
+        if (f.id !== "favorites") {
+          html += `<option value="${f.id}">${f.name}</option>`;
+        }
+      });
+      filterSelect.innerHTML = html;
+      filterSelect.value = currentValue;
+    }
+    const batchSelect = document.getElementById("batch-move-folder");
+    if (batchSelect) {
+      batchSelect.innerHTML = getBatchFoldersHTML();
+    }
+  }
+
+  // src/index.js
+  init_eventHelpers();
+  (function() {
+    "use strict";
+    console.log("[ChatLobby] Loading extension...");
+    async function init() {
+      console.log("[ChatLobby] Initializing...");
+      removeExistingUI();
+      document.body.insertAdjacentHTML("beforeend", createLobbyHTML());
+      const fab = document.getElementById("chat-lobby-fab");
+      if (fab) {
+        fab.style.display = "flex";
+      }
+      setupHandlers();
+      bindEvents();
+      startBackgroundPreload();
+      addLobbyToOptionsMenu();
+      console.log("[ChatLobby] Extension initialized");
+    }
+    function removeExistingUI() {
+      ["chat-lobby-overlay", "chat-lobby-fab", "chat-lobby-folder-modal", "chat-lobby-global-tooltip"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+      });
+    }
+    function setupHandlers() {
+      setCharacterSelectHandler((character) => {
+        renderChatList(character);
+      });
+      setChatHandlers({
+        onOpen: openChat,
+        onDelete: deleteChat
+      });
+    }
+    async function startBackgroundPreload() {
+      setTimeout(async () => {
+        await cache.preloadAll(api);
+        const characters = cache.get("characters");
+        if (characters && characters.length > 0) {
+          const recent = [...characters].sort((a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0)).slice(0, 5);
+          await cache.preloadRecentChats(api, recent);
+        }
+      }, 2e3);
+    }
+    function openLobby() {
+      const overlay = document.getElementById("chat-lobby-overlay");
+      const container = document.getElementById("chat-lobby-container");
+      const fab = document.getElementById("chat-lobby-fab");
+      if (overlay) {
+        overlay.style.display = "flex";
+        if (container) container.style.display = "flex";
+        if (fab) fab.style.display = "none";
+        const batchBtn = document.getElementById("chat-lobby-batch-mode");
+        if (batchBtn?.classList.contains("active")) {
+          toggleBatchMode();
+        }
+        renderPersonaBar();
+        renderCharacterGrid();
+        updateFolderDropdowns();
+      }
+    }
+    function closeLobby2() {
+      const container = document.getElementById("chat-lobby-container");
+      const fab = document.getElementById("chat-lobby-fab");
+      if (container) container.style.display = "none";
+      if (fab) fab.style.display = "flex";
+      closeChatPanel();
+    }
+    window.chatLobbyRefresh = async function() {
+      cache.invalidateAll();
+      await renderPersonaBar();
+      await renderCharacterGrid();
+    };
+    function bindEvents() {
+      document.getElementById("chat-lobby-fab")?.addEventListener("click", openLobby);
+      document.getElementById("chat-lobby-close")?.addEventListener("click", closeLobby2);
+      document.getElementById("chat-lobby-chats-back")?.addEventListener("click", () => {
+        if (isMobile()) {
+          closeChatPanel();
+        }
+      });
+      document.getElementById("chat-lobby-refresh")?.addEventListener("click", async () => {
+        cache.invalidateAll();
+        await renderPersonaBar();
+        await renderCharacterGrid();
+      });
+      document.getElementById("chat-lobby-new-chat")?.addEventListener("click", startNewChat);
+      document.getElementById("chat-lobby-delete-char")?.addEventListener("click", deleteCharacter);
+      document.getElementById("chat-lobby-import-char")?.addEventListener("click", () => {
+        closeLobby2();
+        setTimeout(() => {
+          const importBtn = document.getElementById("character_import_button");
+          if (importBtn) importBtn.click();
+        }, 300);
+      });
+      document.getElementById("chat-lobby-add-persona")?.addEventListener("click", () => {
+        closeLobby2();
+        setTimeout(() => {
+          const personaDrawer = document.getElementById("persona-management-button");
+          const drawerIcon = personaDrawer?.querySelector(".drawer-icon");
+          if (drawerIcon) drawerIcon.click();
+          setTimeout(() => {
+            const createBtn = document.getElementById("create_dummy_persona");
+            if (createBtn) createBtn.click();
+          }, 500);
+        }, 300);
+      });
+      document.getElementById("chat-panel-avatar")?.addEventListener("click", () => {
+        closeLobby2();
+        setTimeout(() => {
+          const charInfoBtn = document.getElementById("option_settings");
+          if (charInfoBtn) charInfoBtn.click();
+        }, 300);
+      });
+      const searchInput = document.getElementById("chat-lobby-search-input");
+      searchInput?.addEventListener("input", (e) => {
+        handleSearch(e.target.value);
+      });
+      document.getElementById("chat-lobby-char-sort")?.addEventListener("change", (e) => {
+        handleSortChange(e.target.value);
+      });
+      document.getElementById("chat-lobby-folder-filter")?.addEventListener("change", (e) => {
+        handleFilterChange(e.target.value);
+      });
+      document.getElementById("chat-lobby-chat-sort")?.addEventListener("change", (e) => {
+        handleSortChange2(e.target.value);
+      });
+      document.getElementById("chat-lobby-batch-mode")?.addEventListener("click", toggleBatchMode);
+      document.getElementById("batch-move-btn")?.addEventListener("click", () => {
+        const folder = document.getElementById("batch-move-folder")?.value;
+        executeBatchMove(folder);
+      });
+      document.getElementById("batch-cancel-btn")?.addEventListener("click", toggleBatchMode);
+      document.getElementById("chat-lobby-chats-list")?.addEventListener("change", (e) => {
+        if (e.target.classList.contains("chat-select-cb")) {
+          updateBatchCount();
+        }
+      });
+      document.getElementById("chat-lobby-folder-manage")?.addEventListener("click", openFolderModal);
+      document.getElementById("folder-modal-close")?.addEventListener("click", closeFolderModal);
+      document.getElementById("add-folder-btn")?.addEventListener("click", addFolder);
+      document.getElementById("new-folder-name")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") addFolder();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          const folderModal = document.getElementById("chat-lobby-folder-modal");
+          if (folderModal?.style.display === "flex") {
+            closeFolderModal();
+          } else {
+            const overlay = document.getElementById("chat-lobby-overlay");
+            if (overlay?.style.display !== "none") {
+              closeLobby2();
+            }
+          }
+        }
+      });
+    }
+    function addLobbyToOptionsMenu() {
+      const optionsMenu = document.getElementById("options");
+      if (!optionsMenu) {
+        setTimeout(addLobbyToOptionsMenu, 1e3);
+        return;
+      }
+      if (document.getElementById("option_chat_lobby")) return;
+      const lobbyOption = document.createElement("a");
+      lobbyOption.id = "option_chat_lobby";
+      lobbyOption.innerHTML = '<i class="fa-solid fa-comments"></i> Chat Lobby';
+      lobbyOption.style.cssText = "cursor: pointer;";
+      lobbyOption.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const optionsContainer = document.getElementById("options");
+        if (optionsContainer) optionsContainer.style.display = "none";
+        openLobby();
+      });
+      optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
+      console.log("[ChatLobby] Added to options menu");
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => setTimeout(init, 1e3));
+    } else {
+      setTimeout(init, 1e3);
+    }
+  })();
 })();
