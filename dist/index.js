@@ -878,7 +878,7 @@
     }
 
     // 캐릭터 그리드 업데이트
-    async function updateCharacterGrid(searchTerm = '', retryCount = 0) {
+    async function updateCharacterGrid(searchTerm = '', retryCount = 0, sortOverride = null) {
         const container = document.getElementById('chat-lobby-characters');
         if (!container) return;
 
@@ -889,7 +889,7 @@
         // 캐릭터가 없고 재시도 횟수가 3번 미만이면 재시도
         if (characters.length === 0 && retryCount < 3) {
             console.log('[Chat Lobby] No characters found, retrying...', retryCount + 1);
-            setTimeout(() => updateCharacterGrid(searchTerm, retryCount + 1), 500);
+            setTimeout(() => updateCharacterGrid(searchTerm, retryCount + 1, sortOverride), 500);
             return;
         }
 
@@ -913,9 +913,19 @@
             );
         }
         
-        // 캐릭터 정렬 옵션 가져오기
+        // 캐릭터 정렬 옵션 가져오기 (sortOverride가 있으면 우선 사용)
         const lobbyData = loadLobbyData();
-        const charSortOption = lobbyData.charSortOption || 'recent';
+        const charSortOption = sortOverride || lobbyData.charSortOption || 'recent';
+        
+        // 드롭다운 UI 동기화
+        const sortSelect = document.getElementById('chat-lobby-char-sort');
+        if (sortSelect && sortSelect.value !== charSortOption) {
+            sortSelect.value = charSortOption;
+        }
+        
+        // 정렬 드롭다운 값 업데이트
+        const sortSelect = document.getElementById('chat-lobby-char-sort');
+        if (sortSelect) sortSelect.value = charSortOption;
         
         // 캐릭터 정렬 (즐겨찾기 우선 + 선택된 정렬 기준)
         if (charSortOption === 'name') {
@@ -1348,6 +1358,13 @@
         // 현재 정렬 옵션 가져오기 (최신값)
         const lobbyData = loadLobbyData();
         const currentSort = lobbyData.sortOption || 'recent';
+        console.log('[Chat Lobby] reloadChatsWithFilter - sort:', currentSort, 'filter:', filterValue);
+        
+        // 정렬 드롭다운 값 동기화
+        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
+        if (chatSortSelect && chatSortSelect.value !== currentSort) {
+            chatSortSelect.value = currentSort;
+        }
         
         // 빈 채팅 체크
         const hasNoChats = !chats || 
@@ -2464,10 +2481,12 @@
             const newSort = charSortSelect.value;
             if (newSort === lastCharSortValue) return;
             
+            console.log('[Chat Lobby] Applying char sort:', newSort);
             lastCharSortValue = newSort;
             setCharSortOption(newSort);
             const currentSearch = searchInput.value;
-            updateCharacterGrid(currentSearch);
+            // 정렬값을 직접 전달하여 타이밍 문제 방지
+            updateCharacterGrid(currentSearch, 0, newSort);
         };
         
         // 모든 가능한 이벤트에 리스너 추가
