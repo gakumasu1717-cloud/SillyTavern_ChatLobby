@@ -561,46 +561,47 @@
     async function openPersonaManagement() {
         console.log('[Chat Lobby] openPersonaManagement called');
         
-        // 페르소나 관리 drawer 찾기
-        const personaDrawer = document.getElementById('persona-management-button');
+        // 먼저 로비를 닫음 (ST-CustomTheme 사이드바 버튼 노출을 위해)
+        closeLobby();
+        
+        // 약간 지연 후 페르소나 관리 열기
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         let clicked = false;
         
-        if (personaDrawer) {
-            // drawer-content가 이미 열려있는지 확인
-            const drawerContent = personaDrawer.querySelector('.drawer-content');
-            const isAlreadyOpen = drawerContent && window.getComputedStyle(drawerContent).display !== 'none';
-            
-            if (!isAlreadyOpen) {
-                // .drawer-toggle 찾기 (drawer를 여는 버튼)
-                const toggle = personaDrawer.querySelector('.drawer-toggle');
-                if (toggle) {
-                    console.log('[Chat Lobby] Opening persona management via drawer-toggle');
-                    toggle.click();
-                    clicked = true;
-                }
-            } else {
-                clicked = true; // 이미 열려있음
-            }
+        // ST-CustomTheme 사이드바 버튼 우선 체크
+        const sidebarBtn = document.querySelector('[data-btn-id="persona-management-button"]');
+        if (sidebarBtn) {
+            console.log('[Chat Lobby] Opening persona management via ST-CustomTheme sidebar');
+            sidebarBtn.click();
+            clicked = true;
         }
-
-        // ST-CustomTheme 사이드바 체크
+        
+        // 기본 drawer 사용
         if (!clicked) {
-            const sidebarBtn = document.querySelector('[data-btn-id="persona-management-button"]');
-            if (sidebarBtn) {
-                console.log('[Chat Lobby] Opening persona management via sidebar');
-                sidebarBtn.click();
-                clicked = true;
+            const personaDrawer = document.getElementById('persona-management-button');
+            if (personaDrawer) {
+                // drawer-content가 이미 열려있는지 확인
+                const drawerContent = personaDrawer.querySelector('.drawer-content');
+                const isAlreadyOpen = drawerContent && window.getComputedStyle(drawerContent).display !== 'none';
+                
+                if (!isAlreadyOpen) {
+                    // .drawer-toggle 찾기 (drawer를 여는 버튼)
+                    const toggle = personaDrawer.querySelector('.drawer-toggle');
+                    if (toggle) {
+                        console.log('[Chat Lobby] Opening persona management via drawer-toggle');
+                        toggle.click();
+                        clicked = true;
+                    }
+                } else {
+                    clicked = true; // 이미 열려있음
+                }
             }
         }
 
         if (!clicked) {
             console.warn('[Chat Lobby] Could not find persona management button');
         }
-        
-        // drawer 클릭 후 로비 닫기
-        setTimeout(() => {
-            closeLobby();
-        }, 50);
     }
 
     // 페르소나 변경
@@ -1833,103 +1834,152 @@
         return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
     }
 
-    // 툴팁 위치 계산 및 표시 (PC 전용) - JS로 직접 제어
+    // 툴팁 위치 계산 및 표시 (PC 전용) - body에 별도 툴팁 요소 사용
     function setupTooltipPositioning() {
         const chatsList = document.getElementById('chat-lobby-chats-list');
         if (!chatsList) return;
 
-        // 터치 디바이스가 아니면 데스크톱으로 간주
-        const isDesktop = () => !('ontouchstart' in window) || window.innerWidth > 1024;
-        let activeTooltip = null;
+        // 터치 디바이스 체크
+        const isDesktop = () => !('ontouchstart' in window) && !navigator.maxTouchPoints;
         
-        console.log('[Chat Lobby] Tooltip setup - isDesktop:', isDesktop());
+        // 전역 툴팁 요소 생성 (body에 직접 추가)
+        let globalTooltip = document.getElementById('chat-lobby-global-tooltip');
+        if (!globalTooltip) {
+            globalTooltip = document.createElement('div');
+            globalTooltip.id = 'chat-lobby-global-tooltip';
+            globalTooltip.className = 'chat-global-tooltip';
+            globalTooltip.innerHTML = '<div class="tooltip-header">📝 마지막 메시지</div><div class="tooltip-content"></div>';
+            document.body.appendChild(globalTooltip);
+        }
+        
+        const tooltipContent = globalTooltip.querySelector('.tooltip-content');
+        let currentChatItem = null;
+        let hoverTimer = null;
 
         const hideTooltip = () => {
-            if (activeTooltip) {
-                activeTooltip.classList.remove('show');
-                activeTooltip = null;
+            globalTooltip.style.display = 'none';
+            currentChatItem = null;
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
             }
         };
 
-        // 마우스 커서 바로 아래에 툴팁 표시
-        const positionTooltip = (tooltip, e) => {
-            const tooltipWidth = 350;
-            const tooltipHeight = 350;
-            const cursorOffset = 15; // 커서 아래 여백
+        const showTooltip = (text, mouseX, mouseY) => {
+            if (!text) return;
+            
+            tooltipContent.textContent = text;
+            globalTooltip.style.display = 'block';
+            
+            // 크기 측정 후 위치 계산
+            requestAnimationFrame(() => {
+                const tooltipRect = globalTooltip.getBoundingClientRect();
+                const tooltipWidth = tooltipRect.width || 350;
+                const tooltipHeight = tooltipRect.height || 200;
+                const cursorOffset = 15;
 
-            // 기본: 커서 바로 아래, 약간 왼쪽 정렬
-            let left = e.clientX - (tooltipWidth / 2);
-            let top = e.clientY + cursorOffset;
+                // 마우스 오른쪽에 표시
+                let left = mouseX + cursorOffset;
+                let top = mouseY - tooltipHeight / 2;
 
-            // 왼쪽 화면 밖으로 나가면 조정
-            if (left < 10) {
-                left = 10;
-            }
-            // 오른쪽 화면 밖으로 나가면 조정
-            if (left + tooltipWidth > window.innerWidth - 10) {
-                left = window.innerWidth - tooltipWidth - 10;
-            }
+                // 오른쪽 화면 밖으로 나가면 왼쪽에 표시
+                if (left + tooltipWidth > window.innerWidth - 20) {
+                    left = mouseX - tooltipWidth - cursorOffset;
+                }
 
-            // 아래로 화면 밖 나가면 커서 위에 표시
-            if (top + tooltipHeight > window.innerHeight - 10) {
-                top = e.clientY - tooltipHeight - cursorOffset;
-            }
+                // 아래로 화면 밖 나가면 위로 조정
+                if (top + tooltipHeight > window.innerHeight - 20) {
+                    top = window.innerHeight - tooltipHeight - 20;
+                }
 
-            // 위로도 밖이면 최소값
-            if (top < 10) {
-                top = 10;
-            }
+                // 위로 밖이면 최소값
+                if (top < 20) {
+                    top = 20;
+                }
 
-            tooltip.style.left = left + 'px';
-            tooltip.style.top = top + 'px';
+                // 왼쪽 밖이면
+                if (left < 20) {
+                    left = 20;
+                }
+
+                globalTooltip.style.left = left + 'px';
+                globalTooltip.style.top = top + 'px';
+            });
         };
 
+        // mouseover로 채팅 아이템 진입 감지
         chatsList.addEventListener('mouseover', (e) => {
             if (!isDesktop()) return;
+            
             const chatItem = e.target.closest('.lobby-chat-item');
-            if (!chatItem) {
+            if (chatItem && chatItem !== currentChatItem) {
+                currentChatItem = chatItem;
+                const tooltipText = chatItem.dataset.tooltip;
+                
+                // 300ms 후 툴팁 표시 (너무 빠른 움직임 방지)
+                if (hoverTimer) clearTimeout(hoverTimer);
+                hoverTimer = setTimeout(() => {
+                    if (tooltipText && currentChatItem === chatItem) {
+                        showTooltip(tooltipText, e.clientX, e.clientY);
+                    }
+                }, 300);
+            }
+        });
+
+        // mouseout으로 아이템 벗어남 감지
+        chatsList.addEventListener('mouseout', (e) => {
+            if (!isDesktop()) return;
+            
+            const chatItem = e.target.closest('.lobby-chat-item');
+            const relatedTarget = e.relatedTarget?.closest?.('.lobby-chat-item');
+            
+            // 다른 채팅 아이템으로 이동하거나 밖으로 나갔을 때
+            if (chatItem && chatItem !== relatedTarget) {
                 hideTooltip();
-                return;
             }
-
-            const tooltip = chatItem.querySelector('.chat-tooltip');
-            if (!tooltip) return;
-
-            // 다른 툴팁이 열려있으면 닫기
-            if (activeTooltip && activeTooltip !== tooltip) {
-                activeTooltip.classList.remove('show');
-            }
-
-            activeTooltip = tooltip;
-            tooltip.classList.add('show');
-            positionTooltip(tooltip, e);
         });
 
+        // 마우스 이동 시 툴팁 위치 업데이트
         chatsList.addEventListener('mousemove', (e) => {
-            if (!isDesktop() || !activeTooltip) return;
-            positionTooltip(activeTooltip, e);
+            if (!isDesktop()) return;
+            if (globalTooltip.style.display === 'none') return;
+            
+            const chatItem = e.target.closest('.lobby-chat-item');
+            if (chatItem && chatItem === currentChatItem) {
+                const tooltipRect = globalTooltip.getBoundingClientRect();
+                const tooltipWidth = tooltipRect.width;
+                const tooltipHeight = tooltipRect.height;
+                const cursorOffset = 15;
+
+                let left = e.clientX + cursorOffset;
+                let top = e.clientY - tooltipHeight / 2;
+
+                if (left + tooltipWidth > window.innerWidth - 20) {
+                    left = e.clientX - tooltipWidth - cursorOffset;
+                }
+                if (top + tooltipHeight > window.innerHeight - 20) {
+                    top = window.innerHeight - tooltipHeight - 20;
+                }
+                if (top < 20) top = 20;
+                if (left < 20) left = 20;
+
+                globalTooltip.style.left = left + 'px';
+                globalTooltip.style.top = top + 'px';
+            }
         });
 
+        // 채팅 리스트 밖으로 나가면 숨김
         chatsList.addEventListener('mouseleave', () => {
             hideTooltip();
         });
 
-        chatsList.addEventListener('mouseout', (e) => {
-            // 채팅 아이템 밖으로 나가면 툴팁 숨기기
-            const chatItem = e.target.closest('.lobby-chat-item');
-            const relatedItem = e.relatedTarget?.closest?.('.lobby-chat-item');
-            if (chatItem && chatItem !== relatedItem) {
-                const tooltip = chatItem.querySelector('.chat-tooltip');
-                if (tooltip) {
-                    tooltip.classList.remove('show');
-                    if (activeTooltip === tooltip) activeTooltip = null;
-                }
-            }
-        });
-
+        // 스크롤 시 숨김
         chatsList.addEventListener('scroll', () => {
             hideTooltip();
         });
+        
+        // 로비 닫힐 때 툴팁도 숨기기
+        document.getElementById('chat-lobby-overlay')?.addEventListener('transitionend', hideTooltip);
     }
 
     // 초기화
