@@ -277,6 +277,11 @@
                                     <option value="all">📁 전체</option>
                                     <option value="favorites">⭐ 즐겨찾기</option>
                                 </select>
+                                <select id="chat-lobby-chat-sort">
+                                    <option value="recent">🕐 최신순</option>
+                                    <option value="name">🔤 이름순</option>
+                                    <option value="messages">💬 메시지수</option>
+                                </select>
                             </div>
                             <div class="folder-actions">
                                 <button id="chat-lobby-batch-mode" title="다중 선택">☑️</button>
@@ -558,53 +563,69 @@
     }
     
     // 페르소나 관리 화면으로 이동 (페르소나 아바타 클릭 시)
+    // ST-CustomTheme이 있으면 사이드바 버튼을 찾아 클릭, 없으면 drawer-icon 클릭
     async function openPersonaManagement() {
-        console.log('[Chat Lobby] openPersonaManagement called');
+        console.log('[Chat Lobby] === openPersonaManagement START ===' );
+        
+        // 디버그: 현재 DOM 상태 출력
+        const personaDrawer = document.getElementById('persona-management-button');
+        console.log('[Chat Lobby] #persona-management-button exists:', !!personaDrawer);
+        if (personaDrawer) {
+            console.log('[Chat Lobby] drawer-toggle:', !!personaDrawer.querySelector('.drawer-toggle'));
+            console.log('[Chat Lobby] drawer-icon:', !!personaDrawer.querySelector('.drawer-icon'));
+            console.log('[Chat Lobby] drawer-content:', !!personaDrawer.querySelector('.drawer-content'));
+        }
+        
+        // ST-CustomTheme 사이드바 버튼 체크
+        const stSidebarSelectors = [
+            '[data-btn-id="persona-management-button"]',
+            '.st-custom-sidebar [data-i18n="Persona Management"]',
+            '#persona-management-button.custom-sidebar-btn'
+        ];
+        
+        console.log('[Chat Lobby] Checking ST-CustomTheme sidebar buttons...');
+        for (const sel of stSidebarSelectors) {
+            const btn = document.querySelector(sel);
+            console.log(`[Chat Lobby] ${sel}:`, !!btn);
+        }
         
         // 먼저 로비를 닫음
         closeLobby();
         
         // 약간 지연 후 페르소나 관리 열기
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         let clicked = false;
         
-        // ST-CustomTheme 사이드바 버튼 여러 선택자로 시도
-        const sidebarSelectors = [
-            '[data-btn-id="persona-management-button"]',
-            '.custom-sidebar [data-i18n="Persona Management"]',
-            '.custom-sidebar-btn[title*="Persona"]',
-            '.custom-sidebar-btn[title*="페르소나"]',
-            '#custom-sidebar-persona-management-button'
-        ];
-        
-        for (const selector of sidebarSelectors) {
+        // ST-CustomTheme 사이드바 버튼 시도
+        for (const selector of stSidebarSelectors) {
             const sidebarBtn = document.querySelector(selector);
             if (sidebarBtn) {
-                console.log('[Chat Lobby] Opening persona management via:', selector);
+                console.log('[Chat Lobby] Clicking ST-CustomTheme button:', selector);
                 sidebarBtn.click();
                 clicked = true;
                 break;
             }
         }
         
-        // 기본 drawer 사용 (ST-CustomTheme 없을 때만)
-        if (!clicked) {
-            const personaDrawer = document.getElementById('persona-management-button');
-            if (personaDrawer) {
-                // drawer-icon 클릭 (drawer-toggle은 ST-CustomTheme과 충돌)
-                const drawerIcon = personaDrawer.querySelector('.drawer-icon');
-                if (drawerIcon) {
-                    console.log('[Chat Lobby] Opening persona management via drawer-icon');
-                    drawerIcon.click();
-                    clicked = true;
-                }
+        // 기본 drawer 사용
+        if (!clicked && personaDrawer) {
+            // drawer-icon 먼저 시도
+            const drawerIcon = personaDrawer.querySelector('.drawer-icon');
+            const drawerToggle = personaDrawer.querySelector('.drawer-toggle');
+            
+            if (drawerIcon) {
+                console.log('[Chat Lobby] Clicking drawer-icon');
+                drawerIcon.click();
+                clicked = true;
+            } else if (drawerToggle) {
+                console.log('[Chat Lobby] Clicking drawer-toggle (fallback)');
+                drawerToggle.click();
+                clicked = true;
             }
         }
 
-        if (!clicked) {
-            console.warn('[Chat Lobby] Could not find persona management button');
-        }
+        console.log('[Chat Lobby] === openPersonaManagement END, clicked:', clicked, '===');
     }
 
     // 페르소나 변경
@@ -946,6 +967,11 @@
         document.getElementById('chat-lobby-delete-char').style.display = 'block';
         document.getElementById('chat-lobby-new-chat').style.display = 'block';
         document.getElementById('chat-lobby-folder-bar').style.display = 'flex';
+        
+        // 정렬 옵션 select 값 설정
+        const lobbyDataForSort = loadLobbyData();
+        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
+        if (chatSortSelect) chatSortSelect.value = lobbyDataForSort.sortOption || 'recent';
 
         // 새 채팅 버튼 데이터 설정
         document.getElementById('chat-lobby-new-chat').dataset.charIndex = charIndex;
@@ -1077,6 +1103,13 @@
             if (currentSort === 'name') {
                 // 이름순 정렬
                 return fnA.localeCompare(fnB, 'ko');
+            }
+            
+            // 메시지 수 순 정렬
+            if (currentSort === 'messages') {
+                const msgA = a.message_count || a.mes_count || 0;
+                const msgB = b.message_count || b.mes_count || 0;
+                return msgB - msgA;
             }
             
             // 날짜순 (최신 또는 생성일)
@@ -1312,6 +1345,13 @@
             }
             
             if (currentSort === 'name') return fnA.localeCompare(fnB, 'ko');
+            
+            // 메시지 수 순 정렬
+            if (currentSort === 'messages') {
+                const msgA = a.message_count || a.mes_count || 0;
+                const msgB = b.message_count || b.mes_count || 0;
+                return msgB - msgA; // 많은 순
+            }
             
             let dateA = parseDate(fnA);
             let dateB = parseDate(fnB);
@@ -1910,7 +1950,7 @@
             });
         };
 
-        // mouseover로 채팅 아이템 진입 감지
+        // mouseover로 채팅 아이템 진입 감지 (가만히 있어도 툴팁 표시)
         chatsList.addEventListener('mouseover', (e) => {
             if (!isDesktop()) return;
             
@@ -1919,13 +1959,19 @@
                 currentChatItem = chatItem;
                 const tooltipText = chatItem.dataset.tooltip;
                 
-                // 100ms 후 툴팁 표시 (너무 빠른 움직임 방지)
+                // 타이머 취소 후 새로 시작
                 if (hoverTimer) clearTimeout(hoverTimer);
+                
+                // 마우스 위치 저장
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+                
+                // 50ms 후 툴팁 표시 (빠르게 반응)
                 hoverTimer = setTimeout(() => {
                     if (tooltipText && currentChatItem === chatItem) {
-                        showTooltip(tooltipText, e.clientX, e.clientY);
+                        showTooltip(tooltipText, mouseX, mouseY);
                     }
-                }, 100);
+                }, 50);
             }
         });
 
@@ -2159,6 +2205,19 @@
             if (selectedCard) {
                 // selectCharacter를 직접 호출하지 않고 채팅만 다시 로드
                 reloadChatsWithFilter(selectedCard, newValue);
+            }
+        });
+        
+        // 채팅 정렬 변경
+        const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
+        chatSortSelect.addEventListener('change', (e) => {
+            const newSort = e.target.value;
+            console.log('[Chat Lobby] Chat sort changed to:', newSort);
+            setSortOption(newSort);
+            // 현재 선택된 캐릭터의 채팅 다시 로드
+            const selectedCard = document.querySelector('.lobby-char-card.selected');
+            if (selectedCard) {
+                selectCharacter(selectedCard);
             }
         });
         
