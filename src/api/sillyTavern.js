@@ -3,9 +3,18 @@
 // ============================================
 
 import { cache } from '../data/cache.js';
+import { CONFIG } from '../config.js';
+
+/**
+ * @typedef {Object} ApiResponse
+ * @property {boolean} ok - 요청 성공 여부
+ * @property {any} data - 응답 데이터
+ * @property {string} [error] - 에러 메시지
+ */
 
 class SillyTavernAPI {
     constructor() {
+        /** @type {Object|null} */
         this._context = null;
     }
     
@@ -13,6 +22,10 @@ class SillyTavernAPI {
     // 기본 유틸
     // ============================================
     
+    /**
+     * SillyTavern 컨텍스트 가져오기
+     * @returns {Object|null}
+     */
     getContext() {
         if (!this._context) {
             this._context = window.SillyTavern?.getContext?.() || null;
@@ -20,6 +33,10 @@ class SillyTavernAPI {
         return this._context;
     }
     
+    /**
+     * 요청 헤더 가져오기
+     * @returns {Object}
+     */
     getRequestHeaders() {
         const context = this.getContext();
         if (context?.getRequestHeaders) {
@@ -32,9 +49,64 @@ class SillyTavernAPI {
     }
     
     // ============================================
+    // 재시도 로직이 적용된 fetch
+    // ============================================
+    
+    /**
+     * 재시도 로직이 적용된 fetch 요청
+     * @param {string} url - 요청 URL
+     * @param {RequestInit} options - fetch 옵션
+     * @param {number} [retries=CONFIG.ui.retryCount] - 재시도 횟수
+     * @returns {Promise<Response>}
+     * @throws {Error} 모든 재시도 실패 시
+     */
+    async fetchWithRetry(url, options, retries = CONFIG.ui.retryCount) {
+        let lastError;
+        
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const response = await fetch(url, options);
+                
+                // 5xx 서버 에러는 재시도
+                if (response.status >= 500 && attempt < retries) {
+                    console.warn(`[API] Server error ${response.status}, retrying... (${attempt + 1}/${retries})`);
+                    await this.delay(CONFIG.ui.retryDelay * (attempt + 1));
+                    continue;
+                }
+                
+                return response;
+            } catch (error) {
+                lastError = error;
+                
+                // 네트워크 에러는 재시도
+                if (attempt < retries) {
+                    console.warn(`[API] Request failed, retrying... (${attempt + 1}/${retries})`, error.message);
+                    await this.delay(CONFIG.ui.retryDelay * (attempt + 1));
+                    continue;
+                }
+            }
+        }
+        
+        throw lastError || new Error('Request failed after retries');
+    }
+    
+    /**
+     * 지연 함수
+     * @param {number} ms - 지연 시간 (밀리초)
+     * @returns {Promise<void>}
+     */
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    // ============================================
     // 페르소나 API
     // ============================================
     
+    /**
+     * 페르소나 목록 가져오기
+     * @returns {Promise<Array>}
+     */
     async fetchPersonas() {
         // 캐시 우선
         if (cache.isValid('personas')) {
@@ -44,7 +116,7 @@ class SillyTavernAPI {
         // 중복 요청 방지
         return cache.getOrFetch('personas', async () => {
             try {
-                const response = await fetch('/api/avatars/get', {
+                const response = await this.fetchWithRetry('/api/avatars/get', {
                     method: 'POST',
                     headers: this.getRequestHeaders(),
                 });
@@ -99,6 +171,10 @@ class SillyTavernAPI {
         });
     }
     
+    /**
+     * 현재 페르소나 가져오기
+     * @returns {Promise<string>}
+     */
     async getCurrentPersona() {
         try {
             const personasModule = await import('../../../../personas.js');
@@ -108,6 +184,11 @@ class SillyTavernAPI {
         }
     }
     
+    /**
+     * 페르소나 설정
+     * @param {string} personaKey - 페르소나 키
+     * @returns {Promise<boolean>}
+     */
     async setPersona(personaKey) {
         try {
             const personasModule = await import('../../../../personas.js');
@@ -126,23 +207,37 @@ class SillyTavernAPI {
         return false;
     }
     
+    /**
+     * 페르소나 삭제
+     * @param {string} personaKey - 페르소나 키
+     * @returns {Promise<boolean>}
+     */
     async deletePersona(personaKey) {
-        const response = await fetch('/api/avatars/delete', {
-            method: 'POST',
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({ avatar: personaKey })
-        });
-        
-        if (response.ok) {
-            cache.invalidate('personas');
+        try {
+            const response = await this.fetchWithRetry('/api/avatars/delete', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({ avatar: personaKey })
+            });
+            
+            if (response.ok) {
+                cache.invalidate('personas');
+            }
+            return response.ok;
+        } catch (error) {
+            console.error('[API] Failed to delete persona:', error);
+            return false;
         }
-        return response.ok;
     }
     
     // ============================================
     // 캐릭터 API
     // ============================================
     
+    /**
+     * 캐릭터 목록 가져오기
+     * @returns {Promise<Array>}
+     */
     async fetchCharacters() {
         // 캐시 우선
         if (cache.isValid('characters')) {
@@ -160,6 +255,11 @@ class SillyTavernAPI {
         return characters;
     }
     
+    /**
+     * 캐릭터 ID로 선택
+     * @param {number|string} index - 캐릭터 인덱스
+     * @returns {Promise<void>}
+     */
     async selectCharacterById(index) {
         const context = this.getContext();
         if (context?.selectCharacterById) {
@@ -167,27 +267,43 @@ class SillyTavernAPI {
         }
     }
     
+    /**
+     * 캐릭터 삭제
+     * @param {string} charAvatar - 캐릭터 아바타
+     * @returns {Promise<boolean>}
+     */
     async deleteCharacter(charAvatar) {
-        const response = await fetch('/api/characters/delete', {
-            method: 'POST',
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({
-                avatar_url: charAvatar,
-                delete_chats: true
-            })
-        });
-        
-        if (response.ok) {
-            cache.invalidate('characters');
-            cache.invalidate('chats', charAvatar);
+        try {
+            const response = await this.fetchWithRetry('/api/characters/delete', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                    avatar_url: charAvatar,
+                    delete_chats: true
+                })
+            });
+            
+            if (response.ok) {
+                cache.invalidate('characters');
+                cache.invalidate('chats', charAvatar);
+            }
+            return response.ok;
+        } catch (error) {
+            console.error('[API] Failed to delete character:', error);
+            return false;
         }
-        return response.ok;
     }
     
     // ============================================
     // 채팅 API
     // ============================================
     
+    /**
+     * 캐릭터의 채팅 목록 가져오기
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @param {boolean} [forceRefresh=false] - 강제 새로고침
+     * @returns {Promise<Array>}
+     */
     async fetchChatsForCharacter(characterAvatar, forceRefresh = false) {
         if (!characterAvatar) return [];
         
@@ -200,7 +316,7 @@ class SillyTavernAPI {
         // 중복 요청 방지
         return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
             try {
-                const response = await fetch('/api/characters/chats', {
+                const response = await this.fetchWithRetry('/api/characters/chats', {
                     method: 'POST',
                     headers: this.getRequestHeaders(),
                     body: JSON.stringify({
@@ -227,23 +343,38 @@ class SillyTavernAPI {
         });
     }
     
+    /**
+     * 채팅 삭제
+     * @param {string} fileName - 파일명
+     * @param {string} charAvatar - 캐릭터 아바타
+     * @returns {Promise<boolean>}
+     */
     async deleteChat(fileName, charAvatar) {
-        const response = await fetch('/api/chats/delete', {
-            method: 'POST',
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({
-                chatfile: fileName,
-                avatar_url: charAvatar
-            }),
-        });
-        
-        if (response.ok) {
-            cache.invalidate('chats', charAvatar);
+        try {
+            const response = await this.fetchWithRetry('/api/chats/delete', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                    chatfile: fileName,
+                    avatar_url: charAvatar
+                }),
+            });
+            
+            if (response.ok) {
+                cache.invalidate('chats', charAvatar);
+            }
+            return response.ok;
+        } catch (error) {
+            console.error('[API] Failed to delete chat:', error);
+            return false;
         }
-        return response.ok;
     }
     
-    // 채팅 수 가져오기 (캐시 활용)
+    /**
+     * 캐릭터의 채팅 수 가져오기
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @returns {Promise<number>}
+     */
     async getChatCount(characterAvatar) {
         if (cache.isValid('chatCounts', characterAvatar)) {
             return cache.get('chatCounts', characterAvatar);
@@ -255,6 +386,7 @@ class SillyTavernAPI {
             cache.set('chatCounts', count, characterAvatar);
             return count;
         } catch (e) {
+            console.error('[API] Failed to get chat count:', e);
             return 0;
         }
     }

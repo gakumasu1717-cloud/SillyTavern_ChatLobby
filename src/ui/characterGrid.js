@@ -5,46 +5,86 @@
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
+import { store } from '../data/store.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
+import { showToast } from './notifications.js';
 import { CONFIG } from '../config.js';
 
-// 캐릭터 선택 시 콜백 (외부에서 설정)
-let onCharacterSelect = null;
+// ============================================
+// 초기화
+// ============================================
 
+/**
+ * 캐릭터 선택 핸들러 설정
+ * @param {Function} handler - 캐릭터 선택 시 호출되는 콜백
+ */
 export function setCharacterSelectHandler(handler) {
-    onCharacterSelect = handler;
+    store.setCharacterSelectHandler(handler);
 }
 
+// ============================================
+// 캐릭터 그리드 렌더링
+// ============================================
+
+/**
+ * 캐릭터 그리드 렌더링
+ * @param {string} [searchTerm=''] - 검색어
+ * @param {string|null} [sortOverride=null] - 정렬 옵션 오버라이드
+ * @returns {Promise<void>}
+ */
 export async function renderCharacterGrid(searchTerm = '', sortOverride = null) {
     const container = document.getElementById('chat-lobby-characters');
     if (!container) return;
     
+    // 검색어 저장
+    store.setSearchTerm(searchTerm);
+    
     // 캐시된 데이터가 있으면 즉시 렌더링
     const cachedCharacters = cache.get('characters');
     if (cachedCharacters && cachedCharacters.length > 0) {
-        renderCharacterList(container, cachedCharacters, searchTerm, sortOverride);
+        await renderCharacterList(container, cachedCharacters, searchTerm, sortOverride);
     } else {
         container.innerHTML = '<div class="lobby-loading">캐릭터 로딩 중...</div>';
     }
     
-    // 최신 데이터 가져오기 (백그라운드)
-    const characters = await api.fetchCharacters();
-    
-    if (characters.length === 0) {
+    try {
+        // 최신 데이터 가져오기 (백그라운드)
+        const characters = await api.fetchCharacters();
+        
+        if (characters.length === 0) {
+            container.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>👥</i>
+                    <div>캐릭터가 없습니다</div>
+                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
+                </div>
+            `;
+            return;
+        }
+        
+        await renderCharacterList(container, characters, searchTerm, sortOverride);
+    } catch (error) {
+        console.error('[CharacterGrid] Failed to load characters:', error);
+        showToast('캐릭터 목록을 불러오지 못했습니다.', 'error');
         container.innerHTML = `
             <div class="lobby-empty-state">
-                <i>👥</i>
-                <div>캐릭터가 없습니다</div>
-                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
+                <i>⚠️</i>
+                <div>캐릭터 로딩 실패</div>
+                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">다시 시도</button>
             </div>
         `;
-        return;
     }
-    
-    renderCharacterList(container, characters, searchTerm, sortOverride);
 }
 
+/**
+ * 캐릭터 목록 렌더링 (내부)
+ * @param {HTMLElement} container - 컨테이너 요소
+ * @param {Array} characters - 캐릭터 배열
+ * @param {string} searchTerm - 검색어
+ * @param {string|null} sortOverride - 정렬 오버라이드
+ * @returns {Promise<void>}
+ */
 async function renderCharacterList(container, characters, searchTerm, sortOverride) {
     let filtered = [...characters];
     
@@ -87,12 +127,18 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     bindCharacterEvents(container);
 }
 
+/**
+ * 캐릭터 카드 HTML 생성
+ * @param {Object} char - 캐릭터 객체
+ * @param {number} index - 원본 인덱스
+ * @returns {string}
+ */
 function renderCharacterCard(char, index) {
     const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : '/img/ai4.png';
     const name = char.name || 'Unknown';
     const safeAvatar = (char.avatar || '').replace(/"/g, '&quot;');
     
-    const isFav = !!(char.fav === true || char.fav === 'true' || char.data?.extensions?.fav);
+    const isFav = isFavoriteChar(char);
     const favBadge = isFav ? '<span class="char-fav-badge">⭐</span>' : '';
     
     return `
@@ -107,9 +153,22 @@ function renderCharacterCard(char, index) {
     `;
 }
 
+/**
+ * 캐릭터가 즐겨찾기인지 확인
+ * @param {Object} char - 캐릭터 객체
+ * @returns {boolean}
+ */
+function isFavoriteChar(char) {
+    return !!(char.fav === true || char.fav === 'true' || char.data?.extensions?.fav);
+}
+
+/**
+ * 캐릭터 정렬
+ * @param {Array} characters - 캐릭터 배열
+ * @param {string} sortOption - 정렬 옵션
+ * @returns {Promise<Array>}
+ */
 async function sortCharacters(characters, sortOption) {
-    const isFav = (char) => !!(char.fav === true || char.fav === 'true' || char.data?.extensions?.fav);
-    
     if (sortOption === 'chats') {
         // 채팅 수 정렬 - 비동기
         const chatCounts = await Promise.all(
@@ -120,7 +179,9 @@ async function sortCharacters(characters, sortOption) {
         );
         
         chatCounts.sort((a, b) => {
-            if (isFav(a.char) !== isFav(b.char)) return isFav(a.char) ? -1 : 1;
+            if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
+                return isFavoriteChar(a.char) ? -1 : 1;
+            }
             return b.count - a.count;
         });
         
@@ -131,7 +192,9 @@ async function sortCharacters(characters, sortOption) {
     
     sorted.sort((a, b) => {
         // 즐겨찾기 우선
-        if (isFav(a) !== isFav(b)) return isFav(a) ? -1 : 1;
+        if (isFavoriteChar(a) !== isFavoriteChar(b)) {
+            return isFavoriteChar(a) ? -1 : 1;
+        }
         
         if (sortOption === 'name') {
             return (a.name || '').localeCompare(b.name || '', 'ko');
@@ -152,6 +215,10 @@ async function sortCharacters(characters, sortOption) {
     return sorted;
 }
 
+/**
+ * 캐릭터 카드 이벤트 바인딩
+ * @param {HTMLElement} container
+ */
 function bindCharacterEvents(container) {
     container.querySelectorAll('.lobby-char-card').forEach(card => {
         createTouchClickHandler(card, () => {
@@ -164,8 +231,9 @@ function bindCharacterEvents(container) {
             card.classList.add('selected');
             
             // 콜백 호출
-            if (onCharacterSelect) {
-                onCharacterSelect({
+            const handler = store.onCharacterSelect;
+            if (handler) {
+                handler({
                     index: card.dataset.charIndex,
                     avatar: card.dataset.charAvatar,
                     name: card.querySelector('.lobby-char-name').textContent,
@@ -176,15 +244,24 @@ function bindCharacterEvents(container) {
     });
 }
 
-// 검색 핸들러 (디바운스 적용)
+// ============================================
+// 검색/정렬 핸들러
+// ============================================
+
+/**
+ * 검색 핸들러 (디바운스 적용)
+ * @type {Function}
+ */
 export const handleSearch = debounce((searchTerm) => {
     renderCharacterGrid(searchTerm);
 }, CONFIG.ui.debounceWait);
 
-// 정렬 변경 핸들러
+/**
+ * 정렬 변경 핸들러
+ * @param {string} sortOption - 정렬 옵션
+ */
 export function handleSortChange(sortOption) {
     storage.setCharSortOption(sortOption);
-    const searchInput = document.getElementById('chat-lobby-search-input');
-    const searchTerm = searchInput?.value || '';
+    const searchTerm = store.searchTerm;
     renderCharacterGrid(searchTerm, sortOption);
 }

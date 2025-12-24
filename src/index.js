@@ -5,6 +5,7 @@
 import { CONFIG } from './config.js';
 import { cache } from './data/cache.js';
 import { storage } from './data/storage.js';
+import { store } from './data/store.js';
 import { api } from './api/sillyTavern.js';
 import { createLobbyHTML, getBatchFoldersHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
@@ -23,6 +24,10 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     // 초기화
     // ============================================
     
+    /**
+     * 익스텐션 초기화
+     * @returns {Promise<void>}
+     */
     async function init() {
         console.log('[ChatLobby] Initializing...');
         
@@ -41,8 +46,8 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         // 핸들러 연결
         setupHandlers();
         
-        // 이벤트 리스너 등록
-        bindEvents();
+        // 이벤트 위임 설정
+        setupEventDelegation();
         
         // 백그라운드 프리로딩 시작
         startBackgroundPreload();
@@ -53,6 +58,9 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         console.log('[ChatLobby] Extension initialized');
     }
     
+    /**
+     * 기존 UI 요소 제거
+     */
     function removeExistingUI() {
         ['chat-lobby-overlay', 'chat-lobby-fab', 'chat-lobby-folder-modal', 'chat-lobby-global-tooltip'].forEach(id => {
             const el = document.getElementById(id);
@@ -60,6 +68,9 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         });
     }
     
+    /**
+     * 핸들러 설정
+     */
     function setupHandlers() {
         // 캐릭터 선택 시 채팅 목록 렌더링
         setCharacterSelectHandler((character) => {
@@ -77,6 +88,9 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     // 백그라운드 프리로딩
     // ============================================
     
+    /**
+     * 백그라운드 프리로딩 시작
+     */
     async function startBackgroundPreload() {
         // 약간의 딜레이 후 프리로딩 (메인 스레드 블로킹 방지)
         setTimeout(async () => {
@@ -91,13 +105,16 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
                     .slice(0, 5);
                 await cache.preloadRecentChats(api, recent);
             }
-        }, 2000);
+        }, CONFIG.timing.preloadDelay);
     }
     
     // ============================================
     // 로비 열기/닫기
     // ============================================
     
+    /**
+     * 로비 열기
+     */
     function openLobby() {
         const overlay = document.getElementById('chat-lobby-overlay');
         const container = document.getElementById('chat-lobby-container');
@@ -108,9 +125,10 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             if (container) container.style.display = 'flex';
             if (fab) fab.style.display = 'none';
             
+            store.setLobbyOpen(true);
+            
             // 배치 모드 리셋
-            const batchBtn = document.getElementById('chat-lobby-batch-mode');
-            if (batchBtn?.classList.contains('active')) {
+            if (store.batchModeActive) {
                 toggleBatchMode();
             }
             
@@ -123,6 +141,9 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         }
     }
     
+    /**
+     * 로비 닫기
+     */
     function closeLobby() {
         const container = document.getElementById('chat-lobby-container');
         const fab = document.getElementById('chat-lobby-fab');
@@ -130,6 +151,8 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         if (container) container.style.display = 'none';
         if (fab) fab.style.display = 'flex';
         
+        store.setLobbyOpen(false);
+        store.reset();
         closeChatPanel();
     }
     
@@ -141,75 +164,144 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     };
     
     // ============================================
-    // 이벤트 바인딩
+    // 이벤트 위임 (Event Delegation)
     // ============================================
     
-    function bindEvents() {
-        // FAB 버튼
-        document.getElementById('chat-lobby-fab')?.addEventListener('click', openLobby);
+    /**
+     * 이벤트 위임 설정
+     * getElementById 대신 상위 컨테이너에서 이벤트를 위임 처리
+     */
+    function setupEventDelegation() {
+        // FAB 버튼 (document.body에 위임)
+        document.body.addEventListener('click', handleBodyClick);
         
-        // 닫기 버튼
-        document.getElementById('chat-lobby-close')?.addEventListener('click', closeLobby);
+        // 키보드 이벤트
+        document.addEventListener('keydown', handleKeydown);
         
-        // 뒤로 가기 (모바일)
-        document.getElementById('chat-lobby-chats-back')?.addEventListener('click', () => {
-            if (isMobile()) {
-                closeChatPanel();
-            }
-        });
-        
-        // 새로고침
-        document.getElementById('chat-lobby-refresh')?.addEventListener('click', async () => {
-            cache.invalidateAll();
-            await renderPersonaBar();
-            await renderCharacterGrid();
-        });
-        
-        // 새 채팅
-        document.getElementById('chat-lobby-new-chat')?.addEventListener('click', startNewChat);
-        
-        // 캐릭터 삭제
-        document.getElementById('chat-lobby-delete-char')?.addEventListener('click', deleteCharacter);
-        
-        // 캐릭터 임포트
-        document.getElementById('chat-lobby-import-char')?.addEventListener('click', () => {
-            closeLobby();
-            setTimeout(() => {
-                const importBtn = document.getElementById('character_import_button');
-                if (importBtn) importBtn.click();
-            }, 300);
-        });
-        
-        // 페르소나 추가
-        document.getElementById('chat-lobby-add-persona')?.addEventListener('click', () => {
-            closeLobby();
-            setTimeout(() => {
-                const personaDrawer = document.getElementById('persona-management-button');
-                const drawerIcon = personaDrawer?.querySelector('.drawer-icon');
-                if (drawerIcon) drawerIcon.click();
-                
-                setTimeout(() => {
-                    const createBtn = document.getElementById('create_dummy_persona');
-                    if (createBtn) createBtn.click();
-                }, 500);
-            }, 300);
-        });
-        
-        // 캐릭터 아바타 클릭 (설정 열기)
-        document.getElementById('chat-panel-avatar')?.addEventListener('click', () => {
-            closeLobby();
-            setTimeout(() => {
-                const charInfoBtn = document.getElementById('option_settings');
-                if (charInfoBtn) charInfoBtn.click();
-            }, 300);
-        });
-        
-        // 검색
+        // 검색 입력 (input 이벤트는 위임이 잘 안되므로 직접 바인딩)
         const searchInput = document.getElementById('chat-lobby-search-input');
-        searchInput?.addEventListener('input', (e) => {
-            handleSearch(e.target.value);
-        });
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+        }
         
+        // 드롭다운 change 이벤트도 직접 바인딩
+        bindDropdownEvents();
+    }
+    
+    /**
+     * body 클릭 이벤트 핸들러 (이벤트 위임)
+     * @param {MouseEvent} e
+     */
+    function handleBodyClick(e) {
+        const target = e.target;
+        
+        // data-action 속성으로 액션 분기
+        const actionEl = target.closest('[data-action]');
+        if (actionEl) {
+            handleAction(actionEl.dataset.action, actionEl, e);
+            return;
+        }
+        
+        // ID 기반 분기 (기존 HTML과 호환)
+        const id = target.id || target.closest('[id]')?.id;
+        
+        switch (id) {
+            case 'chat-lobby-fab':
+                openLobby();
+                break;
+            case 'chat-lobby-close':
+                closeLobby();
+                break;
+            case 'chat-lobby-chats-back':
+                if (isMobile()) closeChatPanel();
+                break;
+            case 'chat-lobby-refresh':
+                handleRefresh();
+                break;
+            case 'chat-lobby-new-chat':
+                startNewChat();
+                break;
+            case 'chat-lobby-delete-char':
+                deleteCharacter();
+                break;
+            case 'chat-lobby-import-char':
+                handleImportCharacter();
+                break;
+            case 'chat-lobby-add-persona':
+                handleAddPersona();
+                break;
+            case 'chat-panel-avatar':
+                handleOpenCharSettings();
+                break;
+            case 'chat-lobby-batch-mode':
+                toggleBatchMode();
+                break;
+            case 'batch-move-btn':
+                handleBatchMove();
+                break;
+            case 'batch-cancel-btn':
+                toggleBatchMode();
+                break;
+            case 'chat-lobby-folder-manage':
+                openFolderModal();
+                break;
+            case 'folder-modal-close':
+                closeFolderModal();
+                break;
+            case 'add-folder-btn':
+                addFolder();
+                break;
+        }
+    }
+    
+    /**
+     * data-action 기반 액션 처리
+     * @param {string} action - 액션 이름
+     * @param {HTMLElement} el - 트리거 요소
+     * @param {Event} e - 이벤트 객체
+     */
+    function handleAction(action, el, e) {
+        switch (action) {
+            case 'open-lobby':
+                openLobby();
+                break;
+            case 'close-lobby':
+                closeLobby();
+                break;
+            case 'refresh':
+                handleRefresh();
+                break;
+            case 'toggle-batch':
+                toggleBatchMode();
+                break;
+            // 필요에 따라 추가
+        }
+    }
+    
+    /**
+     * 키보드 이벤트 핸들러
+     * @param {KeyboardEvent} e
+     */
+    function handleKeydown(e) {
+        if (e.key === 'Escape') {
+            const folderModal = document.getElementById('chat-lobby-folder-modal');
+            if (folderModal?.style.display === 'flex') {
+                closeFolderModal();
+            } else if (store.isLobbyOpen) {
+                closeLobby();
+            }
+        }
+        
+        // 폴더 추가 Enter 키
+        if (e.key === 'Enter' && e.target.id === 'new-folder-name') {
+            addFolder();
+        }
+    }
+    
+    /**
+     * 드롭다운 이벤트 바인딩
+     */
+    function bindDropdownEvents() {
         // 캐릭터 정렬
         document.getElementById('chat-lobby-char-sort')?.addEventListener('change', (e) => {
             handleCharSortChange(e.target.value);
@@ -225,57 +317,85 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             handleChatSortChange(e.target.value);
         });
         
-        // 배치 모드
-        document.getElementById('chat-lobby-batch-mode')?.addEventListener('click', toggleBatchMode);
-        
-        // 배치 이동
-        document.getElementById('batch-move-btn')?.addEventListener('click', () => {
-            const folder = document.getElementById('batch-move-folder')?.value;
-            executeBatchMove(folder);
-        });
-        
-        // 배치 취소
-        document.getElementById('batch-cancel-btn')?.addEventListener('click', toggleBatchMode);
-        
-        // 배치 체크박스 변경
+        // 배치 체크박스 변경 (위임)
         document.getElementById('chat-lobby-chats-list')?.addEventListener('change', (e) => {
             if (e.target.classList.contains('chat-select-cb')) {
                 updateBatchCount();
             }
         });
-        
-        // 폴더 관리
-        document.getElementById('chat-lobby-folder-manage')?.addEventListener('click', openFolderModal);
-        document.getElementById('folder-modal-close')?.addEventListener('click', closeFolderModal);
-        document.getElementById('add-folder-btn')?.addEventListener('click', addFolder);
-        document.getElementById('new-folder-name')?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') addFolder();
-        });
-        
-        // ESC로 닫기
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const folderModal = document.getElementById('chat-lobby-folder-modal');
-                if (folderModal?.style.display === 'flex') {
-                    closeFolderModal();
-                } else {
-                    const overlay = document.getElementById('chat-lobby-overlay');
-                    if (overlay?.style.display !== 'none') {
-                        closeLobby();
-                    }
-                }
-            }
-        });
+    }
+    
+    // ============================================
+    // 액션 핸들러
+    // ============================================
+    
+    /**
+     * 새로고침 처리
+     */
+    async function handleRefresh() {
+        cache.invalidateAll();
+        await renderPersonaBar();
+        await renderCharacterGrid();
+    }
+    
+    /**
+     * 캐릭터 임포트 처리
+     */
+    function handleImportCharacter() {
+        closeLobby();
+        setTimeout(() => {
+            const importBtn = document.getElementById('character_import_button');
+            if (importBtn) importBtn.click();
+        }, CONFIG.timing.menuCloseDelay);
+    }
+    
+    /**
+     * 페르소나 추가 처리
+     */
+    function handleAddPersona() {
+        closeLobby();
+        setTimeout(() => {
+            const personaDrawer = document.getElementById('persona-management-button');
+            const drawerIcon = personaDrawer?.querySelector('.drawer-icon');
+            if (drawerIcon) drawerIcon.click();
+            
+            setTimeout(() => {
+                const createBtn = document.getElementById('create_dummy_persona');
+                if (createBtn) createBtn.click();
+            }, CONFIG.timing.drawerOpenDelay);
+        }, CONFIG.timing.menuCloseDelay);
+    }
+    
+    /**
+     * 캐릭터 설정 열기
+     */
+    function handleOpenCharSettings() {
+        closeLobby();
+        setTimeout(() => {
+            const charInfoBtn = document.getElementById('option_settings');
+            if (charInfoBtn) charInfoBtn.click();
+        }, CONFIG.timing.menuCloseDelay);
+    }
+    
+    /**
+     * 배치 이동 처리
+     */
+    function handleBatchMove() {
+        const folder = document.getElementById('batch-move-folder')?.value;
+        executeBatchMove(folder);
     }
     
     // ============================================
     // 옵션 메뉴에 버튼 추가
     // ============================================
     
+    /**
+     * 옵션 메뉴에 Chat Lobby 버튼 추가
+     */
     function addLobbyToOptionsMenu() {
         const optionsMenu = document.getElementById('options');
         if (!optionsMenu) {
-            setTimeout(addLobbyToOptionsMenu, 1000);
+            setTimeout(addLobbyToOptionsMenu, CONFIG.timing.initDelay);
             return;
         }
         
@@ -305,9 +425,9 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     // ============================================
     
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1000));
+        document.addEventListener('DOMContentLoaded', () => setTimeout(init, CONFIG.timing.initDelay));
     } else {
-        setTimeout(init, 1000);
+        setTimeout(init, CONFIG.timing.initDelay);
     }
     
 })();

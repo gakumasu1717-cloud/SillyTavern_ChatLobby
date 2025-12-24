@@ -2,6 +2,11 @@
 // 날짜 유틸리티
 // ============================================
 
+/**
+ * 타임스탬프를 한국어 날짜로 포맷
+ * @param {number|string} timestamp - 타임스탬프 또는 날짜 문자열
+ * @returns {string} 포맷된 날짜 (예: "12월 25일")
+ */
 export function formatDate(timestamp) {
     if (!timestamp) return '';
     try {
@@ -16,7 +21,15 @@ export function formatDate(timestamp) {
     }
 }
 
-// 파일명에서 날짜 파싱
+/**
+ * 파일명에서 날짜 파싱
+ * 지원 형식:
+ * - YYYY-MM-DD@HHhMMmSSs (공백 없음)
+ * - YYYY-MM-DD @HHh MMm SSs (공백 있음)
+ * - YYYY-MM-DD (날짜만)
+ * @param {string} filename - 파일명
+ * @returns {number} 타임스탬프 (밀리초), 파싱 실패 시 0
+ */
 export function parseDateFromFilename(filename) {
     // 형식: YYYY-MM-DD@HHhMMmSSs (공백 없음)
     const m = filename.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
@@ -39,7 +52,14 @@ export function parseDateFromFilename(filename) {
     return 0;
 }
 
-// 날짜 정렬용 timestamp 추출
+/**
+ * 채팅 객체에서 타임스탬프 추출 (정렬용)
+ * @param {Object} chat - 채팅 객체
+ * @param {string} [chat.file_name] - 파일명
+ * @param {string} [chat.fileName] - 파일명 (대체)
+ * @param {number|string} [chat.last_mes] - 마지막 메시지 시간
+ * @returns {number} 타임스탬프
+ */
 export function getTimestamp(chat) {
     const fileName = chat.file_name || chat.fileName || '';
     let ts = parseDateFromFilename(fileName);

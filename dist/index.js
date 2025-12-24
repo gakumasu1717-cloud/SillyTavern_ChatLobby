@@ -60,6 +60,21 @@
           debounceWait: 300,
           retryCount: 3,
           retryDelay: 500
+        },
+        // 타이밍 상수 (하드코딩된 setTimeout 값 대체)
+        timing: {
+          animationDuration: 300,
+          // CSS 애니메이션 시간
+          menuCloseDelay: 300,
+          // 메뉴 닫힌 후 다음 동작까지 대기
+          drawerOpenDelay: 500,
+          // 드로어 열기 후 버튼 클릭까지 대기
+          initDelay: 1e3,
+          // 앱 초기화 지연
+          preloadDelay: 2e3,
+          // 백그라운드 프리로딩 시작 지연
+          toastDuration: 3e3
+          // 토스트 알림 표시 시간
         }
       };
       DEFAULT_DATA = {
@@ -99,7 +114,7 @@
           };
           this.timestamps = {
             chats: /* @__PURE__ */ new Map(),
-            chatCounts: 0,
+            chatCounts: /* @__PURE__ */ new Map(),
             personas: 0,
             characters: 0
           };
@@ -112,6 +127,12 @@
         // ============================================
         // 범용 캐시 메서드
         // ============================================
+        /**
+         * 캐시 유효성 확인
+         * @param {CacheType} type - 캐시 타입
+         * @param {string|null} [key=null] - 서브 키 (chats, chatCounts용)
+         * @returns {boolean}
+         */
         isValid(type, key = null) {
           const duration = CONFIG.cache[`${type}Duration`];
           const now = Date.now();
@@ -122,12 +143,24 @@
             return this.timestamps[type] && now - this.timestamps[type] < duration;
           }
         }
+        /**
+         * 캐시 데이터 가져오기
+         * @param {CacheType} type - 캐시 타입
+         * @param {string|null} [key=null] - 서브 키
+         * @returns {*}
+         */
         get(type, key = null) {
           if (key !== null) {
             return this.stores[type].get(key);
           }
           return this.stores[type];
         }
+        /**
+         * 캐시 데이터 저장
+         * @param {CacheType} type - 캐시 타입
+         * @param {*} data - 저장할 데이터
+         * @param {string|null} [key=null] - 서브 키
+         */
         set(type, data, key = null) {
           const now = Date.now();
           if (key !== null) {
@@ -138,6 +171,11 @@
             this.timestamps[type] = now;
           }
         }
+        /**
+         * 캐시 무효화
+         * @param {CacheType} [type] - 캐시 타입 (없으면 전체)
+         * @param {string|null} [key=null] - 서브 키
+         */
         invalidate(type, key = null) {
           if (key !== null) {
             this.stores[type].delete(key);
@@ -152,14 +190,24 @@
             }
           }
         }
+        /**
+         * 전체 캐시 무효화
+         */
         invalidateAll() {
           Object.keys(this.stores).forEach((type) => {
             this.invalidate(type);
           });
         }
         // ============================================
-        // 중복 요청 방지 (같은 요청이 진행 중이면 그 Promise 반환)
+        // 중복 요청 방지
         // ============================================
+        /**
+         * 중복 요청 방지 fetch
+         * 같은 키로 진행 중인 요청이 있으면 그 Promise 반환
+         * @param {string} key - 요청 식별 키
+         * @param {() => Promise<*>} fetchFn - fetch 함수
+         * @returns {Promise<*>}
+         */
         async getOrFetch(key, fetchFn) {
           if (this.pendingRequests.has(key)) {
             return this.pendingRequests.get(key);
@@ -173,6 +221,11 @@
         // ============================================
         // 프리로딩 (백그라운드에서 미리 로딩)
         // ============================================
+        /**
+         * 모든 데이터 프리로딩
+         * @param {Object} api - API 인스턴스
+         * @returns {Promise<void>}
+         */
         async preloadAll(api2) {
           console.log("[Cache] Starting preload...");
           const promises = [];
@@ -195,6 +248,11 @@
           await Promise.all(promises);
           console.log("[Cache] Preload complete");
         }
+        /**
+         * 페르소나 프리로딩
+         * @param {Object} api
+         * @returns {Promise<void>}
+         */
         async preloadPersonas(api2) {
           if (this.isValid("personas")) return;
           try {
@@ -204,6 +262,11 @@
             console.error("[Cache] Failed to preload personas:", e);
           }
         }
+        /**
+         * 캐릭터 프리로딩
+         * @param {Object} api
+         * @returns {Promise<void>}
+         */
         async preloadCharacters(api2) {
           if (this.isValid("characters")) return;
           try {
@@ -213,18 +276,25 @@
             console.error("[Cache] Failed to preload characters:", e);
           }
         }
-        // 자주 사용하는 캐릭터의 채팅 목록도 프리로딩
+        /**
+         * 최근 캐릭터들의 채팅 프리로딩
+         * @param {Object} api
+         * @param {Array} recentCharacters - 최근 캐릭터 배열
+         * @returns {Promise<void>}
+         */
         async preloadRecentChats(api2, recentCharacters) {
-          const promises = recentCharacters.slice(0, 5).map(async (char) => {
-            if (!this.isValid("chats", char.avatar)) {
-              try {
-                const chats = await api2.fetchChatsForCharacter(char.avatar);
-                this.set("chats", chats, char.avatar);
-              } catch (e) {
-              }
+          console.log("[Cache] Preloading recent chats for", recentCharacters.length, "characters");
+          const promises = recentCharacters.map(async (char) => {
+            if (this.isValid("chats", char.avatar)) return;
+            try {
+              const chats = await api2.fetchChatsForCharacter(char.avatar);
+              this.set("chats", chats, char.avatar);
+            } catch (e) {
+              console.error("[Cache] Failed to preload chats for", char.name, e);
             }
           });
           await Promise.all(promises);
+          console.log("[Cache] Recent chats preload complete");
         }
       };
       cache = new CacheManager();
@@ -240,7 +310,10 @@
         constructor() {
           this._data = null;
         }
-        // 데이터 로드 (메모리 캐시 우선)
+        /**
+         * 데이터 로드 (메모리 캐시 우선)
+         * @returns {LobbyData}
+         */
         load() {
           if (this._data) return this._data;
           try {
@@ -256,7 +329,10 @@
           this._data = { ...DEFAULT_DATA };
           return this._data;
         }
-        // 데이터 저장
+        /**
+         * 데이터 저장
+         * @param {LobbyData} data
+         */
         save(data) {
           try {
             this._data = data;
@@ -265,27 +341,50 @@
             console.error("[Storage] Failed to save:", e);
           }
         }
-        // 데이터 업데이트 (load → update → save 한번에)
+        /**
+         * 데이터 업데이트 (load → update → save 한번에)
+         * @param {(data: LobbyData) => *} updater - 업데이트 함수
+         * @returns {*} updater의 반환값
+         */
         update(updater) {
           const data = this.load();
           const result = updater(data);
           this.save(data);
           return result;
         }
-        // 캐시 초기화 (다시 localStorage에서 읽게)
+        /**
+         * 캐시 초기화 (다시 localStorage에서 읽게)
+         */
         invalidate() {
           this._data = null;
         }
         // ============================================
         // 헬퍼 메서드
         // ============================================
+        /**
+         * 채팅 키 생성
+         * @param {string} charAvatar - 캐릭터 아바타
+         * @param {string} chatFileName - 채팅 파일명
+         * @returns {string}
+         */
         getChatKey(charAvatar, chatFileName) {
           return `${charAvatar}_${chatFileName}`;
         }
+        // ============================================
         // 폴더 관련
+        // ============================================
+        /**
+         * 폴더 목록 가져오기
+         * @returns {Array}
+         */
         getFolders() {
           return this.load().folders;
         }
+        /**
+         * 폴더 추가
+         * @param {string} name - 폴더 이름
+         * @returns {string} 생성된 폴더 ID
+         */
         addFolder(name) {
           return this.update((data) => {
             const id = "folder_" + Date.now();
@@ -297,6 +396,11 @@
             return id;
           });
         }
+        /**
+         * 폴더 삭제
+         * @param {string} folderId - 폴더 ID
+         * @returns {boolean} 성공 여부
+         */
         deleteFolder(folderId) {
           return this.update((data) => {
             const folder = data.folders.find((f) => f.id === folderId);
@@ -310,6 +414,12 @@
             return true;
           });
         }
+        /**
+         * 폴더 이름 변경
+         * @param {string} folderId - 폴더 ID
+         * @param {string} newName - 새 이름
+         * @returns {boolean} 성공 여부
+         */
         renameFolder(folderId, newName) {
           return this.update((data) => {
             const folder = data.folders.find((f) => f.id === folderId);
@@ -318,19 +428,41 @@
             return true;
           });
         }
+        // ============================================
         // 채팅-폴더 할당
+        // ============================================
+        /**
+         * 채팅을 폴더에 할당
+         * @param {string} charAvatar
+         * @param {string} chatFileName
+         * @param {string} folderId
+         */
         assignChatToFolder(charAvatar, chatFileName, folderId) {
           this.update((data) => {
             const key = this.getChatKey(charAvatar, chatFileName);
             data.chatAssignments[key] = folderId;
           });
         }
+        /**
+         * 채팅이 속한 폴더 가져오기
+         * @param {string} charAvatar
+         * @param {string} chatFileName
+         * @returns {string} 폴더 ID
+         */
         getChatFolder(charAvatar, chatFileName) {
           const data = this.load();
           const key = this.getChatKey(charAvatar, chatFileName);
           return data.chatAssignments[key] || "uncategorized";
         }
+        // ============================================
         // 즐겨찾기
+        // ============================================
+        /**
+         * 즐겨찾기 토글
+         * @param {string} charAvatar
+         * @param {string} chatFileName
+         * @returns {boolean} 새 즐겨찾기 상태
+         */
         toggleFavorite(charAvatar, chatFileName) {
           return this.update((data) => {
             const key = this.getChatKey(charAvatar, chatFileName);
@@ -343,37 +475,73 @@
             return true;
           });
         }
+        /**
+         * 즐겨찾기 여부 확인
+         * @param {string} charAvatar
+         * @param {string} chatFileName
+         * @returns {boolean}
+         */
         isFavorite(charAvatar, chatFileName) {
           const data = this.load();
           const key = this.getChatKey(charAvatar, chatFileName);
           return data.favorites.includes(key);
         }
+        // ============================================
         // 정렬/필터 옵션
+        // ============================================
+        /**
+         * 채팅 정렬 옵션 가져오기
+         * @returns {string}
+         */
         getSortOption() {
           return this.load().sortOption || "recent";
         }
+        /**
+         * 채팅 정렬 옵션 설정
+         * @param {string} option
+         */
         setSortOption(option) {
           this.update((data) => {
             data.sortOption = option;
           });
         }
+        /**
+         * 캐릭터 정렬 옵션 가져오기
+         * @returns {string}
+         */
         getCharSortOption() {
           return this.load().charSortOption || "recent";
         }
+        /**
+         * 캐릭터 정렬 옵션 설정
+         * @param {string} option
+         */
         setCharSortOption(option) {
           this.update((data) => {
             data.charSortOption = option;
           });
         }
+        /**
+         * 폴더 필터 가져오기
+         * @returns {string}
+         */
         getFilterFolder() {
           return this.load().filterFolder || "all";
         }
+        /**
+         * 폴더 필터 설정
+         * @param {string} folderId
+         */
         setFilterFolder(folderId) {
           this.update((data) => {
             data.filterFolder = folderId;
           });
         }
-        // 다중 채팅 이동
+        /**
+         * 다중 채팅 폴더 이동
+         * @param {string[]} chatKeys - 채팅 키 배열
+         * @param {string} targetFolderId - 대상 폴더 ID
+         */
         moveChatsBatch(chatKeys, targetFolderId) {
           this.update((data) => {
             chatKeys.forEach((key) => {
@@ -386,11 +554,207 @@
     }
   });
 
+  // src/data/store.js
+  var Store, store;
+  var init_store = __esm({
+    "src/data/store.js"() {
+      Store = class {
+        constructor() {
+          this._state = {
+            // 캐릭터 관련
+            currentCharacter: null,
+            // 배치 모드
+            batchModeActive: false,
+            // 페르소나 처리 중
+            isProcessingPersona: false,
+            // 로비 상태
+            isLobbyOpen: false,
+            // 검색어
+            searchTerm: "",
+            // 콜백 핸들러
+            onCharacterSelect: null,
+            chatHandlers: {
+              onOpen: null,
+              onDelete: null
+            }
+          };
+          this._listeners = /* @__PURE__ */ new Map();
+        }
+        // ============================================
+        // Getters
+        // ============================================
+        /**
+         * 현재 선택된 캐릭터 반환
+         * @returns {Character|null}
+         */
+        get currentCharacter() {
+          return this._state.currentCharacter;
+        }
+        /**
+         * 배치 모드 활성화 여부
+         * @returns {boolean}
+         */
+        get batchModeActive() {
+          return this._state.batchModeActive;
+        }
+        /**
+         * 페르소나 처리 중 여부
+         * @returns {boolean}
+         */
+        get isProcessingPersona() {
+          return this._state.isProcessingPersona;
+        }
+        /**
+         * 로비 열림 여부
+         * @returns {boolean}
+         */
+        get isLobbyOpen() {
+          return this._state.isLobbyOpen;
+        }
+        /**
+         * 검색어
+         * @returns {string}
+         */
+        get searchTerm() {
+          return this._state.searchTerm;
+        }
+        /**
+         * 캐릭터 선택 핸들러
+         * @returns {Function|null}
+         */
+        get onCharacterSelect() {
+          return this._state.onCharacterSelect;
+        }
+        /**
+         * 채팅 핸들러
+         * @returns {ChatHandlers}
+         */
+        get chatHandlers() {
+          return this._state.chatHandlers;
+        }
+        // ============================================
+        // Setters (상태 변경 + 리스너 알림)
+        // ============================================
+        /**
+         * 현재 캐릭터 설정
+         * @param {Character|null} character
+         */
+        setCurrentCharacter(character) {
+          this._state.currentCharacter = character;
+          this._notify("currentCharacter", character);
+        }
+        /**
+         * 배치 모드 토글
+         * @returns {boolean} 새 배치 모드 상태
+         */
+        toggleBatchMode() {
+          this._state.batchModeActive = !this._state.batchModeActive;
+          this._notify("batchModeActive", this._state.batchModeActive);
+          return this._state.batchModeActive;
+        }
+        /**
+         * 배치 모드 직접 설정
+         * @param {boolean} active
+         */
+        setBatchMode(active) {
+          this._state.batchModeActive = active;
+          this._notify("batchModeActive", active);
+        }
+        /**
+         * 페르소나 처리 중 상태 설정
+         * @param {boolean} processing
+         */
+        setProcessingPersona(processing) {
+          this._state.isProcessingPersona = processing;
+        }
+        /**
+         * 로비 열림 상태 설정
+         * @param {boolean} open
+         */
+        setLobbyOpen(open) {
+          this._state.isLobbyOpen = open;
+          this._notify("isLobbyOpen", open);
+        }
+        /**
+         * 검색어 설정
+         * @param {string} term
+         */
+        setSearchTerm(term) {
+          this._state.searchTerm = term;
+          this._notify("searchTerm", term);
+        }
+        /**
+         * 캐릭터 선택 핸들러 설정
+         * @param {Function} handler
+         */
+        setCharacterSelectHandler(handler) {
+          this._state.onCharacterSelect = handler;
+        }
+        /**
+         * 채팅 핸들러 설정
+         * @param {ChatHandlers} handlers
+         */
+        setChatHandlers(handlers) {
+          this._state.chatHandlers = {
+            onOpen: handlers.onOpen || null,
+            onDelete: handlers.onDelete || null
+          };
+        }
+        // ============================================
+        // 상태 초기화
+        // ============================================
+        /**
+         * 상태 초기화 (로비 닫을 때)
+         */
+        reset() {
+          this._state.currentCharacter = null;
+          this._state.batchModeActive = false;
+          this._state.searchTerm = "";
+        }
+        // ============================================
+        // 리스너 (옵저버 패턴)
+        // ============================================
+        /**
+         * 상태 변경 구독
+         * @param {string} key - 상태 키
+         * @param {Function} callback - 콜백 함수
+         * @returns {Function} 구독 해제 함수
+         */
+        subscribe(key, callback) {
+          if (!this._listeners.has(key)) {
+            this._listeners.set(key, /* @__PURE__ */ new Set());
+          }
+          this._listeners.get(key).add(callback);
+          return () => {
+            this._listeners.get(key)?.delete(callback);
+          };
+        }
+        /**
+         * 리스너에게 상태 변경 알림
+         * @param {string} key
+         * @param {*} value
+         * @private
+         */
+        _notify(key, value) {
+          this._listeners.get(key)?.forEach((callback) => {
+            try {
+              callback(value);
+            } catch (e) {
+              console.error("[Store] Listener error:", e);
+            }
+          });
+        }
+      };
+      store = new Store();
+    }
+  });
+
   // src/api/sillyTavern.js
   var SillyTavernAPI, api;
   var init_sillyTavern = __esm({
     "src/api/sillyTavern.js"() {
       init_cache();
+      init_config();
       SillyTavernAPI = class {
         constructor() {
           this._context = null;
@@ -398,12 +762,20 @@
         // ============================================
         // 기본 유틸
         // ============================================
+        /**
+         * SillyTavern 컨텍스트 가져오기
+         * @returns {Object|null}
+         */
         getContext() {
           if (!this._context) {
             this._context = window.SillyTavern?.getContext?.() || null;
           }
           return this._context;
         }
+        /**
+         * 요청 헤더 가져오기
+         * @returns {Object}
+         */
         getRequestHeaders() {
           const context = this.getContext();
           if (context?.getRequestHeaders) {
@@ -415,15 +787,60 @@
           };
         }
         // ============================================
+        // 재시도 로직이 적용된 fetch
+        // ============================================
+        /**
+         * 재시도 로직이 적용된 fetch 요청
+         * @param {string} url - 요청 URL
+         * @param {RequestInit} options - fetch 옵션
+         * @param {number} [retries=CONFIG.ui.retryCount] - 재시도 횟수
+         * @returns {Promise<Response>}
+         * @throws {Error} 모든 재시도 실패 시
+         */
+        async fetchWithRetry(url, options, retries = CONFIG.ui.retryCount) {
+          let lastError;
+          for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+              const response = await fetch(url, options);
+              if (response.status >= 500 && attempt < retries) {
+                console.warn(`[API] Server error ${response.status}, retrying... (${attempt + 1}/${retries})`);
+                await this.delay(CONFIG.ui.retryDelay * (attempt + 1));
+                continue;
+              }
+              return response;
+            } catch (error) {
+              lastError = error;
+              if (attempt < retries) {
+                console.warn(`[API] Request failed, retrying... (${attempt + 1}/${retries})`, error.message);
+                await this.delay(CONFIG.ui.retryDelay * (attempt + 1));
+                continue;
+              }
+            }
+          }
+          throw lastError || new Error("Request failed after retries");
+        }
+        /**
+         * 지연 함수
+         * @param {number} ms - 지연 시간 (밀리초)
+         * @returns {Promise<void>}
+         */
+        delay(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+        // ============================================
         // 페르소나 API
         // ============================================
+        /**
+         * 페르소나 목록 가져오기
+         * @returns {Promise<Array>}
+         */
         async fetchPersonas() {
           if (cache.isValid("personas")) {
             return cache.get("personas");
           }
           return cache.getOrFetch("personas", async () => {
             try {
-              const response = await fetch("/api/avatars/get", {
+              const response = await this.fetchWithRetry("/api/avatars/get", {
                 method: "POST",
                 headers: this.getRequestHeaders()
               });
@@ -467,6 +884,10 @@
             }
           });
         }
+        /**
+         * 현재 페르소나 가져오기
+         * @returns {Promise<string>}
+         */
         async getCurrentPersona() {
           try {
             const personasModule = await import("../../../../personas.js");
@@ -475,6 +896,11 @@
             return "";
           }
         }
+        /**
+         * 페르소나 설정
+         * @param {string} personaKey - 페르소나 키
+         * @returns {Promise<boolean>}
+         */
         async setPersona(personaKey) {
           try {
             const personasModule = await import("../../../../personas.js");
@@ -491,20 +917,34 @@
           }
           return false;
         }
+        /**
+         * 페르소나 삭제
+         * @param {string} personaKey - 페르소나 키
+         * @returns {Promise<boolean>}
+         */
         async deletePersona(personaKey) {
-          const response = await fetch("/api/avatars/delete", {
-            method: "POST",
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({ avatar: personaKey })
-          });
-          if (response.ok) {
-            cache.invalidate("personas");
+          try {
+            const response = await this.fetchWithRetry("/api/avatars/delete", {
+              method: "POST",
+              headers: this.getRequestHeaders(),
+              body: JSON.stringify({ avatar: personaKey })
+            });
+            if (response.ok) {
+              cache.invalidate("personas");
+            }
+            return response.ok;
+          } catch (error) {
+            console.error("[API] Failed to delete persona:", error);
+            return false;
           }
-          return response.ok;
         }
         // ============================================
         // 캐릭터 API
         // ============================================
+        /**
+         * 캐릭터 목록 가져오기
+         * @returns {Promise<Array>}
+         */
         async fetchCharacters() {
           if (cache.isValid("characters")) {
             return cache.get("characters");
@@ -518,30 +958,51 @@
           cache.set("characters", characters);
           return characters;
         }
+        /**
+         * 캐릭터 ID로 선택
+         * @param {number|string} index - 캐릭터 인덱스
+         * @returns {Promise<void>}
+         */
         async selectCharacterById(index) {
           const context = this.getContext();
           if (context?.selectCharacterById) {
             await context.selectCharacterById(String(index));
           }
         }
+        /**
+         * 캐릭터 삭제
+         * @param {string} charAvatar - 캐릭터 아바타
+         * @returns {Promise<boolean>}
+         */
         async deleteCharacter(charAvatar) {
-          const response = await fetch("/api/characters/delete", {
-            method: "POST",
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({
-              avatar_url: charAvatar,
-              delete_chats: true
-            })
-          });
-          if (response.ok) {
-            cache.invalidate("characters");
-            cache.invalidate("chats", charAvatar);
+          try {
+            const response = await this.fetchWithRetry("/api/characters/delete", {
+              method: "POST",
+              headers: this.getRequestHeaders(),
+              body: JSON.stringify({
+                avatar_url: charAvatar,
+                delete_chats: true
+              })
+            });
+            if (response.ok) {
+              cache.invalidate("characters");
+              cache.invalidate("chats", charAvatar);
+            }
+            return response.ok;
+          } catch (error) {
+            console.error("[API] Failed to delete character:", error);
+            return false;
           }
-          return response.ok;
         }
         // ============================================
         // 채팅 API
         // ============================================
+        /**
+         * 캐릭터의 채팅 목록 가져오기
+         * @param {string} characterAvatar - 캐릭터 아바타
+         * @param {boolean} [forceRefresh=false] - 강제 새로고침
+         * @returns {Promise<Array>}
+         */
         async fetchChatsForCharacter(characterAvatar, forceRefresh = false) {
           if (!characterAvatar) return [];
           if (!forceRefresh && cache.isValid("chats", characterAvatar)) {
@@ -550,7 +1011,7 @@
           }
           return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
             try {
-              const response = await fetch("/api/characters/chats", {
+              const response = await this.fetchWithRetry("/api/characters/chats", {
                 method: "POST",
                 headers: this.getRequestHeaders(),
                 body: JSON.stringify({
@@ -573,21 +1034,36 @@
             }
           });
         }
+        /**
+         * 채팅 삭제
+         * @param {string} fileName - 파일명
+         * @param {string} charAvatar - 캐릭터 아바타
+         * @returns {Promise<boolean>}
+         */
         async deleteChat(fileName, charAvatar) {
-          const response = await fetch("/api/chats/delete", {
-            method: "POST",
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({
-              chatfile: fileName,
-              avatar_url: charAvatar
-            })
-          });
-          if (response.ok) {
-            cache.invalidate("chats", charAvatar);
+          try {
+            const response = await this.fetchWithRetry("/api/chats/delete", {
+              method: "POST",
+              headers: this.getRequestHeaders(),
+              body: JSON.stringify({
+                chatfile: fileName,
+                avatar_url: charAvatar
+              })
+            });
+            if (response.ok) {
+              cache.invalidate("chats", charAvatar);
+            }
+            return response.ok;
+          } catch (error) {
+            console.error("[API] Failed to delete chat:", error);
+            return false;
           }
-          return response.ok;
         }
-        // 채팅 수 가져오기 (캐시 활용)
+        /**
+         * 캐릭터의 채팅 수 가져오기
+         * @param {string} characterAvatar - 캐릭터 아바타
+         * @returns {Promise<number>}
+         */
         async getChatCount(characterAvatar) {
           if (cache.isValid("chatCounts", characterAvatar)) {
             return cache.get("chatCounts", characterAvatar);
@@ -598,6 +1074,7 @@
             cache.set("chatCounts", count, characterAvatar);
             return count;
           } catch (e) {
+            console.error("[API] Failed to get chat count:", e);
             return 0;
           }
         }
@@ -636,7 +1113,11 @@
     };
   }
   function createTouchClickHandler(element, handler, options = {}) {
-    const { preventDefault = true, stopPropagation = true, scrollThreshold = 10 } = options;
+    const {
+      preventDefault = true,
+      stopPropagation = true,
+      scrollThreshold = 10
+    } = options;
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
@@ -678,6 +1159,290 @@
     }
   });
 
+  // src/ui/notifications.js
+  function initToastContainer() {
+    if (toastContainer) return;
+    toastContainer = document.createElement("div");
+    toastContainer.id = "chat-lobby-toast-container";
+    toastContainer.innerHTML = `
+        <style>
+            #chat-lobby-toast-container {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 100001;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+            }
+            .chat-lobby-toast {
+                background: var(--SmartThemeBlurTintColor, #2a2a2a);
+                color: var(--SmartThemeBodyColor, #fff);
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                pointer-events: auto;
+                animation: toastSlideIn 0.3s ease;
+                max-width: 350px;
+            }
+            .chat-lobby-toast.success { border-left: 4px solid #4caf50; }
+            .chat-lobby-toast.error { border-left: 4px solid #f44336; }
+            .chat-lobby-toast.warning { border-left: 4px solid #ff9800; }
+            .chat-lobby-toast.info { border-left: 4px solid #2196f3; }
+            .chat-lobby-toast.fade-out {
+                animation: toastSlideOut 0.3s ease forwards;
+            }
+            .chat-lobby-toast-icon {
+                font-size: 18px;
+            }
+            .chat-lobby-toast-message {
+                flex: 1;
+                font-size: 14px;
+            }
+            .chat-lobby-toast-close {
+                background: none;
+                border: none;
+                color: inherit;
+                cursor: pointer;
+                opacity: 0.6;
+                font-size: 16px;
+            }
+            .chat-lobby-toast-close:hover { opacity: 1; }
+            @keyframes toastSlideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes toastSlideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        </style>
+    `;
+    document.body.appendChild(toastContainer);
+  }
+  function showToast(message, type = "info", duration = CONFIG.timing.toastDuration) {
+    initToastContainer();
+    const icons = {
+      success: "\u2713",
+      error: "\u2715",
+      warning: "\u26A0",
+      info: "\u2139"
+    };
+    const toast = document.createElement("div");
+    toast.className = `chat-lobby-toast ${type}`;
+    toast.innerHTML = `
+        <span class="chat-lobby-toast-icon">${icons[type]}</span>
+        <span class="chat-lobby-toast-message">${escapeHtml2(message)}</span>
+        <button class="chat-lobby-toast-close">\xD7</button>
+    `;
+    const closeBtn = toast.querySelector(".chat-lobby-toast-close");
+    closeBtn.addEventListener("click", () => removeToast(toast));
+    toastContainer.appendChild(toast);
+    setTimeout(() => removeToast(toast), duration);
+  }
+  function removeToast(toast) {
+    if (!toast.parentNode) return;
+    toast.classList.add("fade-out");
+    setTimeout(() => toast.remove(), CONFIG.timing.animationDuration);
+  }
+  function escapeHtml2(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  function initModalContainer() {
+    if (modalContainer) return;
+    modalContainer = document.createElement("div");
+    modalContainer.id = "chat-lobby-modal-container";
+    modalContainer.innerHTML = `
+        <style>
+            #chat-lobby-modal-container {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 100002;
+                background: rgba(0,0,0,0.6);
+                justify-content: center;
+                align-items: center;
+            }
+            .chat-lobby-modal {
+                background: var(--SmartThemeBlurTintColor, #2a2a2a);
+                border-radius: 12px;
+                padding: 24px;
+                min-width: 320px;
+                max-width: 450px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                animation: modalFadeIn 0.2s ease;
+            }
+            .chat-lobby-modal-title {
+                font-size: 18px;
+                font-weight: bold;
+                margin-bottom: 12px;
+                color: var(--SmartThemeBodyColor, #fff);
+            }
+            .chat-lobby-modal-message {
+                font-size: 14px;
+                color: var(--SmartThemeBodyColor, #ccc);
+                margin-bottom: 20px;
+                line-height: 1.5;
+                white-space: pre-wrap;
+            }
+            .chat-lobby-modal-input {
+                width: 100%;
+                padding: 10px 12px;
+                border: 1px solid var(--SmartThemeBorderColor, #444);
+                border-radius: 6px;
+                background: var(--SmartThemeBlurTintColor, #1a1a1a);
+                color: var(--SmartThemeBodyColor, #fff);
+                font-size: 14px;
+                margin-bottom: 20px;
+                box-sizing: border-box;
+            }
+            .chat-lobby-modal-input:focus {
+                outline: none;
+                border-color: var(--SmartThemeQuoteColor, #888);
+            }
+            .chat-lobby-modal-buttons {
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            }
+            .chat-lobby-modal-btn {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: opacity 0.2s;
+            }
+            .chat-lobby-modal-btn:hover { opacity: 0.8; }
+            .chat-lobby-modal-btn.cancel {
+                background: var(--SmartThemeBorderColor, #444);
+                color: var(--SmartThemeBodyColor, #fff);
+            }
+            .chat-lobby-modal-btn.confirm {
+                background: var(--SmartThemeQuoteColor, #4a9eff);
+                color: #fff;
+            }
+            .chat-lobby-modal-btn.confirm.dangerous {
+                background: #f44336;
+            }
+            @keyframes modalFadeIn {
+                from { transform: scale(0.9); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+        </style>
+        <div class="chat-lobby-modal">
+            <div class="chat-lobby-modal-title"></div>
+            <div class="chat-lobby-modal-message"></div>
+            <input type="text" class="chat-lobby-modal-input" style="display:none;">
+            <div class="chat-lobby-modal-buttons">
+                <button class="chat-lobby-modal-btn cancel">\uCDE8\uC18C</button>
+                <button class="chat-lobby-modal-btn confirm">\uD655\uC778</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modalContainer);
+  }
+  function showAlert(message, title = "\uC54C\uB9BC") {
+    return showModal({
+      title,
+      message,
+      showCancel: false,
+      confirmText: "\uD655\uC778"
+    });
+  }
+  function showConfirm(message, title = "\uD655\uC778", dangerous = false) {
+    return showModal({
+      title,
+      message,
+      showCancel: true,
+      dangerous,
+      confirmText: dangerous ? "\uC0AD\uC81C" : "\uD655\uC778",
+      cancelText: "\uCDE8\uC18C"
+    }).then((result) => result === true);
+  }
+  function showPrompt(message, title = "\uC785\uB825", defaultValue = "") {
+    return showModal({
+      title,
+      message,
+      showCancel: true,
+      inputPlaceholder: "",
+      inputValue: defaultValue
+    });
+  }
+  function showModal(options) {
+    initModalContainer();
+    return new Promise((resolve) => {
+      const modal = modalContainer.querySelector(".chat-lobby-modal");
+      const titleEl = modal.querySelector(".chat-lobby-modal-title");
+      const messageEl = modal.querySelector(".chat-lobby-modal-message");
+      const inputEl = modal.querySelector(".chat-lobby-modal-input");
+      const cancelBtn = modal.querySelector(".chat-lobby-modal-btn.cancel");
+      const confirmBtn = modal.querySelector(".chat-lobby-modal-btn.confirm");
+      titleEl.textContent = options.title || "\uC54C\uB9BC";
+      messageEl.textContent = options.message || "";
+      if (options.inputPlaceholder !== void 0) {
+        inputEl.style.display = "block";
+        inputEl.placeholder = options.inputPlaceholder;
+        inputEl.value = options.inputValue || "";
+        setTimeout(() => inputEl.focus(), 100);
+      } else {
+        inputEl.style.display = "none";
+      }
+      cancelBtn.style.display = options.showCancel !== false ? "block" : "none";
+      cancelBtn.textContent = options.cancelText || "\uCDE8\uC18C";
+      confirmBtn.textContent = options.confirmText || "\uD655\uC778";
+      confirmBtn.classList.toggle("dangerous", options.dangerous === true);
+      const cleanup = () => {
+        modalContainer.style.display = "none";
+        cancelBtn.onclick = null;
+        confirmBtn.onclick = null;
+        inputEl.onkeydown = null;
+      };
+      cancelBtn.onclick = () => {
+        cleanup();
+        resolve(options.inputPlaceholder !== void 0 ? null : false);
+      };
+      confirmBtn.onclick = () => {
+        cleanup();
+        if (options.inputPlaceholder !== void 0) {
+          const value = inputEl.value.trim();
+          resolve(value || null);
+        } else {
+          resolve(true);
+        }
+      };
+      inputEl.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          confirmBtn.click();
+        } else if (e.key === "Escape") {
+          cancelBtn.click();
+        }
+      };
+      const escHandler = (e) => {
+        if (e.key === "Escape" && modalContainer.style.display === "flex") {
+          cancelBtn.click();
+          document.removeEventListener("keydown", escHandler);
+        }
+      };
+      document.addEventListener("keydown", escHandler);
+      modalContainer.style.display = "flex";
+    });
+  }
+  var toastContainer, modalContainer;
+  var init_notifications = __esm({
+    "src/ui/notifications.js"() {
+      init_config();
+      toastContainer = null;
+      modalContainer = null;
+    }
+  });
+
   // src/ui/characterGrid.js
   var characterGrid_exports = {};
   __export(characterGrid_exports, {
@@ -687,29 +1452,42 @@
     setCharacterSelectHandler: () => setCharacterSelectHandler
   });
   function setCharacterSelectHandler(handler) {
-    onCharacterSelect = handler;
+    store.setCharacterSelectHandler(handler);
   }
   async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
     const container = document.getElementById("chat-lobby-characters");
     if (!container) return;
+    store.setSearchTerm(searchTerm);
     const cachedCharacters = cache.get("characters");
     if (cachedCharacters && cachedCharacters.length > 0) {
-      renderCharacterList(container, cachedCharacters, searchTerm, sortOverride);
+      await renderCharacterList(container, cachedCharacters, searchTerm, sortOverride);
     } else {
       container.innerHTML = '<div class="lobby-loading">\uCE90\uB9AD\uD130 \uB85C\uB529 \uC911...</div>';
     }
-    const characters = await api.fetchCharacters();
-    if (characters.length === 0) {
+    try {
+      const characters = await api.fetchCharacters();
+      if (characters.length === 0) {
+        container.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>\u{1F465}</i>
+                    <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uC0C8\uB85C\uACE0\uCE68</button>
+                </div>
+            `;
+        return;
+      }
+      await renderCharacterList(container, characters, searchTerm, sortOverride);
+    } catch (error) {
+      console.error("[CharacterGrid] Failed to load characters:", error);
+      showToast("\uCE90\uB9AD\uD130 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
       container.innerHTML = `
             <div class="lobby-empty-state">
-                <i>\u{1F465}</i>
-                <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uC0C8\uB85C\uACE0\uCE68</button>
+                <i>\u26A0\uFE0F</i>
+                <div>\uCE90\uB9AD\uD130 \uB85C\uB529 \uC2E4\uD328</div>
+                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uB2E4\uC2DC \uC2DC\uB3C4</button>
             </div>
         `;
-      return;
     }
-    renderCharacterList(container, characters, searchTerm, sortOverride);
   }
   async function renderCharacterList(container, characters, searchTerm, sortOverride) {
     let filtered = [...characters];
@@ -745,7 +1523,7 @@
     const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
     const name = char.name || "Unknown";
     const safeAvatar = (char.avatar || "").replace(/"/g, "&quot;");
-    const isFav = !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
+    const isFav = isFavoriteChar(char);
     const favBadge = isFav ? '<span class="char-fav-badge">\u2B50</span>' : "";
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
@@ -758,8 +1536,10 @@
     </div>
     `;
   }
+  function isFavoriteChar(char) {
+    return !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
+  }
   async function sortCharacters(characters, sortOption) {
-    const isFav = (char) => !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
     if (sortOption === "chats") {
       const chatCounts = await Promise.all(
         characters.map(async (char) => {
@@ -768,14 +1548,18 @@
         })
       );
       chatCounts.sort((a, b) => {
-        if (isFav(a.char) !== isFav(b.char)) return isFav(a.char) ? -1 : 1;
+        if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
+          return isFavoriteChar(a.char) ? -1 : 1;
+        }
         return b.count - a.count;
       });
       return chatCounts.map((item) => item.char);
     }
     const sorted = [...characters];
     sorted.sort((a, b) => {
-      if (isFav(a) !== isFav(b)) return isFav(a) ? -1 : 1;
+      if (isFavoriteChar(a) !== isFavoriteChar(b)) {
+        return isFavoriteChar(a) ? -1 : 1;
+      }
       if (sortOption === "name") {
         return (a.name || "").localeCompare(b.name || "", "ko");
       }
@@ -797,8 +1581,9 @@
           el.classList.remove("selected");
         });
         card.classList.add("selected");
-        if (onCharacterSelect) {
-          onCharacterSelect({
+        const handler = store.onCharacterSelect;
+        if (handler) {
+          handler({
             index: card.dataset.charIndex,
             avatar: card.dataset.charAvatar,
             name: card.querySelector(".lobby-char-name").textContent,
@@ -810,20 +1595,20 @@
   }
   function handleSortChange(sortOption) {
     storage.setCharSortOption(sortOption);
-    const searchInput = document.getElementById("chat-lobby-search-input");
-    const searchTerm = searchInput?.value || "";
+    const searchTerm = store.searchTerm;
     renderCharacterGrid(searchTerm, sortOption);
   }
-  var onCharacterSelect, handleSearch;
+  var handleSearch;
   var init_characterGrid = __esm({
     "src/ui/characterGrid.js"() {
       init_sillyTavern();
       init_cache();
       init_storage();
+      init_store();
       init_textUtils();
       init_eventHelpers();
+      init_notifications();
       init_config();
-      onCharacterSelect = null;
       handleSearch = debounce((searchTerm) => {
         renderCharacterGrid(searchTerm);
       }, CONFIG.ui.debounceWait);
@@ -834,6 +1619,7 @@
   init_config();
   init_cache();
   init_storage();
+  init_store();
   init_sillyTavern();
 
   // src/ui/templates.js
@@ -953,9 +1739,11 @@
   // src/ui/personaBar.js
   init_sillyTavern();
   init_cache();
+  init_store();
   init_textUtils();
   init_eventHelpers();
-  var isProcessingPersona = false;
+  init_notifications();
+  init_config();
   async function renderPersonaBar() {
     const container = document.getElementById("chat-lobby-persona-list");
     if (!container) return;
@@ -965,15 +1753,26 @@
     } else {
       container.innerHTML = '<div class="lobby-loading">\uB85C\uB529 \uC911...</div>';
     }
-    const personas = await api.fetchPersonas();
-    if (personas.length === 0) {
-      container.innerHTML = '<div class="persona-empty">\uD398\uB974\uC18C\uB098 \uC5C6\uC74C</div>';
-      return;
+    try {
+      const personas = await api.fetchPersonas();
+      if (personas.length === 0) {
+        container.innerHTML = '<div class="persona-empty">\uD398\uB974\uC18C\uB098 \uC5C6\uC74C</div>';
+        return;
+      }
+      await renderPersonaList(container, personas);
+    } catch (error) {
+      console.error("[PersonaBar] Failed to load personas:", error);
+      showToast("\uD398\uB974\uC18C\uB098 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      container.innerHTML = '<div class="persona-empty">\uB85C\uB529 \uC2E4\uD328</div>';
     }
-    await renderPersonaList(container, personas);
   }
   async function renderPersonaList(container, personas) {
-    const currentPersona = await api.getCurrentPersona();
+    let currentPersona = "";
+    try {
+      currentPersona = await api.getCurrentPersona();
+    } catch (e) {
+      console.warn("[PersonaBar] Could not get current persona");
+    }
     let html = "";
     personas.forEach((persona) => {
       const isSelected = persona.key === currentPersona ? "selected" : "";
@@ -995,7 +1794,7 @@
       const deleteBtn = item.querySelector(".persona-delete-btn");
       if (avatarImg) {
         createTouchClickHandler(avatarImg, async () => {
-          if (isProcessingPersona) return;
+          if (store.isProcessingPersona) return;
           if (item.classList.contains("selected")) {
             openPersonaManagement();
           } else {
@@ -1014,33 +1813,49 @@
       if (deleteBtn) {
         deleteBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
-          await deletePersona(deleteBtn.dataset.persona, item.title);
+          const personaKey = deleteBtn.dataset.persona;
+          const personaName = item.title || personaKey;
+          await deletePersona(personaKey, personaName);
         });
       }
     });
   }
   async function selectPersona(container, item) {
-    if (isProcessingPersona) return;
-    isProcessingPersona = true;
+    if (store.isProcessingPersona) return;
+    store.setProcessingPersona(true);
     try {
       container.querySelectorAll(".persona-item").forEach((el) => el.classList.remove("selected"));
       item.classList.add("selected");
-      await api.setPersona(item.dataset.persona);
+      const success = await api.setPersona(item.dataset.persona);
+      if (success) {
+        showToast(`\uD398\uB974\uC18C\uB098\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+      }
+    } catch (error) {
+      console.error("[PersonaBar] Failed to select persona:", error);
+      showToast("\uD398\uB974\uC18C\uB098 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      item.classList.remove("selected");
     } finally {
-      isProcessingPersona = false;
+      store.setProcessingPersona(false);
     }
   }
   async function deletePersona(personaKey, personaName) {
-    if (!confirm(`"${personaName}" \uD398\uB974\uC18C\uB098\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
-
-\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`)) {
-      return;
-    }
-    const success = await api.deletePersona(personaKey);
-    if (success) {
-      await renderPersonaBar();
-    } else {
-      alert("\uD398\uB974\uC18C\uB098 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+    const confirmed = await showConfirm(
+      `"${personaName}" \uD398\uB974\uC18C\uB098\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`,
+      "\uD398\uB974\uC18C\uB098 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    try {
+      const success = await api.deletePersona(personaKey);
+      if (success) {
+        showToast(`"${personaName}" \uD398\uB974\uC18C\uB098\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+        await renderPersonaBar();
+      } else {
+        showToast("\uD398\uB974\uC18C\uB098 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      }
+    } catch (error) {
+      console.error("[PersonaBar] Failed to delete persona:", error);
+      showToast("\uD398\uB974\uC18C\uB098 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
   function openPersonaManagement() {
@@ -1048,15 +1863,12 @@
     const fab = document.getElementById("chat-lobby-fab");
     if (container) container.style.display = "none";
     if (fab) fab.style.display = "flex";
+    store.setLobbyOpen(false);
     setTimeout(() => {
       const personaDrawer = document.getElementById("persona-management-button");
-      if (personaDrawer) {
-        const drawerIcon = personaDrawer.querySelector(".drawer-icon");
-        if (drawerIcon && !drawerIcon.classList.contains("openIcon")) {
-          drawerIcon.click();
-        }
-      }
-    }, 300);
+      const drawerIcon = personaDrawer?.querySelector(".drawer-icon");
+      if (drawerIcon) drawerIcon.click();
+    }, CONFIG.timing.menuCloseDelay);
   }
 
   // src/index.js
@@ -1066,6 +1878,7 @@
   init_sillyTavern();
   init_cache();
   init_storage();
+  init_store();
   init_textUtils();
 
   // src/utils/dateUtils.js
@@ -1095,19 +1908,16 @@
 
   // src/ui/chatList.js
   init_eventHelpers();
-  var currentCharacter = null;
-  var batchModeActive = false;
-  var onChatOpen = null;
-  var onChatDelete = null;
+  init_notifications();
+  init_config();
   function setChatHandlers(handlers) {
-    onChatOpen = handlers.onOpen;
-    onChatDelete = handlers.onDelete;
+    store.setChatHandlers(handlers);
   }
   function getCurrentCharacter() {
-    return currentCharacter;
+    return store.currentCharacter;
   }
   async function renderChatList(character) {
-    currentCharacter = character;
+    store.setCurrentCharacter(character);
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
     if (!chatsPanel || !chatsList) return;
@@ -1120,19 +1930,31 @@
     } else {
       chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
     }
-    const chats = await api.fetchChatsForCharacter(character.avatar);
-    if (!chats || chats.length === 0) {
-      updateChatCount(0);
+    try {
+      const chats = await api.fetchChatsForCharacter(character.avatar);
+      if (!chats || chats.length === 0) {
+        updateChatCount(0);
+        chatsList.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>\u{1F4AC}</i>
+                    <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                    <div style="font-size: 0.9em; margin-top: 5px;">\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD574\uBCF4\uC138\uC694!</div>
+                </div>
+            `;
+        return;
+      }
+      renderChats(chatsList, chats, character.avatar);
+    } catch (error) {
+      console.error("[ChatList] Failed to load chats:", error);
+      showToast("\uCC44\uD305 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
       chatsList.innerHTML = `
             <div class="lobby-empty-state">
-                <i>\u{1F4AC}</i>
-                <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                <div style="font-size: 0.9em; margin-top: 5px;">\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD574\uBCF4\uC138\uC694!</div>
+                <i>\u26A0\uFE0F</i>
+                <div>\uCC44\uD305 \uBAA9\uB85D \uB85C\uB529 \uC2E4\uD328</div>
+                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uB2E4\uC2DC \uC2DC\uB3C4</button>
             </div>
         `;
-      return;
     }
-    renderChats(chatsList, chats, character.avatar);
   }
   function renderChats(container, rawChats, charAvatar) {
     let chatArray = normalizeChats(rawChats);
@@ -1253,7 +2075,7 @@
       const favBtn = item.querySelector(".chat-fav-btn");
       const delBtn = item.querySelector(".chat-delete-btn");
       createTouchClickHandler(chatContent, () => {
-        if (batchModeActive) {
+        if (store.batchModeActive) {
           const cb = item.querySelector(".chat-select-cb");
           if (cb) {
             cb.checked = !cb.checked;
@@ -1261,11 +2083,12 @@
           }
           return;
         }
-        if (onChatOpen) {
-          onChatOpen({
+        const handlers = store.chatHandlers;
+        if (handlers.onOpen) {
+          handlers.onOpen({
             fileName: item.dataset.fileName,
             charAvatar: item.dataset.charAvatar,
-            charIndex: currentCharacter?.index
+            charIndex: store.currentCharacter?.index
           });
         }
       }, { preventDefault: false });
@@ -1276,8 +2099,9 @@
         item.classList.toggle("is-favorite", isNowFav);
       });
       createTouchClickHandler(delBtn, () => {
-        if (onChatDelete) {
-          onChatDelete({
+        const handlers = store.chatHandlers;
+        if (handlers.onDelete) {
+          handlers.onDelete({
             fileName: item.dataset.fileName,
             charAvatar: item.dataset.charAvatar,
             element: item
@@ -1322,22 +2146,24 @@
   }
   function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
-    if (currentCharacter) {
-      renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+      renderChatList(character);
     }
   }
   function handleSortChange2(sortValue) {
     storage.setSortOption(sortValue);
-    if (currentCharacter) {
-      renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+      renderChatList(character);
     }
   }
   function toggleBatchMode() {
-    batchModeActive = !batchModeActive;
+    const isActive = store.toggleBatchMode();
     const chatsList = document.getElementById("chat-lobby-chats-list");
     const toolbar = document.getElementById("chat-lobby-batch-toolbar");
     const batchBtn = document.getElementById("chat-lobby-batch-mode");
-    if (batchModeActive) {
+    if (isActive) {
       chatsList?.classList.add("batch-mode");
       toolbar?.classList.add("visible");
       batchBtn?.classList.add("active");
@@ -1358,9 +2184,9 @@
     const countSpan = document.getElementById("batch-selected-count");
     if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
   }
-  function executeBatchMove(targetFolder) {
+  async function executeBatchMove(targetFolder) {
     if (!targetFolder) {
-      alert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
+      await showAlert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
     const checked = document.querySelectorAll(".chat-select-cb:checked");
@@ -1373,35 +2199,42 @@
       }
     });
     if (keys.length === 0) {
-      alert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
+      await showAlert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
     storage.moveChatsBatch(keys, targetFolder);
     toggleBatchMode();
-    if (currentCharacter) {
-      renderChatList(currentCharacter);
+    showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+    const character = store.currentCharacter;
+    if (character) {
+      renderChatList(character);
     }
   }
   async function refreshChatList() {
-    if (currentCharacter) {
-      cache.invalidate("chats", currentCharacter.avatar);
-      await renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+      cache.invalidate("chats", character.avatar);
+      await renderChatList(character);
     }
   }
   function closeChatPanel() {
     const chatsPanel = document.getElementById("chat-lobby-chats");
     if (chatsPanel) chatsPanel.classList.remove("visible");
-    currentCharacter = null;
+    store.setCurrentCharacter(null);
   }
 
   // src/handlers/chatHandlers.js
   init_sillyTavern();
   init_cache();
   init_storage();
+  init_store();
+  init_notifications();
+  init_config();
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
     if (!charAvatar || !fileName) {
-      console.error("[ChatLobby] Missing chat data");
+      console.error("[ChatHandlers] Missing chat data");
+      showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
     try {
@@ -1409,46 +2242,54 @@
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === charAvatar);
       if (index === -1) {
-        console.error("[ChatLobby] Character not found");
+        console.error("[ChatHandlers] Character not found");
+        showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
       closeLobby();
       await api.selectCharacterById(index);
       setTimeout(async () => {
         await openChatByFileName(fileName);
-      }, 300);
+      }, CONFIG.timing.menuCloseDelay);
     } catch (error) {
-      console.error("[ChatLobby] Failed to open chat:", error);
+      console.error("[ChatHandlers] Failed to open chat:", error);
+      showToast("\uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
   async function openChatByFileName(fileName) {
     const manageChatsBtn = document.getElementById("option_select_chat");
     if (manageChatsBtn) {
       manageChatsBtn.click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, CONFIG.timing.drawerOpenDelay));
       const chatItems = document.querySelectorAll(".select_chat_block .ch_name, .past_chat_block, .select_chat_block");
       for (const item of chatItems) {
         const itemText = item.textContent || item.dataset?.fileName || "";
         if (itemText.includes(fileName.replace(".jsonl", "")) || itemText.includes(fileName)) {
           item.click();
-          console.log("[ChatLobby] Chat selected:", fileName);
+          console.log("[ChatHandlers] Chat selected:", fileName);
           return;
         }
       }
-      console.log("[ChatLobby] Chat not found in list:", fileName);
+      console.log("[ChatHandlers] Chat not found in list:", fileName);
+      showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
     }
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
     if (!fileName || !charAvatar) {
-      console.error("[ChatLobby] Missing chat data for delete");
+      console.error("[ChatHandlers] Missing chat data for delete");
+      showToast("\uC0AD\uC81C\uD560 \uCC44\uD305 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    if (!confirm(`"${fileName.replace(".jsonl", "")}" \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+    const displayName = fileName.replace(".jsonl", "");
+    const confirmed = await showConfirm(
+      `"${displayName}" \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
 
-\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`)) {
-      return;
-    }
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+      "\uCC44\uD305 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
     try {
       const success = await api.deleteChat(fileName, charAvatar);
       if (success) {
@@ -1461,22 +2302,23 @@
         }
         storage.save(data);
         if (element) {
-          element.style.transition = "opacity 0.3s, transform 0.3s";
+          element.style.transition = `opacity ${CONFIG.timing.animationDuration}ms, transform ${CONFIG.timing.animationDuration}ms`;
           element.style.opacity = "0";
           element.style.transform = "translateX(20px)";
           setTimeout(() => {
             element.remove();
             updateChatCountAfterDelete();
-          }, 300);
+          }, CONFIG.timing.animationDuration);
         } else {
           await refreshChatList();
         }
+        showToast("\uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
       } else {
-        alert("\uCC44\uD305 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+        showToast("\uCC44\uD305 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
       }
     } catch (error) {
-      console.error("[ChatLobby] Error deleting chat:", error);
-      alert("\uCC44\uD305 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.");
+      console.error("[ChatHandlers] Error deleting chat:", error);
+      showToast("\uCC44\uD305 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
   function updateChatCountAfterDelete() {
@@ -1503,44 +2345,62 @@
     const charAvatar = btn?.dataset.charAvatar;
     const hasChats = btn?.dataset.hasChats === "true";
     if (!charIndex || !charAvatar) {
-      console.error("[ChatLobby] No character selected");
+      console.error("[ChatHandlers] No character selected");
+      showToast("\uCE90\uB9AD\uD130\uAC00 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    cache.invalidate("chats", charAvatar);
-    closeLobby();
-    await api.selectCharacterById(parseInt(charIndex));
-    if (hasChats) {
-      setTimeout(() => {
-        const newChatBtn = document.getElementById("option_start_new_chat");
-        if (newChatBtn) newChatBtn.click();
-      }, 300);
+    try {
+      cache.invalidate("chats", charAvatar);
+      closeLobby();
+      await api.selectCharacterById(parseInt(charIndex));
+      if (hasChats) {
+        setTimeout(() => {
+          const newChatBtn = document.getElementById("option_start_new_chat");
+          if (newChatBtn) newChatBtn.click();
+        }, CONFIG.timing.menuCloseDelay);
+      }
+    } catch (error) {
+      console.error("[ChatHandlers] Failed to start new chat:", error);
+      showToast("\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
   async function deleteCharacter() {
     const char = getCurrentCharacter();
-    if (!char) return;
-    if (!confirm(`"${char.name}" \uCE90\uB9AD\uD130\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
-
-\uBAA8\uB4E0 \uCC44\uD305 \uAE30\uB85D\uB3C4 \uD568\uAED8 \uC0AD\uC81C\uB429\uB2C8\uB2E4.
-\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`)) {
+    if (!char) {
+      showToast("\uC0AD\uC81C\uD560 \uCE90\uB9AD\uD130\uAC00 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    const success = await api.deleteCharacter(char.avatar);
-    if (success) {
-      const data = storage.load();
-      const prefix = char.avatar + "_";
-      Object.keys(data.chatAssignments).forEach((key) => {
-        if (key.startsWith(prefix)) {
-          delete data.chatAssignments[key];
-        }
-      });
-      data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
-      storage.save(data);
-      closeChatPanel();
-      const { renderCharacterGrid: renderCharacterGrid2 } = await Promise.resolve().then(() => (init_characterGrid(), characterGrid_exports));
-      await renderCharacterGrid2();
-    } else {
-      alert("\uCE90\uB9AD\uD130 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+    const confirmed = await showConfirm(
+      `"${char.name}" \uCE90\uB9AD\uD130\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uBAA8\uB4E0 \uCC44\uD305 \uAE30\uB85D\uB3C4 \uD568\uAED8 \uC0AD\uC81C\uB429\uB2C8\uB2E4.
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+      "\uCE90\uB9AD\uD130 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    try {
+      const success = await api.deleteCharacter(char.avatar);
+      if (success) {
+        const data = storage.load();
+        const prefix = char.avatar + "_";
+        Object.keys(data.chatAssignments).forEach((key) => {
+          if (key.startsWith(prefix)) {
+            delete data.chatAssignments[key];
+          }
+        });
+        data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
+        storage.save(data);
+        closeChatPanel();
+        const { renderCharacterGrid: renderCharacterGrid2 } = await Promise.resolve().then(() => (init_characterGrid(), characterGrid_exports));
+        await renderCharacterGrid2();
+        showToast(`"${char.name}" \uCE90\uB9AD\uD130\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+      } else {
+        showToast("\uCE90\uB9AD\uD130 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      }
+    } catch (error) {
+      console.error("[ChatHandlers] Failed to delete character:", error);
+      showToast("\uCE90\uB9AD\uD130 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
   function closeLobby() {
@@ -1548,12 +2408,14 @@
     const fab = document.getElementById("chat-lobby-fab");
     if (container) container.style.display = "none";
     if (fab) fab.style.display = "flex";
+    store.setLobbyOpen(false);
     closeChatPanel();
   }
 
   // src/handlers/folderHandlers.js
   init_storage();
   init_textUtils();
+  init_notifications();
   function openFolderModal() {
     const modal = document.getElementById("chat-lobby-folder-modal");
     if (!modal) return;
@@ -1567,85 +2429,125 @@
   function addFolder() {
     const input = document.getElementById("new-folder-name");
     const name = input?.value.trim();
-    if (!name) return;
-    storage.addFolder(name);
-    input.value = "";
-    refreshFolderList();
-    updateFolderDropdowns();
+    if (!name) {
+      showToast("\uD3F4\uB354 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.", "warning");
+      return;
+    }
+    try {
+      storage.addFolder(name);
+      input.value = "";
+      refreshFolderList();
+      updateFolderDropdowns();
+      showToast(`"${name}" \uD3F4\uB354\uAC00 \uC0DD\uC131\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+    } catch (error) {
+      console.error("[FolderHandlers] Failed to add folder:", error);
+      showToast("\uD3F4\uB354 \uCD94\uAC00\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    }
+  }
+  async function deleteFolder(folderId, folderName) {
+    const confirmed = await showConfirm(
+      `"${folderName}" \uD3F4\uB354\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uD3F4\uB354 \uC548\uC758 \uCC44\uD305\uB4E4\uC740 \uBBF8\uBD84\uB958\uB85C \uC774\uB3D9\uB429\uB2C8\uB2E4.`,
+      "\uD3F4\uB354 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    try {
+      storage.deleteFolder(folderId);
+      refreshFolderList();
+      updateFolderDropdowns();
+      refreshChatList();
+      showToast(`"${folderName}" \uD3F4\uB354\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+    } catch (error) {
+      console.error("[FolderHandlers] Failed to delete folder:", error);
+      showToast("\uD3F4\uB354 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    }
+  }
+  async function renameFolder(folderId, currentName) {
+    const newName = await showPrompt("\uC0C8 \uD3F4\uB354 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694:", "\uD3F4\uB354 \uC774\uB984 \uBCC0\uACBD", currentName);
+    if (!newName || newName === currentName) return;
+    try {
+      storage.renameFolder(folderId, newName);
+      refreshFolderList();
+      updateFolderDropdowns();
+      showToast(`\uD3F4\uB354 \uC774\uB984\uC774 "${newName}"\uC73C\uB85C \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+    } catch (error) {
+      console.error("[FolderHandlers] Failed to rename folder:", error);
+      showToast("\uD3F4\uB354 \uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    }
   }
   function refreshFolderList() {
     const container = document.getElementById("folder-list");
     if (!container) return;
-    const data = storage.load();
-    const sorted = [...data.folders].sort((a, b) => a.order - b.order);
-    let html = "";
-    sorted.forEach((f) => {
-      const isSystem = f.isSystem ? "system" : "";
-      const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}">\u{1F5D1}\uFE0F</button>`;
-      const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}">\u270F\uFE0F</button>`;
-      let count = 0;
-      if (f.id === "favorites") {
-        count = data.favorites.length;
-      } else {
-        count = Object.values(data.chatAssignments).filter((v) => v === f.id).length;
-      }
-      html += `
-        <div class="folder-item ${isSystem}" data-id="${f.id}">
-            <span class="folder-name">${escapeHtml(f.name)}</span>
-            <span class="folder-count">${count}\uAC1C</span>
-            ${editBtn}
-            ${deleteBtn}
-        </div>`;
-    });
-    container.innerHTML = html;
-    bindFolderEvents(container);
+    try {
+      const data = storage.load();
+      const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+      let html = "";
+      sorted.forEach((f) => {
+        const isSystem = f.isSystem ? "system" : "";
+        const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}" data-name="${escapeHtml(f.name)}">\u{1F5D1}\uFE0F</button>`;
+        const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}" data-name="${escapeHtml(f.name)}">\u270F\uFE0F</button>`;
+        let count = 0;
+        if (f.id === "favorites") {
+          count = data.favorites.length;
+        } else {
+          count = Object.values(data.chatAssignments).filter((v) => v === f.id).length;
+        }
+        html += `
+            <div class="folder-item ${isSystem}" data-id="${f.id}">
+                <span class="folder-name">${escapeHtml(f.name)}</span>
+                <span class="folder-count">${count}\uAC1C</span>
+                ${editBtn}
+                ${deleteBtn}
+            </div>`;
+      });
+      container.innerHTML = html;
+      bindFolderEvents(container);
+    } catch (error) {
+      console.error("[FolderHandlers] Failed to refresh folder list:", error);
+      showToast("\uD3F4\uB354 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    }
   }
   function bindFolderEvents(container) {
     container.querySelectorAll(".folder-delete-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const folderId = btn.dataset.id;
-        if (confirm("\uC774 \uD3F4\uB354\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?\n\uD3F4\uB354 \uC548\uC758 \uCC44\uD305\uB4E4\uC740 \uBBF8\uBD84\uB958\uB85C \uC774\uB3D9\uB429\uB2C8\uB2E4.")) {
-          storage.deleteFolder(folderId);
-          refreshFolderList();
-          updateFolderDropdowns();
-          refreshChatList();
-        }
+        const folderName = btn.dataset.name;
+        deleteFolder(folderId, folderName);
       });
     });
     container.querySelectorAll(".folder-edit-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const folderId = btn.dataset.id;
-        const folderItem = btn.closest(".folder-item");
-        const nameSpan = folderItem.querySelector(".folder-name");
-        const currentName = nameSpan.textContent;
-        const newName = prompt("\uC0C8 \uD3F4\uB354 \uC774\uB984:", currentName);
-        if (newName && newName.trim() && newName !== currentName) {
-          storage.renameFolder(folderId, newName.trim());
-          refreshFolderList();
-          updateFolderDropdowns();
-        }
+        const currentName = btn.dataset.name;
+        renameFolder(folderId, currentName);
       });
     });
   }
   function updateFolderDropdowns() {
-    const data = storage.load();
-    const sorted = [...data.folders].sort((a, b) => a.order - b.order);
-    const filterSelect = document.getElementById("chat-lobby-folder-filter");
-    if (filterSelect) {
-      const currentValue = filterSelect.value;
-      let html = '<option value="all">\u{1F4C1} \uC804\uCCB4</option>';
-      html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
-      sorted.forEach((f) => {
-        if (f.id !== "favorites") {
-          html += `<option value="${f.id}">${f.name}</option>`;
-        }
-      });
-      filterSelect.innerHTML = html;
-      filterSelect.value = currentValue;
-    }
-    const batchSelect = document.getElementById("batch-move-folder");
-    if (batchSelect) {
-      batchSelect.innerHTML = getBatchFoldersHTML();
+    try {
+      const data = storage.load();
+      const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+      const filterSelect = document.getElementById("chat-lobby-folder-filter");
+      if (filterSelect) {
+        const currentValue = filterSelect.value;
+        let html = '<option value="all">\u{1F4C1} \uC804\uCCB4</option>';
+        html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
+        sorted.forEach((f) => {
+          if (f.id !== "favorites") {
+            html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
+          }
+        });
+        filterSelect.innerHTML = html;
+        filterSelect.value = currentValue;
+      }
+      const batchSelect = document.getElementById("batch-move-folder");
+      if (batchSelect) {
+        batchSelect.innerHTML = getBatchFoldersHTML();
+      }
+    } catch (error) {
+      console.error("[FolderHandlers] Failed to update dropdowns:", error);
     }
   }
 
@@ -1663,7 +2565,7 @@
         fab.style.display = "flex";
       }
       setupHandlers();
-      bindEvents();
+      setupEventDelegation();
       startBackgroundPreload();
       addLobbyToOptionsMenu();
       console.log("[ChatLobby] Extension initialized");
@@ -1691,7 +2593,7 @@
           const recent = [...characters].sort((a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0)).slice(0, 5);
           await cache.preloadRecentChats(api, recent);
         }
-      }, 2e3);
+      }, CONFIG.timing.preloadDelay);
     }
     function openLobby() {
       const overlay = document.getElementById("chat-lobby-overlay");
@@ -1701,8 +2603,8 @@
         overlay.style.display = "flex";
         if (container) container.style.display = "flex";
         if (fab) fab.style.display = "none";
-        const batchBtn = document.getElementById("chat-lobby-batch-mode");
-        if (batchBtn?.classList.contains("active")) {
+        store.setLobbyOpen(true);
+        if (store.batchModeActive) {
           toggleBatchMode();
         }
         renderPersonaBar();
@@ -1715,6 +2617,8 @@
       const fab = document.getElementById("chat-lobby-fab");
       if (container) container.style.display = "none";
       if (fab) fab.style.display = "flex";
+      store.setLobbyOpen(false);
+      store.reset();
       closeChatPanel();
     }
     window.chatLobbyRefresh = async function() {
@@ -1722,51 +2626,101 @@
       await renderPersonaBar();
       await renderCharacterGrid();
     };
-    function bindEvents() {
-      document.getElementById("chat-lobby-fab")?.addEventListener("click", openLobby);
-      document.getElementById("chat-lobby-close")?.addEventListener("click", closeLobby2);
-      document.getElementById("chat-lobby-chats-back")?.addEventListener("click", () => {
-        if (isMobile()) {
-          closeChatPanel();
-        }
-      });
-      document.getElementById("chat-lobby-refresh")?.addEventListener("click", async () => {
-        cache.invalidateAll();
-        await renderPersonaBar();
-        await renderCharacterGrid();
-      });
-      document.getElementById("chat-lobby-new-chat")?.addEventListener("click", startNewChat);
-      document.getElementById("chat-lobby-delete-char")?.addEventListener("click", deleteCharacter);
-      document.getElementById("chat-lobby-import-char")?.addEventListener("click", () => {
-        closeLobby2();
-        setTimeout(() => {
-          const importBtn = document.getElementById("character_import_button");
-          if (importBtn) importBtn.click();
-        }, 300);
-      });
-      document.getElementById("chat-lobby-add-persona")?.addEventListener("click", () => {
-        closeLobby2();
-        setTimeout(() => {
-          const personaDrawer = document.getElementById("persona-management-button");
-          const drawerIcon = personaDrawer?.querySelector(".drawer-icon");
-          if (drawerIcon) drawerIcon.click();
-          setTimeout(() => {
-            const createBtn = document.getElementById("create_dummy_persona");
-            if (createBtn) createBtn.click();
-          }, 500);
-        }, 300);
-      });
-      document.getElementById("chat-panel-avatar")?.addEventListener("click", () => {
-        closeLobby2();
-        setTimeout(() => {
-          const charInfoBtn = document.getElementById("option_settings");
-          if (charInfoBtn) charInfoBtn.click();
-        }, 300);
-      });
+    function setupEventDelegation() {
+      document.body.addEventListener("click", handleBodyClick);
+      document.addEventListener("keydown", handleKeydown);
       const searchInput = document.getElementById("chat-lobby-search-input");
-      searchInput?.addEventListener("input", (e) => {
-        handleSearch(e.target.value);
-      });
+      if (searchInput) {
+        searchInput.addEventListener("input", (e) => handleSearch(e.target.value));
+      }
+      bindDropdownEvents();
+    }
+    function handleBodyClick(e) {
+      const target = e.target;
+      const actionEl = target.closest("[data-action]");
+      if (actionEl) {
+        handleAction(actionEl.dataset.action, actionEl, e);
+        return;
+      }
+      const id = target.id || target.closest("[id]")?.id;
+      switch (id) {
+        case "chat-lobby-fab":
+          openLobby();
+          break;
+        case "chat-lobby-close":
+          closeLobby2();
+          break;
+        case "chat-lobby-chats-back":
+          if (isMobile()) closeChatPanel();
+          break;
+        case "chat-lobby-refresh":
+          handleRefresh();
+          break;
+        case "chat-lobby-new-chat":
+          startNewChat();
+          break;
+        case "chat-lobby-delete-char":
+          deleteCharacter();
+          break;
+        case "chat-lobby-import-char":
+          handleImportCharacter();
+          break;
+        case "chat-lobby-add-persona":
+          handleAddPersona();
+          break;
+        case "chat-panel-avatar":
+          handleOpenCharSettings();
+          break;
+        case "chat-lobby-batch-mode":
+          toggleBatchMode();
+          break;
+        case "batch-move-btn":
+          handleBatchMove();
+          break;
+        case "batch-cancel-btn":
+          toggleBatchMode();
+          break;
+        case "chat-lobby-folder-manage":
+          openFolderModal();
+          break;
+        case "folder-modal-close":
+          closeFolderModal();
+          break;
+        case "add-folder-btn":
+          addFolder();
+          break;
+      }
+    }
+    function handleAction(action, el, e) {
+      switch (action) {
+        case "open-lobby":
+          openLobby();
+          break;
+        case "close-lobby":
+          closeLobby2();
+          break;
+        case "refresh":
+          handleRefresh();
+          break;
+        case "toggle-batch":
+          toggleBatchMode();
+          break;
+      }
+    }
+    function handleKeydown(e) {
+      if (e.key === "Escape") {
+        const folderModal = document.getElementById("chat-lobby-folder-modal");
+        if (folderModal?.style.display === "flex") {
+          closeFolderModal();
+        } else if (store.isLobbyOpen) {
+          closeLobby2();
+        }
+      }
+      if (e.key === "Enter" && e.target.id === "new-folder-name") {
+        addFolder();
+      }
+    }
+    function bindDropdownEvents() {
       document.getElementById("chat-lobby-char-sort")?.addEventListener("change", (e) => {
         handleSortChange(e.target.value);
       });
@@ -1776,41 +2730,51 @@
       document.getElementById("chat-lobby-chat-sort")?.addEventListener("change", (e) => {
         handleSortChange2(e.target.value);
       });
-      document.getElementById("chat-lobby-batch-mode")?.addEventListener("click", toggleBatchMode);
-      document.getElementById("batch-move-btn")?.addEventListener("click", () => {
-        const folder = document.getElementById("batch-move-folder")?.value;
-        executeBatchMove(folder);
-      });
-      document.getElementById("batch-cancel-btn")?.addEventListener("click", toggleBatchMode);
       document.getElementById("chat-lobby-chats-list")?.addEventListener("change", (e) => {
         if (e.target.classList.contains("chat-select-cb")) {
           updateBatchCount();
         }
       });
-      document.getElementById("chat-lobby-folder-manage")?.addEventListener("click", openFolderModal);
-      document.getElementById("folder-modal-close")?.addEventListener("click", closeFolderModal);
-      document.getElementById("add-folder-btn")?.addEventListener("click", addFolder);
-      document.getElementById("new-folder-name")?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") addFolder();
-      });
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-          const folderModal = document.getElementById("chat-lobby-folder-modal");
-          if (folderModal?.style.display === "flex") {
-            closeFolderModal();
-          } else {
-            const overlay = document.getElementById("chat-lobby-overlay");
-            if (overlay?.style.display !== "none") {
-              closeLobby2();
-            }
-          }
-        }
-      });
+    }
+    async function handleRefresh() {
+      cache.invalidateAll();
+      await renderPersonaBar();
+      await renderCharacterGrid();
+    }
+    function handleImportCharacter() {
+      closeLobby2();
+      setTimeout(() => {
+        const importBtn = document.getElementById("character_import_button");
+        if (importBtn) importBtn.click();
+      }, CONFIG.timing.menuCloseDelay);
+    }
+    function handleAddPersona() {
+      closeLobby2();
+      setTimeout(() => {
+        const personaDrawer = document.getElementById("persona-management-button");
+        const drawerIcon = personaDrawer?.querySelector(".drawer-icon");
+        if (drawerIcon) drawerIcon.click();
+        setTimeout(() => {
+          const createBtn = document.getElementById("create_dummy_persona");
+          if (createBtn) createBtn.click();
+        }, CONFIG.timing.drawerOpenDelay);
+      }, CONFIG.timing.menuCloseDelay);
+    }
+    function handleOpenCharSettings() {
+      closeLobby2();
+      setTimeout(() => {
+        const charInfoBtn = document.getElementById("option_settings");
+        if (charInfoBtn) charInfoBtn.click();
+      }, CONFIG.timing.menuCloseDelay);
+    }
+    function handleBatchMove() {
+      const folder = document.getElementById("batch-move-folder")?.value;
+      executeBatchMove(folder);
     }
     function addLobbyToOptionsMenu() {
       const optionsMenu = document.getElementById("options");
       if (!optionsMenu) {
-        setTimeout(addLobbyToOptionsMenu, 1e3);
+        setTimeout(addLobbyToOptionsMenu, CONFIG.timing.initDelay);
         return;
       }
       if (document.getElementById("option_chat_lobby")) return;
@@ -1829,9 +2793,9 @@
       console.log("[ChatLobby] Added to options menu");
     }
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => setTimeout(init, 1e3));
+      document.addEventListener("DOMContentLoaded", () => setTimeout(init, CONFIG.timing.initDelay));
     } else {
-      setTimeout(init, 1e3);
+      setTimeout(init, CONFIG.timing.initDelay);
     }
   })();
 })();

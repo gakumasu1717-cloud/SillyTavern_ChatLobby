@@ -4,9 +4,23 @@
 
 import { CONFIG } from '../config.js';
 
+/**
+ * @typedef {'chats' | 'chatCounts' | 'personas' | 'characters'} CacheType
+ */
+
+/**
+ * 메모리 캐시 관리 클래스
+ * - 타입별 캐시 저장소
+ * - 캐시 만료 관리
+ * - 중복 요청 방지
+ * - 백그라운드 프리로딩
+ */
 class CacheManager {
     constructor() {
-        // 캐시 저장소
+        /**
+         * 캐시 저장소
+         * @type {{ chats: Map, chatCounts: Map, personas: Array|null, characters: Array|null }}
+         */
         this.stores = {
             chats: new Map(),        // 캐릭터별 채팅 목록
             chatCounts: new Map(),   // 캐릭터별 채팅 수
@@ -14,21 +28,30 @@ class CacheManager {
             characters: null,        // 캐릭터 목록
         };
         
-        // 캐시 타임스탬프
+        /**
+         * 캐시 타임스탬프
+         * @type {{ chats: Map, chatCounts: Map, personas: number, characters: number }}
+         */
         this.timestamps = {
             chats: new Map(),
-            chatCounts: 0,
+            chatCounts: new Map(),
             personas: 0,
             characters: 0,
         };
         
-        // 프리로딩 상태
+        /**
+         * 프리로딩 완료 상태
+         * @type {{ personas: boolean, characters: boolean }}
+         */
         this.preloadStatus = {
             personas: false,
             characters: false,
         };
         
-        // 로딩 중인 Promise 저장 (중복 요청 방지)
+        /**
+         * 로딩 중인 Promise (중복 요청 방지)
+         * @type {Map<string, Promise>}
+         */
         this.pendingRequests = new Map();
     }
     
@@ -36,6 +59,12 @@ class CacheManager {
     // 범용 캐시 메서드
     // ============================================
     
+    /**
+     * 캐시 유효성 확인
+     * @param {CacheType} type - 캐시 타입
+     * @param {string|null} [key=null] - 서브 키 (chats, chatCounts용)
+     * @returns {boolean}
+     */
     isValid(type, key = null) {
         const duration = CONFIG.cache[`${type}Duration`];
         const now = Date.now();
@@ -50,6 +79,12 @@ class CacheManager {
         }
     }
     
+    /**
+     * 캐시 데이터 가져오기
+     * @param {CacheType} type - 캐시 타입
+     * @param {string|null} [key=null] - 서브 키
+     * @returns {*}
+     */
     get(type, key = null) {
         if (key !== null) {
             return this.stores[type].get(key);
@@ -57,6 +92,12 @@ class CacheManager {
         return this.stores[type];
     }
     
+    /**
+     * 캐시 데이터 저장
+     * @param {CacheType} type - 캐시 타입
+     * @param {*} data - 저장할 데이터
+     * @param {string|null} [key=null] - 서브 키
+     */
     set(type, data, key = null) {
         const now = Date.now();
         
@@ -69,6 +110,11 @@ class CacheManager {
         }
     }
     
+    /**
+     * 캐시 무효화
+     * @param {CacheType} [type] - 캐시 타입 (없으면 전체)
+     * @param {string|null} [key=null] - 서브 키
+     */
     invalidate(type, key = null) {
         if (key !== null) {
             this.stores[type].delete(key);
@@ -84,6 +130,9 @@ class CacheManager {
         }
     }
     
+    /**
+     * 전체 캐시 무효화
+     */
     invalidateAll() {
         Object.keys(this.stores).forEach(type => {
             this.invalidate(type);
@@ -91,9 +140,16 @@ class CacheManager {
     }
     
     // ============================================
-    // 중복 요청 방지 (같은 요청이 진행 중이면 그 Promise 반환)
+    // 중복 요청 방지
     // ============================================
     
+    /**
+     * 중복 요청 방지 fetch
+     * 같은 키로 진행 중인 요청이 있으면 그 Promise 반환
+     * @param {string} key - 요청 식별 키
+     * @param {() => Promise<*>} fetchFn - fetch 함수
+     * @returns {Promise<*>}
+     */
     async getOrFetch(key, fetchFn) {
         // 이미 진행 중인 요청이 있으면 그걸 반환
         if (this.pendingRequests.has(key)) {
@@ -113,6 +169,11 @@ class CacheManager {
     // 프리로딩 (백그라운드에서 미리 로딩)
     // ============================================
     
+    /**
+     * 모든 데이터 프리로딩
+     * @param {Object} api - API 인스턴스
+     * @returns {Promise<void>}
+     */
     async preloadAll(api) {
         console.log('[Cache] Starting preload...');
         
@@ -141,6 +202,11 @@ class CacheManager {
         console.log('[Cache] Preload complete');
     }
     
+    /**
+     * 페르소나 프리로딩
+     * @param {Object} api
+     * @returns {Promise<void>}
+     */
     async preloadPersonas(api) {
         if (this.isValid('personas')) return;
         
@@ -152,6 +218,11 @@ class CacheManager {
         }
     }
     
+    /**
+     * 캐릭터 프리로딩
+     * @param {Object} api
+     * @returns {Promise<void>}
+     */
     async preloadCharacters(api) {
         if (this.isValid('characters')) return;
         
@@ -163,20 +234,28 @@ class CacheManager {
         }
     }
     
-    // 자주 사용하는 캐릭터의 채팅 목록도 프리로딩
+    /**
+     * 최근 캐릭터들의 채팅 프리로딩
+     * @param {Object} api
+     * @param {Array} recentCharacters - 최근 캐릭터 배열
+     * @returns {Promise<void>}
+     */
     async preloadRecentChats(api, recentCharacters) {
-        const promises = recentCharacters.slice(0, 5).map(async (char) => {
-            if (!this.isValid('chats', char.avatar)) {
-                try {
-                    const chats = await api.fetchChatsForCharacter(char.avatar);
-                    this.set('chats', chats, char.avatar);
-                } catch (e) {
-                    // 무시
-                }
+        console.log('[Cache] Preloading recent chats for', recentCharacters.length, 'characters');
+        
+        const promises = recentCharacters.map(async (char) => {
+            if (this.isValid('chats', char.avatar)) return;
+            
+            try {
+                const chats = await api.fetchChatsForCharacter(char.avatar);
+                this.set('chats', chats, char.avatar);
+            } catch (e) {
+                console.error('[Cache] Failed to preload chats for', char.name, e);
             }
         });
         
         await Promise.all(promises);
+        console.log('[Cache] Recent chats preload complete');
     }
 }
 

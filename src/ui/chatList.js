@@ -5,31 +5,44 @@
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
+import { store } from '../data/store.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { formatDate, getTimestamp } from '../utils/dateUtils.js';
 import { createTouchClickHandler } from '../utils/eventHelpers.js';
+import { showToast, showAlert } from './notifications.js';
+import { CONFIG } from '../config.js';
 
-// 현재 선택된 캐릭터
-let currentCharacter = null;
+// ============================================
+// 초기화
+// ============================================
 
-// 배치 모드 상태
-let batchModeActive = false;
-
-// 외부 핸들러
-let onChatOpen = null;
-let onChatDelete = null;
-
+/**
+ * 채팅 핸들러 설정
+ * @param {{ onOpen: Function, onDelete: Function }} handlers
+ */
 export function setChatHandlers(handlers) {
-    onChatOpen = handlers.onOpen;
-    onChatDelete = handlers.onDelete;
+    store.setChatHandlers(handlers);
 }
 
+/**
+ * 현재 선택된 캐릭터 반환
+ * @returns {Object|null}
+ */
 export function getCurrentCharacter() {
-    return currentCharacter;
+    return store.currentCharacter;
 }
 
+// ============================================
+// 채팅 목록 렌더링
+// ============================================
+
+/**
+ * 채팅 목록 렌더링
+ * @param {Object} character - 캐릭터 정보
+ * @returns {Promise<void>}
+ */
 export async function renderChatList(character) {
-    currentCharacter = character;
+    store.setCurrentCharacter(character);
     
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
@@ -49,24 +62,42 @@ export async function renderChatList(character) {
         chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
     }
     
-    // 최신 데이터 가져오기
-    const chats = await api.fetchChatsForCharacter(character.avatar);
-    
-    if (!chats || chats.length === 0) {
-        updateChatCount(0);
+    try {
+        // 최신 데이터 가져오기
+        const chats = await api.fetchChatsForCharacter(character.avatar);
+        
+        if (!chats || chats.length === 0) {
+            updateChatCount(0);
+            chatsList.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>💬</i>
+                    <div>채팅 기록이 없습니다</div>
+                    <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
+                </div>
+            `;
+            return;
+        }
+        
+        renderChats(chatsList, chats, character.avatar);
+    } catch (error) {
+        console.error('[ChatList] Failed to load chats:', error);
+        showToast('채팅 목록을 불러오지 못했습니다.', 'error');
         chatsList.innerHTML = `
             <div class="lobby-empty-state">
-                <i>💬</i>
-                <div>채팅 기록이 없습니다</div>
-                <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
+                <i>⚠️</i>
+                <div>채팅 목록 로딩 실패</div>
+                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">다시 시도</button>
             </div>
         `;
-        return;
     }
-    
-    renderChats(chatsList, chats, character.avatar);
 }
 
+/**
+ * 채팅 목록 내부 렌더링
+ * @param {HTMLElement} container
+ * @param {Array|Object} rawChats
+ * @param {string} charAvatar
+ */
 function renderChats(container, rawChats, charAvatar) {
     // 배열로 변환
     let chatArray = normalizeChats(rawChats);
@@ -107,6 +138,11 @@ function renderChats(container, rawChats, charAvatar) {
     syncDropdowns(filterFolder, sortOption);
 }
 
+/**
+ * 채팅 데이터 정규화
+ * @param {Array|Object} chats
+ * @returns {Array}
+ */
 function normalizeChats(chats) {
     if (Array.isArray(chats)) return chats;
     
@@ -122,6 +158,11 @@ function normalizeChats(chats) {
     return [];
 }
 
+/**
+ * 유효한 채팅만 필터링
+ * @param {Array} chats
+ * @returns {Array}
+ */
 function filterValidChats(chats) {
     return chats.filter(chat => {
         const fileName = chat?.file_name || chat?.fileName || '';
@@ -134,6 +175,13 @@ function filterValidChats(chats) {
     });
 }
 
+/**
+ * 폴더별 필터링
+ * @param {Array} chats
+ * @param {string} charAvatar
+ * @param {string} filterFolder
+ * @returns {Array}
+ */
 function filterByFolder(chats, charAvatar, filterFolder) {
     const data = storage.load();
     
@@ -150,6 +198,13 @@ function filterByFolder(chats, charAvatar, filterFolder) {
     });
 }
 
+/**
+ * 채팅 정렬
+ * @param {Array} chats
+ * @param {string} charAvatar
+ * @param {string} sortOption
+ * @returns {Array}
+ */
 function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
     
@@ -179,6 +234,13 @@ function sortChats(chats, charAvatar, sortOption) {
     });
 }
 
+/**
+ * 채팅 아이템 HTML 생성
+ * @param {Object} chat
+ * @param {string} charAvatar
+ * @param {number} index
+ * @returns {string}
+ */
 function renderChatItem(chat, charAvatar, index) {
     const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
     const displayName = fileName.replace('.jsonl', '');
@@ -222,6 +284,11 @@ function renderChatItem(chat, charAvatar, index) {
     `;
 }
 
+/**
+ * 채팅 아이템 이벤트 바인딩
+ * @param {HTMLElement} container
+ * @param {string} charAvatar
+ */
 function bindChatEvents(container, charAvatar) {
     container.querySelectorAll('.lobby-chat-item').forEach(item => {
         const chatContent = item.querySelector('.chat-content');
@@ -230,7 +297,7 @@ function bindChatEvents(container, charAvatar) {
         
         // 채팅 열기
         createTouchClickHandler(chatContent, () => {
-            if (batchModeActive) {
+            if (store.batchModeActive) {
                 const cb = item.querySelector('.chat-select-cb');
                 if (cb) {
                     cb.checked = !cb.checked;
@@ -239,11 +306,12 @@ function bindChatEvents(container, charAvatar) {
                 return;
             }
             
-            if (onChatOpen) {
-                onChatOpen({
+            const handlers = store.chatHandlers;
+            if (handlers.onOpen) {
+                handlers.onOpen({
                     fileName: item.dataset.fileName,
                     charAvatar: item.dataset.charAvatar,
-                    charIndex: currentCharacter?.index
+                    charIndex: store.currentCharacter?.index
                 });
             }
         }, { preventDefault: false });
@@ -258,8 +326,9 @@ function bindChatEvents(container, charAvatar) {
         
         // 삭제
         createTouchClickHandler(delBtn, () => {
-            if (onChatDelete) {
-                onChatDelete({
+            const handlers = store.chatHandlers;
+            if (handlers.onDelete) {
+                handlers.onDelete({
                     fileName: item.dataset.fileName,
                     charAvatar: item.dataset.charAvatar,
                     element: item
@@ -273,6 +342,10 @@ function bindChatEvents(container, charAvatar) {
 // UI 헬퍼
 // ============================================
 
+/**
+ * 채팅 헤더 업데이트
+ * @param {Object} character
+ */
 function updateChatHeader(character) {
     const avatarImg = document.getElementById('chat-panel-avatar');
     const nameEl = document.getElementById('chat-panel-name');
@@ -294,6 +367,10 @@ function updateChatHeader(character) {
     document.getElementById('chat-panel-count').textContent = '채팅 로딩 중...';
 }
 
+/**
+ * 채팅 수 업데이트
+ * @param {number} count
+ */
 function updateChatCount(count) {
     const el = document.getElementById('chat-panel-count');
     if (el) el.textContent = count > 0 ? `${count}개 채팅` : '채팅 없음';
@@ -302,11 +379,20 @@ function updateChatCount(count) {
     if (newChatBtn) newChatBtn.dataset.hasChats = count > 0 ? 'true' : 'false';
 }
 
+/**
+ * 폴더 바 표시/숨김
+ * @param {boolean} visible
+ */
 function showFolderBar(visible) {
     const bar = document.getElementById('chat-lobby-folder-bar');
     if (bar) bar.style.display = visible ? 'flex' : 'none';
 }
 
+/**
+ * 드롭다운 동기화
+ * @param {string} filterValue
+ * @param {string} sortValue
+ */
 function syncDropdowns(filterValue, sortValue) {
     const filterSelect = document.getElementById('chat-lobby-folder-filter');
     const sortSelect = document.getElementById('chat-lobby-chat-sort');
@@ -319,17 +405,27 @@ function syncDropdowns(filterValue, sortValue) {
 // 필터/정렬 변경 핸들러
 // ============================================
 
+/**
+ * 폴더 필터 변경
+ * @param {string} filterValue
+ */
 export function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
-    if (currentCharacter) {
-        renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+        renderChatList(character);
     }
 }
 
+/**
+ * 정렬 옵션 변경
+ * @param {string} sortValue
+ */
 export function handleSortChange(sortValue) {
     storage.setSortOption(sortValue);
-    if (currentCharacter) {
-        renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+        renderChatList(character);
     }
 }
 
@@ -337,14 +433,17 @@ export function handleSortChange(sortValue) {
 // 배치 모드
 // ============================================
 
+/**
+ * 배치 모드 토글
+ */
 export function toggleBatchMode() {
-    batchModeActive = !batchModeActive;
+    const isActive = store.toggleBatchMode();
     
     const chatsList = document.getElementById('chat-lobby-chats-list');
     const toolbar = document.getElementById('chat-lobby-batch-toolbar');
     const batchBtn = document.getElementById('chat-lobby-batch-mode');
     
-    if (batchModeActive) {
+    if (isActive) {
         chatsList?.classList.add('batch-mode');
         toolbar?.classList.add('visible');
         batchBtn?.classList.add('active');
@@ -362,15 +461,22 @@ export function toggleBatchMode() {
     updateBatchCount();
 }
 
+/**
+ * 배치 선택 수 업데이트
+ */
 export function updateBatchCount() {
     const count = document.querySelectorAll('.chat-select-cb:checked').length;
     const countSpan = document.getElementById('batch-selected-count');
     if (countSpan) countSpan.textContent = `${count}개 선택`;
 }
 
-export function executeBatchMove(targetFolder) {
+/**
+ * 배치 이동 실행
+ * @param {string} targetFolder
+ */
+export async function executeBatchMove(targetFolder) {
     if (!targetFolder) {
-        alert('이동할 폴더를 선택하세요.');
+        await showAlert('이동할 폴더를 선택하세요.');
         return;
     }
     
@@ -386,33 +492,49 @@ export function executeBatchMove(targetFolder) {
     });
     
     if (keys.length === 0) {
-        alert('이동할 채팅을 선택하세요.');
+        await showAlert('이동할 채팅을 선택하세요.');
         return;
     }
     
     storage.moveChatsBatch(keys, targetFolder);
     toggleBatchMode();
+    showToast(`${keys.length}개 채팅이 이동되었습니다.`, 'success');
     
-    if (currentCharacter) {
-        renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+        renderChatList(character);
     }
 }
 
+/**
+ * 배치 모드 활성화 여부
+ * @returns {boolean}
+ */
 export function isBatchMode() {
-    return batchModeActive;
+    return store.batchModeActive;
 }
 
-// 채팅 목록 새로고침
+// ============================================
+// 채팅 목록 관리
+// ============================================
+
+/**
+ * 채팅 목록 새로고침
+ * @returns {Promise<void>}
+ */
 export async function refreshChatList() {
-    if (currentCharacter) {
-        cache.invalidate('chats', currentCharacter.avatar);
-        await renderChatList(currentCharacter);
+    const character = store.currentCharacter;
+    if (character) {
+        cache.invalidate('chats', character.avatar);
+        await renderChatList(character);
     }
 }
 
-// 채팅 패널 닫기
+/**
+ * 채팅 패널 닫기
+ */
 export function closeChatPanel() {
     const chatsPanel = document.getElementById('chat-lobby-chats');
     if (chatsPanel) chatsPanel.classList.remove('visible');
-    currentCharacter = null;
+    store.setCurrentCharacter(null);
 }

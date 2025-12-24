@@ -4,12 +4,30 @@
 
 import { CONFIG, DEFAULT_DATA } from '../config.js';
 
+/**
+ * @typedef {Object} LobbyData
+ * @property {Array<{id: string, name: string, isSystem: boolean, order: number}>} folders
+ * @property {Object<string, string>} chatAssignments - 채팅 키 → 폴더 ID
+ * @property {string[]} favorites - 즐겨찾기 채팅 키 목록
+ * @property {string} sortOption - 채팅 정렬 옵션
+ * @property {string} filterFolder - 폴더 필터
+ * @property {string[]} collapsedFolders - 접힌 폴더 목록
+ * @property {string} charSortOption - 캐릭터 정렬 옵션
+ */
+
+/**
+ * localStorage 관리 클래스
+ */
 class StorageManager {
     constructor() {
+        /** @type {LobbyData|null} */
         this._data = null; // 메모리 캐시
     }
     
-    // 데이터 로드 (메모리 캐시 우선)
+    /**
+     * 데이터 로드 (메모리 캐시 우선)
+     * @returns {LobbyData}
+     */
     load() {
         if (this._data) return this._data;
         
@@ -28,7 +46,10 @@ class StorageManager {
         return this._data;
     }
     
-    // 데이터 저장
+    /**
+     * 데이터 저장
+     * @param {LobbyData} data
+     */
     save(data) {
         try {
             this._data = data;
@@ -38,7 +59,11 @@ class StorageManager {
         }
     }
     
-    // 데이터 업데이트 (load → update → save 한번에)
+    /**
+     * 데이터 업데이트 (load → update → save 한번에)
+     * @param {(data: LobbyData) => *} updater - 업데이트 함수
+     * @returns {*} updater의 반환값
+     */
     update(updater) {
         const data = this.load();
         const result = updater(data);
@@ -46,7 +71,9 @@ class StorageManager {
         return result;
     }
     
-    // 캐시 초기화 (다시 localStorage에서 읽게)
+    /**
+     * 캐시 초기화 (다시 localStorage에서 읽게)
+     */
     invalidate() {
         this._data = null;
     }
@@ -55,15 +82,33 @@ class StorageManager {
     // 헬퍼 메서드
     // ============================================
     
+    /**
+     * 채팅 키 생성
+     * @param {string} charAvatar - 캐릭터 아바타
+     * @param {string} chatFileName - 채팅 파일명
+     * @returns {string}
+     */
     getChatKey(charAvatar, chatFileName) {
         return `${charAvatar}_${chatFileName}`;
     }
     
+    // ============================================
     // 폴더 관련
+    // ============================================
+    
+    /**
+     * 폴더 목록 가져오기
+     * @returns {Array}
+     */
     getFolders() {
         return this.load().folders;
     }
     
+    /**
+     * 폴더 추가
+     * @param {string} name - 폴더 이름
+     * @returns {string} 생성된 폴더 ID
+     */
     addFolder(name) {
         return this.update((data) => {
             const id = 'folder_' + Date.now();
@@ -78,6 +123,11 @@ class StorageManager {
         });
     }
     
+    /**
+     * 폴더 삭제
+     * @param {string} folderId - 폴더 ID
+     * @returns {boolean} 성공 여부
+     */
     deleteFolder(folderId) {
         return this.update((data) => {
             const folder = data.folders.find(f => f.id === folderId);
@@ -95,6 +145,12 @@ class StorageManager {
         });
     }
     
+    /**
+     * 폴더 이름 변경
+     * @param {string} folderId - 폴더 ID
+     * @param {string} newName - 새 이름
+     * @returns {boolean} 성공 여부
+     */
     renameFolder(folderId, newName) {
         return this.update((data) => {
             const folder = data.folders.find(f => f.id === folderId);
@@ -104,7 +160,16 @@ class StorageManager {
         });
     }
     
+    // ============================================
     // 채팅-폴더 할당
+    // ============================================
+    
+    /**
+     * 채팅을 폴더에 할당
+     * @param {string} charAvatar
+     * @param {string} chatFileName
+     * @param {string} folderId
+     */
     assignChatToFolder(charAvatar, chatFileName, folderId) {
         this.update((data) => {
             const key = this.getChatKey(charAvatar, chatFileName);
@@ -112,13 +177,28 @@ class StorageManager {
         });
     }
     
+    /**
+     * 채팅이 속한 폴더 가져오기
+     * @param {string} charAvatar
+     * @param {string} chatFileName
+     * @returns {string} 폴더 ID
+     */
     getChatFolder(charAvatar, chatFileName) {
         const data = this.load();
         const key = this.getChatKey(charAvatar, chatFileName);
         return data.chatAssignments[key] || 'uncategorized';
     }
     
+    // ============================================
     // 즐겨찾기
+    // ============================================
+    
+    /**
+     * 즐겨찾기 토글
+     * @param {string} charAvatar
+     * @param {string} chatFileName
+     * @returns {boolean} 새 즐겨찾기 상태
+     */
     toggleFavorite(charAvatar, chatFileName) {
         return this.update((data) => {
             const key = this.getChatKey(charAvatar, chatFileName);
@@ -132,38 +212,75 @@ class StorageManager {
         });
     }
     
+    /**
+     * 즐겨찾기 여부 확인
+     * @param {string} charAvatar
+     * @param {string} chatFileName
+     * @returns {boolean}
+     */
     isFavorite(charAvatar, chatFileName) {
         const data = this.load();
         const key = this.getChatKey(charAvatar, chatFileName);
         return data.favorites.includes(key);
     }
     
+    // ============================================
     // 정렬/필터 옵션
+    // ============================================
+    
+    /**
+     * 채팅 정렬 옵션 가져오기
+     * @returns {string}
+     */
     getSortOption() {
         return this.load().sortOption || 'recent';
     }
     
+    /**
+     * 채팅 정렬 옵션 설정
+     * @param {string} option
+     */
     setSortOption(option) {
         this.update((data) => { data.sortOption = option; });
     }
     
+    /**
+     * 캐릭터 정렬 옵션 가져오기
+     * @returns {string}
+     */
     getCharSortOption() {
         return this.load().charSortOption || 'recent';
     }
     
+    /**
+     * 캐릭터 정렬 옵션 설정
+     * @param {string} option
+     */
     setCharSortOption(option) {
         this.update((data) => { data.charSortOption = option; });
     }
     
+    /**
+     * 폴더 필터 가져오기
+     * @returns {string}
+     */
     getFilterFolder() {
         return this.load().filterFolder || 'all';
     }
     
+    /**
+     * 폴더 필터 설정
+     * @param {string} folderId
+     */
     setFilterFolder(folderId) {
         this.update((data) => { data.filterFolder = folderId; });
     }
     
-    // 다중 채팅 이동
+    /**
+     * 다중 채팅 폴더 이동
+     * @param {string[]} chatKeys - 채팅 키 배열
+     * @param {string} targetFolderId - 대상 폴더 ID
+     */
     moveChatsBatch(chatKeys, targetFolderId) {
         this.update((data) => {
             chatKeys.forEach(key => {
