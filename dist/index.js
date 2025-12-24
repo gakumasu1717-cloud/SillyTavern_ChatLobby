@@ -2282,10 +2282,11 @@
             }
         });
         
-        // 채팅 정렬 변경 - 모바일 호환성을 위해 여러 이벤트 사용
+        // 채팅 정렬 변경 - 모바일: polling 방식 사용
         const chatSortSelect = document.getElementById('chat-lobby-chat-sort');
         let lastChatSortValue = loadLobbyData().sortOption || 'recent';
         chatSortSelect.value = lastChatSortValue;
+        let chatSortPollInterval = null;
         
         const applyChatSort = () => {
             const newSort = chatSortSelect.value;
@@ -2303,8 +2304,32 @@
         
         // 모든 가능한 이벤트에 리스너 추가
         chatSortSelect.addEventListener('change', applyChatSort);
-        chatSortSelect.addEventListener('blur', applyChatSort);
-        chatSortSelect.addEventListener('touchend', () => setTimeout(applyChatSort, 100));
+        chatSortSelect.addEventListener('blur', () => {
+            applyChatSort();
+            if (chatSortPollInterval) {
+                clearInterval(chatSortPollInterval);
+                chatSortPollInterval = null;
+            }
+        });
+        
+        // 모바일: focus 시 polling 시작
+        chatSortSelect.addEventListener('focus', () => {
+            if (chatSortPollInterval) clearInterval(chatSortPollInterval);
+            chatSortPollInterval = setInterval(applyChatSort, 200);
+        });
+        
+        // click으로도 polling 시작 (모바일 대응)
+        chatSortSelect.addEventListener('click', () => {
+            if (chatSortPollInterval) clearInterval(chatSortPollInterval);
+            chatSortPollInterval = setInterval(applyChatSort, 200);
+            // 3초 후 자동 종료
+            setTimeout(() => {
+                if (chatSortPollInterval) {
+                    clearInterval(chatSortPollInterval);
+                    chatSortPollInterval = null;
+                }
+            }, 3000);
+        });
         
         // 배치 모드 버튼 - 터치 중복 방지
         const batchModeBtn = document.getElementById('chat-lobby-batch-mode');
@@ -2440,10 +2465,11 @@
             }, 300);
         });
         
-        // 캐릭터 정렬 드롭다운 변경 이벤트 - 모바일 호환성을 위해 여러 이벤트 사용
+        // 캐릭터 정렬 드롭다운 변경 이벤트 - 모바일: polling 방식 사용
         const charSortSelect = document.getElementById('chat-lobby-char-sort');
         let lastCharSortValue = loadLobbyData().charSortOption || 'recent';
         charSortSelect.value = lastCharSortValue;
+        let charSortPollInterval = null;
         
         const applyCharSort = () => {
             const newSort = charSortSelect.value;
@@ -2457,8 +2483,32 @@
         
         // 모든 가능한 이벤트에 리스너 추가
         charSortSelect.addEventListener('change', applyCharSort);
-        charSortSelect.addEventListener('blur', applyCharSort);
-        charSortSelect.addEventListener('touchend', () => setTimeout(applyCharSort, 100));
+        charSortSelect.addEventListener('blur', () => {
+            applyCharSort();
+            if (charSortPollInterval) {
+                clearInterval(charSortPollInterval);
+                charSortPollInterval = null;
+            }
+        });
+        
+        // 모바일: focus 시 polling 시작
+        charSortSelect.addEventListener('focus', () => {
+            if (charSortPollInterval) clearInterval(charSortPollInterval);
+            charSortPollInterval = setInterval(applyCharSort, 200);
+        });
+        
+        // click으로도 polling 시작 (모바일 대응)
+        charSortSelect.addEventListener('click', () => {
+            if (charSortPollInterval) clearInterval(charSortPollInterval);
+            charSortPollInterval = setInterval(applyCharSort, 200);
+            // 3초 후 자동 종료
+            setTimeout(() => {
+                if (charSortPollInterval) {
+                    clearInterval(charSortPollInterval);
+                    charSortPollInterval = null;
+                }
+            }, 3000);
+        });
 
         // ESC 키로 닫기
         document.addEventListener('keydown', (e) => {
