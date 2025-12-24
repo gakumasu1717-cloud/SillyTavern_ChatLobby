@@ -595,31 +595,14 @@
             console.log('[Chat Lobby] Clicking ST-CustomTheme sidebar button');
             stButton.click();
         } else if (personaDrawer) {
-            // 방법 1: drawer-toggle 클릭
+            // drawer-toggle 클릭
             const drawerToggle = personaDrawer.querySelector('.drawer-toggle');
             if (drawerToggle) {
                 console.log('[Chat Lobby] Clicking drawer-toggle');
                 drawerToggle.click();
+            } else {
+                console.warn('[Chat Lobby] drawer-toggle not found');
             }
-            
-            // 방법 2: drawer-content를 직접 표시 (클릭이 안 될 경우)
-            setTimeout(() => {
-                const drawerContent = personaDrawer.querySelector('.drawer-content');
-                if (drawerContent) {
-                    const isOpen = window.getComputedStyle(drawerContent).display !== 'none';
-                    console.log('[Chat Lobby] Drawer opened:', isOpen);
-                    
-                    if (!isOpen) {
-                        // 직접 열기
-                        console.log('[Chat Lobby] Forcing drawer-content open');
-                        drawerContent.style.display = 'block';
-                        drawerContent.style.maxHeight = '50vh';
-                        drawerContent.style.overflow = 'auto';
-                        // 열림 클래스 추가
-                        personaDrawer.classList.add('openDrawer');
-                    }
-                }
-            }, 150);
         } else {
             console.warn('[Chat Lobby] No persona management button found');
         }
@@ -1941,28 +1924,18 @@
                 const tooltipHeight = tooltipRect.height || 200;
                 const cursorOffset = 15;
 
-                // 마우스 오른쪽에 표시
+                // 항상 마우스 오른쪽에 표시 (화면 밖으로 나가도 관찮음)
                 let left = mouseX + cursorOffset;
                 let top = mouseY - tooltipHeight / 2;
 
-                // 오른쪽 화면 밖으로 나가면 왼쪽에 표시
-                if (left + tooltipWidth > window.innerWidth - 20) {
-                    left = mouseX - tooltipWidth - cursorOffset;
-                }
-
                 // 아래로 화면 밖 나가면 위로 조정
-                if (top + tooltipHeight > window.innerHeight - 20) {
-                    top = window.innerHeight - tooltipHeight - 20;
+                if (top + tooltipHeight > window.innerHeight - 10) {
+                    top = window.innerHeight - tooltipHeight - 10;
                 }
 
                 // 위로 밖이면 최소값
-                if (top < 20) {
-                    top = 20;
-                }
-
-                // 왼쪽 밖이면
-                if (left < 20) {
-                    left = 20;
+                if (top < 10) {
+                    top = 10;
                 }
 
                 globalTooltip.style.left = left + 'px';
