@@ -171,18 +171,25 @@ async function openChatByFileName(fileName) {
 async function clickChatItemAndVerify(item, fileName) {
     console.log('[ChatHandlers] Clicking chat item...');
     
-    // 클릭 실행 - MouseEvent로 직접 디스패치
-    const clickEvent = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-    });
-    item.dispatchEvent(clickEvent);
+    // SillyTavern은 jQuery를 사용하므로 jQuery 클릭 사용
+    if (window.$ || window.jQuery) {
+        const $ = window.$ || window.jQuery;
+        console.log('[ChatHandlers] Using jQuery click');
+        $(item).trigger('click');
+    } else {
+        // fallback: native click
+        console.log('[ChatHandlers] jQuery not found, using native click');
+        item.click();
+    }
     
     console.log('[ChatHandlers] Click dispatched, waiting for chat to load...');
     
-    // 채팅이 로드될 때까지 대기 (최대 3초)
-    const maxWait = 3000;
+    // 채팅이 로드될 때까지 대기 - context.chatId 변경 확인
+    const context = api.getContext();
+    const initialChatId = context?.chatId || '';
+    console.log('[ChatHandlers] Initial chatId:', initialChatId);
+    
+    const maxWait = 5000; // 5초로 증가
     const interval = 200;
     let waited = 0;
     
@@ -190,23 +197,41 @@ async function clickChatItemAndVerify(item, fileName) {
         await new Promise(resolve => setTimeout(resolve, interval));
         waited += interval;
         
-        // 채팅 선택 팝업이 닫혔는지 확인
-        const popup = document.getElementById('select_chat_popup');
-        const isPopupClosed = !popup || popup.style.display === 'none' || !popup.classList.contains('visible');
+        // 채팅 ID가 변경되었는지 확인
+        const newContext = api.getContext();
+        const newChatId = newContext?.chatId || '';
         
-        if (isPopupClosed) {
-            console.log('[ChatHandlers] ✅ Chat popup closed after', waited, 'ms');
+        if (newChatId && newChatId !== initialChatId) {
+            console.log('[ChatHandlers] ✅ Chat changed to:', newChatId, 'after', waited, 'ms');
+            
+            // 팝업 닫기 시도
+            const popup = document.getElementById('select_chat_popup');
+            if (popup) {
+                const closeBtn = popup.querySelector('.popup_close, .fa-xmark, [title="Close"]');
+                if (closeBtn) {
+                    console.log('[ChatHandlers] Closing popup');
+                    closeBtn.click();
+                }
+            }
             return;
+        }
+        
+        // 1초마다 로그
+        if (waited % 1000 === 0) {
+            console.log('[ChatHandlers] Still waiting...', waited, 'ms');
         }
     }
     
-    console.warn('[ChatHandlers] ⚠️ Popup still open after', maxWait, 'ms, trying force close');
+    console.warn('[ChatHandlers] ⚠️ Chat did not change after', maxWait, 'ms');
     
-    // 팝업이 안 닫히면 강제로 닫기 시도
-    const closeBtn = document.querySelector('#select_chat_popup .popup_close, .select_chat_popup_close');
-    if (closeBtn) {
-        closeBtn.click();
-        console.log('[ChatHandlers] Clicked popup close button');
+    // 마지막 시도: 팝업 강제 닫기
+    const popup = document.getElementById('select_chat_popup');
+    if (popup) {
+        const closeBtn = popup.querySelector('.popup_close, .fa-xmark, [title="Close"]');
+        if (closeBtn) {
+            console.log('[ChatHandlers] Force closing popup');
+            closeBtn.click();
+        }
     }
 }
 

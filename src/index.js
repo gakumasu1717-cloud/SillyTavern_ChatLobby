@@ -278,7 +278,10 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             case 'chat-lobby-add-persona':
                 handleAddPersona();
                 break;
-            // chat-panel-avatar 제거 - 캐릭터 설정 열기 기능 비활성화 (충돌 방지)
+            case 'chat-panel-avatar':
+                // 선택된 캐릭터 화면으로 이동
+                handleGoToCharacter();
+                break;
             case 'chat-lobby-batch-mode':
                 toggleBatchMode();
                 break;
@@ -413,7 +416,37 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     }
     
     /**
-     * 캐릭터 설정 열기
+     * 선택된 캐릭터 화면으로 이동
+     */
+    function handleGoToCharacter() {
+        const character = store.currentCharacter;
+        if (!character) {
+            console.warn('[ChatLobby] No character selected');
+            return;
+        }
+        
+        console.log('[ChatLobby] Going to character:', character.name);
+        
+        // 로비 닫기
+        closeLobby();
+        
+        // 캐릭터 선택
+        setTimeout(async () => {
+            const context = api.getContext();
+            const characters = context?.characters || [];
+            const index = characters.findIndex(c => c.avatar === character.avatar);
+            
+            if (index !== -1) {
+                await api.selectCharacterById(index);
+                console.log('[ChatLobby] Character selected:', character.name);
+            } else {
+                console.error('[ChatLobby] Character not found:', character.avatar);
+            }
+        }, CONFIG.timing.menuCloseDelay);
+    }
+    
+    /**
+     * 캐릭터 설정 열기 (미사용)
      */
     function handleOpenCharSettings() {
         closeLobby();

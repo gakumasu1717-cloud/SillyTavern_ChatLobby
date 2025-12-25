@@ -2400,31 +2400,50 @@
   }
   async function clickChatItemAndVerify(item, fileName) {
     console.log("[ChatHandlers] Clicking chat item...");
-    const clickEvent = new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      view: window
-    });
-    item.dispatchEvent(clickEvent);
+    if (window.$ || window.jQuery) {
+      const $ = window.$ || window.jQuery;
+      console.log("[ChatHandlers] Using jQuery click");
+      $(item).trigger("click");
+    } else {
+      console.log("[ChatHandlers] jQuery not found, using native click");
+      item.click();
+    }
     console.log("[ChatHandlers] Click dispatched, waiting for chat to load...");
-    const maxWait = 3e3;
+    const context = api.getContext();
+    const initialChatId = context?.chatId || "";
+    console.log("[ChatHandlers] Initial chatId:", initialChatId);
+    const maxWait = 5e3;
     const interval = 200;
     let waited = 0;
     while (waited < maxWait) {
       await new Promise((resolve) => setTimeout(resolve, interval));
       waited += interval;
-      const popup = document.getElementById("select_chat_popup");
-      const isPopupClosed = !popup || popup.style.display === "none" || !popup.classList.contains("visible");
-      if (isPopupClosed) {
-        console.log("[ChatHandlers] \u2705 Chat popup closed after", waited, "ms");
+      const newContext = api.getContext();
+      const newChatId = newContext?.chatId || "";
+      if (newChatId && newChatId !== initialChatId) {
+        console.log("[ChatHandlers] \u2705 Chat changed to:", newChatId, "after", waited, "ms");
+        const popup2 = document.getElementById("select_chat_popup");
+        if (popup2) {
+          const closeBtn = popup2.querySelector('.popup_close, .fa-xmark, [title="Close"]');
+          if (closeBtn) {
+            console.log("[ChatHandlers] Closing popup");
+            closeBtn.click();
+          }
+        }
         return;
       }
+      if (waited % 1e3 === 0) {
+        console.log("[ChatHandlers] Still waiting...", waited, "ms");
+      }
     }
-    console.warn("[ChatHandlers] \u26A0\uFE0F Popup still open after", maxWait, "ms, trying force close");
-    const closeBtn = document.querySelector("#select_chat_popup .popup_close, .select_chat_popup_close");
-    if (closeBtn) {
-      closeBtn.click();
-      console.log("[ChatHandlers] Clicked popup close button");
+    console.warn("[ChatHandlers] \u26A0\uFE0F Chat did not change after", maxWait, "ms");
+    const popup = document.getElementById("select_chat_popup");
+    if (popup) {
+      const closeBtn = popup.querySelector('.popup_close, .fa-xmark, [title="Close"]');
+      if (closeBtn) {
+        console.log("[ChatHandlers] Force closing popup");
+        closeBtn.click();
+      }
     }
   }
   async function deleteChat(chatInfo) {
@@ -2850,7 +2869,9 @@
         case "chat-lobby-add-persona":
           handleAddPersona();
           break;
-        // chat-panel-avatar 제거 - 캐릭터 설정 열기 기능 비활성화 (충돌 방지)
+        case "chat-panel-avatar":
+          handleGoToCharacter();
+          break;
         case "chat-lobby-batch-mode":
           toggleBatchMode();
           break;
@@ -2938,6 +2959,26 @@
           const createBtn = document.getElementById("create_dummy_persona");
           if (createBtn) createBtn.click();
         }, CONFIG.timing.drawerOpenDelay);
+      }, CONFIG.timing.menuCloseDelay);
+    }
+    function handleGoToCharacter() {
+      const character = store.currentCharacter;
+      if (!character) {
+        console.warn("[ChatLobby] No character selected");
+        return;
+      }
+      console.log("[ChatLobby] Going to character:", character.name);
+      closeLobby2();
+      setTimeout(async () => {
+        const context = api.getContext();
+        const characters = context?.characters || [];
+        const index = characters.findIndex((c) => c.avatar === character.avatar);
+        if (index !== -1) {
+          await api.selectCharacterById(index);
+          console.log("[ChatLobby] Character selected:", character.name);
+        } else {
+          console.error("[ChatLobby] Character not found:", character.avatar);
+        }
       }, CONFIG.timing.menuCloseDelay);
     }
     function handleOpenCharSettings() {
