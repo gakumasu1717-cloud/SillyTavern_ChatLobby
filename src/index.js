@@ -430,16 +430,38 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         // 로비 닫기
         closeLobby();
         
-        // 캐릭터 편집 화면 열기
+        // 캐릭터 선택
         const context = api.getContext();
         const characters = context?.characters || [];
         const index = characters.findIndex(c => c.avatar === character.avatar);
         
-        if (index !== -1) {
-            await api.openCharacterEditor(index);
-        } else {
+        if (index === -1) {
             console.error('[ChatLobby] Character not found:', character.avatar);
+            return;
         }
+        
+        // 캐릭터 선택
+        await api.selectCharacterById(index);
+        
+        // 잠시 대기 후 캐릭터 아이콘 버튼 클릭
+        setTimeout(() => {
+            // 캐릭터 아이콘 버튼 찾기 (rm_button_selected_ch 또는 아바타 영역)
+            const charIconBtn = document.getElementById('rm_button_selected_ch') ||
+                               document.querySelector('.avatar-container .avatar') ||
+                               document.querySelector('#avatar-and-name-block .avatar');
+            
+            if (charIconBtn) {
+                console.log('[ChatLobby] Clicking character icon button');
+                charIconBtn.click();
+            } else {
+                // 대안: 설정 버튼 클릭
+                const settingsBtn = document.getElementById('option_settings');
+                if (settingsBtn) {
+                    console.log('[ChatLobby] Clicking option_settings button (fallback)');
+                    settingsBtn.click();
+                }
+            }
+        }, CONFIG.timing.drawerOpenDelay);
     }
     
     /**

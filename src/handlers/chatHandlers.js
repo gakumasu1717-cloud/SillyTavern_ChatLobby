@@ -47,16 +47,24 @@ export async function openChat(chatInfo) {
         console.log('[ChatHandlers] Closing lobby');
         closeLobby();
         
-        // 캐릭터 선택
+        // 방법 1: SillyTavern openCharacterChat 함수 사용 시도
+        if (context?.openCharacterChat) {
+            console.log('[ChatHandlers] Using context.openCharacterChat');
+            const chatFileName = fileName.replace('.jsonl', '');
+            await context.openCharacterChat(chatFileName);
+            return;
+        }
+        
+        // 방법 2: 캐릭터 선택 후 채팅 선택
         console.log('[ChatHandlers] Selecting character by id:', index);
         await api.selectCharacterById(index);
         
-        // 채팅 열기 - 더 긴 딜레이로 SillyTavern이 준비되도록
+        // 채팅 선택 팝업 열기 및 해당 채팅 선택
         console.log('[ChatHandlers] Waiting before opening chat file...');
         setTimeout(async () => {
             console.log('[ChatHandlers] Now calling openChatByFileName');
             await openChatByFileName(fileName);
-        }, CONFIG.timing.drawerOpenDelay); // menuCloseDelay(300) 대신 drawerOpenDelay(500) 사용
+        }, CONFIG.timing.drawerOpenDelay);
         
     } catch (error) {
         console.error('[ChatHandlers] Failed to open chat:', error);
@@ -163,40 +171,32 @@ async function openChatByFileName(fileName) {
 }
 
 /**
- * 채팅 아이템 클릭 후 로드 확인
+ * 채팅 아이템 클릭
  * @param {HTMLElement} item - 클릭할 채팅 아이템
- * @param {string} fileName - 기대하는 파일명
+ * @param {string} fileName - 파일명
  * @returns {Promise<void>}
  */
 async function clickChatItemAndVerify(item, fileName) {
-    console.log('[ChatHandlers] Clicking chat item for:', fileName);
+    console.log('[ChatHandlers] Clicking chat item:', fileName);
     
-    // SillyTavern은 jQuery를 사용하므로 jQuery 클릭 사용
-    if (window.$ || window.jQuery) {
-        const $ = window.$ || window.jQuery;
-        console.log('[ChatHandlers] Using jQuery click on item');
-        
-        // 아이템이 아니라 아이템 내부의 클릭 가능한 요소 찾기
-        const clickableEl = item.querySelector('.select_chat_block_filename') || 
-                           item.querySelector('.ch_name') || 
-                           item;
-        
-        // jQuery 트리거
-        $(clickableEl).trigger('click');
-        
-        // 추가로 네이티브 클릭도 시도
-        setTimeout(() => {
-            clickableEl.click();
-        }, 100);
-    } else {
-        console.log('[ChatHandlers] jQuery not found, using native click');
-        item.click();
+    // data-file-name 속성이 있는 요소를 직접 클릭
+    const targetItem = item.hasAttribute('data-file-name') ? item :
+                       item.closest('[data-file-name]') || item;
+    
+    console.log('[ChatHandlers] Target element:', targetItem.tagName, targetItem.className);
+    
+    // jQuery 트리거 (우선)
+    if (window.$) {
+        console.log('[ChatHandlers] Triggering jQuery click');
+        window.$(targetItem).trigger('click');
     }
     
-    // 잠시 대기
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 네이티브 클릭도 실행
+    console.log('[ChatHandlers] Triggering native click');
+    targetItem.click();
     
-    console.log('[ChatHandlers] Click completed for:', fileName);
+    // 확인
+    console.log('[ChatHandlers] Click executed for:', fileName);
 }
 
 // ============================================

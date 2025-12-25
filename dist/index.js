@@ -2384,6 +2384,12 @@
       }
       console.log("[ChatHandlers] Closing lobby");
       closeLobby();
+      if (context?.openCharacterChat) {
+        console.log("[ChatHandlers] Using context.openCharacterChat");
+        const chatFileName = fileName.replace(".jsonl", "");
+        await context.openCharacterChat(chatFileName);
+        return;
+      }
       console.log("[ChatHandlers] Selecting character by id:", index);
       await api.selectCharacterById(index);
       console.log("[ChatHandlers] Waiting before opening chat file...");
@@ -2460,21 +2466,16 @@
     showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
   }
   async function clickChatItemAndVerify(item, fileName) {
-    console.log("[ChatHandlers] Clicking chat item for:", fileName);
-    if (window.$ || window.jQuery) {
-      const $ = window.$ || window.jQuery;
-      console.log("[ChatHandlers] Using jQuery click on item");
-      const clickableEl = item.querySelector(".select_chat_block_filename") || item.querySelector(".ch_name") || item;
-      $(clickableEl).trigger("click");
-      setTimeout(() => {
-        clickableEl.click();
-      }, 100);
-    } else {
-      console.log("[ChatHandlers] jQuery not found, using native click");
-      item.click();
+    console.log("[ChatHandlers] Clicking chat item:", fileName);
+    const targetItem = item.hasAttribute("data-file-name") ? item : item.closest("[data-file-name]") || item;
+    console.log("[ChatHandlers] Target element:", targetItem.tagName, targetItem.className);
+    if (window.$) {
+      console.log("[ChatHandlers] Triggering jQuery click");
+      window.$(targetItem).trigger("click");
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    console.log("[ChatHandlers] Click completed for:", fileName);
+    console.log("[ChatHandlers] Triggering native click");
+    targetItem.click();
+    console.log("[ChatHandlers] Click executed for:", fileName);
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
@@ -3002,11 +3003,24 @@
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === character.avatar);
-      if (index !== -1) {
-        await api.openCharacterEditor(index);
-      } else {
+      if (index === -1) {
         console.error("[ChatLobby] Character not found:", character.avatar);
+        return;
       }
+      await api.selectCharacterById(index);
+      setTimeout(() => {
+        const charIconBtn = document.getElementById("rm_button_selected_ch") || document.querySelector(".avatar-container .avatar") || document.querySelector("#avatar-and-name-block .avatar");
+        if (charIconBtn) {
+          console.log("[ChatLobby] Clicking character icon button");
+          charIconBtn.click();
+        } else {
+          const settingsBtn = document.getElementById("option_settings");
+          if (settingsBtn) {
+            console.log("[ChatLobby] Clicking option_settings button (fallback)");
+            settingsBtn.click();
+          }
+        }
+      }, CONFIG.timing.drawerOpenDelay);
     }
     function handleOpenCharSettings() {
       closeLobby2();
