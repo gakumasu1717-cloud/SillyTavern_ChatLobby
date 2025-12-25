@@ -1722,34 +1722,37 @@ ${message}` : message;
   }
   function bindPersonaEvents(container) {
     container.querySelectorAll(".persona-item").forEach((item) => {
-      const avatarImg = item.querySelector(".persona-avatar");
-      const nameSpan = item.querySelector(".persona-name");
       const deleteBtn = item.querySelector(".persona-delete-btn");
-      if (avatarImg) {
-        createTouchClickHandler(avatarImg, async () => {
-          if (store.isProcessingPersona) return;
-          if (item.classList.contains("selected")) {
-            openPersonaManagement();
-          } else {
-            await selectPersona(container, item);
-          }
-        });
-        avatarImg.style.cursor = "pointer";
-      }
-      if (nameSpan) {
-        createTouchClickHandler(nameSpan, async () => {
-          if (item.classList.contains("selected")) return;
+      const handleItemClick = async (e) => {
+        if (e.target.closest(".persona-delete-btn")) return;
+        if (store.isProcessingPersona) return;
+        if (item.classList.contains("selected")) {
+          openPersonaManagement();
+        } else {
           await selectPersona(container, item);
-        });
-        nameSpan.style.cursor = "pointer";
-      }
+        }
+      };
+      item.addEventListener("click", handleItemClick);
+      item.addEventListener("touchend", (e) => {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        handleItemClick(e);
+      }, { passive: false });
       if (deleteBtn) {
-        deleteBtn.addEventListener("click", async (e) => {
+        const handleDelete = async (e) => {
           e.stopPropagation();
+          e.preventDefault();
           const personaKey = deleteBtn.dataset.persona;
           const personaName = item.title || personaKey;
           await deletePersona(personaKey, personaName);
-        });
+        };
+        deleteBtn.addEventListener("click", handleDelete);
+        deleteBtn.addEventListener("touchend", (e) => {
+          e.stopPropagation();
+          if (e.cancelable) e.preventDefault();
+          handleDelete(e);
+        }, { passive: false });
       }
     });
   }

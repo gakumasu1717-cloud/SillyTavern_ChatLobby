@@ -83,41 +83,51 @@ async function renderPersonaList(container, personas) {
  */
 function bindPersonaEvents(container) {
     container.querySelectorAll('.persona-item').forEach(item => {
-        const avatarImg = item.querySelector('.persona-avatar');
-        const nameSpan = item.querySelector('.persona-name');
         const deleteBtn = item.querySelector('.persona-delete-btn');
         
-        // 아바타 클릭 - 선택된 페르소나면 관리화면, 아니면 선택
-        if (avatarImg) {
-            createTouchClickHandler(avatarImg, async () => {
-                if (store.isProcessingPersona) return;
-                
-                if (item.classList.contains('selected')) {
-                    openPersonaManagement();
-                } else {
-                    await selectPersona(container, item);
-                }
-            });
-            avatarImg.style.cursor = 'pointer';
-        }
-        
-        // 이름 클릭 - 페르소나 선택
-        if (nameSpan) {
-            createTouchClickHandler(nameSpan, async () => {
-                if (item.classList.contains('selected')) return;
+        // 전체 아이템 클릭 - 바로 선택, 이미 선택됐으면 관리화면
+        const handleItemClick = async (e) => {
+            // 삭제 버튼 클릭은 무시
+            if (e.target.closest('.persona-delete-btn')) return;
+            if (store.isProcessingPersona) return;
+            
+            if (item.classList.contains('selected')) {
+                // 이미 선택된 페르소나 → 관리 화면으로
+                openPersonaManagement();
+            } else {
+                // 선택 안 된 페르소나 → 바로 선택
                 await selectPersona(container, item);
-            });
-            nameSpan.style.cursor = 'pointer';
-        }
+            }
+        };
         
-        // 삭제 버튼
+        // PC: click 이벤트
+        item.addEventListener('click', handleItemClick);
+        
+        // 모바일: touchend 이벤트 (터치 후 바로 반응)
+        item.addEventListener('touchend', (e) => {
+            // 스크롤 중이면 무시
+            if (e.cancelable) {
+                e.preventDefault();
+            }
+            handleItemClick(e);
+        }, { passive: false });
+        
+        // 삭제 버튼은 별도 처리
         if (deleteBtn) {
-            deleteBtn.addEventListener('click', async (e) => {
+            const handleDelete = async (e) => {
                 e.stopPropagation();
+                e.preventDefault();
                 const personaKey = deleteBtn.dataset.persona;
                 const personaName = item.title || personaKey;
                 await deletePersona(personaKey, personaName);
-            });
+            };
+            
+            deleteBtn.addEventListener('click', handleDelete);
+            deleteBtn.addEventListener('touchend', (e) => {
+                e.stopPropagation();
+                if (e.cancelable) e.preventDefault();
+                handleDelete(e);
+            }, { passive: false });
         }
     });
 }
