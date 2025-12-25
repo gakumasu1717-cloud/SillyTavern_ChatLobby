@@ -198,7 +198,7 @@ function initModalContainer() {
     modalContainer.innerHTML = `
         <style>
             .chat-lobby-modal {
-                background: var(--SmartThemeBlurTintColor, #2a2a2a);
+                background: #2a2a2a !important;
                 border-radius: 12px;
                 padding: 24px;
                 min-width: 320px;
