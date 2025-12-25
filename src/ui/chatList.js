@@ -303,14 +303,20 @@ function renderChatItem(chat, charAvatar, index) {
  * @param {string} charAvatar
  */
 function bindChatEvents(container, charAvatar) {
-    container.querySelectorAll('.lobby-chat-item').forEach(item => {
+    console.log('[ChatList] bindChatEvents called for:', charAvatar);
+    
+    container.querySelectorAll('.lobby-chat-item').forEach((item, index) => {
         const chatContent = item.querySelector('.chat-content');
         const favBtn = item.querySelector('.chat-fav-btn');
         const delBtn = item.querySelector('.chat-delete-btn');
+        const fileName = item.dataset.fileName;
         
         // 채팅 열기
         createTouchClickHandler(chatContent, () => {
+            console.log('[ChatList] Chat item clicked:', fileName);
+            
             if (store.batchModeActive) {
+                console.log('[ChatList] Batch mode active, toggling checkbox');
                 const cb = item.querySelector('.chat-select-cb');
                 if (cb) {
                     cb.checked = !cb.checked;
@@ -320,21 +326,27 @@ function bindChatEvents(container, charAvatar) {
             }
             
             const handlers = store.chatHandlers;
+            console.log('[ChatList] Chat handlers:', {
+                hasOnOpen: !!handlers.onOpen,
+                hasOnDelete: !!handlers.onDelete
+            });
+            
             if (handlers.onOpen) {
                 // currentCharacter가 null인 경우 dataset에서 가져오기
                 const charIndex = store.currentCharacter?.index || item.dataset.charIndex || null;
                 
-                if (!charIndex && !item.dataset.charAvatar) {
-                    console.warn('[ChatList] Missing character info for chat open');
-                }
-                
-                handlers.onOpen({
+                const chatInfo = {
                     fileName: item.dataset.fileName,
                     charAvatar: item.dataset.charAvatar,
                     charIndex: charIndex
-                });
+                };
+                
+                console.log('[ChatList] Calling onOpen with:', chatInfo);
+                handlers.onOpen(chatInfo);
+            } else {
+                console.error('[ChatList] onOpen handler not available!');
             }
-        }, { preventDefault: false });
+        }, { preventDefault: true, stopPropagation: true, debugName: `chat-${index}` });
         
         // 즐겨찾기 토글
         createTouchClickHandler(favBtn, () => {
@@ -342,7 +354,7 @@ function bindChatEvents(container, charAvatar) {
             const isNowFav = storage.toggleFavorite(charAvatar, fn);
             favBtn.textContent = isNowFav ? '⭐' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
-        });
+        }, { debugName: `fav-${index}` });
         
         // 삭제
         createTouchClickHandler(delBtn, () => {
@@ -354,7 +366,7 @@ function bindChatEvents(container, charAvatar) {
                     element: item
                 });
             }
-        });
+        }, { debugName: `del-${index}` });
     });
 }
 

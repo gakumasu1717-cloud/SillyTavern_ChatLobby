@@ -1118,16 +1118,32 @@
     const {
       preventDefault = true,
       stopPropagation = true,
-      scrollThreshold = 10
+      scrollThreshold = 10,
+      debugName = "unknown"
     } = options;
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
-    const wrappedHandler = (e) => {
-      if (isScrolling) return;
+    let lastHandleTime = 0;
+    const wrappedHandler = (e, source) => {
+      const now = Date.now();
+      if (now - lastHandleTime < 100) {
+        console.log(`[EventHelper] ${debugName}: Duplicate ${source} event ignored`);
+        return;
+      }
+      if (isScrolling) {
+        console.log(`[EventHelper] ${debugName}: ${source} ignored (scrolling)`);
+        return;
+      }
+      lastHandleTime = now;
+      console.log(`[EventHelper] ${debugName}: ${source} event fired`);
       if (preventDefault) e.preventDefault();
       if (stopPropagation) e.stopPropagation();
-      handler(e);
+      try {
+        handler(e);
+      } catch (error) {
+        console.error(`[EventHelper] ${debugName}: Handler error:`, error);
+      }
     };
     element.addEventListener("touchstart", (e) => {
       touchHandled = false;
@@ -1142,13 +1158,15 @@
     element.addEventListener("touchend", (e) => {
       if (!isScrolling) {
         touchHandled = true;
-        wrappedHandler(e);
+        wrappedHandler(e, "touchend");
       }
       isScrolling = false;
     });
     element.addEventListener("click", (e) => {
       if (!touchHandled) {
-        wrappedHandler(e);
+        wrappedHandler(e, "click");
+      } else {
+        console.log(`[EventHelper] ${debugName}: click ignored (touch already handled)`);
       }
       touchHandled = false;
     });
@@ -1577,8 +1595,10 @@
     return sorted;
   }
   function bindCharacterEvents(container) {
-    container.querySelectorAll(".lobby-char-card").forEach((card) => {
+    container.querySelectorAll(".lobby-char-card").forEach((card, index) => {
+      const charName = card.querySelector(".lobby-char-name")?.textContent || "Unknown";
       createTouchClickHandler(card, () => {
+        console.log("[CharacterGrid] Card click handler fired for:", charName);
         container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
           el.classList.remove("selected");
         });
@@ -1586,10 +1606,10 @@
         const characterData = {
           index: card.dataset.charIndex,
           avatar: card.dataset.charAvatar,
-          name: card.querySelector(".lobby-char-name")?.textContent || "Unknown",
+          name: charName,
           avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
         };
-        console.log("[CharacterGrid] Character card clicked:", characterData.name, characterData.avatar);
+        console.log("[CharacterGrid] Character data:", characterData);
         const handler = store.onCharacterSelect;
         if (handler && typeof handler === "function") {
           console.log("[CharacterGrid] Calling onCharacterSelect handler");
@@ -1604,7 +1624,7 @@
             handlerType: typeof handler
           });
         }
-      }, { preventDefault: false, stopPropagation: false });
+      }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
     });
   }
   function handleSortChange(sortOption) {
@@ -2110,12 +2130,16 @@
     `;
   }
   function bindChatEvents(container, charAvatar) {
-    container.querySelectorAll(".lobby-chat-item").forEach((item) => {
+    console.log("[ChatList] bindChatEvents called for:", charAvatar);
+    container.querySelectorAll(".lobby-chat-item").forEach((item, index) => {
       const chatContent = item.querySelector(".chat-content");
       const favBtn = item.querySelector(".chat-fav-btn");
       const delBtn = item.querySelector(".chat-delete-btn");
+      const fileName = item.dataset.fileName;
       createTouchClickHandler(chatContent, () => {
+        console.log("[ChatList] Chat item clicked:", fileName);
         if (store.batchModeActive) {
+          console.log("[ChatList] Batch mode active, toggling checkbox");
           const cb = item.querySelector(".chat-select-cb");
           if (cb) {
             cb.checked = !cb.checked;
@@ -2124,24 +2148,29 @@
           return;
         }
         const handlers = store.chatHandlers;
+        console.log("[ChatList] Chat handlers:", {
+          hasOnOpen: !!handlers.onOpen,
+          hasOnDelete: !!handlers.onDelete
+        });
         if (handlers.onOpen) {
           const charIndex = store.currentCharacter?.index || item.dataset.charIndex || null;
-          if (!charIndex && !item.dataset.charAvatar) {
-            console.warn("[ChatList] Missing character info for chat open");
-          }
-          handlers.onOpen({
+          const chatInfo = {
             fileName: item.dataset.fileName,
             charAvatar: item.dataset.charAvatar,
             charIndex
-          });
+          };
+          console.log("[ChatList] Calling onOpen with:", chatInfo);
+          handlers.onOpen(chatInfo);
+        } else {
+          console.error("[ChatList] onOpen handler not available!");
         }
-      }, { preventDefault: false });
+      }, { preventDefault: true, stopPropagation: true, debugName: `chat-${index}` });
       createTouchClickHandler(favBtn, () => {
         const fn = item.dataset.fileName;
         const isNowFav = storage.toggleFavorite(charAvatar, fn);
         favBtn.textContent = isNowFav ? "\u2B50" : "\u2606";
         item.classList.toggle("is-favorite", isNowFav);
-      });
+      }, { debugName: `fav-${index}` });
       createTouchClickHandler(delBtn, () => {
         const handlers = store.chatHandlers;
         if (handlers.onDelete) {
@@ -2151,7 +2180,7 @@
             element: item
           });
         }
-      });
+      }, { debugName: `del-${index}` });
     });
   }
   function updateChatHeader(character) {

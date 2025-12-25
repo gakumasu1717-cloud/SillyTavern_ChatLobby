@@ -220,8 +220,12 @@ async function sortCharacters(characters, sortOption) {
  * @param {HTMLElement} container
  */
 function bindCharacterEvents(container) {
-    container.querySelectorAll('.lobby-char-card').forEach(card => {
+    container.querySelectorAll('.lobby-char-card').forEach((card, index) => {
+        const charName = card.querySelector('.lobby-char-name')?.textContent || 'Unknown';
+        
         createTouchClickHandler(card, () => {
+            console.log('[CharacterGrid] Card click handler fired for:', charName);
+            
             // 기존 선택 해제
             container.querySelectorAll('.lobby-char-card.selected').forEach(el => {
                 el.classList.remove('selected');
@@ -234,11 +238,11 @@ function bindCharacterEvents(container) {
             const characterData = {
                 index: card.dataset.charIndex,
                 avatar: card.dataset.charAvatar,
-                name: card.querySelector('.lobby-char-name')?.textContent || 'Unknown',
+                name: charName,
                 avatarSrc: card.querySelector('.lobby-char-avatar')?.src || ''
             };
             
-            console.log('[CharacterGrid] Character card clicked:', characterData.name, characterData.avatar);
+            console.log('[CharacterGrid] Character data:', characterData);
             
             // 콜백 호출
             const handler = store.onCharacterSelect;
@@ -255,7 +259,7 @@ function bindCharacterEvents(container) {
                     handlerType: typeof handler
                 });
             }
-        }, { preventDefault: false, stopPropagation: false });
+        }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
     });
 }
 

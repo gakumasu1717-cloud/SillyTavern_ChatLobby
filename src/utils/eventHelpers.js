@@ -48,22 +48,45 @@ export function createTouchClickHandler(element, handler, options = {}) {
     const { 
         preventDefault = true, 
         stopPropagation = true, 
-        scrollThreshold = 10 
+        scrollThreshold = 10,
+        debugName = 'unknown'
     } = options;
     
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
+    let lastHandleTime = 0;
     
     /**
      * 래핑된 핸들러
      * @param {Event} e
+     * @param {string} source - 이벤트 소스 (touch/click)
      */
-    const wrappedHandler = (e) => {
-        if (isScrolling) return;
+    const wrappedHandler = (e, source) => {
+        const now = Date.now();
+        
+        // 중복 실행 방지 (100ms 내 중복 무시)
+        if (now - lastHandleTime < 100) {
+            console.log(`[EventHelper] ${debugName}: Duplicate ${source} event ignored`);
+            return;
+        }
+        
+        if (isScrolling) {
+            console.log(`[EventHelper] ${debugName}: ${source} ignored (scrolling)`);
+            return;
+        }
+        
+        lastHandleTime = now;
+        console.log(`[EventHelper] ${debugName}: ${source} event fired`);
+        
         if (preventDefault) e.preventDefault();
         if (stopPropagation) e.stopPropagation();
-        handler(e);
+        
+        try {
+            handler(e);
+        } catch (error) {
+            console.error(`[EventHelper] ${debugName}: Handler error:`, error);
+        }
     };
     
     element.addEventListener('touchstart', (e) => {
@@ -81,14 +104,16 @@ export function createTouchClickHandler(element, handler, options = {}) {
     element.addEventListener('touchend', (e) => {
         if (!isScrolling) {
             touchHandled = true;
-            wrappedHandler(e);
+            wrappedHandler(e, 'touchend');
         }
         isScrolling = false;
     });
     
     element.addEventListener('click', (e) => {
         if (!touchHandled) {
-            wrappedHandler(e);
+            wrappedHandler(e, 'click');
+        } else {
+            console.log(`[EventHelper] ${debugName}: click ignored (touch already handled)`);
         }
         touchHandled = false;
     });
