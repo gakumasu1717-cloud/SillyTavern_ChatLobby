@@ -40,7 +40,7 @@ function initToastContainer() {
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                z-index: 2147483647;
+                z-index: 1002;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
@@ -169,7 +169,7 @@ function initModalContainer() {
                 display: none;
                 position: fixed;
                 inset: 0;
-                z-index: 2147483647;
+                z-index: 1003;
                 background: rgba(0,0,0,0.6);
                 justify-content: center;
                 align-items: center;
