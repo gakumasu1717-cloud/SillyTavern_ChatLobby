@@ -14,6 +14,7 @@ import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange a
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { debounce, isMobile } from './utils/eventHelpers.js';
+import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 
 (function() {
     'use strict';
@@ -164,7 +165,10 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     }
     
     /**
-     * 로비 닫기
+     * 로비 닫기 (상태 초기화)
+     * - 로비를 완전히 닫을 때 사용
+     * - 캐릭터/채팅 선택 상태를 초기화함
+     * - ESC 키, 닫기 버튼, 오버레이 클릭 시 사용
      */
     function closeLobby() {
         const container = document.getElementById('chat-lobby-container');
@@ -174,7 +178,7 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         if (fab) fab.style.display = 'flex';
         
         store.setLobbyOpen(false);
-        store.reset();
+        store.reset(); // 상태 초기화
         closeChatPanel();
     }
     
@@ -427,9 +431,6 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         
         console.log('[ChatLobby] Opening character editor for:', character.name);
         
-        // 로비 닫기
-        closeLobby();
-        
         // 캐릭터 선택
         const context = api.getContext();
         const characters = context?.characters || [];
@@ -440,19 +441,26 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             return;
         }
         
+        // 로비 닫기 (상태 초기화)
+        closeLobby();
+        
         // 캐릭터 선택
         await api.selectCharacterById(index);
         
-        // 캐릭터 선택 완료 대기 후 rightNavDrawerIcon 클릭
-        setTimeout(() => {
-            const rightNavIcon = document.getElementById('rightNavDrawerIcon');
-            if (rightNavIcon) {
-                console.log('[ChatLobby] Clicking rightNavDrawerIcon');
-                rightNavIcon.click();
-            } else {
-                console.warn('[ChatLobby] rightNavDrawerIcon not found');
-            }
-        }, 500);
+        // 캐릭터 선택 완료 대기 (조건 확인 방식)
+        const charSelected = await waitForCharacterSelect(character.avatar, 2000);
+        if (!charSelected) {
+            console.warn('[ChatLobby] Character selection timeout');
+        }
+        
+        // rightNavDrawerIcon 클릭
+        const rightNavIcon = document.getElementById('rightNavDrawerIcon');
+        if (rightNavIcon) {
+            console.log('[ChatLobby] Clicking rightNavDrawerIcon');
+            rightNavIcon.click();
+        } else {
+            console.warn('[ChatLobby] rightNavDrawerIcon not found');
+        }
     }
     
     /**

@@ -2364,6 +2364,34 @@
   init_store();
   init_notifications();
   init_config();
+
+  // src/utils/waitFor.js
+  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      try {
+        if (conditionFn()) return true;
+      } catch (e) {
+      }
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    return false;
+  }
+  async function waitForElement(selector, timeout = 3e3) {
+    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
+    return found ? document.querySelector(selector) : null;
+  }
+  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
+    return waitFor(() => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context) return false;
+      const currentChar = context.characters?.[context.characterId];
+      return currentChar?.avatar === expectedAvatar;
+    }, timeout);
+  }
+
+  // src/handlers/chatHandlers.js
+  init_eventHelpers();
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
     console.log("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
@@ -2383,11 +2411,14 @@
         return;
       }
       const chatFileName = fileName.replace(".jsonl", "");
-      console.log("[ChatHandlers] Selecting character first");
+      console.log("[ChatHandlers] Selecting character");
       await api.selectCharacterById(index);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      console.log("[ChatHandlers] Closing lobby");
-      closeLobby();
+      const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
+      if (!charSelected) {
+        console.warn("[ChatHandlers] Character selection timeout, continuing anyway");
+      }
+      console.log("[ChatHandlers] Closing lobby (keeping state)");
+      closeLobbyKeepState();
       if (typeof context?.openCharacterChat === "function") {
         console.log("[ChatHandlers] Using context.openCharacterChat:", chatFileName);
         try {
@@ -2399,9 +2430,7 @@
         }
       }
       console.log("[ChatHandlers] Fallback: clicking chat item in UI");
-      setTimeout(async () => {
-        await openChatByFileName(fileName);
-      }, CONFIG.timing.drawerOpenDelay);
+      await openChatByFileName(fileName);
     } catch (error) {
       console.error("[ChatHandlers] Failed to open chat:", error);
       showToast("\uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -2417,70 +2446,38 @@
     }
     console.log("[ChatHandlers] Clicking option_select_chat button");
     manageChatsBtn.click();
-    const maxWaitTime = 3e3;
-    const pollInterval = 100;
-    let waited = 0;
-    while (waited < maxWaitTime) {
-      const chatItems = document.querySelectorAll(".select_chat_block");
-      if (chatItems.length > 0) {
-        console.log("[ChatHandlers] Chat list loaded, found", chatItems.length, "items after", waited, "ms");
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-      waited += pollInterval;
+    const listLoaded = await waitFor(() => {
+      return document.querySelectorAll(".select_chat_block").length > 0;
+    }, 3e3);
+    if (!listLoaded) {
+      console.error("[ChatHandlers] Chat list did not load");
+      showToast("\uCC44\uD305 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      return;
     }
     const searchName = fileName.replace(".jsonl", "").trim();
-    const searchNameWithExt = fileName.endsWith(".jsonl") ? fileName : fileName + ".jsonl";
-    console.log("[ChatHandlers] Searching for:", { searchName, searchNameWithExt });
+    console.log("[ChatHandlers] Searching for:", searchName);
     function isExactMatch(itemName, target) {
       const cleanItem = itemName.replace(".jsonl", "").trim();
       const cleanTarget = target.replace(".jsonl", "").trim();
       return cleanItem === cleanTarget;
     }
-    const chatSelectors = [
-      ".select_chat_block",
-      ".past_chat_block",
-      "[data-file-name]"
-    ];
-    for (const selector of chatSelectors) {
-      const chatItems = document.querySelectorAll(selector);
-      console.log("[ChatHandlers] Checking selector:", selector, "found", chatItems.length, "items");
-      for (let i = 0; i < chatItems.length; i++) {
-        const item = chatItems[i];
-        const itemFileName = item.dataset?.fileName || "";
-        const fileNameEl = item.querySelector(".select_chat_block_filename");
-        const displayName = fileNameEl?.textContent?.trim() || "";
-        console.log(`[ChatHandlers] Item ${i}:`, {
-          itemFileName,
-          displayName,
-          matchesSearchName: isExactMatch(itemFileName, searchName) || isExactMatch(displayName, searchName)
-        });
-        if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
-          console.log("[ChatHandlers] \u2705 MATCH FOUND via itemFileName:", itemFileName);
-          await clickChatItemAndVerify(item, fileName);
-          return;
+    const chatItems = document.querySelectorAll(".select_chat_block");
+    console.log("[ChatHandlers] Found", chatItems.length, "chat items");
+    for (const item of chatItems) {
+      const itemFileName = item.getAttribute("file_name") || "";
+      if (isExactMatch(itemFileName, searchName)) {
+        console.log("[ChatHandlers] \u2705 MATCH FOUND:", itemFileName);
+        if (window.$) {
+          window.$(item).trigger("click");
+        } else {
+          item.click();
         }
-        if (displayName && isExactMatch(displayName, searchName)) {
-          console.log("[ChatHandlers] \u2705 MATCH FOUND via displayName:", displayName);
-          await clickChatItemAndVerify(item, fileName);
-          return;
-        }
+        console.log("[ChatHandlers] Click executed");
+        return;
       }
     }
     console.warn("[ChatHandlers] \u274C Chat not found in list:", fileName);
     showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
-  }
-  async function clickChatItemAndVerify(item, fileName) {
-    console.log("[ChatHandlers] Clicking chat item:", fileName);
-    const targetItem = item.hasAttribute("data-file-name") ? item : item.closest("[data-file-name]") || item;
-    console.log("[ChatHandlers] Target element:", targetItem.tagName, targetItem.className);
-    if (window.$) {
-      console.log("[ChatHandlers] Triggering jQuery click");
-      window.$(targetItem).trigger("click");
-    }
-    console.log("[ChatHandlers] Triggering native click");
-    targetItem.click();
-    console.log("[ChatHandlers] Click executed for:", fileName);
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
@@ -2559,13 +2556,12 @@
     }
     try {
       cache.invalidate("chats", charAvatar);
-      closeLobby();
+      closeLobbyKeepState();
       await api.selectCharacterById(parseInt(charIndex));
+      await waitForCharacterSelect(charAvatar, 2e3);
       if (hasChats) {
-        setTimeout(() => {
-          const newChatBtn = document.getElementById("option_start_new_chat");
-          if (newChatBtn) newChatBtn.click();
-        }, CONFIG.timing.menuCloseDelay);
+        const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
+        if (newChatBtn) newChatBtn.click();
       }
     } catch (error) {
       console.error("[ChatHandlers] Failed to start new chat:", error);
@@ -2611,7 +2607,7 @@
       showToast("\uCE90\uB9AD\uD130 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
-  function closeLobby() {
+  function closeLobbyKeepState() {
     const container = document.getElementById("chat-lobby-container");
     const fab = document.getElementById("chat-lobby-fab");
     if (container) container.style.display = "none";
@@ -2833,7 +2829,7 @@
         console.log("[ChatLobby] Lobby opened, handler status:", !!store.onCharacterSelect);
       }
     }
-    function closeLobby2() {
+    function closeLobby() {
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
       if (container) container.style.display = "none";
@@ -2885,7 +2881,7 @@
           openLobby();
           break;
         case "chat-lobby-close":
-          closeLobby2();
+          closeLobby();
           break;
         case "chat-lobby-chats-back":
           if (isMobile()) closeChatPanel();
@@ -2934,7 +2930,7 @@
           openLobby();
           break;
         case "close-lobby":
-          closeLobby2();
+          closeLobby();
           break;
         case "refresh":
           handleRefresh();
@@ -2950,7 +2946,7 @@
         if (folderModal?.style.display === "flex") {
           closeFolderModal();
         } else if (store.isLobbyOpen) {
-          closeLobby2();
+          closeLobby();
         }
       }
       if (e.key === "Enter" && e.target.id === "new-folder-name") {
@@ -2979,14 +2975,14 @@
       await renderCharacterGrid();
     }
     function handleImportCharacter() {
-      closeLobby2();
+      closeLobby();
       setTimeout(() => {
         const importBtn = document.getElementById("character_import_button");
         if (importBtn) importBtn.click();
       }, CONFIG.timing.menuCloseDelay);
     }
     function handleAddPersona() {
-      closeLobby2();
+      closeLobby();
       setTimeout(() => {
         const personaDrawer = document.getElementById("persona-management-button");
         const drawerIcon = personaDrawer?.querySelector(".drawer-icon");
@@ -3004,7 +3000,6 @@
         return;
       }
       console.log("[ChatLobby] Opening character editor for:", character.name);
-      closeLobby2();
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === character.avatar);
@@ -3012,19 +3007,22 @@
         console.error("[ChatLobby] Character not found:", character.avatar);
         return;
       }
+      closeLobby();
       await api.selectCharacterById(index);
-      setTimeout(() => {
-        const rightNavIcon = document.getElementById("rightNavDrawerIcon");
-        if (rightNavIcon) {
-          console.log("[ChatLobby] Clicking rightNavDrawerIcon");
-          rightNavIcon.click();
-        } else {
-          console.warn("[ChatLobby] rightNavDrawerIcon not found");
-        }
-      }, 500);
+      const charSelected = await waitForCharacterSelect(character.avatar, 2e3);
+      if (!charSelected) {
+        console.warn("[ChatLobby] Character selection timeout");
+      }
+      const rightNavIcon = document.getElementById("rightNavDrawerIcon");
+      if (rightNavIcon) {
+        console.log("[ChatLobby] Clicking rightNavDrawerIcon");
+        rightNavIcon.click();
+      } else {
+        console.warn("[ChatLobby] rightNavDrawerIcon not found");
+      }
     }
     function handleOpenCharSettings() {
-      closeLobby2();
+      closeLobby();
       setTimeout(() => {
         const charInfoBtn = document.getElementById("option_settings");
         if (charInfoBtn) charInfoBtn.click();

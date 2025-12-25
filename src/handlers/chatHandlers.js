@@ -9,6 +9,8 @@ import { store } from '../data/store.js';
 import { refreshChatList, getCurrentCharacter, closeChatPanel } from '../ui/chatList.js';
 import { showToast, showConfirm, showAlert } from '../ui/notifications.js';
 import { CONFIG } from '../config.js';
+import { waitFor, waitForCharacterSelect, waitForElement } from '../utils/waitFor.js';
+import { isMobile } from '../utils/eventHelpers.js';
 
 // ============================================
 // 채팅 열기
@@ -46,18 +48,21 @@ export async function openChat(chatInfo) {
         // 파일명 정규화 (확장자 제거)
         const chatFileName = fileName.replace('.jsonl', '');
         
-        // 먼저 캐릭터 선택
-        console.log('[ChatHandlers] Selecting character first');
+        // 1. 캐릭터 선택
+        console.log('[ChatHandlers] Selecting character');
         await api.selectCharacterById(index);
         
-        // 캐릭터 선택 완료 대기
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // 2. 캐릭터 선택 완료 대기 (조건 확인 방식)
+        const charSelected = await waitForCharacterSelect(charAvatar, 2000);
+        if (!charSelected) {
+            console.warn('[ChatHandlers] Character selection timeout, continuing anyway');
+        }
         
-        // 로비 닫기 (캐릭터 선택 후)
-        console.log('[ChatHandlers] Closing lobby');
-        closeLobby();
+        // 3. 로비 닫기 (상태 유지하면서)
+        console.log('[ChatHandlers] Closing lobby (keeping state)');
+        closeLobbyKeepState();
         
-        // SillyTavern openCharacterChat 함수 사용
+        // 4. SillyTavern openCharacterChat 함수 사용
         if (typeof context?.openCharacterChat === 'function') {
             console.log('[ChatHandlers] Using context.openCharacterChat:', chatFileName);
             try {
@@ -69,11 +74,9 @@ export async function openChat(chatInfo) {
             }
         }
         
-        // Fallback: 채팅 선택 UI 클릭
+        // 5. Fallback: 채팅 선택 UI 클릭
         console.log('[ChatHandlers] Fallback: clicking chat item in UI');
-        setTimeout(async () => {
-            await openChatByFileName(fileName);
-        }, CONFIG.timing.drawerOpenDelay);
+        await openChatByFileName(fileName);
         
     } catch (error) {
         console.error('[ChatHandlers] Failed to open chat:', error);
@@ -82,7 +85,7 @@ export async function openChat(chatInfo) {
 }
 
 /**
- * 파일명으로 채팅 열기
+ * 파일명으로 채팅 열기 (UI 클릭 방식)
  * @param {string} fileName - 채팅 파일명
  * @returns {Promise<void>}
  */
@@ -100,32 +103,24 @@ async function openChatByFileName(fileName) {
     console.log('[ChatHandlers] Clicking option_select_chat button');
     manageChatsBtn.click();
     
-    // 채팅 목록이 로드될 때까지 대기 (폴링 방식으로 개선)
-    const maxWaitTime = 3000; // 최대 3초 대기
-    const pollInterval = 100; // 100ms 간격으로 확인
-    let waited = 0;
+    // 채팅 목록이 로드될 때까지 대기 (조건 확인 방식)
+    const listLoaded = await waitFor(() => {
+        return document.querySelectorAll('.select_chat_block').length > 0;
+    }, 3000);
     
-    while (waited < maxWaitTime) {
-        const chatItems = document.querySelectorAll('.select_chat_block');
-        if (chatItems.length > 0) {
-            console.log('[ChatHandlers] Chat list loaded, found', chatItems.length, 'items after', waited, 'ms');
-            break;
-        }
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-        waited += pollInterval;
+    if (!listLoaded) {
+        console.error('[ChatHandlers] Chat list did not load');
+        showToast('채팅 목록을 불러오지 못했습니다.', 'error');
+        return;
     }
     
     // 파일명에서 확장자 제거하고 정규화
     const searchName = fileName.replace('.jsonl', '').trim();
-    const searchNameWithExt = fileName.endsWith('.jsonl') ? fileName : fileName + '.jsonl';
     
-    console.log('[ChatHandlers] Searching for:', { searchName, searchNameWithExt });
+    console.log('[ChatHandlers] Searching for:', searchName);
     
     /**
-     * 정확한 파일명 매칭 (부분 매칭 대신 정확한 매칭)
-     * @param {string} itemName - 비교할 파일명
-     * @param {string} target - 찾으려는 파일명
-     * @returns {boolean}
+     * 정확한 파일명 매칭
      */
     function isExactMatch(itemName, target) {
         const cleanItem = itemName.replace('.jsonl', '').trim();
@@ -133,79 +128,31 @@ async function openChatByFileName(fileName) {
         return cleanItem === cleanTarget;
     }
     
-    // 채팅 목록에서 해당 파일 찾기 - 정확한 매칭 우선
-    const chatSelectors = [
-        '.select_chat_block',
-        '.past_chat_block', 
-        '[data-file-name]'
-    ];
+    // 채팅 목록에서 해당 파일 찾기
+    const chatItems = document.querySelectorAll('.select_chat_block');
+    console.log('[ChatHandlers] Found', chatItems.length, 'chat items');
     
-    for (const selector of chatSelectors) {
-        const chatItems = document.querySelectorAll(selector);
-        console.log('[ChatHandlers] Checking selector:', selector, 'found', chatItems.length, 'items');
+    for (const item of chatItems) {
+        // file_name 속성에서 파일명 가져오기 (SillyTavern 표준)
+        const itemFileName = item.getAttribute('file_name') || '';
         
-        for (let i = 0; i < chatItems.length; i++) {
-            const item = chatItems[i];
+        if (isExactMatch(itemFileName, searchName)) {
+            console.log('[ChatHandlers] ✅ MATCH FOUND:', itemFileName);
             
-            // data-file-name 속성에서 파일명 가져오기 (가장 정확)
-            const itemFileName = item.dataset?.fileName || '';
-            
-            // .select_chat_block_filename 요소에서 파일명 가져오기
-            const fileNameEl = item.querySelector('.select_chat_block_filename');
-            const displayName = fileNameEl?.textContent?.trim() || '';
-            
-            console.log(`[ChatHandlers] Item ${i}:`, { 
-                itemFileName, 
-                displayName,
-                matchesSearchName: isExactMatch(itemFileName, searchName) || isExactMatch(displayName, searchName)
-            });
-            
-            // 정확한 매칭 시도
-            if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
-                console.log('[ChatHandlers] ✅ MATCH FOUND via itemFileName:', itemFileName);
-                await clickChatItemAndVerify(item, fileName);
-                return;
+            // jQuery 클릭 (SillyTavern 방식)
+            if (window.$) {
+                window.$(item).trigger('click');
+            } else {
+                item.click();
             }
             
-            if (displayName && isExactMatch(displayName, searchName)) {
-                console.log('[ChatHandlers] ✅ MATCH FOUND via displayName:', displayName);
-                await clickChatItemAndVerify(item, fileName);
-                return;
-            }
+            console.log('[ChatHandlers] Click executed');
+            return;
         }
     }
     
     console.warn('[ChatHandlers] ❌ Chat not found in list:', fileName);
     showToast('채팅 파일을 찾지 못했습니다.', 'warning');
-}
-
-/**
- * 채팅 아이템 클릭
- * @param {HTMLElement} item - 클릭할 채팅 아이템
- * @param {string} fileName - 파일명
- * @returns {Promise<void>}
- */
-async function clickChatItemAndVerify(item, fileName) {
-    console.log('[ChatHandlers] Clicking chat item:', fileName);
-    
-    // data-file-name 속성이 있는 요소를 직접 클릭
-    const targetItem = item.hasAttribute('data-file-name') ? item :
-                       item.closest('[data-file-name]') || item;
-    
-    console.log('[ChatHandlers] Target element:', targetItem.tagName, targetItem.className);
-    
-    // jQuery 트리거 (우선)
-    if (window.$) {
-        console.log('[ChatHandlers] Triggering jQuery click');
-        window.$(targetItem).trigger('click');
-    }
-    
-    // 네이티브 클릭도 실행
-    console.log('[ChatHandlers] Triggering native click');
-    targetItem.click();
-    
-    // 확인
-    console.log('[ChatHandlers] Click executed for:', fileName);
 }
 
 // ============================================
@@ -322,15 +269,18 @@ export async function startNewChat() {
         // 캐시 무효화
         cache.invalidate('chats', charAvatar);
         
-        closeLobby();
+        // 로비 닫기 (상태 유지)
+        closeLobbyKeepState();
+        
         await api.selectCharacterById(parseInt(charIndex));
+        
+        // 캐릭터 선택 완료 대기
+        await waitForCharacterSelect(charAvatar, 2000);
         
         // 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
         if (hasChats) {
-            setTimeout(() => {
-                const newChatBtn = document.getElementById('option_start_new_chat');
-                if (newChatBtn) newChatBtn.click();
-            }, CONFIG.timing.menuCloseDelay);
+            const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
+            if (newChatBtn) newChatBtn.click();
         }
     } catch (error) {
         console.error('[ChatHandlers] Failed to start new chat:', error);
@@ -400,9 +350,12 @@ export async function deleteCharacter() {
 // ============================================
 
 /**
- * 로비 닫기
+ * 로비 닫기 (상태 유지)
+ * - 채팅을 열면서 닫을 때 사용
+ * - 캐싱된 상태를 유지하여 다시 열 때 빠르게 복원
+ * - store.reset()을 호출하지 않음
  */
-function closeLobby() {
+function closeLobbyKeepState() {
     const container = document.getElementById('chat-lobby-container');
     const fab = document.getElementById('chat-lobby-fab');
     
@@ -411,4 +364,5 @@ function closeLobby() {
     
     store.setLobbyOpen(false);
     closeChatPanel();
+    // 주의: store.reset()을 호출하지 않음 - 상태 유지
 }
