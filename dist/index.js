@@ -2400,37 +2400,31 @@
   }
   async function clickChatItemAndVerify(item, fileName) {
     console.log("[ChatHandlers] Clicking chat item...");
-    const context = api.getContext();
-    const currentChat = context?.chatId || "";
-    console.log("[ChatHandlers] Current chat before click:", currentChat);
-    item.click();
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const drawer = document.getElementById("select_chat_popup");
-    if (drawer && drawer.style.display !== "none") {
-      console.log("[ChatHandlers] Drawer still open, waiting...");
-      let waitCount = 0;
-      while (drawer.style.display !== "none" && waitCount < 20) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        waitCount++;
-      }
-      if (drawer.style.display !== "none") {
-        console.warn("[ChatHandlers] Drawer did not close, trying alternative click");
-        const clickEvent = new MouseEvent("click", {
-          bubbles: true,
-          cancelable: true,
-          view: window
-        });
-        item.dispatchEvent(clickEvent);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+    const clickEvent = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    });
+    item.dispatchEvent(clickEvent);
+    console.log("[ChatHandlers] Click dispatched, waiting for chat to load...");
+    const maxWait = 3e3;
+    const interval = 200;
+    let waited = 0;
+    while (waited < maxWait) {
+      await new Promise((resolve) => setTimeout(resolve, interval));
+      waited += interval;
+      const popup = document.getElementById("select_chat_popup");
+      const isPopupClosed = !popup || popup.style.display === "none" || !popup.classList.contains("visible");
+      if (isPopupClosed) {
+        console.log("[ChatHandlers] \u2705 Chat popup closed after", waited, "ms");
+        return;
       }
     }
-    const newContext = api.getContext();
-    const newChat = newContext?.chatId || "";
-    console.log("[ChatHandlers] Chat after click:", newChat);
-    if (newChat !== currentChat) {
-      console.log("[ChatHandlers] \u2705 Chat successfully changed");
-    } else {
-      console.warn("[ChatHandlers] \u26A0\uFE0F Chat may not have changed");
+    console.warn("[ChatHandlers] \u26A0\uFE0F Popup still open after", maxWait, "ms, trying force close");
+    const closeBtn = document.querySelector("#select_chat_popup .popup_close, .select_chat_popup_close");
+    if (closeBtn) {
+      closeBtn.click();
+      console.log("[ChatHandlers] Clicked popup close button");
     }
   }
   async function deleteChat(chatInfo) {
@@ -2856,9 +2850,7 @@
         case "chat-lobby-add-persona":
           handleAddPersona();
           break;
-        case "chat-panel-avatar":
-          handleOpenCharSettings();
-          break;
+        // chat-panel-avatar 제거 - 캐릭터 설정 열기 기능 비활성화 (충돌 방지)
         case "chat-lobby-batch-mode":
           toggleBatchMode();
           break;

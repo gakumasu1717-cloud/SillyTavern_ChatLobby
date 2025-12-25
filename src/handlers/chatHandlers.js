@@ -171,51 +171,42 @@ async function openChatByFileName(fileName) {
 async function clickChatItemAndVerify(item, fileName) {
     console.log('[ChatHandlers] Clicking chat item...');
     
-    // 현재 채팅 파일명 저장 (비교용)
-    const context = api.getContext();
-    const currentChat = context?.chatId || '';
-    console.log('[ChatHandlers] Current chat before click:', currentChat);
+    // 클릭 실행 - MouseEvent로 직접 디스패치
+    const clickEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+    });
+    item.dispatchEvent(clickEvent);
     
-    // 클릭 실행
-    item.click();
+    console.log('[ChatHandlers] Click dispatched, waiting for chat to load...');
     
-    // 클릭 후 잠시 대기
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // 채팅이 로드될 때까지 대기 (최대 3초)
+    const maxWait = 3000;
+    const interval = 200;
+    let waited = 0;
     
-    // 채팅 선택 드로어가 닫히는지 확인
-    const drawer = document.getElementById('select_chat_popup');
-    if (drawer && drawer.style.display !== 'none') {
-        console.log('[ChatHandlers] Drawer still open, waiting...');
+    while (waited < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, interval));
+        waited += interval;
         
-        // 드로어가 닫힐 때까지 대기 (최대 2초)
-        let waitCount = 0;
-        while (drawer.style.display !== 'none' && waitCount < 20) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            waitCount++;
-        }
+        // 채팅 선택 팝업이 닫혔는지 확인
+        const popup = document.getElementById('select_chat_popup');
+        const isPopupClosed = !popup || popup.style.display === 'none' || !popup.classList.contains('visible');
         
-        if (drawer.style.display !== 'none') {
-            console.warn('[ChatHandlers] Drawer did not close, trying alternative click');
-            // 대체 방법: 직접 이벤트 디스패치
-            const clickEvent = new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            });
-            item.dispatchEvent(clickEvent);
-            await new Promise(resolve => setTimeout(resolve, 500));
+        if (isPopupClosed) {
+            console.log('[ChatHandlers] ✅ Chat popup closed after', waited, 'ms');
+            return;
         }
     }
     
-    // 채팅이 실제로 변경되었는지 확인
-    const newContext = api.getContext();
-    const newChat = newContext?.chatId || '';
-    console.log('[ChatHandlers] Chat after click:', newChat);
+    console.warn('[ChatHandlers] ⚠️ Popup still open after', maxWait, 'ms, trying force close');
     
-    if (newChat !== currentChat) {
-        console.log('[ChatHandlers] ✅ Chat successfully changed');
-    } else {
-        console.warn('[ChatHandlers] ⚠️ Chat may not have changed');
+    // 팝업이 안 닫히면 강제로 닫기 시도
+    const closeBtn = document.querySelector('#select_chat_popup .popup_close, .select_chat_popup_close');
+    if (closeBtn) {
+        closeBtn.click();
+        console.log('[ChatHandlers] Clicked popup close button');
     }
 }
 

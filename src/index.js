@@ -278,9 +278,7 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             case 'chat-lobby-add-persona':
                 handleAddPersona();
                 break;
-            case 'chat-panel-avatar':
-                handleOpenCharSettings();
-                break;
+            // chat-panel-avatar 제거 - 캐릭터 설정 열기 기능 비활성화 (충돌 방지)
             case 'chat-lobby-batch-mode':
                 toggleBatchMode();
                 break;
