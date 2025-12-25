@@ -8,10 +8,17 @@
     "build:watch": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser --watch",
     "build:min": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser --minify"
   },
-  "keywords": ["sillytavern", "extension", "chat", "lobby"],
+  "keywords": [
+    "sillytavern",
+    "extension",
+    "chat",
+    "lobby"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "esbuild": "^0.27.2"
+    "@types/node": "^25.0.3",
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3"
   }
 }

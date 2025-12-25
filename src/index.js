@@ -430,9 +430,35 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     // ============================================
     
     /**
+     * SillyTavern 컨텍스트가 준비될 때까지 대기
+     * @param {number} maxAttempts - 최대 시도 횟수
+     * @param {number} interval - 시도 간격 (ms)
+     * @returns {Promise<boolean>} 성공 여부
+     */
+    async function waitForSillyTavern(maxAttempts = 30, interval = 500) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const context = window.SillyTavern?.getContext?.();
+            if (context && context.characters) {
+                console.log('[ChatLobby] SillyTavern context ready after', attempt * interval, 'ms');
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+        console.error('[ChatLobby] SillyTavern context not available after', maxAttempts * interval, 'ms');
+        return false;
+    }
+    
+    /**
      * 초기화 완료 후 로비 자동 열기
      */
     async function initAndOpen() {
+        // SillyTavern 컨텍스트가 준비될 때까지 대기
+        const isReady = await waitForSillyTavern();
+        if (!isReady) {
+            console.error('[ChatLobby] Cannot initialize - SillyTavern not ready');
+            return;
+        }
+        
         await init();
         // 초기화 완료 후 로비 자동 열기
         setTimeout(() => {

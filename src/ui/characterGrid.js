@@ -239,6 +239,8 @@ function bindCharacterEvents(container) {
                     name: card.querySelector('.lobby-char-name').textContent,
                     avatarSrc: card.querySelector('.lobby-char-avatar').src
                 });
+            } else {
+                console.warn('[CharacterGrid] onCharacterSelect handler not set. Please wait for initialization.');
             }
         }, { preventDefault: false, stopPropagation: false });
     });

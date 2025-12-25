@@ -309,10 +309,17 @@ function bindChatEvents(container, charAvatar) {
             
             const handlers = store.chatHandlers;
             if (handlers.onOpen) {
+                // currentCharacter가 null인 경우 dataset에서 가져오기
+                const charIndex = store.currentCharacter?.index || item.dataset.charIndex || null;
+                
+                if (!charIndex && !item.dataset.charAvatar) {
+                    console.warn('[ChatList] Missing character info for chat open');
+                }
+                
                 handlers.onOpen({
                     fileName: item.dataset.fileName,
                     charAvatar: item.dataset.charAvatar,
-                    charIndex: store.currentCharacter?.index
+                    charIndex: charIndex
                 });
             }
         }, { preventDefault: false });

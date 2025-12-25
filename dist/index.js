@@ -1589,6 +1589,8 @@
             name: card.querySelector(".lobby-char-name").textContent,
             avatarSrc: card.querySelector(".lobby-char-avatar").src
           });
+        } else {
+          console.warn("[CharacterGrid] onCharacterSelect handler not set. Please wait for initialization.");
         }
       }, { preventDefault: false, stopPropagation: false });
     });
@@ -1861,13 +1863,29 @@
   function openPersonaManagement() {
     const container = document.getElementById("chat-lobby-container");
     const fab = document.getElementById("chat-lobby-fab");
+    const overlay = document.getElementById("chat-lobby-overlay");
     if (container) container.style.display = "none";
+    if (overlay) overlay.style.display = "none";
     if (fab) fab.style.display = "flex";
     store.setLobbyOpen(false);
     setTimeout(() => {
       const personaDrawer = document.getElementById("persona-management-button");
-      const drawerIcon = personaDrawer?.querySelector(".drawer-icon");
-      if (drawerIcon) drawerIcon.click();
+      if (!personaDrawer) {
+        console.warn("[PersonaBar] Persona management button not found");
+        showToast("\uD398\uB974\uC18C\uB098 \uAD00\uB9AC \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "warning");
+        return;
+      }
+      const drawerIcon = personaDrawer.querySelector(".drawer-icon");
+      if (drawerIcon) {
+        if (!drawerIcon.classList.contains("openIcon")) {
+          drawerIcon.click();
+          console.log("[PersonaBar] Opening persona management drawer");
+        } else {
+          console.log("[PersonaBar] Drawer already open");
+        }
+      } else {
+        personaDrawer.click();
+      }
     }, CONFIG.timing.menuCloseDelay);
   }
 
@@ -2047,9 +2065,10 @@
     const folderName = folder?.name || "";
     const tooltipPreview = truncateText(preview, 500);
     const safeAvatar = (charAvatar || "").replace(/"/g, "&quot;");
+    const safeFileName = (fileName || "").replace(/"/g, "&quot;");
     return `
     <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
-         data-file-name="${escapeHtml(fileName)}" 
+         data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
          data-folder-id="${folderId}">
@@ -2085,10 +2104,14 @@
         }
         const handlers = store.chatHandlers;
         if (handlers.onOpen) {
+          const charIndex = store.currentCharacter?.index || item.dataset.charIndex || null;
+          if (!charIndex && !item.dataset.charAvatar) {
+            console.warn("[ChatList] Missing character info for chat open");
+          }
           handlers.onOpen({
             fileName: item.dataset.fileName,
             charAvatar: item.dataset.charAvatar,
-            charIndex: store.currentCharacter?.index
+            charIndex
           });
         }
       }, { preventDefault: false });
@@ -2258,21 +2281,57 @@
   }
   async function openChatByFileName(fileName) {
     const manageChatsBtn = document.getElementById("option_select_chat");
-    if (manageChatsBtn) {
-      manageChatsBtn.click();
-      await new Promise((resolve) => setTimeout(resolve, CONFIG.timing.drawerOpenDelay));
-      const chatItems = document.querySelectorAll(".select_chat_block .ch_name, .past_chat_block, .select_chat_block");
+    if (!manageChatsBtn) {
+      console.error("[ChatHandlers] Chat select button not found");
+      showToast("\uCC44\uD305 \uC120\uD0DD \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    manageChatsBtn.click();
+    const maxWaitTime = 3e3;
+    const pollInterval = 100;
+    let waited = 0;
+    while (waited < maxWaitTime) {
+      const chatItems = document.querySelectorAll(".select_chat_block");
+      if (chatItems.length > 0) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      waited += pollInterval;
+    }
+    const searchName = fileName.replace(".jsonl", "").trim();
+    const searchNameWithExt = fileName.endsWith(".jsonl") ? fileName : fileName + ".jsonl";
+    function isExactMatch(itemName, target) {
+      const cleanItem = itemName.replace(".jsonl", "").trim();
+      const cleanTarget = target.replace(".jsonl", "").trim();
+      return cleanItem === cleanTarget;
+    }
+    const chatSelectors = [
+      ".select_chat_block",
+      ".past_chat_block",
+      "[data-file-name]"
+    ];
+    for (const selector of chatSelectors) {
+      const chatItems = document.querySelectorAll(selector);
       for (const item of chatItems) {
-        const itemText = item.textContent || item.dataset?.fileName || "";
-        if (itemText.includes(fileName.replace(".jsonl", "")) || itemText.includes(fileName)) {
+        const itemFileName = item.dataset?.fileName || "";
+        if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
           item.click();
-          console.log("[ChatHandlers] Chat selected:", fileName);
+          console.log("[ChatHandlers] Chat selected (exact match):", fileName, "via", selector);
           return;
         }
+        const fileNameEl = item.querySelector(".select_chat_block_filename");
+        if (fileNameEl) {
+          const displayName = fileNameEl.textContent?.trim() || "";
+          if (isExactMatch(displayName, searchName)) {
+            item.click();
+            console.log("[ChatHandlers] Chat selected (filename element):", fileName, "via", selector);
+            return;
+          }
+        }
       }
-      console.log("[ChatHandlers] Chat not found in list:", fileName);
-      showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
     }
+    console.warn("[ChatHandlers] Chat not found in list:", fileName);
+    showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
@@ -2603,10 +2662,12 @@
         overlay.style.display = "flex";
         if (container) container.style.display = "flex";
         if (fab) fab.style.display = "none";
+        store.reset();
         store.setLobbyOpen(true);
         if (store.batchModeActive) {
           toggleBatchMode();
         }
+        closeChatPanel();
         renderPersonaBar();
         renderCharacterGrid();
         updateFolderDropdowns();
@@ -2792,10 +2853,33 @@
       optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
       console.log("[ChatLobby] Added to options menu");
     }
+    async function waitForSillyTavern(maxAttempts = 30, interval = 500) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const context = window.SillyTavern?.getContext?.();
+        if (context && context.characters) {
+          console.log("[ChatLobby] SillyTavern context ready after", attempt * interval, "ms");
+          return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, interval));
+      }
+      console.error("[ChatLobby] SillyTavern context not available after", maxAttempts * interval, "ms");
+      return false;
+    }
+    async function initAndOpen() {
+      const isReady = await waitForSillyTavern();
+      if (!isReady) {
+        console.error("[ChatLobby] Cannot initialize - SillyTavern not ready");
+        return;
+      }
+      await init();
+      setTimeout(() => {
+        openLobby();
+      }, 100);
+    }
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => setTimeout(init, CONFIG.timing.initDelay));
+      document.addEventListener("DOMContentLoaded", () => setTimeout(initAndOpen, CONFIG.timing.initDelay));
     } else {
-      setTimeout(init, CONFIG.timing.initDelay);
+      setTimeout(initAndOpen, CONFIG.timing.initDelay);
     }
   })();
 })();

@@ -72,34 +72,66 @@ async function openChatByFileName(fileName) {
     
     manageChatsBtn.click();
     
-    // 채팅 목록이 로드될 때까지 대기
-    await new Promise(resolve => setTimeout(resolve, CONFIG.timing.drawerOpenDelay));
+    // 채팅 목록이 로드될 때까지 대기 (폴링 방식으로 개선)
+    const maxWaitTime = 3000; // 최대 3초 대기
+    const pollInterval = 100; // 100ms 간격으로 확인
+    let waited = 0;
+    
+    while (waited < maxWaitTime) {
+        const chatItems = document.querySelectorAll('.select_chat_block');
+        if (chatItems.length > 0) {
+            break;
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        waited += pollInterval;
+    }
     
     // 파일명에서 확장자 제거하고 정규화
     const searchName = fileName.replace('.jsonl', '').trim();
+    const searchNameWithExt = fileName.endsWith('.jsonl') ? fileName : fileName + '.jsonl';
     
-    // 채팅 목록에서 해당 파일 찾기 - 여러 셀렉터 시도
+    /**
+     * 정확한 파일명 매칭 (부분 매칭 대신 정확한 매칭)
+     * @param {string} itemName - 비교할 파일명
+     * @param {string} target - 찾으려는 파일명
+     * @returns {boolean}
+     */
+    function isExactMatch(itemName, target) {
+        const cleanItem = itemName.replace('.jsonl', '').trim();
+        const cleanTarget = target.replace('.jsonl', '').trim();
+        return cleanItem === cleanTarget;
+    }
+    
+    // 채팅 목록에서 해당 파일 찾기 - 정확한 매칭 우선
     const chatSelectors = [
         '.select_chat_block',
         '.past_chat_block', 
-        '[data-file-name]',
-        '.ch_name'
+        '[data-file-name]'
     ];
     
     for (const selector of chatSelectors) {
         const chatItems = document.querySelectorAll(selector);
         
         for (const item of chatItems) {
-            const itemText = item.textContent?.trim() || '';
+            // data-file-name 속성에서 파일명 가져오기 (가장 정확)
             const itemFileName = item.dataset?.fileName || '';
             
-            // 파일명 매칭 (확장자 유무 모두 체크)
-            if (itemText.includes(searchName) || 
-                itemFileName.includes(searchName) ||
-                itemFileName.includes(fileName)) {
+            // 정확한 매칭 시도
+            if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
                 item.click();
-                console.log('[ChatHandlers] Chat selected:', fileName, 'via', selector);
+                console.log('[ChatHandlers] Chat selected (exact match):', fileName, 'via', selector);
                 return;
+            }
+            
+            // .select_chat_block_filename 요소에서 파일명 가져오기
+            const fileNameEl = item.querySelector('.select_chat_block_filename');
+            if (fileNameEl) {
+                const displayName = fileNameEl.textContent?.trim() || '';
+                if (isExactMatch(displayName, searchName)) {
+                    item.click();
+                    console.log('[ChatHandlers] Chat selected (filename element):', fileName, 'via', selector);
+                    return;
+                }
             }
         }
     }
