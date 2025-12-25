@@ -15,7 +15,8 @@ export async function waitFor(conditionFn, timeout = 3000, interval = 50) {
         try {
             if (conditionFn()) return true;
         } catch (e) {
-            // 조건 함수 에러는 무시하고 계속 시도
+            // 조건 함수 에러는 무시하고 계속 시도 (디버깅시 활성화)
+            // console.debug('[waitFor] Condition check failed:', e.message);
         }
         await new Promise(r => setTimeout(r, interval));
     }

@@ -356,8 +356,7 @@ export async function deleteCharacter() {
         closeChatPanel();
         
         // SillyTavern 내장 deleteCharacter 함수 사용 시도
-        const context = api.getContext();
-        
+        // (위에서 가져온 context 재사용 - 레이스 컨디션 방지)
         if (typeof context?.deleteCharacter === 'function') {
             // SillyTavern 내장 함수 사용 (context.characters 자동 갱신됨)
             console.log('[ChatLobby] Using SillyTavern deleteCharacter function');

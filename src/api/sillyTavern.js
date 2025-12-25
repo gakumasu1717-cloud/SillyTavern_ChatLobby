@@ -132,7 +132,7 @@ class SillyTavernAPI {
                     const powerUserModule = await import('../../../../power-user.js');
                     personaNames = powerUserModule.power_user?.personas || {};
                 } catch (e) {
-                    console.log('[API] Could not import power_user');
+                    console.warn('[API] Could not import power_user:', e.message);
                 }
                 
                 const personas = avatars.map(avatarId => ({
@@ -177,6 +177,7 @@ class SillyTavernAPI {
             const personasModule = await import('../../../../personas.js');
             return personasModule.user_avatar || '';
         } catch (e) {
+            console.warn('[API] Failed to get current persona:', e.message);
             return '';
         }
     }
@@ -309,7 +310,7 @@ class SillyTavernAPI {
             return cache.get('chats', characterAvatar);
         }
         
-        // 중복 요청 방지
+        // 중복 요청 방지 (pendingRequests용 키, cache.stores 키와 다름)
         return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
             try {
                 const response = await this.fetchWithRetry('/api/characters/chats', {

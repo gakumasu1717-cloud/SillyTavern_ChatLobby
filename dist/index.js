@@ -997,7 +997,7 @@ ${message}` : message;
                 const powerUserModule = await import("../../../../power-user.js");
                 personaNames = powerUserModule.power_user?.personas || {};
               } catch (e) {
-                console.log("[API] Could not import power_user");
+                console.warn("[API] Could not import power_user:", e.message);
               }
               const personas = avatars.map((avatarId) => ({
                 key: avatarId,
@@ -1035,6 +1035,7 @@ ${message}` : message;
             const personasModule = await import("../../../../personas.js");
             return personasModule.user_avatar || "";
           } catch (e) {
+            console.warn("[API] Failed to get current persona:", e.message);
             return "";
           }
         }
@@ -2460,10 +2461,9 @@ ${message}` : message;
       data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
       storage.save(data);
       closeChatPanel();
-      const context2 = api.getContext();
-      if (typeof context2?.deleteCharacter === "function") {
+      if (typeof context?.deleteCharacter === "function") {
         console.log("[ChatLobby] Using SillyTavern deleteCharacter function");
-        await context2.deleteCharacter(char.avatar, { deleteChats: true });
+        await context.deleteCharacter(char.avatar, { deleteChats: true });
       } else {
         console.log("[ChatLobby] Using direct API call");
         const headers = api.getRequestHeaders();
@@ -2481,9 +2481,9 @@ ${message}` : message;
           console.error("[ChatLobby] Delete response:", response.status, errorText);
           throw new Error(`Delete failed: ${response.status} - ${errorText}`);
         }
-        if (typeof context2?.getCharacters === "function") {
+        if (typeof context?.getCharacters === "function") {
           console.log("[ChatLobby] Refreshing characters via getCharacters()");
-          await context2.getCharacters();
+          await context.getCharacters();
         }
       }
       cache.invalidate("characters");
