@@ -164,10 +164,11 @@
     min-width: 75px;
     overflow: visible;
     position: relative;
+    box-sizing: border-box;
 }
 
 .persona-item:hover {
-    border-color: var(--SmartThemeQuoteColor, #6a9fb5);
+    border-color: #f8a427 !important;
     transform: scale(1.05);
     background: rgba(255, 255, 255, 0.1);
 }
@@ -176,6 +177,11 @@
     border-color: #4CAF50;
     box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
     background: rgba(76, 175, 80, 0.1);
+}
+
+/* 선택된 페르소나도 호버 시 주황색 */
+.persona-item.selected:hover {
+    border-color: #f8a427 !important;
 }
 
 /* 페르소나 삭제 버튼 */
@@ -192,15 +198,14 @@
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.2s;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
+    z-index: 10;
 }
 
 .persona-item:hover .persona-delete-btn {
-    opacity: 1;
+    display: flex;
 }
 
 .persona-delete-btn:hover {
