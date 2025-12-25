@@ -22,6 +22,8 @@ import { CONFIG } from '../config.js';
 export async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
     
+    console.log('[ChatHandlers] openChat called:', { fileName, charAvatar, charIndex });
+    
     if (!charAvatar || !fileName) {
         console.error('[ChatHandlers] Missing chat data');
         showToast('채팅 정보가 올바르지 않습니다.', 'error');
@@ -33,6 +35,8 @@ export async function openChat(chatInfo) {
         const characters = context?.characters || [];
         const index = characters.findIndex(c => c.avatar === charAvatar);
         
+        console.log('[ChatHandlers] Found character at index:', index);
+        
         if (index === -1) {
             console.error('[ChatHandlers] Character not found');
             showToast('캐릭터를 찾을 수 없습니다.', 'error');
@@ -40,15 +44,19 @@ export async function openChat(chatInfo) {
         }
         
         // 로비 닫기
+        console.log('[ChatHandlers] Closing lobby');
         closeLobby();
         
         // 캐릭터 선택
+        console.log('[ChatHandlers] Selecting character by id:', index);
         await api.selectCharacterById(index);
         
-        // 채팅 열기
+        // 채팅 열기 - 더 긴 딜레이로 SillyTavern이 준비되도록
+        console.log('[ChatHandlers] Waiting before opening chat file...');
         setTimeout(async () => {
+            console.log('[ChatHandlers] Now calling openChatByFileName');
             await openChatByFileName(fileName);
-        }, CONFIG.timing.menuCloseDelay);
+        }, CONFIG.timing.drawerOpenDelay); // menuCloseDelay(300) 대신 drawerOpenDelay(500) 사용
         
     } catch (error) {
         console.error('[ChatHandlers] Failed to open chat:', error);
@@ -138,13 +146,13 @@ async function openChatByFileName(fileName) {
             // 정확한 매칭 시도
             if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
                 console.log('[ChatHandlers] ✅ MATCH FOUND via itemFileName:', itemFileName);
-                item.click();
+                await clickChatItemAndVerify(item, fileName);
                 return;
             }
             
             if (displayName && isExactMatch(displayName, searchName)) {
                 console.log('[ChatHandlers] ✅ MATCH FOUND via displayName:', displayName);
-                item.click();
+                await clickChatItemAndVerify(item, fileName);
                 return;
             }
         }
@@ -152,6 +160,63 @@ async function openChatByFileName(fileName) {
     
     console.warn('[ChatHandlers] ❌ Chat not found in list:', fileName);
     showToast('채팅 파일을 찾지 못했습니다.', 'warning');
+}
+
+/**
+ * 채팅 아이템 클릭 후 로드 확인
+ * @param {HTMLElement} item - 클릭할 채팅 아이템
+ * @param {string} fileName - 기대하는 파일명
+ * @returns {Promise<void>}
+ */
+async function clickChatItemAndVerify(item, fileName) {
+    console.log('[ChatHandlers] Clicking chat item...');
+    
+    // 현재 채팅 파일명 저장 (비교용)
+    const context = api.getContext();
+    const currentChat = context?.chatId || '';
+    console.log('[ChatHandlers] Current chat before click:', currentChat);
+    
+    // 클릭 실행
+    item.click();
+    
+    // 클릭 후 잠시 대기
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // 채팅 선택 드로어가 닫히는지 확인
+    const drawer = document.getElementById('select_chat_popup');
+    if (drawer && drawer.style.display !== 'none') {
+        console.log('[ChatHandlers] Drawer still open, waiting...');
+        
+        // 드로어가 닫힐 때까지 대기 (최대 2초)
+        let waitCount = 0;
+        while (drawer.style.display !== 'none' && waitCount < 20) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waitCount++;
+        }
+        
+        if (drawer.style.display !== 'none') {
+            console.warn('[ChatHandlers] Drawer did not close, trying alternative click');
+            // 대체 방법: 직접 이벤트 디스패치
+            const clickEvent = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+            });
+            item.dispatchEvent(clickEvent);
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+    
+    // 채팅이 실제로 변경되었는지 확인
+    const newContext = api.getContext();
+    const newChat = newContext?.chatId || '';
+    console.log('[ChatHandlers] Chat after click:', newChat);
+    
+    if (newChat !== currentChat) {
+        console.log('[ChatHandlers] ✅ Chat successfully changed');
+    } else {
+        console.warn('[ChatHandlers] ⚠️ Chat may not have changed');
+    }
 }
 
 // ============================================

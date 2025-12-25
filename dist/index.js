@@ -2305,6 +2305,7 @@
   init_config();
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
+    console.log("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
     if (!charAvatar || !fileName) {
       console.error("[ChatHandlers] Missing chat data");
       showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
@@ -2314,16 +2315,21 @@
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === charAvatar);
+      console.log("[ChatHandlers] Found character at index:", index);
       if (index === -1) {
         console.error("[ChatHandlers] Character not found");
         showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
+      console.log("[ChatHandlers] Closing lobby");
       closeLobby();
+      console.log("[ChatHandlers] Selecting character by id:", index);
       await api.selectCharacterById(index);
+      console.log("[ChatHandlers] Waiting before opening chat file...");
       setTimeout(async () => {
+        console.log("[ChatHandlers] Now calling openChatByFileName");
         await openChatByFileName(fileName);
-      }, CONFIG.timing.menuCloseDelay);
+      }, CONFIG.timing.drawerOpenDelay);
     } catch (error) {
       console.error("[ChatHandlers] Failed to open chat:", error);
       showToast("\uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -2379,18 +2385,53 @@
         });
         if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
           console.log("[ChatHandlers] \u2705 MATCH FOUND via itemFileName:", itemFileName);
-          item.click();
+          await clickChatItemAndVerify(item, fileName);
           return;
         }
         if (displayName && isExactMatch(displayName, searchName)) {
           console.log("[ChatHandlers] \u2705 MATCH FOUND via displayName:", displayName);
-          item.click();
+          await clickChatItemAndVerify(item, fileName);
           return;
         }
       }
     }
     console.warn("[ChatHandlers] \u274C Chat not found in list:", fileName);
     showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
+  }
+  async function clickChatItemAndVerify(item, fileName) {
+    console.log("[ChatHandlers] Clicking chat item...");
+    const context = api.getContext();
+    const currentChat = context?.chatId || "";
+    console.log("[ChatHandlers] Current chat before click:", currentChat);
+    item.click();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const drawer = document.getElementById("select_chat_popup");
+    if (drawer && drawer.style.display !== "none") {
+      console.log("[ChatHandlers] Drawer still open, waiting...");
+      let waitCount = 0;
+      while (drawer.style.display !== "none" && waitCount < 20) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      if (drawer.style.display !== "none") {
+        console.warn("[ChatHandlers] Drawer did not close, trying alternative click");
+        const clickEvent = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        item.dispatchEvent(clickEvent);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    const newContext = api.getContext();
+    const newChat = newContext?.chatId || "";
+    console.log("[ChatHandlers] Chat after click:", newChat);
+    if (newChat !== currentChat) {
+      console.log("[ChatHandlers] \u2705 Chat successfully changed");
+    } else {
+      console.warn("[ChatHandlers] \u26A0\uFE0F Chat may not have changed");
+    }
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
