@@ -2705,7 +2705,13 @@
       }, CONFIG.timing.preloadDelay);
     }
     function openLobby() {
-      console.log("[ChatLobby] Opening lobby...");
+      console.log("[ChatLobby] Opening lobby... called from:");
+      console.trace();
+      const chatsPanel = document.getElementById("chat-lobby-chats");
+      if (store.isLobbyOpen && chatsPanel?.classList.contains("visible")) {
+        console.log("[ChatLobby] Lobby already open with chat panel, ignoring openLobby call");
+        return;
+      }
       const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
@@ -2754,12 +2760,38 @@
     }
     function handleBodyClick(e) {
       const target = e.target;
+      if (target.closest(".lobby-char-card") || target.closest(".lobby-chat-item")) {
+        console.log("[EventDelegation] Ignoring click on card/chat item");
+        return;
+      }
       const actionEl = target.closest("[data-action]");
       if (actionEl) {
         handleAction(actionEl.dataset.action, actionEl, e);
         return;
       }
       const id = target.id || target.closest("[id]")?.id;
+      if (target.closest("#chat-lobby-container") && !target.closest("button") && !target.closest("[data-action]")) {
+        if (![
+          "chat-lobby-fab",
+          "chat-lobby-close",
+          "chat-lobby-chats-back",
+          "chat-lobby-refresh",
+          "chat-lobby-new-chat",
+          "chat-lobby-delete-char",
+          "chat-lobby-import-char",
+          "chat-lobby-add-persona",
+          "chat-panel-avatar",
+          "chat-lobby-batch-mode",
+          "batch-move-btn",
+          "batch-cancel-btn",
+          "chat-lobby-folder-manage",
+          "folder-modal-close",
+          "add-folder-btn"
+        ].includes(id)) {
+          return;
+        }
+      }
+      console.log("[EventDelegation] handleBodyClick - id:", id);
       switch (id) {
         case "chat-lobby-fab":
           openLobby();
