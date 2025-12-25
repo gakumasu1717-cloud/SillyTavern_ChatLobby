@@ -287,12 +287,10 @@ function initModalContainer() {
  * @returns {Promise<void>}
  */
 export function showAlert(message, title = '알림') {
-    return showModal({
-        title,
-        message,
-        showCancel: false,
-        confirmText: '확인'
-    });
+    // 브라우저 네이티브 alert 사용
+    const fullMessage = title ? `[${title}]\n\n${message}` : message;
+    alert(fullMessage);
+    return Promise.resolve();
 }
 
 /**
@@ -303,14 +301,9 @@ export function showAlert(message, title = '알림') {
  * @returns {Promise<boolean>}
  */
 export function showConfirm(message, title = '확인', dangerous = false) {
-    return showModal({
-        title,
-        message,
-        showCancel: true,
-        dangerous,
-        confirmText: dangerous ? '삭제' : '확인',
-        cancelText: '취소'
-    }).then(result => result === true);
+    // 브라우저 네이티브 confirm 사용 (CSS 문제 회피)
+    const fullMessage = title ? `[${title}]\n\n${message}` : message;
+    return Promise.resolve(confirm(fullMessage));
 }
 
 /**
@@ -321,13 +314,10 @@ export function showConfirm(message, title = '확인', dangerous = false) {
  * @returns {Promise<string|null>}
  */
 export function showPrompt(message, title = '입력', defaultValue = '') {
-    return showModal({
-        title,
-        message,
-        showCancel: true,
-        inputPlaceholder: '',
-        inputValue: defaultValue
-    });
+    // 브라우저 네이티브 prompt 사용
+    const fullMessage = title ? `[${title}]\n\n${message}` : message;
+    const result = prompt(fullMessage, defaultValue);
+    return Promise.resolve(result);
 }
 
 /**

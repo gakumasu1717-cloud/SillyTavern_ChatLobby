@@ -1335,211 +1335,31 @@
     div.textContent = str;
     return div.innerHTML;
   }
-  function initModalContainer() {
-    const existing = document.getElementById("chat-lobby-modal-container");
-    if (existing) {
-      existing.remove();
-      modalContainer = null;
-    }
-    if (modalContainer && document.body.contains(modalContainer)) return;
-    modalContainer = document.createElement("div");
-    modalContainer.id = "chat-lobby-modal-container";
-    modalContainer.setAttribute("style", `
-        display: none !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        min-height: 100vh !important;
-        max-height: 100vh !important;
-        min-width: 100vw !important;
-        max-width: 100vw !important;
-        z-index: 99999 !important;
-        background: rgba(0,0,0,0.6) !important;
-        justify-content: center !important;
-        align-items: center !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        box-sizing: border-box !important;
-        transform: none !important;
-    `);
-    modalContainer.innerHTML = `
-        <style>
-            .chat-lobby-modal {
-                background: #2a2a2a !important;
-                border-radius: 12px;
-                padding: 24px;
-                min-width: 320px;
-                max-width: 450px;
-                max-width: 90vw;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-                animation: modalFadeIn 0.2s ease;
-            }
-            .chat-lobby-modal-title {
-                font-size: 18px;
-                font-weight: bold;
-                margin-bottom: 12px;
-                color: var(--SmartThemeBodyColor, #fff);
-            }
-            .chat-lobby-modal-message {
-                font-size: 14px;
-                color: var(--SmartThemeBodyColor, #ccc);
-                margin-bottom: 20px;
-                line-height: 1.5;
-                white-space: pre-wrap;
-            }
-            .chat-lobby-modal-input {
-                width: 100%;
-                padding: 10px 12px;
-                border: 1px solid var(--SmartThemeBorderColor, #444);
-                border-radius: 6px;
-                background: var(--SmartThemeBlurTintColor, #1a1a1a);
-                color: var(--SmartThemeBodyColor, #fff);
-                font-size: 14px;
-                margin-bottom: 20px;
-                box-sizing: border-box;
-            }
-            .chat-lobby-modal-input:focus {
-                outline: none;
-                border-color: var(--SmartThemeQuoteColor, #888);
-            }
-            .chat-lobby-modal-buttons {
-                display: flex;
-                gap: 10px;
-                justify-content: flex-end;
-            }
-            .chat-lobby-modal-btn {
-                padding: 10px 20px;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 14px;
-                transition: opacity 0.2s;
-            }
-            .chat-lobby-modal-btn:hover { opacity: 0.8; }
-            .chat-lobby-modal-btn.cancel {
-                background: var(--SmartThemeBorderColor, #444);
-                color: var(--SmartThemeBodyColor, #fff);
-            }
-            .chat-lobby-modal-btn.confirm {
-                background: var(--SmartThemeQuoteColor, #4a9eff);
-                color: #fff;
-            }
-            .chat-lobby-modal-btn.confirm.dangerous {
-                background: #f44336;
-            }
-            @keyframes modalFadeIn {
-                from { transform: scale(0.9); opacity: 0; }
-                to { transform: scale(1); opacity: 1; }
-            }
-        </style>
-        <div class="chat-lobby-modal">
-            <div class="chat-lobby-modal-title"></div>
-            <div class="chat-lobby-modal-message"></div>
-            <input type="text" class="chat-lobby-modal-input" style="display:none;">
-            <div class="chat-lobby-modal-buttons">
-                <button class="chat-lobby-modal-btn cancel">\uCDE8\uC18C</button>
-                <button class="chat-lobby-modal-btn confirm">\uD655\uC778</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modalContainer);
-  }
   function showAlert(message, title = "\uC54C\uB9BC") {
-    return showModal({
-      title,
-      message,
-      showCancel: false,
-      confirmText: "\uD655\uC778"
-    });
+    const fullMessage = title ? `[${title}]
+
+${message}` : message;
+    alert(fullMessage);
+    return Promise.resolve();
   }
   function showConfirm(message, title = "\uD655\uC778", dangerous = false) {
-    return showModal({
-      title,
-      message,
-      showCancel: true,
-      dangerous,
-      confirmText: dangerous ? "\uC0AD\uC81C" : "\uD655\uC778",
-      cancelText: "\uCDE8\uC18C"
-    }).then((result) => result === true);
+    const fullMessage = title ? `[${title}]
+
+${message}` : message;
+    return Promise.resolve(confirm(fullMessage));
   }
   function showPrompt(message, title = "\uC785\uB825", defaultValue = "") {
-    return showModal({
-      title,
-      message,
-      showCancel: true,
-      inputPlaceholder: "",
-      inputValue: defaultValue
-    });
+    const fullMessage = title ? `[${title}]
+
+${message}` : message;
+    const result = prompt(fullMessage, defaultValue);
+    return Promise.resolve(result);
   }
-  function showModal(options) {
-    initModalContainer();
-    return new Promise((resolve) => {
-      const modal = modalContainer.querySelector(".chat-lobby-modal");
-      const titleEl = modal.querySelector(".chat-lobby-modal-title");
-      const messageEl = modal.querySelector(".chat-lobby-modal-message");
-      const inputEl = modal.querySelector(".chat-lobby-modal-input");
-      const cancelBtn = modal.querySelector(".chat-lobby-modal-btn.cancel");
-      const confirmBtn = modal.querySelector(".chat-lobby-modal-btn.confirm");
-      titleEl.textContent = options.title || "\uC54C\uB9BC";
-      messageEl.textContent = options.message || "";
-      if (options.inputPlaceholder !== void 0) {
-        inputEl.style.display = "block";
-        inputEl.placeholder = options.inputPlaceholder;
-        inputEl.value = options.inputValue || "";
-        setTimeout(() => inputEl.focus(), 100);
-      } else {
-        inputEl.style.display = "none";
-      }
-      cancelBtn.style.display = options.showCancel !== false ? "block" : "none";
-      cancelBtn.textContent = options.cancelText || "\uCDE8\uC18C";
-      confirmBtn.textContent = options.confirmText || "\uD655\uC778";
-      confirmBtn.classList.toggle("dangerous", options.dangerous === true);
-      const cleanup = () => {
-        modalContainer.style.setProperty("display", "none", "important");
-        cancelBtn.onclick = null;
-        confirmBtn.onclick = null;
-        inputEl.onkeydown = null;
-      };
-      cancelBtn.onclick = () => {
-        cleanup();
-        resolve(options.inputPlaceholder !== void 0 ? null : false);
-      };
-      confirmBtn.onclick = () => {
-        cleanup();
-        if (options.inputPlaceholder !== void 0) {
-          const value = inputEl.value.trim();
-          resolve(value || null);
-        } else {
-          resolve(true);
-        }
-      };
-      inputEl.onkeydown = (e) => {
-        if (e.key === "Enter") {
-          confirmBtn.click();
-        } else if (e.key === "Escape") {
-          cancelBtn.click();
-        }
-      };
-      const escHandler = (e) => {
-        if (modalContainer.style.display === "flex" && e.key === "Escape") {
-          cancelBtn.click();
-          document.removeEventListener("keydown", escHandler);
-        }
-      };
-      document.addEventListener("keydown", escHandler);
-      modalContainer.style.setProperty("display", "flex", "important");
-    });
-  }
-  var toastContainer, modalContainer;
+  var toastContainer;
   var init_notifications = __esm({
     "src/ui/notifications.js"() {
       init_config();
       toastContainer = null;
-      modalContainer = null;
     }
   });
 
