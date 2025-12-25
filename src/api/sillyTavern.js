@@ -236,14 +236,17 @@ class SillyTavernAPI {
     
     /**
      * 캐릭터 목록 가져오기
+     * @param {boolean} [forceRefresh=false] - 강제 새로고침
      * @returns {Promise<Array>}
      */
-    async fetchCharacters() {
-        // 캐시 우선
-        if (cache.isValid('characters')) {
+    async fetchCharacters(forceRefresh = false) {
+        // 강제 새로고침이 아니면 캐시 우선
+        if (!forceRefresh && cache.isValid('characters')) {
             return cache.get('characters');
         }
         
+        // context 강제 리로드
+        this._context = null;
         const context = this.getContext();
         if (!context) {
             console.error('[API] Context not available');
@@ -335,6 +338,11 @@ class SillyTavernAPI {
                 
                 const result = data || [];
                 cache.set('chats', result, characterAvatar);
+                
+                // 채팅 수도 같이 캐시 (추가 API 호출 방지)
+                const count = Array.isArray(result) ? result.length : 0;
+                cache.set('chatCounts', count, characterAvatar);
+                
                 return result;
             } catch (error) {
                 console.error('[API] Failed to load chats:', error);

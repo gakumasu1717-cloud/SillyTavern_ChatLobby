@@ -170,22 +170,34 @@ function isFavoriteChar(char) {
  */
 async function sortCharacters(characters, sortOption) {
     if (sortOption === 'chats') {
-        // 채팅 수 정렬 - 비동기
-        const chatCounts = await Promise.all(
-            characters.map(async (char) => {
-                const count = await api.getChatCount(char.avatar);
-                return { char, count };
-            })
-        );
+        // 채팅 수 정렬 - 캐시된 데이터만 사용 (N+1 문제 방지)
+        // 캐시가 없으면 0으로 처리, 추가 API 호출 없음
+        const results = characters.map(char => {
+            // 캐시에서 직접 가져오기 (비동기 없음)
+            const cachedCount = cache.get('chatCounts', char.avatar);
+            return { 
+                char, 
+                count: cachedCount,  // undefined 유지 (캐시 미스 구분용)
+                hasCache: cachedCount !== undefined
+            };
+        });
         
-        chatCounts.sort((a, b) => {
+        results.sort((a, b) => {
+            // 1. 즐겨찾기 우선
             if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
                 return isFavoriteChar(a.char) ? -1 : 1;
             }
+            
+            // 2. 캐시 미스는 맨 뒤로
+            if (a.hasCache && !b.hasCache) return -1;
+            if (!a.hasCache && b.hasCache) return 1;
+            if (!a.hasCache && !b.hasCache) return 0;
+            
+            // 3. 채팅 수 내림차순
             return b.count - a.count;
         });
         
-        return chatCounts.map(item => item.char);
+        return results.map(item => item.char);
     }
     
     const sorted = [...characters];

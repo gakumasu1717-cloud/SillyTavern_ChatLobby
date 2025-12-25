@@ -1,23 +1,11 @@
 // ============================================
-// 토스트 알림 및 커스텀 모달 UI
+// 토스트 알림 및 다이얼로그
 // ============================================
 
 import { CONFIG } from '../config.js';
 
 /**
  * @typedef {'success' | 'error' | 'warning' | 'info'} ToastType
- */
-
-/**
- * @typedef {Object} ModalOptions
- * @property {string} title - 모달 제목
- * @property {string} message - 모달 메시지
- * @property {string} [confirmText='확인'] - 확인 버튼 텍스트
- * @property {string} [cancelText='취소'] - 취소 버튼 텍스트
- * @property {boolean} [showCancel=true] - 취소 버튼 표시 여부
- * @property {boolean} [dangerous=false] - 위험 액션 여부 (빨간 버튼)
- * @property {string} [inputPlaceholder] - 입력 필드 플레이스홀더 (prompt용)
- * @property {string} [inputValue=''] - 입력 필드 기본값
  */
 
 // ============================================
@@ -144,51 +132,48 @@ function removeToast(toast) {
  * @returns {string}
  */
 function escapeHtml(str) {
+    if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
 }
 
 // ============================================
-// 브라우저 네이티브 alert/confirm/prompt 사용
+// 다이얼로그 (브라우저 네이티브)
 // ============================================
 
 /**
- * 커스텀 알림창 (alert 대체)
+ * 알림창 표시
  * @param {string} message - 메시지
  * @param {string} [title='알림'] - 제목
  * @returns {Promise<void>}
  */
 export function showAlert(message, title = '알림') {
-    // 브라우저 네이티브 alert 사용
     const fullMessage = title ? `[${title}]\n\n${message}` : message;
     alert(fullMessage);
     return Promise.resolve();
 }
 
 /**
- * 커스텀 확인창 (confirm 대체)
+ * 확인창 표시
  * @param {string} message - 메시지
  * @param {string} [title='확인'] - 제목
- * @param {boolean} [dangerous=false] - 위험 액션 여부
+ * @param {boolean} [_dangerous=false] - 미사용 (호환성 유지)
  * @returns {Promise<boolean>}
  */
-export function showConfirm(message, title = '확인', dangerous = false) {
-    // 브라우저 네이티브 confirm 사용 (CSS 문제 회피)
+export function showConfirm(message, title = '확인', _dangerous = false) {
     const fullMessage = title ? `[${title}]\n\n${message}` : message;
     return Promise.resolve(confirm(fullMessage));
 }
 
 /**
- * 커스텀 입력창 (prompt 대체)
+ * 입력창 표시
  * @param {string} message - 메시지
  * @param {string} [title='입력'] - 제목
  * @param {string} [defaultValue=''] - 기본값
  * @returns {Promise<string|null>}
  */
 export function showPrompt(message, title = '입력', defaultValue = '') {
-    // 브라우저 네이티브 prompt 사용
     const fullMessage = title ? `[${title}]\n\n${message}` : message;
-    const result = prompt(fullMessage, defaultValue);
-    return Promise.resolve(result);
+    return Promise.resolve(prompt(fullMessage, defaultValue));
 }

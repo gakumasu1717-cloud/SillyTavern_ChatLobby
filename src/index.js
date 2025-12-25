@@ -13,6 +13,7 @@ import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSor
 import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, executeBatchMove, updateBatchCount, closeChatPanel } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
+import { showToast } from './ui/notifications.js';
 import { debounce, isMobile } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 
@@ -50,6 +51,9 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         // 이벤트 위임 설정
         setupEventDelegation();
         
+        // SillyTavern 이벤트 리스닝
+        setupSillyTavernEvents();
+        
         // 백그라운드 프리로딩 시작
         startBackgroundPreload();
         
@@ -57,6 +61,45 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         addLobbyToOptionsMenu();
         
         console.log('[ChatLobby] Extension initialized');
+    }
+    
+    /**
+     * SillyTavern 이벤트 리스닝 설정
+     * 캐릭터 삭제/추가 등의 이벤트를 감지하여 캐시 무효화
+     */
+    function setupSillyTavernEvents() {
+        const context = window.SillyTavern?.getContext?.();
+        if (!context?.eventSource) {
+            console.warn('[ChatLobby] SillyTavern eventSource not found');
+            return;
+        }
+        
+        const { eventSource, eventTypes } = context;
+        
+        // 캐릭터 삭제 시 캐시 무효화
+        eventSource.on(eventTypes.CHARACTER_DELETED, () => {
+            console.log('[ChatLobby] Character deleted, invalidating cache');
+            cache.invalidate('characters');
+            // 로비가 열려있으면 새로고침
+            if (isLobbyOpen()) {
+                renderCharacterGrid(store.searchTerm);
+            }
+        });
+        
+        // 채팅 변경 시 (새 캐릭터 선택 포함)
+        eventSource.on(eventTypes.CHAT_CHANGED, () => {
+            console.log('[ChatLobby] Chat changed, invalidating character cache');
+            cache.invalidate('characters');
+        });
+        
+        console.log('[ChatLobby] SillyTavern events registered');
+    }
+    
+    /**
+     * 로비가 열려있는지 확인
+     */
+    function isLobbyOpen() {
+        return store.isLobbyOpen;
     }
     
     /**
@@ -114,6 +157,12 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     // ============================================
     
     /**
+     * 외부 작업 후 새로고침 필요 플래그
+     * (임포트, 페르소나 추가 등)
+     */
+    let needsRefreshOnOpen = false;
+    
+    /**
      * 로비 열기
      */
     function openLobby() {
@@ -141,6 +190,14 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
                 setupHandlers();
             }
             
+            // 스마트 캐시 무효화: 변화 감지 시에만
+            const shouldInvalidate = needsRefreshOnOpen || detectChanges();
+            if (shouldInvalidate) {
+                console.log('[ChatLobby] Changes detected, invalidating cache');
+                cache.invalidateAll();
+                needsRefreshOnOpen = false;
+            }
+            
             // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지)
             store.reset();
             store.setLobbyOpen(true);
@@ -162,6 +219,30 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             
             console.log('[ChatLobby] Lobby opened, handler status:', !!store.onCharacterSelect);
         }
+    }
+    
+    /**
+     * 변화 감지: 캐시된 데이터와 현재 SillyTavern 데이터 비교
+     * @returns {boolean} 변화가 감지되면 true
+     */
+    function detectChanges() {
+        const context = api.getContext();
+        if (!context) return false;
+        
+        // 캐릭터 수 비교
+        const cachedChars = cache.get('characters');
+        const currentChars = context.characters;
+        if (cachedChars && currentChars) {
+            if (cachedChars.length !== currentChars.length) {
+                console.log('[ChatLobby] Character count changed:', cachedChars.length, '->', currentChars.length);
+                return true;
+            }
+        }
+        
+        // 페르소나는 context에서 직접 비교하기 어려우므로 스킵
+        // (페르소나 작업 시 needsRefreshOnOpen 플래그 사용)
+        
+        return false;
     }
     
     /**
@@ -383,40 +464,53 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     // ============================================
     
     /**
-     * 새로고침 처리
+     * 새로고침 처리 - 캐시 완전 무효화 후 강제 리로드
      */
     async function handleRefresh() {
+        console.log('[ChatLobby] Force refresh - invalidating all cache');
         cache.invalidateAll();
+        
+        // 강제로 API 재호출 (forceRefresh=true)
+        await api.fetchPersonas();
+        await api.fetchCharacters(true);
+        
         await renderPersonaBar();
         await renderCharacterGrid();
+        
+        showToast('새로고침 완료', 'success');
     }
     
     /**
-     * 캐릭터 임포트 처리
+     * 캠릭터 임포트 처리
      */
     function handleImportCharacter() {
+        // 다음 로비 오픈 시 새로고침 필요
+        needsRefreshOnOpen = true;
+        
+        // 로비 닫고 임포트 버튼 클릭
         closeLobby();
-        setTimeout(() => {
-            const importBtn = document.getElementById('character_import_button');
-            if (importBtn) importBtn.click();
-        }, CONFIG.timing.menuCloseDelay);
+        
+        const importBtn = document.getElementById('character_import_button');
+        if (importBtn) {
+            importBtn.click();
+        }
     }
     
     /**
      * 페르소나 추가 처리
      */
     function handleAddPersona() {
+        // 다음 로비 오픈 시 새로고침 필요
+        needsRefreshOnOpen = true;
+        
+        // 로비 닫고 페르소나 관리 드로어 열기
         closeLobby();
-        setTimeout(() => {
-            const personaDrawer = document.getElementById('persona-management-button');
-            const drawerIcon = personaDrawer?.querySelector('.drawer-icon');
-            if (drawerIcon) drawerIcon.click();
-            
-            setTimeout(() => {
-                const createBtn = document.getElementById('create_dummy_persona');
-                if (createBtn) createBtn.click();
-            }, CONFIG.timing.drawerOpenDelay);
-        }, CONFIG.timing.menuCloseDelay);
+        
+        const personaDrawer = document.getElementById('persona-management-button');
+        const drawerIcon = personaDrawer?.querySelector('.drawer-icon');
+        if (drawerIcon) {
+            drawerIcon.click();
+        }
     }
     
     /**
