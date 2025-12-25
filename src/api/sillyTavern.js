@@ -218,7 +218,9 @@ class SillyTavernAPI {
             });
             
             if (response.ok) {
-                cache.invalidate('personas');
+                // 캐시 무효화 + pending request 제거
+                cache.invalidate('personas', null, true);
+                console.log('[API] Persona deleted, cache invalidated');
             }
             return response.ok;
         } catch (error) {

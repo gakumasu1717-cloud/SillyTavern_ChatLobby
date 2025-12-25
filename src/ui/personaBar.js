@@ -173,6 +173,8 @@ async function deletePersona(personaKey, personaName) {
         const success = await api.deletePersona(personaKey);
         if (success) {
             showToast(`"${personaName}" 페르소나가 삭제되었습니다.`, 'success');
+            // 캐시 무효화 후 새 데이터로 리렌더
+            cache.invalidate('personas', null, true);
             await renderPersonaBar();
         } else {
             showToast('페르소나 삭제에 실패했습니다.', 'error');

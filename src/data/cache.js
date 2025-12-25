@@ -114,11 +114,15 @@ class CacheManager {
      * 캐시 무효화
      * @param {CacheType} [type] - 캐시 타입 (없으면 전체)
      * @param {string|null} [key=null] - 서브 키
+     * @param {boolean} [clearPending=false] - pending request도 제거할지
      */
-    invalidate(type, key = null) {
+    invalidate(type, key = null, clearPending = false) {
         if (key !== null) {
             this.stores[type].delete(key);
             this.timestamps[type].delete(key);
+            if (clearPending) {
+                this.pendingRequests.delete(`${type}:${key}`);
+            }
         } else if (type) {
             if (this.stores[type] instanceof Map) {
                 this.stores[type].clear();
@@ -126,6 +130,9 @@ class CacheManager {
             } else {
                 this.stores[type] = null;
                 this.timestamps[type] = 0;
+            }
+            if (clearPending) {
+                this.pendingRequests.delete(type);
             }
         }
     }

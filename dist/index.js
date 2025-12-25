@@ -175,11 +175,15 @@
          * 캐시 무효화
          * @param {CacheType} [type] - 캐시 타입 (없으면 전체)
          * @param {string|null} [key=null] - 서브 키
+         * @param {boolean} [clearPending=false] - pending request도 제거할지
          */
-        invalidate(type, key = null) {
+        invalidate(type, key = null, clearPending = false) {
           if (key !== null) {
             this.stores[type].delete(key);
             this.timestamps[type].delete(key);
+            if (clearPending) {
+              this.pendingRequests.delete(`${type}:${key}`);
+            }
           } else if (type) {
             if (this.stores[type] instanceof Map) {
               this.stores[type].clear();
@@ -187,6 +191,9 @@
             } else {
               this.stores[type] = null;
               this.timestamps[type] = 0;
+            }
+            if (clearPending) {
+              this.pendingRequests.delete(type);
             }
           }
         }
@@ -1065,7 +1072,8 @@ ${message}` : message;
               body: JSON.stringify({ avatar: personaKey })
             });
             if (response.ok) {
-              cache.invalidate("personas");
+              cache.invalidate("personas", null, true);
+              console.log("[API] Persona deleted, cache invalidated");
             }
             return response.ok;
           } catch (error) {
@@ -1783,6 +1791,7 @@ ${message}` : message;
       const success = await api.deletePersona(personaKey);
       if (success) {
         showToast(`"${personaName}" \uD398\uB974\uC18C\uB098\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+        cache.invalidate("personas", null, true);
         await renderPersonaBar();
       } else {
         showToast("\uD398\uB974\uC18C\uB098 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
