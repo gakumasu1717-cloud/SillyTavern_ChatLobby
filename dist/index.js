@@ -1724,48 +1724,23 @@ ${message}` : message;
     container.innerHTML = html;
     bindPersonaEvents(container);
   }
-  var isTouchDevice = () => "ontouchstart" in window || navigator.maxTouchPoints > 0;
-  var focusedPersonaItem = null;
   function bindPersonaEvents(container) {
     container.querySelectorAll(".persona-item").forEach((item) => {
-      const avatarImg = item.querySelector(".persona-avatar");
-      const nameSpan = item.querySelector(".persona-name");
       const deleteBtn = item.querySelector(".persona-delete-btn");
-      const handlePersonaClick = async (e) => {
+      const handleItemClick = async (e) => {
         if (e.target.closest(".persona-delete-btn")) return;
         if (store.isProcessingPersona) return;
-        if (isTouchDevice()) {
-          if (item.classList.contains("selected")) {
-            openPersonaManagement();
-            return;
-          }
-          if (focusedPersonaItem !== item) {
-            container.querySelectorAll(".persona-item").forEach((el) => {
-              el.classList.remove("touch-focused");
-            });
-            item.classList.add("touch-focused");
-            focusedPersonaItem = item;
-            return;
-          }
-          item.classList.remove("touch-focused");
-          focusedPersonaItem = null;
-          await selectPersona(container, item);
+        if (item.classList.contains("selected")) {
+          openPersonaManagement();
         } else {
-          if (item.classList.contains("selected")) {
-            openPersonaManagement();
-          } else {
-            await selectPersona(container, item);
-          }
+          await selectPersona(container, item);
         }
       };
-      if (avatarImg) {
-        createTouchClickHandler(avatarImg, handlePersonaClick, { debugName: "persona-avatar" });
-        avatarImg.style.cursor = "pointer";
-      }
-      if (nameSpan) {
-        createTouchClickHandler(nameSpan, handlePersonaClick, { debugName: "persona-name" });
-        nameSpan.style.cursor = "pointer";
-      }
+      item.addEventListener("click", handleItemClick);
+      item.addEventListener("touchend", (e) => {
+        if (e.cancelable) e.preventDefault();
+        handleItemClick(e);
+      }, { passive: false });
       if (deleteBtn) {
         deleteBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
@@ -1773,16 +1748,12 @@ ${message}` : message;
           const personaName = item.title || personaKey;
           await deletePersona(personaKey, personaName);
         });
+        deleteBtn.addEventListener("touchend", (e) => {
+          e.stopPropagation();
+          if (e.cancelable) e.preventDefault();
+        }, { passive: false });
       }
     });
-    if (isTouchDevice()) {
-      document.addEventListener("touchstart", (e) => {
-        if (!e.target.closest(".persona-item") && focusedPersonaItem) {
-          focusedPersonaItem.classList.remove("touch-focused");
-          focusedPersonaItem = null;
-        }
-      }, { passive: true });
-    }
   }
   async function selectPersona(container, item) {
     if (store.isProcessingPersona) return;

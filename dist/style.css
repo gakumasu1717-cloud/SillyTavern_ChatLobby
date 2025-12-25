@@ -213,23 +213,7 @@
     transform: scale(1.1);
 }
 
-/* ============================================
-   페르소나 - 모바일 터치 포커스
-   ============================================ */
-
-/* 모바일 터치 포커스 상태 (첫 번째 탭) */
-.persona-item.touch-focused {
-    border-color: #f8a427 !important;
-    transform: scale(1.05);
-    background: rgba(255, 255, 255, 0.1);
-}
-
-/* 포커스 상태에서 삭제 버튼 표시 */
-.persona-item.touch-focused .persona-delete-btn {
-    display: flex !important;
-}
-
-/* 터치 디바이스에서 호버 효과 제거 (포커스로 대체) */
+/* 모바일: 호버 효과 제거 (초록색 선택만 표시) */
 @media (hover: none) {
     .persona-item:hover {
         border-color: transparent;
@@ -238,22 +222,17 @@
     }
     
     .persona-item:hover .persona-delete-btn {
-        display: none !important;
+        display: none;
     }
     
-    .persona-item.selected:hover {
+    .persona-item.selected {
         border-color: #4CAF50;
+        box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
         background: rgba(76, 175, 80, 0.1);
     }
     
-    .persona-item.touch-focused {
-        border-color: #f8a427 !important;
-        transform: scale(1.05);
-        background: rgba(255, 255, 255, 0.1);
-    }
-    
-    .persona-item.touch-focused .persona-delete-btn {
-        display: flex !important;
+    .persona-item.selected .persona-delete-btn {
+        display: flex;
     }
 }
 
