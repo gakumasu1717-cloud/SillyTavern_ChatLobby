@@ -293,7 +293,7 @@ export async function startNewChat() {
 // ============================================
 
 /**
- * 캐릭터 삭제 (SillyTavern 내장 함수 직접 호출)
+ * 캐릭터 삭제 (SillyTavern 내장 함수 사용)
  * @returns {Promise<void>}
  */
 export async function deleteCharacter() {
@@ -329,27 +329,39 @@ export async function deleteCharacter() {
         // UI 리셋
         closeChatPanel();
         
-        // SillyTavern API로 삭제 요청
-        const headers = api.getRequestHeaders();
+        // SillyTavern 내장 deleteCharacter 함수 사용 시도
+        const context = api.getContext();
         
-        // avatar가 .png로 끝나는지 확인
-        const avatarUrl = char.avatar.endsWith('.png') ? char.avatar : `${char.avatar}.png`;
-        
-        console.log('[ChatLobby] Deleting character:', { avatar: char.avatar, avatarUrl, headers });
-        
-        const response = await fetch('/api/characters/delete', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({
-                avatar_url: avatarUrl,
-                delete_chats: true
-            })
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[ChatLobby] Delete response:', response.status, errorText);
-            throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+        if (typeof context?.deleteCharacter === 'function') {
+            // SillyTavern 내장 함수 사용 (context.characters 자동 갱신됨)
+            console.log('[ChatLobby] Using SillyTavern deleteCharacter function');
+            await context.deleteCharacter(char.avatar, { deleteChats: true });
+        } else {
+            // Fallback: 직접 API 호출 후 getCharacters로 갱신
+            console.log('[ChatLobby] Using direct API call');
+            const headers = api.getRequestHeaders();
+            const avatarUrl = char.avatar.endsWith('.png') ? char.avatar : `${char.avatar}.png`;
+            
+            const response = await fetch('/api/characters/delete', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    avatar_url: avatarUrl,
+                    delete_chats: true
+                })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[ChatLobby] Delete response:', response.status, errorText);
+                throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+            }
+            
+            // API 삭제 성공 후 SillyTavern의 characters 배열 갱신
+            if (typeof context?.getCharacters === 'function') {
+                console.log('[ChatLobby] Refreshing characters via getCharacters()');
+                await context.getCharacters();
+            }
         }
         
         // 캐시 무효화

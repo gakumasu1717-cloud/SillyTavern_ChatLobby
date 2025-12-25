@@ -2421,21 +2421,31 @@ ${message}` : message;
       data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
       storage.save(data);
       closeChatPanel();
-      const headers = api.getRequestHeaders();
-      const avatarUrl = char.avatar.endsWith(".png") ? char.avatar : `${char.avatar}.png`;
-      console.log("[ChatLobby] Deleting character:", { avatar: char.avatar, avatarUrl, headers });
-      const response = await fetch("/api/characters/delete", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          avatar_url: avatarUrl,
-          delete_chats: true
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[ChatLobby] Delete response:", response.status, errorText);
-        throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+      const context = api.getContext();
+      if (typeof context?.deleteCharacter === "function") {
+        console.log("[ChatLobby] Using SillyTavern deleteCharacter function");
+        await context.deleteCharacter(char.avatar, { deleteChats: true });
+      } else {
+        console.log("[ChatLobby] Using direct API call");
+        const headers = api.getRequestHeaders();
+        const avatarUrl = char.avatar.endsWith(".png") ? char.avatar : `${char.avatar}.png`;
+        const response = await fetch("/api/characters/delete", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            avatar_url: avatarUrl,
+            delete_chats: true
+          })
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("[ChatLobby] Delete response:", response.status, errorText);
+          throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+        }
+        if (typeof context?.getCharacters === "function") {
+          console.log("[ChatLobby] Refreshing characters via getCharacters()");
+          await context.getCharacters();
+        }
       }
       cache.invalidate("characters");
       cache.invalidate("chats", char.avatar);
