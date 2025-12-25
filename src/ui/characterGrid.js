@@ -29,6 +29,7 @@ export function setCharacterSelectHandler(handler) {
 
 /**
  * 캐릭터 그리드 렌더링
+ * context.characters를 직접 사용 (항상 최신 데이터)
  * @param {string} [searchTerm=''] - 검색어
  * @param {string|null} [sortOverride=null] - 정렬 옵션 오버라이드
  * @returns {Promise<void>}
@@ -40,41 +41,21 @@ export async function renderCharacterGrid(searchTerm = '', sortOverride = null) 
     // 검색어 저장
     store.setSearchTerm(searchTerm);
     
-    // 캐시된 데이터가 있으면 즉시 렌더링
-    const cachedCharacters = cache.get('characters');
-    if (cachedCharacters && cachedCharacters.length > 0) {
-        await renderCharacterList(container, cachedCharacters, searchTerm, sortOverride);
-    } else {
-        container.innerHTML = '<div class="lobby-loading">캐릭터 로딩 중...</div>';
-    }
+    // context에서 직접 캐릭터 가져오기 (항상 최신)
+    const characters = api.getCharacters();
     
-    try {
-        // 최신 데이터 가져오기 (백그라운드)
-        const characters = await api.fetchCharacters();
-        
-        if (characters.length === 0) {
-            container.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>👥</i>
-                    <div>캐릭터가 없습니다</div>
-                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
-                </div>
-            `;
-            return;
-        }
-        
-        await renderCharacterList(container, characters, searchTerm, sortOverride);
-    } catch (error) {
-        console.error('[CharacterGrid] Failed to load characters:', error);
-        showToast('캐릭터 목록을 불러오지 못했습니다.', 'error');
+    if (characters.length === 0) {
         container.innerHTML = `
             <div class="lobby-empty-state">
-                <i>⚠️</i>
-                <div>캐릭터 로딩 실패</div>
-                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">다시 시도</button>
+                <i>👥</i>
+                <div>캐릭터가 없습니다</div>
+                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
             </div>
         `;
+        return;
     }
+    
+    await renderCharacterList(container, characters, searchTerm, sortOverride);
 }
 
 /**
@@ -116,8 +97,8 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         return;
     }
     
-    // 원본 인덱스 보존
-    const originalCharacters = cache.get('characters') || characters;
+    // 원본 인덱스 보존 (context.characters 기준)
+    const originalCharacters = api.getCharacters();
     
     container.innerHTML = filtered.map(char => {
         const originalIndex = originalCharacters.indexOf(char);

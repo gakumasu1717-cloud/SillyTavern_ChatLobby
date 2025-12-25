@@ -303,6 +303,15 @@ export async function deleteCharacter() {
         return;
     }
     
+    // 사용자 확인
+    const confirmed = await showConfirm(
+        `"${char.name}" 캐릭터와 모든 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
     try {
         // 로비 데이터 먼저 정리
         const data = storage.load();
@@ -320,36 +329,40 @@ export async function deleteCharacter() {
         // UI 리셋
         closeChatPanel();
         
-        // 로비 임시 숨기기
-        closeLobbyKeepState();
+        // SillyTavern API로 삭제 요청
+        const context = api.getContext();
+        const headers = context?.getRequestHeaders?.() || api.getRequestHeaders();
         
-        // SillyTavern의 deleteCharacter 함수 직접 호출
-        // 이 함수가 자체적으로 confirm 팝업을 띄우고 삭제 처리함
-        const { deleteCharacter: stDeleteCharacter } = await import('../../../../script.js');
-        await stDeleteCharacter(char.avatar, { deleteChats: true });
+        const response = await fetch('/api/characters/delete', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                avatar_url: char.avatar,
+                delete_chats: true
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Delete failed: ${response.status}`);
+        }
         
         // 캐시 무효화
         cache.invalidate('characters');
         cache.invalidate('chats', char.avatar);
         
-        // 3초 후 로비 다시 열기 (SillyTavern UI 처리 시간 고려)
-        setTimeout(async () => {
-            const fab = document.getElementById('chat-lobby-fab');
-            const overlay = document.getElementById('chat-lobby-overlay');
-            const container = document.getElementById('chat-lobby-container');
-            
-            if (fab) fab.style.display = 'flex';
-            if (overlay) overlay.style.display = 'none';
-            if (container) container.style.display = 'none';
-        }, 3000);
+        showToast(`"${char.name}" 캐릭터가 삭제되었습니다.`, 'success');
+        
+        // 그리드 새로고침 (로비가 열려있으면)
+        const overlay = document.getElementById('chat-lobby-overlay');
+        if (overlay?.style.display === 'flex') {
+            // 동적 import로 순환 참조 방지
+            const { renderCharacterGrid } = await import('../ui/characterGrid.js');
+            await renderCharacterGrid();
+        }
         
     } catch (error) {
         console.error('[ChatHandlers] Failed to delete character:', error);
         showToast('캐릭터 삭제 중 오류가 발생했습니다.', 'error');
-        
-        // 에러 시 로비 FAB 다시 표시
-        const fab = document.getElementById('chat-lobby-fab');
-        if (fab) fab.style.display = 'flex';
     }
 }
 

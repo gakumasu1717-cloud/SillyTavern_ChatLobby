@@ -157,13 +157,8 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     // ============================================
     
     /**
-     * 외부 작업 후 새로고침 필요 플래그
-     * (임포트, 페르소나 추가 등)
-     */
-    let needsRefreshOnOpen = false;
-    
-    /**
      * 로비 열기
+     * context.characters를 직접 사용하므로 캐시 무효화 불필요
      */
     function openLobby() {
         console.log('[ChatLobby] Opening lobby...');
@@ -190,14 +185,6 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
                 setupHandlers();
             }
             
-            // 스마트 캐시 무효화: 변화 감지 시에만
-            const shouldInvalidate = needsRefreshOnOpen || detectChanges();
-            if (shouldInvalidate) {
-                console.log('[ChatLobby] Changes detected, invalidating cache');
-                cache.invalidateAll();
-                needsRefreshOnOpen = false;
-            }
-            
             // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지)
             store.reset();
             store.setLobbyOpen(true);
@@ -210,7 +197,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             // 채팅 패널 닫기 (이전 캐릭터 선택 상태 클리어)
             closeChatPanel();
             
-            // 캐시된 데이터로 즉시 렌더링 (캐시 있으면 0ms)
+            // 렌더링 (context에서 직접 가져오므로 항상 최신)
             renderPersonaBar();
             renderCharacterGrid();
             
@@ -219,30 +206,6 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             
             console.log('[ChatLobby] Lobby opened, handler status:', !!store.onCharacterSelect);
         }
-    }
-    
-    /**
-     * 변화 감지: 캐시된 데이터와 현재 SillyTavern 데이터 비교
-     * @returns {boolean} 변화가 감지되면 true
-     */
-    function detectChanges() {
-        const context = api.getContext();
-        if (!context) return false;
-        
-        // 캐릭터 수 비교
-        const cachedChars = cache.get('characters');
-        const currentChars = context.characters;
-        if (cachedChars && currentChars) {
-            if (cachedChars.length !== currentChars.length) {
-                console.log('[ChatLobby] Character count changed:', cachedChars.length, '->', currentChars.length);
-                return true;
-            }
-        }
-        
-        // 페르소나는 context에서 직접 비교하기 어려우므로 스킵
-        // (페르소나 작업 시 needsRefreshOnOpen 플래그 사용)
-        
-        return false;
     }
     
     /**
@@ -480,36 +443,44 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         showToast('새로고침 완료', 'success');
     }
     
+    // ============================================
+    // 임포트/페르소나 - 로비 상시 실행 방식
+    // ============================================
+    
     /**
-     * 캠릭터 임포트 처리
+     * 캐릭터 임포트 처리
+     * 로비를 닫지 않고 임포트 버튼만 클릭
+     * SillyTavern 이벤트가 context.characters를 자동 업데이트하므로
+     * 다음 렌더링 시 자동 반영됨
      */
     function handleImportCharacter() {
-        // 다음 로비 오픈 시 새로고침 필요
-        needsRefreshOnOpen = true;
-        
-        // 로비 닫고 임포트 버튼 클릭
-        closeLobby();
-        
+        // 임포트 버튼 클릭 (로비는 유지)
         const importBtn = document.getElementById('character_import_button');
         if (importBtn) {
             importBtn.click();
+            // 임포트 완료 후 사용자가 로비로 돌아오면 
+            // context.characters에서 최신 데이터 가져옴
         }
     }
     
     /**
      * 페르소나 추가 처리
+     * 드로어 열어서 더미 페르소나 만들기
      */
-    function handleAddPersona() {
-        // 다음 로비 오픈 시 새로고침 필요
-        needsRefreshOnOpen = true;
-        
-        // 로비 닫고 페르소나 관리 드로어 열기
-        closeLobby();
-        
+    async function handleAddPersona() {
+        // 드로어 열기
         const personaDrawer = document.getElementById('persona-management-button');
         const drawerIcon = personaDrawer?.querySelector('.drawer-icon');
-        if (drawerIcon) {
-            drawerIcon.click();
+        if (!drawerIcon) return;
+        
+        drawerIcon.click();
+        
+        // 버튼이 나타날 때까지 대기
+        const createBtn = await waitForElement('#create_dummy_persona', 2000);
+        if (createBtn) {
+            createBtn.click();
+            // 페르소나 추가 후 캐시 무효화
+            cache.invalidate('personas');
         }
     }
     

@@ -236,26 +236,20 @@ class SillyTavernAPI {
     
     /**
      * 캐릭터 목록 가져오기
-     * @param {boolean} [forceRefresh=false] - 강제 새로고침
+     * context.characters를 직접 사용 (이미 메모리에 있음, 캐싱 불필요)
+     * @returns {Array}
+     */
+    getCharacters() {
+        const context = this.getContext();
+        return context?.characters || [];
+    }
+    
+    /**
+     * 캐릭터 목록 가져오기 (비동기 호환용 - 기존 코드 호환)
      * @returns {Promise<Array>}
      */
-    async fetchCharacters(forceRefresh = false) {
-        // 강제 새로고침이 아니면 캐시 우선
-        if (!forceRefresh && cache.isValid('characters')) {
-            return cache.get('characters');
-        }
-        
-        // context 강제 리로드
-        this._context = null;
-        const context = this.getContext();
-        if (!context) {
-            console.error('[API] Context not available');
-            return [];
-        }
-        
-        const characters = context.characters || [];
-        cache.set('characters', characters);
-        return characters;
+    async fetchCharacters() {
+        return this.getCharacters();
     }
     
     /**
