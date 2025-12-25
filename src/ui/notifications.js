@@ -159,27 +159,51 @@ let modalContainer = null;
  * 모달 컨테이너 초기화
  */
 function initModalContainer() {
-    if (modalContainer) return;
+    // 항상 기존 모달 제거하고 새로 생성 (이전 버전과의 충돌 방지)
+    const existing = document.getElementById('chat-lobby-modal-container');
+    if (existing) {
+        existing.remove();
+        modalContainer = null;
+    }
+    
+    if (modalContainer && document.body.contains(modalContainer)) return;
     
     modalContainer = document.createElement('div');
     modalContainer.id = 'chat-lobby-modal-container';
+    
+    // 인라인 스타일로 강제 적용 (!important 사용)
+    modalContainer.setAttribute('style', `
+        display: none !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        min-height: 100vh !important;
+        max-height: 100vh !important;
+        min-width: 100vw !important;
+        max-width: 100vw !important;
+        z-index: 99999 !important;
+        background: rgba(0,0,0,0.6) !important;
+        justify-content: center !important;
+        align-items: center !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        transform: none !important;
+    `);
+    
     modalContainer.innerHTML = `
         <style>
-            #chat-lobby-modal-container {
-                display: none;
-                position: fixed;
-                inset: 0;
-                z-index: 10003;
-                background: rgba(0,0,0,0.6);
-                justify-content: center;
-                align-items: center;
-            }
             .chat-lobby-modal {
                 background: var(--SmartThemeBlurTintColor, #2a2a2a);
                 border-radius: 12px;
                 padding: 24px;
                 min-width: 320px;
                 max-width: 450px;
+                max-width: 90vw;
                 box-shadow: 0 8px 32px rgba(0,0,0,0.4);
                 animation: modalFadeIn 0.2s ease;
             }
@@ -251,6 +275,8 @@ function initModalContainer() {
             </div>
         </div>
     `;
+    
+    // body의 맨 마지막에 추가 (다른 모든 요소 위에)
     document.body.appendChild(modalContainer);
 }
 
@@ -342,7 +368,7 @@ function showModal(options) {
         
         // 이벤트 핸들러
         const cleanup = () => {
-            modalContainer.style.display = 'none';
+            modalContainer.style.setProperty('display', 'none', 'important');
             cancelBtn.onclick = null;
             confirmBtn.onclick = null;
             inputEl.onkeydown = null;
@@ -374,14 +400,14 @@ function showModal(options) {
         
         // ESC로 닫기
         const escHandler = (e) => {
-            if (e.key === 'Escape' && modalContainer.style.display === 'flex') {
+            if (modalContainer.style.display === 'flex' && e.key === 'Escape') {
                 cancelBtn.click();
                 document.removeEventListener('keydown', escHandler);
             }
         };
         document.addEventListener('keydown', escHandler);
         
-        // 표시
-        modalContainer.style.display = 'flex';
+        // 표시 (!important로 강제)
+        modalContainer.style.setProperty('display', 'flex', 'important');
     });
 }

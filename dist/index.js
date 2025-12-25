@@ -1336,26 +1336,45 @@
     return div.innerHTML;
   }
   function initModalContainer() {
-    if (modalContainer) return;
+    const existing = document.getElementById("chat-lobby-modal-container");
+    if (existing) {
+      existing.remove();
+      modalContainer = null;
+    }
+    if (modalContainer && document.body.contains(modalContainer)) return;
     modalContainer = document.createElement("div");
     modalContainer.id = "chat-lobby-modal-container";
+    modalContainer.setAttribute("style", `
+        display: none !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        min-height: 100vh !important;
+        max-height: 100vh !important;
+        min-width: 100vw !important;
+        max-width: 100vw !important;
+        z-index: 99999 !important;
+        background: rgba(0,0,0,0.6) !important;
+        justify-content: center !important;
+        align-items: center !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        transform: none !important;
+    `);
     modalContainer.innerHTML = `
         <style>
-            #chat-lobby-modal-container {
-                display: none;
-                position: fixed;
-                inset: 0;
-                z-index: 10003;
-                background: rgba(0,0,0,0.6);
-                justify-content: center;
-                align-items: center;
-            }
             .chat-lobby-modal {
                 background: var(--SmartThemeBlurTintColor, #2a2a2a);
                 border-radius: 12px;
                 padding: 24px;
                 min-width: 320px;
                 max-width: 450px;
+                max-width: 90vw;
                 box-shadow: 0 8px 32px rgba(0,0,0,0.4);
                 animation: modalFadeIn 0.2s ease;
             }
@@ -1480,7 +1499,7 @@
       confirmBtn.textContent = options.confirmText || "\uD655\uC778";
       confirmBtn.classList.toggle("dangerous", options.dangerous === true);
       const cleanup = () => {
-        modalContainer.style.display = "none";
+        modalContainer.style.setProperty("display", "none", "important");
         cancelBtn.onclick = null;
         confirmBtn.onclick = null;
         inputEl.onkeydown = null;
@@ -1506,13 +1525,13 @@
         }
       };
       const escHandler = (e) => {
-        if (e.key === "Escape" && modalContainer.style.display === "flex") {
+        if (modalContainer.style.display === "flex" && e.key === "Escape") {
           cancelBtn.click();
           document.removeEventListener("keydown", escHandler);
         }
       };
       document.addEventListener("keydown", escHandler);
-      modalContainer.style.display = "flex";
+      modalContainer.style.setProperty("display", "flex", "important");
     });
   }
   var toastContainer, modalContainer;
