@@ -260,10 +260,11 @@ function renderChatItem(chat, charAvatar, index) {
     
     const tooltipPreview = truncateText(preview, 500);
     const safeAvatar = (charAvatar || '').replace(/"/g, '&quot;');
+    const safeFileName = (fileName || '').replace(/"/g, '&quot;');
     
     return `
     <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''}" 
-         data-file-name="${escapeHtml(fileName)}" 
+         data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
          data-folder-id="${folderId}">

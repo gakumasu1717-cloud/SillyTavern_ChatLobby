@@ -64,26 +64,48 @@ export async function openChat(chatInfo) {
 async function openChatByFileName(fileName) {
     const manageChatsBtn = document.getElementById('option_select_chat');
     
-    if (manageChatsBtn) {
-        manageChatsBtn.click();
-        
-        await new Promise(resolve => setTimeout(resolve, CONFIG.timing.drawerOpenDelay));
-        
-        // 채팅 목록에서 해당 파일 찾기
-        const chatItems = document.querySelectorAll('.select_chat_block .ch_name, .past_chat_block, .select_chat_block');
+    if (!manageChatsBtn) {
+        console.error('[ChatHandlers] Chat select button not found');
+        showToast('채팅 선택 버튼을 찾을 수 없습니다.', 'error');
+        return;
+    }
+    
+    manageChatsBtn.click();
+    
+    // 채팅 목록이 로드될 때까지 대기
+    await new Promise(resolve => setTimeout(resolve, CONFIG.timing.drawerOpenDelay));
+    
+    // 파일명에서 확장자 제거하고 정규화
+    const searchName = fileName.replace('.jsonl', '').trim();
+    
+    // 채팅 목록에서 해당 파일 찾기 - 여러 셀렉터 시도
+    const chatSelectors = [
+        '.select_chat_block',
+        '.past_chat_block', 
+        '[data-file-name]',
+        '.ch_name'
+    ];
+    
+    for (const selector of chatSelectors) {
+        const chatItems = document.querySelectorAll(selector);
         
         for (const item of chatItems) {
-            const itemText = item.textContent || item.dataset?.fileName || '';
-            if (itemText.includes(fileName.replace('.jsonl', '')) || itemText.includes(fileName)) {
+            const itemText = item.textContent?.trim() || '';
+            const itemFileName = item.dataset?.fileName || '';
+            
+            // 파일명 매칭 (확장자 유무 모두 체크)
+            if (itemText.includes(searchName) || 
+                itemFileName.includes(searchName) ||
+                itemFileName.includes(fileName)) {
                 item.click();
-                console.log('[ChatHandlers] Chat selected:', fileName);
+                console.log('[ChatHandlers] Chat selected:', fileName, 'via', selector);
                 return;
             }
         }
-        
-        console.log('[ChatHandlers] Chat not found in list:', fileName);
-        showToast('채팅 파일을 찾지 못했습니다.', 'warning');
     }
+    
+    console.warn('[ChatHandlers] Chat not found in list:', fileName);
+    showToast('채팅 파일을 찾지 못했습니다.', 'warning');
 }
 
 // ============================================

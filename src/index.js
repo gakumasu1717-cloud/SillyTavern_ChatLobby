@@ -125,12 +125,17 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             if (container) container.style.display = 'flex';
             if (fab) fab.style.display = 'none';
             
+            // 상태 초기화 (이전 선택 정보 클리어)
+            store.reset();
             store.setLobbyOpen(true);
             
             // 배치 모드 리셋
             if (store.batchModeActive) {
                 toggleBatchMode();
             }
+            
+            // 채팅 패널 닫기 (이전 캐릭터 선택 상태 클리어)
+            closeChatPanel();
             
             // 캐시된 데이터로 즉시 렌더링 (캐시 있으면 0ms)
             renderPersonaBar();
@@ -424,10 +429,21 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     // DOM 로드 후 초기화
     // ============================================
     
+    /**
+     * 초기화 완료 후 로비 자동 열기
+     */
+    async function initAndOpen() {
+        await init();
+        // 초기화 완료 후 로비 자동 열기
+        setTimeout(() => {
+            openLobby();
+        }, 100);
+    }
+    
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setTimeout(init, CONFIG.timing.initDelay));
+        document.addEventListener('DOMContentLoaded', () => setTimeout(initAndOpen, CONFIG.timing.initDelay));
     } else {
-        setTimeout(init, CONFIG.timing.initDelay);
+        setTimeout(initAndOpen, CONFIG.timing.initDelay);
     }
     
 })();

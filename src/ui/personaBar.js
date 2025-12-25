@@ -190,13 +190,34 @@ function openPersonaManagement() {
     // 로비 닫기
     const container = document.getElementById('chat-lobby-container');
     const fab = document.getElementById('chat-lobby-fab');
+    const overlay = document.getElementById('chat-lobby-overlay');
+    
     if (container) container.style.display = 'none';
+    if (overlay) overlay.style.display = 'none';
     if (fab) fab.style.display = 'flex';
     store.setLobbyOpen(false);
     
+    // 페르소나 관리 drawer 열기
     setTimeout(() => {
         const personaDrawer = document.getElementById('persona-management-button');
-        const drawerIcon = personaDrawer?.querySelector('.drawer-icon');
-        if (drawerIcon) drawerIcon.click();
+        if (!personaDrawer) {
+            console.warn('[PersonaBar] Persona management button not found');
+            showToast('페르소나 관리 버튼을 찾을 수 없습니다.', 'warning');
+            return;
+        }
+        
+        const drawerIcon = personaDrawer.querySelector('.drawer-icon');
+        if (drawerIcon) {
+            // drawer가 닫혀있을 때만 클릭
+            if (!drawerIcon.classList.contains('openIcon')) {
+                drawerIcon.click();
+                console.log('[PersonaBar] Opening persona management drawer');
+            } else {
+                console.log('[PersonaBar] Drawer already open');
+            }
+        } else {
+            // drawer-icon이 없으면 버튼 자체를 클릭
+            personaDrawer.click();
+        }
     }, CONFIG.timing.menuCloseDelay);
 }
