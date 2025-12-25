@@ -230,17 +230,30 @@ function bindCharacterEvents(container) {
             // 새로 선택
             card.classList.add('selected');
             
+            // 캐릭터 정보 구성
+            const characterData = {
+                index: card.dataset.charIndex,
+                avatar: card.dataset.charAvatar,
+                name: card.querySelector('.lobby-char-name')?.textContent || 'Unknown',
+                avatarSrc: card.querySelector('.lobby-char-avatar')?.src || ''
+            };
+            
+            console.log('[CharacterGrid] Character card clicked:', characterData.name, characterData.avatar);
+            
             // 콜백 호출
             const handler = store.onCharacterSelect;
-            if (handler) {
-                handler({
-                    index: card.dataset.charIndex,
-                    avatar: card.dataset.charAvatar,
-                    name: card.querySelector('.lobby-char-name').textContent,
-                    avatarSrc: card.querySelector('.lobby-char-avatar').src
-                });
+            if (handler && typeof handler === 'function') {
+                console.log('[CharacterGrid] Calling onCharacterSelect handler');
+                try {
+                    handler(characterData);
+                } catch (error) {
+                    console.error('[CharacterGrid] Handler error:', error);
+                }
             } else {
-                console.warn('[CharacterGrid] onCharacterSelect handler not set. Please wait for initialization.');
+                console.error('[CharacterGrid] onCharacterSelect handler not available!', {
+                    handler: handler,
+                    handlerType: typeof handler
+                });
             }
         }, { preventDefault: false, stopPropagation: false });
     });

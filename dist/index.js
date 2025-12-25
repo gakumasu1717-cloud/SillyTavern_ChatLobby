@@ -705,11 +705,13 @@
         // ============================================
         /**
          * 상태 초기화 (로비 닫을 때)
+         * 주의: 핸들러는 초기화하지 않음 (init에서 한 번만 설정)
          */
         reset() {
           this._state.currentCharacter = null;
           this._state.batchModeActive = false;
           this._state.searchTerm = "";
+          console.log("[Store] State reset, handlers preserved");
         }
         // ============================================
         // 리스너 (옵저버 패턴)
@@ -1581,16 +1583,26 @@
           el.classList.remove("selected");
         });
         card.classList.add("selected");
+        const characterData = {
+          index: card.dataset.charIndex,
+          avatar: card.dataset.charAvatar,
+          name: card.querySelector(".lobby-char-name")?.textContent || "Unknown",
+          avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
+        };
+        console.log("[CharacterGrid] Character card clicked:", characterData.name, characterData.avatar);
         const handler = store.onCharacterSelect;
-        if (handler) {
-          handler({
-            index: card.dataset.charIndex,
-            avatar: card.dataset.charAvatar,
-            name: card.querySelector(".lobby-char-name").textContent,
-            avatarSrc: card.querySelector(".lobby-char-avatar").src
-          });
+        if (handler && typeof handler === "function") {
+          console.log("[CharacterGrid] Calling onCharacterSelect handler");
+          try {
+            handler(characterData);
+          } catch (error) {
+            console.error("[CharacterGrid] Handler error:", error);
+          }
         } else {
-          console.warn("[CharacterGrid] onCharacterSelect handler not set. Please wait for initialization.");
+          console.error("[CharacterGrid] onCharacterSelect handler not available!", {
+            handler,
+            handlerType: typeof handler
+          });
         }
       }, { preventDefault: false, stopPropagation: false });
     });
@@ -1935,10 +1947,19 @@
     return store.currentCharacter;
   }
   async function renderChatList(character) {
+    console.log("[ChatList] renderChatList called with:", character);
+    if (!character || !character.avatar) {
+      console.error("[ChatList] Invalid character data:", character);
+      return;
+    }
     store.setCurrentCharacter(character);
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
-    if (!chatsPanel || !chatsList) return;
+    if (!chatsPanel || !chatsList) {
+      console.error("[ChatList] Chat panel elements not found");
+      return;
+    }
+    console.log("[ChatList] Showing chat panel for:", character.name);
     chatsPanel.classList.add("visible");
     updateChatHeader(character);
     showFolderBar(true);
@@ -2655,6 +2676,7 @@
       }, CONFIG.timing.preloadDelay);
     }
     function openLobby() {
+      console.log("[ChatLobby] Opening lobby...");
       const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
@@ -2662,6 +2684,10 @@
         overlay.style.display = "flex";
         if (container) container.style.display = "flex";
         if (fab) fab.style.display = "none";
+        if (!store.onCharacterSelect) {
+          console.warn("[ChatLobby] Handler not set, re-running setupHandlers");
+          setupHandlers();
+        }
         store.reset();
         store.setLobbyOpen(true);
         if (store.batchModeActive) {
@@ -2671,6 +2697,7 @@
         renderPersonaBar();
         renderCharacterGrid();
         updateFolderDropdowns();
+        console.log("[ChatLobby] Lobby opened, handler status:", !!store.onCharacterSelect);
       }
     }
     function closeLobby2() {

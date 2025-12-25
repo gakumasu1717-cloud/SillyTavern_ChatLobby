@@ -201,11 +201,14 @@ class Store {
     
     /**
      * 상태 초기화 (로비 닫을 때)
+     * 주의: 핸들러는 초기화하지 않음 (init에서 한 번만 설정)
      */
     reset() {
         this._state.currentCharacter = null;
         this._state.batchModeActive = false;
         this._state.searchTerm = '';
+        // 핸들러는 유지 (onCharacterSelect, chatHandlers)
+        console.log('[Store] State reset, handlers preserved');
     }
     
     // ============================================

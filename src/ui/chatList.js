@@ -42,12 +42,24 @@ export function getCurrentCharacter() {
  * @returns {Promise<void>}
  */
 export async function renderChatList(character) {
+    console.log('[ChatList] renderChatList called with:', character);
+    
+    if (!character || !character.avatar) {
+        console.error('[ChatList] Invalid character data:', character);
+        return;
+    }
+    
     store.setCurrentCharacter(character);
     
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
     
-    if (!chatsPanel || !chatsList) return;
+    if (!chatsPanel || !chatsList) {
+        console.error('[ChatList] Chat panel elements not found');
+        return;
+    }
+    
+    console.log('[ChatList] Showing chat panel for:', character.name);
     
     // UI 표시
     chatsPanel.classList.add('visible');

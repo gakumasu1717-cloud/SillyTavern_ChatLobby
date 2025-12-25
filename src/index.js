@@ -116,6 +116,8 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
      * 로비 열기
      */
     function openLobby() {
+        console.log('[ChatLobby] Opening lobby...');
+        
         const overlay = document.getElementById('chat-lobby-overlay');
         const container = document.getElementById('chat-lobby-container');
         const fab = document.getElementById('chat-lobby-fab');
@@ -125,7 +127,13 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             if (container) container.style.display = 'flex';
             if (fab) fab.style.display = 'none';
             
-            // 상태 초기화 (이전 선택 정보 클리어)
+            // 핸들러가 설정되어 있는지 확인
+            if (!store.onCharacterSelect) {
+                console.warn('[ChatLobby] Handler not set, re-running setupHandlers');
+                setupHandlers();
+            }
+            
+            // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지)
             store.reset();
             store.setLobbyOpen(true);
             
@@ -143,6 +151,8 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
             
             // 폴더 드롭다운 업데이트
             updateFolderDropdowns();
+            
+            console.log('[ChatLobby] Lobby opened, handler status:', !!store.onCharacterSelect);
         }
     }
     
