@@ -443,22 +443,14 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         // 캐릭터 선택
         await api.selectCharacterById(index);
         
-        // 캐릭터 선택이 완료될 때까지 대기 후 캐릭터 패널 탭 클릭
+        // 캐릭터 선택 완료 대기 후 rightNavDrawerIcon 클릭
         setTimeout(() => {
-            // jQuery를 사용하여 rm_button_selected_ch 클릭 (SillyTavern 방식)
-            const $ = window.jQuery || window.$;
-            if ($ && $('#rm_button_selected_ch').length) {
-                console.log('[ChatLobby] Clicking rm_button_selected_ch via jQuery');
-                $('#rm_button_selected_ch').trigger('click');
+            const rightNavIcon = document.getElementById('rightNavDrawerIcon');
+            if (rightNavIcon) {
+                console.log('[ChatLobby] Clicking rightNavDrawerIcon');
+                rightNavIcon.click();
             } else {
-                // 순수 JS 폴백
-                const charTab = document.getElementById('rm_button_selected_ch');
-                if (charTab) {
-                    console.log('[ChatLobby] Clicking rm_button_selected_ch');
-                    charTab.click();
-                } else {
-                    console.warn('[ChatLobby] rm_button_selected_ch not found');
-                }
+                console.warn('[ChatLobby] rightNavDrawerIcon not found');
             }
         }, 500);
     }

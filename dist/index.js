@@ -2382,9 +2382,12 @@
         showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
+      const chatFileName = fileName.replace(".jsonl", "");
+      console.log("[ChatHandlers] Selecting character first");
+      await api.selectCharacterById(index);
+      await new Promise((resolve) => setTimeout(resolve, 300));
       console.log("[ChatHandlers] Closing lobby");
       closeLobby();
-      const chatFileName = fileName.replace(".jsonl", "");
       if (typeof context?.openCharacterChat === "function") {
         console.log("[ChatHandlers] Using context.openCharacterChat:", chatFileName);
         try {
@@ -2395,18 +2398,7 @@
           console.warn("[ChatHandlers] context.openCharacterChat failed:", err);
         }
       }
-      if (typeof window.openCharacterChat === "function") {
-        console.log("[ChatHandlers] Using window.openCharacterChat");
-        try {
-          await window.openCharacterChat(chatFileName);
-          console.log("[ChatHandlers] \u2705 Chat opened via window.openCharacterChat");
-          return;
-        } catch (err) {
-          console.warn("[ChatHandlers] window.openCharacterChat failed:", err);
-        }
-      }
-      console.log("[ChatHandlers] Fallback: selecting character and clicking chat item");
-      await api.selectCharacterById(index);
+      console.log("[ChatHandlers] Fallback: clicking chat item in UI");
       setTimeout(async () => {
         await openChatByFileName(fileName);
       }, CONFIG.timing.drawerOpenDelay);
@@ -3022,18 +3014,12 @@
       }
       await api.selectCharacterById(index);
       setTimeout(() => {
-        const $ = window.jQuery || window.$;
-        if ($ && $("#rm_button_selected_ch").length) {
-          console.log("[ChatLobby] Clicking rm_button_selected_ch via jQuery");
-          $("#rm_button_selected_ch").trigger("click");
+        const rightNavIcon = document.getElementById("rightNavDrawerIcon");
+        if (rightNavIcon) {
+          console.log("[ChatLobby] Clicking rightNavDrawerIcon");
+          rightNavIcon.click();
         } else {
-          const charTab = document.getElementById("rm_button_selected_ch");
-          if (charTab) {
-            console.log("[ChatLobby] Clicking rm_button_selected_ch");
-            charTab.click();
-          } else {
-            console.warn("[ChatLobby] rm_button_selected_ch not found");
-          }
+          console.warn("[ChatLobby] rightNavDrawerIcon not found");
         }
       }, 500);
     }

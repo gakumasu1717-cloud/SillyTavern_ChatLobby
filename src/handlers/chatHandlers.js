@@ -43,14 +43,21 @@ export async function openChat(chatInfo) {
             return;
         }
         
-        // 로비 닫기
-        console.log('[ChatHandlers] Closing lobby');
-        closeLobby();
-        
         // 파일명 정규화 (확장자 제거)
         const chatFileName = fileName.replace('.jsonl', '');
         
-        // 방법 1: SillyTavern context.openCharacterChat 함수 사용
+        // 먼저 캐릭터 선택
+        console.log('[ChatHandlers] Selecting character first');
+        await api.selectCharacterById(index);
+        
+        // 캐릭터 선택 완료 대기
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // 로비 닫기 (캐릭터 선택 후)
+        console.log('[ChatHandlers] Closing lobby');
+        closeLobby();
+        
+        // SillyTavern openCharacterChat 함수 사용
         if (typeof context?.openCharacterChat === 'function') {
             console.log('[ChatHandlers] Using context.openCharacterChat:', chatFileName);
             try {
@@ -62,23 +69,8 @@ export async function openChat(chatInfo) {
             }
         }
         
-        // 방법 2: 전역 openCharacterChat 함수 사용 시도
-        if (typeof window.openCharacterChat === 'function') {
-            console.log('[ChatHandlers] Using window.openCharacterChat');
-            try {
-                await window.openCharacterChat(chatFileName);
-                console.log('[ChatHandlers] ✅ Chat opened via window.openCharacterChat');
-                return;
-            } catch (err) {
-                console.warn('[ChatHandlers] window.openCharacterChat failed:', err);
-            }
-        }
-        
-        // 방법 3: 캐릭터 선택 후 채팅 선택 UI 클릭
-        console.log('[ChatHandlers] Fallback: selecting character and clicking chat item');
-        await api.selectCharacterById(index);
-        
-        // 채팅 선택 팝업 열기 및 해당 채팅 선택
+        // Fallback: 채팅 선택 UI 클릭
+        console.log('[ChatHandlers] Fallback: clicking chat item in UI');
         setTimeout(async () => {
             await openChatByFileName(fileName);
         }, CONFIG.timing.drawerOpenDelay);
