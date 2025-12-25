@@ -2330,12 +2330,14 @@
     }
   }
   async function openChatByFileName(fileName) {
+    console.log("[ChatHandlers] openChatByFileName called with:", fileName);
     const manageChatsBtn = document.getElementById("option_select_chat");
     if (!manageChatsBtn) {
       console.error("[ChatHandlers] Chat select button not found");
       showToast("\uCC44\uD305 \uC120\uD0DD \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
+    console.log("[ChatHandlers] Clicking option_select_chat button");
     manageChatsBtn.click();
     const maxWaitTime = 3e3;
     const pollInterval = 100;
@@ -2343,6 +2345,7 @@
     while (waited < maxWaitTime) {
       const chatItems = document.querySelectorAll(".select_chat_block");
       if (chatItems.length > 0) {
+        console.log("[ChatHandlers] Chat list loaded, found", chatItems.length, "items after", waited, "ms");
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -2350,6 +2353,7 @@
     }
     const searchName = fileName.replace(".jsonl", "").trim();
     const searchNameWithExt = fileName.endsWith(".jsonl") ? fileName : fileName + ".jsonl";
+    console.log("[ChatHandlers] Searching for:", { searchName, searchNameWithExt });
     function isExactMatch(itemName, target) {
       const cleanItem = itemName.replace(".jsonl", "").trim();
       const cleanTarget = target.replace(".jsonl", "").trim();
@@ -2362,25 +2366,30 @@
     ];
     for (const selector of chatSelectors) {
       const chatItems = document.querySelectorAll(selector);
-      for (const item of chatItems) {
+      console.log("[ChatHandlers] Checking selector:", selector, "found", chatItems.length, "items");
+      for (let i = 0; i < chatItems.length; i++) {
+        const item = chatItems[i];
         const itemFileName = item.dataset?.fileName || "";
+        const fileNameEl = item.querySelector(".select_chat_block_filename");
+        const displayName = fileNameEl?.textContent?.trim() || "";
+        console.log(`[ChatHandlers] Item ${i}:`, {
+          itemFileName,
+          displayName,
+          matchesSearchName: isExactMatch(itemFileName, searchName) || isExactMatch(displayName, searchName)
+        });
         if (isExactMatch(itemFileName, searchName) || isExactMatch(itemFileName, searchNameWithExt)) {
+          console.log("[ChatHandlers] \u2705 MATCH FOUND via itemFileName:", itemFileName);
           item.click();
-          console.log("[ChatHandlers] Chat selected (exact match):", fileName, "via", selector);
           return;
         }
-        const fileNameEl = item.querySelector(".select_chat_block_filename");
-        if (fileNameEl) {
-          const displayName = fileNameEl.textContent?.trim() || "";
-          if (isExactMatch(displayName, searchName)) {
-            item.click();
-            console.log("[ChatHandlers] Chat selected (filename element):", fileName, "via", selector);
-            return;
-          }
+        if (displayName && isExactMatch(displayName, searchName)) {
+          console.log("[ChatHandlers] \u2705 MATCH FOUND via displayName:", displayName);
+          item.click();
+          return;
         }
       }
     }
-    console.warn("[ChatHandlers] Chat not found in list:", fileName);
+    console.warn("[ChatHandlers] \u274C Chat not found in list:", fileName);
     showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
   }
   async function deleteChat(chatInfo) {
@@ -2705,11 +2714,10 @@
       }, CONFIG.timing.preloadDelay);
     }
     function openLobby() {
-      console.log("[ChatLobby] Opening lobby... called from:");
-      console.trace();
+      console.log("[ChatLobby] Opening lobby...");
       const chatsPanel = document.getElementById("chat-lobby-chats");
       if (store.isLobbyOpen && chatsPanel?.classList.contains("visible")) {
-        console.log("[ChatLobby] Lobby already open with chat panel, ignoring openLobby call");
+        console.log("[ChatLobby] Lobby already open with chat panel, ignoring");
         return;
       }
       const overlay = document.getElementById("chat-lobby-overlay");
@@ -2760,8 +2768,17 @@
     }
     function handleBodyClick(e) {
       const target = e.target;
+      if (target.id === "chat-lobby-fab" || target.closest("#chat-lobby-fab")) {
+        console.log("[EventDelegation] FAB clicked");
+        openLobby();
+        return;
+      }
+      const lobbyContainer = target.closest("#chat-lobby-container");
+      const folderModal = target.closest("#chat-lobby-folder-modal");
+      if (!lobbyContainer && !folderModal) {
+        return;
+      }
       if (target.closest(".lobby-char-card") || target.closest(".lobby-chat-item")) {
-        console.log("[EventDelegation] Ignoring click on card/chat item");
         return;
       }
       const actionEl = target.closest("[data-action]");
@@ -2769,29 +2786,10 @@
         handleAction(actionEl.dataset.action, actionEl, e);
         return;
       }
-      const id = target.id || target.closest("[id]")?.id;
-      if (target.closest("#chat-lobby-container") && !target.closest("button") && !target.closest("[data-action]")) {
-        if (![
-          "chat-lobby-fab",
-          "chat-lobby-close",
-          "chat-lobby-chats-back",
-          "chat-lobby-refresh",
-          "chat-lobby-new-chat",
-          "chat-lobby-delete-char",
-          "chat-lobby-import-char",
-          "chat-lobby-add-persona",
-          "chat-panel-avatar",
-          "chat-lobby-batch-mode",
-          "batch-move-btn",
-          "batch-cancel-btn",
-          "chat-lobby-folder-manage",
-          "folder-modal-close",
-          "add-folder-btn"
-        ].includes(id)) {
-          return;
-        }
-      }
-      console.log("[EventDelegation] handleBodyClick - id:", id);
+      const clickedEl = target.closest("button, [id]");
+      const id = clickedEl?.id || target.id;
+      if (!id) return;
+      console.log("[EventDelegation] Lobby click - id:", id);
       switch (id) {
         case "chat-lobby-fab":
           openLobby();

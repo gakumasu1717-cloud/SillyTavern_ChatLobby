@@ -116,14 +116,12 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
      * 로비 열기
      */
     function openLobby() {
-        // 스택 트레이스로 호출 위치 확인
-        console.log('[ChatLobby] Opening lobby... called from:');
-        console.trace();
+        console.log('[ChatLobby] Opening lobby...');
         
         // 이미 열려있고 채팅 패널이 표시 중이면 무시
         const chatsPanel = document.getElementById('chat-lobby-chats');
         if (store.isLobbyOpen && chatsPanel?.classList.contains('visible')) {
-            console.log('[ChatLobby] Lobby already open with chat panel, ignoring openLobby call');
+            console.log('[ChatLobby] Lobby already open with chat panel, ignoring');
             return;
         }
         
@@ -219,9 +217,24 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     function handleBodyClick(e) {
         const target = e.target;
         
+        // FAB 버튼은 로비 외부에 있으므로 별도 처리
+        if (target.id === 'chat-lobby-fab' || target.closest('#chat-lobby-fab')) {
+            console.log('[EventDelegation] FAB clicked');
+            openLobby();
+            return;
+        }
+        
+        // 로비 컨테이너 내부 클릭만 처리
+        const lobbyContainer = target.closest('#chat-lobby-container');
+        const folderModal = target.closest('#chat-lobby-folder-modal');
+        
+        if (!lobbyContainer && !folderModal) {
+            // 로비 외부 클릭은 무시
+            return;
+        }
+        
         // 캐릭터 카드나 채팅 아이템 클릭은 무시 (각자 핸들러가 있음)
         if (target.closest('.lobby-char-card') || target.closest('.lobby-chat-item')) {
-            console.log('[EventDelegation] Ignoring click on card/chat item');
             return;
         }
         
@@ -233,21 +246,12 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         }
         
         // ID 기반 분기 (기존 HTML과 호환)
-        const id = target.id || target.closest('[id]')?.id;
+        const clickedEl = target.closest('button, [id]');
+        const id = clickedEl?.id || target.id;
         
-        // 로비 컨테이너 내부 클릭은 무시 (의도치 않은 ID 매칭 방지)
-        if (target.closest('#chat-lobby-container') && !target.closest('button') && !target.closest('[data-action]')) {
-            // 버튼이 아닌 컨테이너 내부 클릭은 무시
-            if (!['chat-lobby-fab', 'chat-lobby-close', 'chat-lobby-chats-back', 'chat-lobby-refresh', 
-                  'chat-lobby-new-chat', 'chat-lobby-delete-char', 'chat-lobby-import-char', 
-                  'chat-lobby-add-persona', 'chat-panel-avatar', 'chat-lobby-batch-mode',
-                  'batch-move-btn', 'batch-cancel-btn', 'chat-lobby-folder-manage', 
-                  'folder-modal-close', 'add-folder-btn'].includes(id)) {
-                return;
-            }
-        }
+        if (!id) return;
         
-        console.log('[EventDelegation] handleBodyClick - id:', id);
+        console.log('[EventDelegation] Lobby click - id:', id);
         
         switch (id) {
             case 'chat-lobby-fab':
