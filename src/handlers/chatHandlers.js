@@ -47,22 +47,39 @@ export async function openChat(chatInfo) {
         console.log('[ChatHandlers] Closing lobby');
         closeLobby();
         
-        // 방법 1: SillyTavern openCharacterChat 함수 사용 시도
-        if (context?.openCharacterChat) {
-            console.log('[ChatHandlers] Using context.openCharacterChat');
-            const chatFileName = fileName.replace('.jsonl', '');
-            await context.openCharacterChat(chatFileName);
-            return;
+        // 파일명 정규화 (확장자 제거)
+        const chatFileName = fileName.replace('.jsonl', '');
+        
+        // 방법 1: SillyTavern context.openCharacterChat 함수 사용
+        if (typeof context?.openCharacterChat === 'function') {
+            console.log('[ChatHandlers] Using context.openCharacterChat:', chatFileName);
+            try {
+                await context.openCharacterChat(chatFileName);
+                console.log('[ChatHandlers] ✅ Chat opened via context.openCharacterChat');
+                return;
+            } catch (err) {
+                console.warn('[ChatHandlers] context.openCharacterChat failed:', err);
+            }
         }
         
-        // 방법 2: 캐릭터 선택 후 채팅 선택
-        console.log('[ChatHandlers] Selecting character by id:', index);
+        // 방법 2: 전역 openCharacterChat 함수 사용 시도
+        if (typeof window.openCharacterChat === 'function') {
+            console.log('[ChatHandlers] Using window.openCharacterChat');
+            try {
+                await window.openCharacterChat(chatFileName);
+                console.log('[ChatHandlers] ✅ Chat opened via window.openCharacterChat');
+                return;
+            } catch (err) {
+                console.warn('[ChatHandlers] window.openCharacterChat failed:', err);
+            }
+        }
+        
+        // 방법 3: 캐릭터 선택 후 채팅 선택 UI 클릭
+        console.log('[ChatHandlers] Fallback: selecting character and clicking chat item');
         await api.selectCharacterById(index);
         
         // 채팅 선택 팝업 열기 및 해당 채팅 선택
-        console.log('[ChatHandlers] Waiting before opening chat file...');
         setTimeout(async () => {
-            console.log('[ChatHandlers] Now calling openChatByFileName');
             await openChatByFileName(fileName);
         }, CONFIG.timing.drawerOpenDelay);
         

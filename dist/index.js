@@ -2384,17 +2384,30 @@
       }
       console.log("[ChatHandlers] Closing lobby");
       closeLobby();
-      if (context?.openCharacterChat) {
-        console.log("[ChatHandlers] Using context.openCharacterChat");
-        const chatFileName = fileName.replace(".jsonl", "");
-        await context.openCharacterChat(chatFileName);
-        return;
+      const chatFileName = fileName.replace(".jsonl", "");
+      if (typeof context?.openCharacterChat === "function") {
+        console.log("[ChatHandlers] Using context.openCharacterChat:", chatFileName);
+        try {
+          await context.openCharacterChat(chatFileName);
+          console.log("[ChatHandlers] \u2705 Chat opened via context.openCharacterChat");
+          return;
+        } catch (err) {
+          console.warn("[ChatHandlers] context.openCharacterChat failed:", err);
+        }
       }
-      console.log("[ChatHandlers] Selecting character by id:", index);
+      if (typeof window.openCharacterChat === "function") {
+        console.log("[ChatHandlers] Using window.openCharacterChat");
+        try {
+          await window.openCharacterChat(chatFileName);
+          console.log("[ChatHandlers] \u2705 Chat opened via window.openCharacterChat");
+          return;
+        } catch (err) {
+          console.warn("[ChatHandlers] window.openCharacterChat failed:", err);
+        }
+      }
+      console.log("[ChatHandlers] Fallback: selecting character and clicking chat item");
       await api.selectCharacterById(index);
-      console.log("[ChatHandlers] Waiting before opening chat file...");
       setTimeout(async () => {
-        console.log("[ChatHandlers] Now calling openChatByFileName");
         await openChatByFileName(fileName);
       }, CONFIG.timing.drawerOpenDelay);
     } catch (error) {
@@ -3009,18 +3022,20 @@
       }
       await api.selectCharacterById(index);
       setTimeout(() => {
-        const charIconBtn = document.getElementById("rm_button_selected_ch") || document.querySelector(".avatar-container .avatar") || document.querySelector("#avatar-and-name-block .avatar");
-        if (charIconBtn) {
-          console.log("[ChatLobby] Clicking character icon button");
-          charIconBtn.click();
+        const $ = window.jQuery || window.$;
+        if ($ && $("#rm_button_selected_ch").length) {
+          console.log("[ChatLobby] Clicking rm_button_selected_ch via jQuery");
+          $("#rm_button_selected_ch").trigger("click");
         } else {
-          const settingsBtn = document.getElementById("option_settings");
-          if (settingsBtn) {
-            console.log("[ChatLobby] Clicking option_settings button (fallback)");
-            settingsBtn.click();
+          const charTab = document.getElementById("rm_button_selected_ch");
+          if (charTab) {
+            console.log("[ChatLobby] Clicking rm_button_selected_ch");
+            charTab.click();
+          } else {
+            console.warn("[ChatLobby] rm_button_selected_ch not found");
           }
         }
-      }, CONFIG.timing.drawerOpenDelay);
+      }, 500);
     }
     function handleOpenCharSettings() {
       closeLobby2();

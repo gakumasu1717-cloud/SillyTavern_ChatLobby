@@ -416,7 +416,7 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     }
     
     /**
-     * 선택된 캐릭터 편집 화면으로 이동 (븃카드 관리 화면)
+     * 선택된 캐릭터 편집 화면으로 이동 (봇카드 관리 화면)
      */
     async function handleGoToCharacter() {
         const character = store.currentCharacter;
@@ -443,25 +443,24 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
         // 캐릭터 선택
         await api.selectCharacterById(index);
         
-        // 잠시 대기 후 캐릭터 아이콘 버튼 클릭
+        // 캐릭터 선택이 완료될 때까지 대기 후 캐릭터 패널 탭 클릭
         setTimeout(() => {
-            // 캐릭터 아이콘 버튼 찾기 (rm_button_selected_ch 또는 아바타 영역)
-            const charIconBtn = document.getElementById('rm_button_selected_ch') ||
-                               document.querySelector('.avatar-container .avatar') ||
-                               document.querySelector('#avatar-and-name-block .avatar');
-            
-            if (charIconBtn) {
-                console.log('[ChatLobby] Clicking character icon button');
-                charIconBtn.click();
+            // jQuery를 사용하여 rm_button_selected_ch 클릭 (SillyTavern 방식)
+            const $ = window.jQuery || window.$;
+            if ($ && $('#rm_button_selected_ch').length) {
+                console.log('[ChatLobby] Clicking rm_button_selected_ch via jQuery');
+                $('#rm_button_selected_ch').trigger('click');
             } else {
-                // 대안: 설정 버튼 클릭
-                const settingsBtn = document.getElementById('option_settings');
-                if (settingsBtn) {
-                    console.log('[ChatLobby] Clicking option_settings button (fallback)');
-                    settingsBtn.click();
+                // 순수 JS 폴백
+                const charTab = document.getElementById('rm_button_selected_ch');
+                if (charTab) {
+                    console.log('[ChatLobby] Clicking rm_button_selected_ch');
+                    charTab.click();
+                } else {
+                    console.warn('[ChatLobby] rm_button_selected_ch not found');
                 }
             }
-        }, CONFIG.timing.drawerOpenDelay);
+        }, 500);
     }
     
     /**
