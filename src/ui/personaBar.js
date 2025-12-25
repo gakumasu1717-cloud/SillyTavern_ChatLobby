@@ -77,59 +77,95 @@ async function renderPersonaList(container, personas) {
     bindPersonaEvents(container);
 }
 
+// 모바일 감지
+const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+// 현재 포커스된 아이템 추적 (모바일용)
+let focusedPersonaItem = null;
+
 /**
  * 페르소나 이벤트 바인딩
  * @param {HTMLElement} container
  */
 function bindPersonaEvents(container) {
     container.querySelectorAll('.persona-item').forEach(item => {
+        const avatarImg = item.querySelector('.persona-avatar');
+        const nameSpan = item.querySelector('.persona-name');
         const deleteBtn = item.querySelector('.persona-delete-btn');
         
-        // 전체 아이템 클릭 - 바로 선택, 이미 선택됐으면 관리화면
-        const handleItemClick = async (e) => {
+        // 통합 클릭 핸들러
+        const handlePersonaClick = async (e) => {
             // 삭제 버튼 클릭은 무시
             if (e.target.closest('.persona-delete-btn')) return;
             if (store.isProcessingPersona) return;
             
-            if (item.classList.contains('selected')) {
-                // 이미 선택된 페르소나 → 관리 화면으로
-                openPersonaManagement();
-            } else {
-                // 선택 안 된 페르소나 → 바로 선택
+            // 모바일: 더블탭 로직
+            if (isTouchDevice()) {
+                // 이미 선택된(초록색) 페르소나면 바로 관리 화면
+                if (item.classList.contains('selected')) {
+                    openPersonaManagement();
+                    return;
+                }
+                
+                // 첫 번째 탭: 포커스 표시 (주황색)
+                if (focusedPersonaItem !== item) {
+                    // 이전 포커스 제거
+                    container.querySelectorAll('.persona-item').forEach(el => {
+                        el.classList.remove('touch-focused');
+                    });
+                    // 새 포커스 추가
+                    item.classList.add('touch-focused');
+                    focusedPersonaItem = item;
+                    return;
+                }
+                
+                // 두 번째 탭: 실제 선택
+                item.classList.remove('touch-focused');
+                focusedPersonaItem = null;
                 await selectPersona(container, item);
+                
+            } else {
+                // 데스크탑: 기존 로직 (클릭 = 선택, 선택된거 클릭 = 관리화면)
+                if (item.classList.contains('selected')) {
+                    openPersonaManagement();
+                } else {
+                    await selectPersona(container, item);
+                }
             }
         };
         
-        // PC: click 이벤트
-        item.addEventListener('click', handleItemClick);
+        // 아바타 클릭
+        if (avatarImg) {
+            createTouchClickHandler(avatarImg, handlePersonaClick, { debugName: 'persona-avatar' });
+            avatarImg.style.cursor = 'pointer';
+        }
         
-        // 모바일: touchend 이벤트 (터치 후 바로 반응)
-        item.addEventListener('touchend', (e) => {
-            // 스크롤 중이면 무시
-            if (e.cancelable) {
-                e.preventDefault();
-            }
-            handleItemClick(e);
-        }, { passive: false });
+        // 이름 클릭
+        if (nameSpan) {
+            createTouchClickHandler(nameSpan, handlePersonaClick, { debugName: 'persona-name' });
+            nameSpan.style.cursor = 'pointer';
+        }
         
-        // 삭제 버튼은 별도 처리
+        // 삭제 버튼 (포커스 상태에서만 보이므로 바로 실행)
         if (deleteBtn) {
-            const handleDelete = async (e) => {
+            deleteBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                e.preventDefault();
                 const personaKey = deleteBtn.dataset.persona;
                 const personaName = item.title || personaKey;
                 await deletePersona(personaKey, personaName);
-            };
-            
-            deleteBtn.addEventListener('click', handleDelete);
-            deleteBtn.addEventListener('touchend', (e) => {
-                e.stopPropagation();
-                if (e.cancelable) e.preventDefault();
-                handleDelete(e);
-            }, { passive: false });
+            });
         }
     });
+    
+    // 모바일: 다른 곳 터치하면 포커스 해제
+    if (isTouchDevice()) {
+        document.addEventListener('touchstart', (e) => {
+            if (!e.target.closest('.persona-item') && focusedPersonaItem) {
+                focusedPersonaItem.classList.remove('touch-focused');
+                focusedPersonaItem = null;
+            }
+        }, { passive: true });
+    }
 }
 
 // ============================================

@@ -52,6 +52,7 @@ export function createTouchClickHandler(element, handler, options = {}) {
         debugName = 'unknown'
     } = options;
     
+    let touchStartX = 0;
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
@@ -92,11 +93,16 @@ export function createTouchClickHandler(element, handler, options = {}) {
     element.addEventListener('touchstart', (e) => {
         touchHandled = false;
         isScrolling = false;
+        touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
     }, { passive: true });
     
     element.addEventListener('touchmove', (e) => {
-        if (Math.abs(e.touches[0].clientY - touchStartY) > scrollThreshold) {
+        // 가로 OR 세로 움직임 감지
+        const deltaX = Math.abs(e.touches[0].clientX - touchStartX);
+        const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+        
+        if (deltaX > scrollThreshold || deltaY > scrollThreshold) {
             isScrolling = true;
         }
     }, { passive: true });

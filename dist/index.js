@@ -1316,6 +1316,7 @@ ${message}` : message;
       scrollThreshold = 10,
       debugName = "unknown"
     } = options;
+    let touchStartX = 0;
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
@@ -1343,10 +1344,13 @@ ${message}` : message;
     element.addEventListener("touchstart", (e) => {
       touchHandled = false;
       isScrolling = false;
+      touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
     }, { passive: true });
     element.addEventListener("touchmove", (e) => {
-      if (Math.abs(e.touches[0].clientY - touchStartY) > scrollThreshold) {
+      const deltaX = Math.abs(e.touches[0].clientX - touchStartX);
+      const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+      if (deltaX > scrollThreshold || deltaY > scrollThreshold) {
         isScrolling = true;
       }
     }, { passive: true });
@@ -1720,41 +1724,65 @@ ${message}` : message;
     container.innerHTML = html;
     bindPersonaEvents(container);
   }
+  var isTouchDevice = () => "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  var focusedPersonaItem = null;
   function bindPersonaEvents(container) {
     container.querySelectorAll(".persona-item").forEach((item) => {
+      const avatarImg = item.querySelector(".persona-avatar");
+      const nameSpan = item.querySelector(".persona-name");
       const deleteBtn = item.querySelector(".persona-delete-btn");
-      const handleItemClick = async (e) => {
+      const handlePersonaClick = async (e) => {
         if (e.target.closest(".persona-delete-btn")) return;
         if (store.isProcessingPersona) return;
-        if (item.classList.contains("selected")) {
-          openPersonaManagement();
-        } else {
+        if (isTouchDevice()) {
+          if (item.classList.contains("selected")) {
+            openPersonaManagement();
+            return;
+          }
+          if (focusedPersonaItem !== item) {
+            container.querySelectorAll(".persona-item").forEach((el) => {
+              el.classList.remove("touch-focused");
+            });
+            item.classList.add("touch-focused");
+            focusedPersonaItem = item;
+            return;
+          }
+          item.classList.remove("touch-focused");
+          focusedPersonaItem = null;
           await selectPersona(container, item);
+        } else {
+          if (item.classList.contains("selected")) {
+            openPersonaManagement();
+          } else {
+            await selectPersona(container, item);
+          }
         }
       };
-      item.addEventListener("click", handleItemClick);
-      item.addEventListener("touchend", (e) => {
-        if (e.cancelable) {
-          e.preventDefault();
-        }
-        handleItemClick(e);
-      }, { passive: false });
+      if (avatarImg) {
+        createTouchClickHandler(avatarImg, handlePersonaClick, { debugName: "persona-avatar" });
+        avatarImg.style.cursor = "pointer";
+      }
+      if (nameSpan) {
+        createTouchClickHandler(nameSpan, handlePersonaClick, { debugName: "persona-name" });
+        nameSpan.style.cursor = "pointer";
+      }
       if (deleteBtn) {
-        const handleDelete = async (e) => {
+        deleteBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
-          e.preventDefault();
           const personaKey = deleteBtn.dataset.persona;
           const personaName = item.title || personaKey;
           await deletePersona(personaKey, personaName);
-        };
-        deleteBtn.addEventListener("click", handleDelete);
-        deleteBtn.addEventListener("touchend", (e) => {
-          e.stopPropagation();
-          if (e.cancelable) e.preventDefault();
-          handleDelete(e);
-        }, { passive: false });
+        });
       }
     });
+    if (isTouchDevice()) {
+      document.addEventListener("touchstart", (e) => {
+        if (!e.target.closest(".persona-item") && focusedPersonaItem) {
+          focusedPersonaItem.classList.remove("touch-focused");
+          focusedPersonaItem = null;
+        }
+      }, { passive: true });
+    }
   }
   async function selectPersona(container, item) {
     if (store.isProcessingPersona) return;
