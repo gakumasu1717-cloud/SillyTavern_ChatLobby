@@ -56,6 +56,16 @@ class StorageManager {
             localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
         } catch (e) {
             console.error('[Storage] Failed to save:', e);
+            
+            // 사용자에게 알림 (QuotaExceededError 등)
+            if (typeof window !== 'undefined') {
+                import('../ui/notifications.js').then(({ showToast }) => {
+                    showToast('데이터 저장에 실패했습니다. 저장 공간을 확인해주세요.', 'error');
+                }).catch(() => {
+                    // notifications 로드 실패 시 alert fallback
+                    alert('데이터 저장에 실패했습니다.');
+                });
+            }
         }
     }
     

@@ -14,8 +14,7 @@ import { CONFIG } from '../config.js';
 
 class SillyTavernAPI {
     constructor() {
-        /** @type {Object|null} */
-        this._context = null;
+        // 캐싱 제거됨 - 항상 최신 context 사용
     }
     
     // ============================================
@@ -23,14 +22,12 @@ class SillyTavernAPI {
     // ============================================
     
     /**
-     * SillyTavern 컨텍스트 가져오기
+     * SillyTavern 컨텍스트 가져오기 (캐싱 없음 - 항상 최신)
      * @returns {Object|null}
      */
     getContext() {
-        if (!this._context) {
-            this._context = window.SillyTavern?.getContext?.() || null;
-        }
-        return this._context;
+        // 캐싱 제거! 항상 최신 context 사용 (삭제 후 동기화 문제 방지)
+        return window.SillyTavern?.getContext?.() || null;
     }
     
     /**

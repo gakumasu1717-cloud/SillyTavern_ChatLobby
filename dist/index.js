@@ -301,6 +301,136 @@
     }
   });
 
+  // src/ui/notifications.js
+  var notifications_exports = {};
+  __export(notifications_exports, {
+    showAlert: () => showAlert,
+    showConfirm: () => showConfirm,
+    showPrompt: () => showPrompt,
+    showToast: () => showToast
+  });
+  function initToastContainer() {
+    if (toastContainer) return;
+    toastContainer = document.createElement("div");
+    toastContainer.id = "chat-lobby-toast-container";
+    toastContainer.innerHTML = `
+        <style>
+            #chat-lobby-toast-container {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 10002;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+            }
+            .chat-lobby-toast {
+                background: var(--SmartThemeBlurTintColor, #2a2a2a);
+                color: var(--SmartThemeBodyColor, #fff);
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                pointer-events: auto;
+                animation: toastSlideIn 0.3s ease;
+                max-width: 350px;
+            }
+            .chat-lobby-toast.success { border-left: 4px solid #4caf50; }
+            .chat-lobby-toast.error { border-left: 4px solid #f44336; }
+            .chat-lobby-toast.warning { border-left: 4px solid #ff9800; }
+            .chat-lobby-toast.info { border-left: 4px solid #2196f3; }
+            .chat-lobby-toast.fade-out {
+                animation: toastSlideOut 0.3s ease forwards;
+            }
+            .chat-lobby-toast-icon {
+                font-size: 18px;
+            }
+            .chat-lobby-toast-message {
+                flex: 1;
+                font-size: 14px;
+            }
+            .chat-lobby-toast-close {
+                background: none;
+                border: none;
+                color: inherit;
+                cursor: pointer;
+                opacity: 0.6;
+                font-size: 16px;
+            }
+            .chat-lobby-toast-close:hover { opacity: 1; }
+            @keyframes toastSlideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes toastSlideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        </style>
+    `;
+    document.body.appendChild(toastContainer);
+  }
+  function showToast(message, type = "info", duration = CONFIG.timing.toastDuration) {
+    initToastContainer();
+    const icons = {
+      success: "\u2713",
+      error: "\u2715",
+      warning: "\u26A0",
+      info: "\u2139"
+    };
+    const toast = document.createElement("div");
+    toast.className = `chat-lobby-toast ${type}`;
+    toast.innerHTML = `
+        <span class="chat-lobby-toast-icon">${icons[type]}</span>
+        <span class="chat-lobby-toast-message">${escapeHtml(message)}</span>
+        <button class="chat-lobby-toast-close">\xD7</button>
+    `;
+    const closeBtn = toast.querySelector(".chat-lobby-toast-close");
+    closeBtn.addEventListener("click", () => removeToast(toast));
+    toastContainer.appendChild(toast);
+    setTimeout(() => removeToast(toast), duration);
+  }
+  function removeToast(toast) {
+    if (!toast.parentNode) return;
+    toast.classList.add("fade-out");
+    setTimeout(() => toast.remove(), CONFIG.timing.animationDuration);
+  }
+  function escapeHtml(str) {
+    if (!str) return "";
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  function showAlert(message, title = "\uC54C\uB9BC") {
+    const fullMessage = title ? `[${title}]
+
+${message}` : message;
+    alert(fullMessage);
+    return Promise.resolve();
+  }
+  function showConfirm(message, title = "\uD655\uC778", _dangerous = false) {
+    const fullMessage = title ? `[${title}]
+
+${message}` : message;
+    return Promise.resolve(confirm(fullMessage));
+  }
+  function showPrompt(message, title = "\uC785\uB825", defaultValue = "") {
+    const fullMessage = title ? `[${title}]
+
+${message}` : message;
+    return Promise.resolve(prompt(fullMessage, defaultValue));
+  }
+  var toastContainer;
+  var init_notifications = __esm({
+    "src/ui/notifications.js"() {
+      init_config();
+      toastContainer = null;
+    }
+  });
+
   // src/data/storage.js
   var StorageManager, storage;
   var init_storage = __esm({
@@ -339,6 +469,13 @@
             localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
           } catch (e) {
             console.error("[Storage] Failed to save:", e);
+            if (typeof window !== "undefined") {
+              Promise.resolve().then(() => (init_notifications(), notifications_exports)).then(({ showToast: showToast2 }) => {
+                showToast2("\uB370\uC774\uD130 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC800\uC7A5 \uACF5\uAC04\uC744 \uD655\uC778\uD574\uC8FC\uC138\uC694.", "error");
+              }).catch(() => {
+                alert("\uB370\uC774\uD130 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+              });
+            }
           }
         }
         /**
@@ -759,20 +896,16 @@
       init_config();
       SillyTavernAPI = class {
         constructor() {
-          this._context = null;
         }
         // ============================================
         // 기본 유틸
         // ============================================
         /**
-         * SillyTavern 컨텍스트 가져오기
+         * SillyTavern 컨텍스트 가져오기 (캐싱 없음 - 항상 최신)
          * @returns {Object|null}
          */
         getContext() {
-          if (!this._context) {
-            this._context = window.SillyTavern?.getContext?.() || null;
-          }
-          return this._context;
+          return window.SillyTavern?.getContext?.() || null;
         }
         /**
          * 요청 헤더 가져오기
@@ -1148,7 +1281,7 @@
   });
 
   // src/utils/textUtils.js
-  function escapeHtml(text) {
+  function escapeHtml2(text) {
     if (!text) return "";
     const div = document.createElement("div");
     div.textContent = text;
@@ -1241,129 +1374,6 @@
     }
   });
 
-  // src/ui/notifications.js
-  function initToastContainer() {
-    if (toastContainer) return;
-    toastContainer = document.createElement("div");
-    toastContainer.id = "chat-lobby-toast-container";
-    toastContainer.innerHTML = `
-        <style>
-            #chat-lobby-toast-container {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                z-index: 10002;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                pointer-events: none;
-            }
-            .chat-lobby-toast {
-                background: var(--SmartThemeBlurTintColor, #2a2a2a);
-                color: var(--SmartThemeBodyColor, #fff);
-                padding: 12px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                pointer-events: auto;
-                animation: toastSlideIn 0.3s ease;
-                max-width: 350px;
-            }
-            .chat-lobby-toast.success { border-left: 4px solid #4caf50; }
-            .chat-lobby-toast.error { border-left: 4px solid #f44336; }
-            .chat-lobby-toast.warning { border-left: 4px solid #ff9800; }
-            .chat-lobby-toast.info { border-left: 4px solid #2196f3; }
-            .chat-lobby-toast.fade-out {
-                animation: toastSlideOut 0.3s ease forwards;
-            }
-            .chat-lobby-toast-icon {
-                font-size: 18px;
-            }
-            .chat-lobby-toast-message {
-                flex: 1;
-                font-size: 14px;
-            }
-            .chat-lobby-toast-close {
-                background: none;
-                border: none;
-                color: inherit;
-                cursor: pointer;
-                opacity: 0.6;
-                font-size: 16px;
-            }
-            .chat-lobby-toast-close:hover { opacity: 1; }
-            @keyframes toastSlideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes toastSlideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        </style>
-    `;
-    document.body.appendChild(toastContainer);
-  }
-  function showToast(message, type = "info", duration = CONFIG.timing.toastDuration) {
-    initToastContainer();
-    const icons = {
-      success: "\u2713",
-      error: "\u2715",
-      warning: "\u26A0",
-      info: "\u2139"
-    };
-    const toast = document.createElement("div");
-    toast.className = `chat-lobby-toast ${type}`;
-    toast.innerHTML = `
-        <span class="chat-lobby-toast-icon">${icons[type]}</span>
-        <span class="chat-lobby-toast-message">${escapeHtml2(message)}</span>
-        <button class="chat-lobby-toast-close">\xD7</button>
-    `;
-    const closeBtn = toast.querySelector(".chat-lobby-toast-close");
-    closeBtn.addEventListener("click", () => removeToast(toast));
-    toastContainer.appendChild(toast);
-    setTimeout(() => removeToast(toast), duration);
-  }
-  function removeToast(toast) {
-    if (!toast.parentNode) return;
-    toast.classList.add("fade-out");
-    setTimeout(() => toast.remove(), CONFIG.timing.animationDuration);
-  }
-  function escapeHtml2(str) {
-    if (!str) return "";
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
-  function showAlert(message, title = "\uC54C\uB9BC") {
-    const fullMessage = title ? `[${title}]
-
-${message}` : message;
-    alert(fullMessage);
-    return Promise.resolve();
-  }
-  function showConfirm(message, title = "\uD655\uC778", _dangerous = false) {
-    const fullMessage = title ? `[${title}]
-
-${message}` : message;
-    return Promise.resolve(confirm(fullMessage));
-  }
-  function showPrompt(message, title = "\uC785\uB825", defaultValue = "") {
-    const fullMessage = title ? `[${title}]
-
-${message}` : message;
-    return Promise.resolve(prompt(fullMessage, defaultValue));
-  }
-  var toastContainer;
-  var init_notifications = __esm({
-    "src/ui/notifications.js"() {
-      init_config();
-      toastContainer = null;
-    }
-  });
-
   // src/ui/characterGrid.js
   var characterGrid_exports = {};
   __export(characterGrid_exports, {
@@ -1435,7 +1445,7 @@ ${message}` : message;
          data-is-fav="${isFav}">
         ${favBadge}
         <img class="lobby-char-avatar" src="${avatarUrl}" alt="${name}" onerror="this.src='/img/ai4.png'">
-        <div class="lobby-char-name">${escapeHtml(name)}</div>
+        <div class="lobby-char-name">${escapeHtml2(name)}</div>
     </div>
     `;
   }
@@ -1701,10 +1711,10 @@ ${message}` : message;
       const isSelected = persona.key === currentPersona ? "selected" : "";
       const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
       html += `
-        <div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
+        <div class="persona-item ${isSelected}" data-persona="${escapeHtml2(persona.key)}" title="${escapeHtml2(persona.name)}">
             <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>\u{1F464}</div>'">
-            <span class="persona-name">${escapeHtml(persona.name)}</span>
-            <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
+            <span class="persona-name">${escapeHtml2(persona.name)}</span>
+            <button class="persona-delete-btn" data-persona="${escapeHtml2(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
         </div>`;
     });
     container.innerHTML = html;
@@ -1851,9 +1861,6 @@ ${message}` : message;
   init_config();
   function setChatHandlers(handlers) {
     store.setChatHandlers(handlers);
-  }
-  function getCurrentCharacter() {
-    return store.currentCharacter;
   }
   async function renderChatList(character) {
     console.log("[ChatList] renderChatList called with:", character);
@@ -2007,11 +2014,11 @@ ${message}` : message;
         </div>
         <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
         <div class="chat-content">
-            <div class="chat-name">${escapeHtml(displayName)}</div>
-            <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
+            <div class="chat-name">${escapeHtml2(displayName)}</div>
+            <div class="chat-preview">${escapeHtml2(truncateText(preview, 80))}</div>
             <div class="chat-meta">
                 ${messageCount > 0 ? `<span>\u{1F4AC} ${messageCount}\uAC1C</span>` : ""}
-                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
+                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml2(folderName)}</span>` : ""}
             </div>
         </div>
         <button class="chat-delete-btn" title="\uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F</button>
@@ -2082,7 +2089,11 @@ ${message}` : message;
       avatarImg.src = character.avatarSrc;
     }
     if (nameEl) nameEl.textContent = character.name;
-    if (deleteBtn) deleteBtn.style.display = "block";
+    if (deleteBtn) {
+      deleteBtn.style.display = "block";
+      deleteBtn.dataset.charAvatar = character.avatar;
+      deleteBtn.dataset.charName = character.name;
+    }
     if (newChatBtn) {
       newChatBtn.style.display = "block";
       newChatBtn.dataset.charIndex = character.index;
@@ -2314,6 +2325,15 @@ ${message}` : message;
       showToast("\uC0AD\uC81C\uD560 \uCC44\uD305 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
+    const cachedChats = cache.get("chats", charAvatar);
+    const chatExists = cachedChats?.some(
+      (c) => (c.file_name || c.fileName) === fileName
+    );
+    if (!chatExists) {
+      showToast("\uC774\uBBF8 \uC0AD\uC81C\uB418\uC5C8\uAC70\uB098 \uCC3E\uC744 \uC218 \uC5C6\uB294 \uCC44\uD305\uC785\uB2C8\uB2E4.", "warning");
+      if (element) element.remove();
+      return;
+    }
     const displayName = fileName.replace(".jsonl", "");
     const confirmed = await showConfirm(
       `"${displayName}" \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
@@ -2397,9 +2417,18 @@ ${message}` : message;
     }
   }
   async function deleteCharacter() {
-    const char = getCurrentCharacter();
-    if (!char) {
+    const deleteBtn = document.getElementById("chat-lobby-delete-char");
+    const charAvatar = deleteBtn?.dataset.charAvatar;
+    const charName = deleteBtn?.dataset.charName;
+    if (!charAvatar) {
       showToast("\uC0AD\uC81C\uD560 \uCE90\uB9AD\uD130\uAC00 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    const context = api.getContext();
+    const char = context?.characters?.find((c) => c.avatar === charAvatar);
+    if (!char) {
+      showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uC774\uBBF8 \uC0AD\uC81C\uB418\uC5C8\uC744 \uC218 \uC788\uC5B4\uC694.", "error");
+      closeChatPanel();
       return;
     }
     const confirmed = await showConfirm(
@@ -2421,10 +2450,10 @@ ${message}` : message;
       data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
       storage.save(data);
       closeChatPanel();
-      const context = api.getContext();
-      if (typeof context?.deleteCharacter === "function") {
+      const context2 = api.getContext();
+      if (typeof context2?.deleteCharacter === "function") {
         console.log("[ChatLobby] Using SillyTavern deleteCharacter function");
-        await context.deleteCharacter(char.avatar, { deleteChats: true });
+        await context2.deleteCharacter(char.avatar, { deleteChats: true });
       } else {
         console.log("[ChatLobby] Using direct API call");
         const headers = api.getRequestHeaders();
@@ -2442,9 +2471,9 @@ ${message}` : message;
           console.error("[ChatLobby] Delete response:", response.status, errorText);
           throw new Error(`Delete failed: ${response.status} - ${errorText}`);
         }
-        if (typeof context?.getCharacters === "function") {
+        if (typeof context2?.getCharacters === "function") {
           console.log("[ChatLobby] Refreshing characters via getCharacters()");
-          await context.getCharacters();
+          await context2.getCharacters();
         }
       }
       cache.invalidate("characters");
@@ -2543,8 +2572,8 @@ ${message}` : message;
       let html = "";
       sorted.forEach((f) => {
         const isSystem = f.isSystem ? "system" : "";
-        const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}" data-name="${escapeHtml(f.name)}">\u{1F5D1}\uFE0F</button>`;
-        const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}" data-name="${escapeHtml(f.name)}">\u270F\uFE0F</button>`;
+        const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}" data-name="${escapeHtml2(f.name)}">\u{1F5D1}\uFE0F</button>`;
+        const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}" data-name="${escapeHtml2(f.name)}">\u270F\uFE0F</button>`;
         let count = 0;
         if (f.id === "favorites") {
           count = data.favorites.length;
@@ -2553,7 +2582,7 @@ ${message}` : message;
         }
         html += `
             <div class="folder-item ${isSystem}" data-id="${f.id}">
-                <span class="folder-name">${escapeHtml(f.name)}</span>
+                <span class="folder-name">${escapeHtml2(f.name)}</span>
                 <span class="folder-count">${count}\uAC1C</span>
                 ${editBtn}
                 ${deleteBtn}
@@ -2593,7 +2622,7 @@ ${message}` : message;
         html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
         sorted.forEach((f) => {
           if (f.id !== "favorites") {
-            html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
+            html += `<option value="${f.id}">${escapeHtml2(f.name)}</option>`;
           }
         });
         filterSelect.innerHTML = html;

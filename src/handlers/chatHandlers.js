@@ -173,6 +173,18 @@ export async function deleteChat(chatInfo) {
         return;
     }
     
+    // 삭제 전 실제 존재 여부 확인 (이중 클릭/레이스컨디션 방지)
+    const cachedChats = cache.get('chats', charAvatar);
+    const chatExists = cachedChats?.some(c => 
+        (c.file_name || c.fileName) === fileName
+    );
+    
+    if (!chatExists) {
+        showToast('이미 삭제되었거나 찾을 수 없는 채팅입니다.', 'warning');
+        if (element) element.remove();
+        return;
+    }
+    
     const displayName = fileName.replace('.jsonl', '');
     const confirmed = await showConfirm(
         `"${displayName}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,
@@ -297,9 +309,23 @@ export async function startNewChat() {
  * @returns {Promise<void>}
  */
 export async function deleteCharacter() {
-    const char = getCurrentCharacter();
-    if (!char) {
+    // store 대신 버튼의 dataset에서 직접 가져오기 (레이스컨디션 방지)
+    const deleteBtn = document.getElementById('chat-lobby-delete-char');
+    const charAvatar = deleteBtn?.dataset.charAvatar;
+    const charName = deleteBtn?.dataset.charName;
+    
+    if (!charAvatar) {
         showToast('삭제할 캐릭터가 선택되지 않았습니다.', 'error');
+        return;
+    }
+    
+    // context에서 실제 캐릭터 객체 확인 (최신 상태)
+    const context = api.getContext();
+    const char = context?.characters?.find(c => c.avatar === charAvatar);
+    
+    if (!char) {
+        showToast('캐릭터를 찾을 수 없습니다. 이미 삭제되었을 수 있어요.', 'error');
+        closeChatPanel();
         return;
     }
     

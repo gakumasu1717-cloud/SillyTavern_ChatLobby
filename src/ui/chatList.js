@@ -389,7 +389,11 @@ function updateChatHeader(character) {
         avatarImg.src = character.avatarSrc;
     }
     if (nameEl) nameEl.textContent = character.name;
-    if (deleteBtn) deleteBtn.style.display = 'block';
+    if (deleteBtn) {
+        deleteBtn.style.display = 'block';
+        deleteBtn.dataset.charAvatar = character.avatar;  // 레이스컨디션 방지
+        deleteBtn.dataset.charName = character.name;
+    }
     if (newChatBtn) {
         newChatBtn.style.display = 'block';
         newChatBtn.dataset.charIndex = character.index;
