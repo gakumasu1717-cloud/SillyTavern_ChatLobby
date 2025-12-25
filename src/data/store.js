@@ -4,7 +4,7 @@
 
 /**
  * @typedef {Object} Character
- * @property {string} index - 캐릭터 인덱스
+ * @property {string|number} index - 캐릭터 인덱스 (dataset에서는 string, API에서는 number)
  * @property {string} avatar - 아바타 파일명
  * @property {string} name - 캐릭터 이름
  * @property {string} avatarSrc - 아바타 이미지 URL

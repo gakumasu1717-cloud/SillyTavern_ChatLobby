@@ -284,7 +284,7 @@ export async function startNewChat() {
         // 로비 닫기 (상태 유지)
         closeLobbyKeepState();
         
-        await api.selectCharacterById(parseInt(charIndex));
+        await api.selectCharacterById(parseInt(charIndex, 10));
         
         // 캐릭터 선택 완료 대기
         await waitForCharacterSelect(charAvatar, 2000);

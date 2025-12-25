@@ -2415,7 +2415,7 @@ ${message}` : message;
     try {
       cache.invalidate("chats", charAvatar);
       closeLobbyKeepState();
-      await api.selectCharacterById(parseInt(charIndex));
+      await api.selectCharacterById(parseInt(charIndex, 10));
       await waitForCharacterSelect(charAvatar, 2e3);
       if (hasChats) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
