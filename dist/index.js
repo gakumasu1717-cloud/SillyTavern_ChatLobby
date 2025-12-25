@@ -1742,16 +1742,15 @@ ${message}` : message;
         handleItemClick(e);
       }, { passive: false });
       if (deleteBtn) {
-        deleteBtn.addEventListener("click", async (e) => {
+        const handleDelete = async (e) => {
           e.stopPropagation();
+          if (e.cancelable) e.preventDefault();
           const personaKey = deleteBtn.dataset.persona;
           const personaName = item.title || personaKey;
           await deletePersona(personaKey, personaName);
-        });
-        deleteBtn.addEventListener("touchend", (e) => {
-          e.stopPropagation();
-          if (e.cancelable) e.preventDefault();
-        }, { passive: false });
+        };
+        deleteBtn.addEventListener("click", handleDelete);
+        deleteBtn.addEventListener("touchend", handleDelete, { passive: false });
       }
     });
   }
