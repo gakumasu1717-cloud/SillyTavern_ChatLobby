@@ -330,20 +330,26 @@ export async function deleteCharacter() {
         closeChatPanel();
         
         // SillyTavern API로 삭제 요청
-        const context = api.getContext();
-        const headers = context?.getRequestHeaders?.() || api.getRequestHeaders();
+        const headers = api.getRequestHeaders();
+        
+        // avatar가 .png로 끝나는지 확인
+        const avatarUrl = char.avatar.endsWith('.png') ? char.avatar : `${char.avatar}.png`;
+        
+        console.log('[ChatLobby] Deleting character:', { avatar: char.avatar, avatarUrl, headers });
         
         const response = await fetch('/api/characters/delete', {
             method: 'POST',
             headers: headers,
             body: JSON.stringify({
-                avatar_url: char.avatar,
+                avatar_url: avatarUrl,
                 delete_chats: true
             })
         });
         
         if (!response.ok) {
-            throw new Error(`Delete failed: ${response.status}`);
+            const errorText = await response.text();
+            console.error('[ChatLobby] Delete response:', response.status, errorText);
+            throw new Error(`Delete failed: ${response.status} - ${errorText}`);
         }
         
         // 캐시 무효화

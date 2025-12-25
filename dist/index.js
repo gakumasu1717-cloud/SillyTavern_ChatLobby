@@ -2421,18 +2421,21 @@ ${message}` : message;
       data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
       storage.save(data);
       closeChatPanel();
-      const context = api.getContext();
-      const headers = context?.getRequestHeaders?.() || api.getRequestHeaders();
+      const headers = api.getRequestHeaders();
+      const avatarUrl = char.avatar.endsWith(".png") ? char.avatar : `${char.avatar}.png`;
+      console.log("[ChatLobby] Deleting character:", { avatar: char.avatar, avatarUrl, headers });
       const response = await fetch("/api/characters/delete", {
         method: "POST",
         headers,
         body: JSON.stringify({
-          avatar_url: char.avatar,
+          avatar_url: avatarUrl,
           delete_chats: true
         })
       });
       if (!response.ok) {
-        throw new Error(`Delete failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error("[ChatLobby] Delete response:", response.status, errorText);
+        throw new Error(`Delete failed: ${response.status} - ${errorText}`);
       }
       cache.invalidate("characters");
       cache.invalidate("chats", char.avatar);
@@ -2858,6 +2861,8 @@ ${message}` : message;
       if (createBtn) {
         createBtn.click();
         cache.invalidate("personas");
+      } else {
+        showToast("\uD398\uB974\uC18C\uB098 \uC0DD\uC131 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4", "error");
       }
     }
     async function handleGoToCharacter() {

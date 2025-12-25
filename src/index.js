@@ -481,6 +481,8 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             createBtn.click();
             // 페르소나 추가 후 캐시 무효화
             cache.invalidate('personas');
+        } else {
+            showToast('페르소나 생성 버튼을 찾을 수 없습니다', 'error');
         }
     }
     
