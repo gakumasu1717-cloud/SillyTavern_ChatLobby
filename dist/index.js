@@ -1251,7 +1251,7 @@
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                z-index: 100001;
+                z-index: 2147483647;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
@@ -1345,7 +1345,7 @@
                 display: none;
                 position: fixed;
                 inset: 0;
-                z-index: 100002;
+                z-index: 2147483647;
                 background: rgba(0,0,0,0.6);
                 justify-content: center;
                 align-items: center;
