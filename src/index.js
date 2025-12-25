@@ -416,33 +416,30 @@ import { debounce, isMobile } from './utils/eventHelpers.js';
     }
     
     /**
-     * 선택된 캐릭터 화면으로 이동
+     * 선택된 캐릭터 편집 화면으로 이동 (븃카드 관리 화면)
      */
-    function handleGoToCharacter() {
+    async function handleGoToCharacter() {
         const character = store.currentCharacter;
         if (!character) {
             console.warn('[ChatLobby] No character selected');
             return;
         }
         
-        console.log('[ChatLobby] Going to character:', character.name);
+        console.log('[ChatLobby] Opening character editor for:', character.name);
         
         // 로비 닫기
         closeLobby();
         
-        // 캐릭터 선택
-        setTimeout(async () => {
-            const context = api.getContext();
-            const characters = context?.characters || [];
-            const index = characters.findIndex(c => c.avatar === character.avatar);
-            
-            if (index !== -1) {
-                await api.selectCharacterById(index);
-                console.log('[ChatLobby] Character selected:', character.name);
-            } else {
-                console.error('[ChatLobby] Character not found:', character.avatar);
-            }
-        }, CONFIG.timing.menuCloseDelay);
+        // 캐릭터 편집 화면 열기
+        const context = api.getContext();
+        const characters = context?.characters || [];
+        const index = characters.findIndex(c => c.avatar === character.avatar);
+        
+        if (index !== -1) {
+            await api.openCharacterEditor(index);
+        } else {
+            console.error('[ChatLobby] Character not found:', character.avatar);
+        }
     }
     
     /**

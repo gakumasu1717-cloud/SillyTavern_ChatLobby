@@ -390,6 +390,90 @@ class SillyTavernAPI {
             return 0;
         }
     }
+    
+    /**
+     * 캐릭터 편집 화면 열기
+     * @param {number|string} characterIndex - 캐릭터 인덱스
+     * @returns {Promise<void>}
+     */
+    async openCharacterEditor(characterIndex) {
+        console.log('[API] Opening character editor for index:', characterIndex);
+        
+        // 먼저 캐릭터 선택
+        await this.selectCharacterById(characterIndex);
+        
+        // 잠시 대기 후 캐릭터 설정 버튼 클릭
+        await this.delay(300);
+        
+        // 캐릭터 설정/편집 버튼 찾기 및 클릭
+        const settingsBtn = document.getElementById('option_settings');
+        if (settingsBtn) {
+            console.log('[API] Clicking option_settings button');
+            settingsBtn.click();
+        } else {
+            console.warn('[API] option_settings button not found');
+        }
+    }
+    
+    /**
+     * 특정 채팅 파일 열기 (SillyTavern API 사용)
+     * @param {string} fileName - 채팅 파일명
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @returns {Promise<boolean>}
+     */
+    async openChatFile(fileName, characterAvatar) {
+        console.log('[API] Opening chat file:', fileName, 'for character:', characterAvatar);
+        
+        const context = this.getContext();
+        
+        // 방법 1: SillyTavern context.openChat 사용
+        if (context?.openChat) {
+            try {
+                await context.openChat(fileName);
+                console.log('[API] Chat opened via context.openChat');
+                return true;
+            } catch (e) {
+                console.warn('[API] context.openChat failed:', e);
+            }
+        }
+        
+        // 방법 2: getChat API 직접 호출
+        try {
+            // 파일명에서 확장자 제거
+            const chatName = fileName.replace('.jsonl', '');
+            
+            // SillyTavern의 getChat 함수 호출 시도
+            if (window.SillyTavern?.getContext) {
+                const ctx = window.SillyTavern.getContext();
+                
+                // 채팅 파일명 설정
+                if (typeof window.characters_api_format !== 'undefined') {
+                    // 기존 채팅 로드 API
+                    const response = await fetch('/api/chats/get', {
+                        method: 'POST',
+                        headers: this.getRequestHeaders(),
+                        body: JSON.stringify({
+                            ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ''),
+                            file_name: fileName,
+                            avatar_url: characterAvatar
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        console.log('[API] Chat loaded via /api/chats/get');
+                        // 페이지 새로고침으로 채팅 적용
+                        location.reload();
+                        return true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[API] Direct chat load failed:', e);
+        }
+        
+        // 방법 3: jQuery로 채팅 목록에서 직접 선택
+        return false;
+    }
 }
 
 // 싱글톤 인스턴스

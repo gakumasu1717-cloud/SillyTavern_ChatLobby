@@ -1080,6 +1080,67 @@
             return 0;
           }
         }
+        /**
+         * 캐릭터 편집 화면 열기
+         * @param {number|string} characterIndex - 캐릭터 인덱스
+         * @returns {Promise<void>}
+         */
+        async openCharacterEditor(characterIndex) {
+          console.log("[API] Opening character editor for index:", characterIndex);
+          await this.selectCharacterById(characterIndex);
+          await this.delay(300);
+          const settingsBtn = document.getElementById("option_settings");
+          if (settingsBtn) {
+            console.log("[API] Clicking option_settings button");
+            settingsBtn.click();
+          } else {
+            console.warn("[API] option_settings button not found");
+          }
+        }
+        /**
+         * 특정 채팅 파일 열기 (SillyTavern API 사용)
+         * @param {string} fileName - 채팅 파일명
+         * @param {string} characterAvatar - 캐릭터 아바타
+         * @returns {Promise<boolean>}
+         */
+        async openChatFile(fileName, characterAvatar) {
+          console.log("[API] Opening chat file:", fileName, "for character:", characterAvatar);
+          const context = this.getContext();
+          if (context?.openChat) {
+            try {
+              await context.openChat(fileName);
+              console.log("[API] Chat opened via context.openChat");
+              return true;
+            } catch (e) {
+              console.warn("[API] context.openChat failed:", e);
+            }
+          }
+          try {
+            const chatName = fileName.replace(".jsonl", "");
+            if (window.SillyTavern?.getContext) {
+              const ctx = window.SillyTavern.getContext();
+              if (typeof window.characters_api_format !== "undefined") {
+                const response = await fetch("/api/chats/get", {
+                  method: "POST",
+                  headers: this.getRequestHeaders(),
+                  body: JSON.stringify({
+                    ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ""),
+                    file_name: fileName,
+                    avatar_url: characterAvatar
+                  })
+                });
+                if (response.ok) {
+                  console.log("[API] Chat loaded via /api/chats/get");
+                  location.reload();
+                  return true;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[API] Direct chat load failed:", e);
+          }
+          return false;
+        }
       };
       api = new SillyTavernAPI();
     }
@@ -2399,52 +2460,21 @@
     showToast("\uCC44\uD305 \uD30C\uC77C\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "warning");
   }
   async function clickChatItemAndVerify(item, fileName) {
-    console.log("[ChatHandlers] Clicking chat item...");
+    console.log("[ChatHandlers] Clicking chat item for:", fileName);
     if (window.$ || window.jQuery) {
       const $ = window.$ || window.jQuery;
-      console.log("[ChatHandlers] Using jQuery click");
-      $(item).trigger("click");
+      console.log("[ChatHandlers] Using jQuery click on item");
+      const clickableEl = item.querySelector(".select_chat_block_filename") || item.querySelector(".ch_name") || item;
+      $(clickableEl).trigger("click");
+      setTimeout(() => {
+        clickableEl.click();
+      }, 100);
     } else {
       console.log("[ChatHandlers] jQuery not found, using native click");
       item.click();
     }
-    console.log("[ChatHandlers] Click dispatched, waiting for chat to load...");
-    const context = api.getContext();
-    const initialChatId = context?.chatId || "";
-    console.log("[ChatHandlers] Initial chatId:", initialChatId);
-    const maxWait = 5e3;
-    const interval = 200;
-    let waited = 0;
-    while (waited < maxWait) {
-      await new Promise((resolve) => setTimeout(resolve, interval));
-      waited += interval;
-      const newContext = api.getContext();
-      const newChatId = newContext?.chatId || "";
-      if (newChatId && newChatId !== initialChatId) {
-        console.log("[ChatHandlers] \u2705 Chat changed to:", newChatId, "after", waited, "ms");
-        const popup2 = document.getElementById("select_chat_popup");
-        if (popup2) {
-          const closeBtn = popup2.querySelector('.popup_close, .fa-xmark, [title="Close"]');
-          if (closeBtn) {
-            console.log("[ChatHandlers] Closing popup");
-            closeBtn.click();
-          }
-        }
-        return;
-      }
-      if (waited % 1e3 === 0) {
-        console.log("[ChatHandlers] Still waiting...", waited, "ms");
-      }
-    }
-    console.warn("[ChatHandlers] \u26A0\uFE0F Chat did not change after", maxWait, "ms");
-    const popup = document.getElementById("select_chat_popup");
-    if (popup) {
-      const closeBtn = popup.querySelector('.popup_close, .fa-xmark, [title="Close"]');
-      if (closeBtn) {
-        console.log("[ChatHandlers] Force closing popup");
-        closeBtn.click();
-      }
-    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log("[ChatHandlers] Click completed for:", fileName);
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
@@ -2961,25 +2991,22 @@
         }, CONFIG.timing.drawerOpenDelay);
       }, CONFIG.timing.menuCloseDelay);
     }
-    function handleGoToCharacter() {
+    async function handleGoToCharacter() {
       const character = store.currentCharacter;
       if (!character) {
         console.warn("[ChatLobby] No character selected");
         return;
       }
-      console.log("[ChatLobby] Going to character:", character.name);
+      console.log("[ChatLobby] Opening character editor for:", character.name);
       closeLobby2();
-      setTimeout(async () => {
-        const context = api.getContext();
-        const characters = context?.characters || [];
-        const index = characters.findIndex((c) => c.avatar === character.avatar);
-        if (index !== -1) {
-          await api.selectCharacterById(index);
-          console.log("[ChatLobby] Character selected:", character.name);
-        } else {
-          console.error("[ChatLobby] Character not found:", character.avatar);
-        }
-      }, CONFIG.timing.menuCloseDelay);
+      const context = api.getContext();
+      const characters = context?.characters || [];
+      const index = characters.findIndex((c) => c.avatar === character.avatar);
+      if (index !== -1) {
+        await api.openCharacterEditor(index);
+      } else {
+        console.error("[ChatLobby] Character not found:", character.avatar);
+      }
     }
     function handleOpenCharSettings() {
       closeLobby2();

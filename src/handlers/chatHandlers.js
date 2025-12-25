@@ -169,70 +169,34 @@ async function openChatByFileName(fileName) {
  * @returns {Promise<void>}
  */
 async function clickChatItemAndVerify(item, fileName) {
-    console.log('[ChatHandlers] Clicking chat item...');
+    console.log('[ChatHandlers] Clicking chat item for:', fileName);
     
     // SillyTavern은 jQuery를 사용하므로 jQuery 클릭 사용
     if (window.$ || window.jQuery) {
         const $ = window.$ || window.jQuery;
-        console.log('[ChatHandlers] Using jQuery click');
-        $(item).trigger('click');
+        console.log('[ChatHandlers] Using jQuery click on item');
+        
+        // 아이템이 아니라 아이템 내부의 클릭 가능한 요소 찾기
+        const clickableEl = item.querySelector('.select_chat_block_filename') || 
+                           item.querySelector('.ch_name') || 
+                           item;
+        
+        // jQuery 트리거
+        $(clickableEl).trigger('click');
+        
+        // 추가로 네이티브 클릭도 시도
+        setTimeout(() => {
+            clickableEl.click();
+        }, 100);
     } else {
-        // fallback: native click
         console.log('[ChatHandlers] jQuery not found, using native click');
         item.click();
     }
     
-    console.log('[ChatHandlers] Click dispatched, waiting for chat to load...');
+    // 잠시 대기
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    // 채팅이 로드될 때까지 대기 - context.chatId 변경 확인
-    const context = api.getContext();
-    const initialChatId = context?.chatId || '';
-    console.log('[ChatHandlers] Initial chatId:', initialChatId);
-    
-    const maxWait = 5000; // 5초로 증가
-    const interval = 200;
-    let waited = 0;
-    
-    while (waited < maxWait) {
-        await new Promise(resolve => setTimeout(resolve, interval));
-        waited += interval;
-        
-        // 채팅 ID가 변경되었는지 확인
-        const newContext = api.getContext();
-        const newChatId = newContext?.chatId || '';
-        
-        if (newChatId && newChatId !== initialChatId) {
-            console.log('[ChatHandlers] ✅ Chat changed to:', newChatId, 'after', waited, 'ms');
-            
-            // 팝업 닫기 시도
-            const popup = document.getElementById('select_chat_popup');
-            if (popup) {
-                const closeBtn = popup.querySelector('.popup_close, .fa-xmark, [title="Close"]');
-                if (closeBtn) {
-                    console.log('[ChatHandlers] Closing popup');
-                    closeBtn.click();
-                }
-            }
-            return;
-        }
-        
-        // 1초마다 로그
-        if (waited % 1000 === 0) {
-            console.log('[ChatHandlers] Still waiting...', waited, 'ms');
-        }
-    }
-    
-    console.warn('[ChatHandlers] ⚠️ Chat did not change after', maxWait, 'ms');
-    
-    // 마지막 시도: 팝업 강제 닫기
-    const popup = document.getElementById('select_chat_popup');
-    if (popup) {
-        const closeBtn = popup.querySelector('.popup_close, .fa-xmark, [title="Close"]');
-        if (closeBtn) {
-            console.log('[ChatHandlers] Force closing popup');
-            closeBtn.click();
-        }
-    }
+    console.log('[ChatHandlers] Click completed for:', fileName);
 }
 
 // ============================================
