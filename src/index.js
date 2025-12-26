@@ -319,9 +319,17 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
      * 배치 모드 버튼들에 터치 이벤트 직접 바인딩 (모바일 호환)
      */
     function bindBatchModeButtons() {
+        console.log('[ChatLobby] bindBatchModeButtons called');
+        
         const batchMoveBtn = document.getElementById('batch-move-btn');
         const batchCancelBtn = document.getElementById('batch-cancel-btn');
         const batchModeBtn = document.getElementById('chat-lobby-batch-mode');
+        
+        console.log('[ChatLobby] Batch buttons found:', {
+            moveBtn: !!batchMoveBtn,
+            cancelBtn: !!batchCancelBtn,
+            modeBtn: !!batchModeBtn
+        });
         
         // 배치 이동 버튼
         if (batchMoveBtn) {
@@ -575,6 +583,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     /**
      * 페르소나 추가 처리
      * 드로어 열어서 더미 페르소나 만들기
+     * 사용자가 이름 입력 후 확인하면 드로어가 닫히므로 그때 리렌더
      */
     async function handleAddPersona() {
         // 드로어 열기
@@ -588,17 +597,36 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         const createBtn = await waitForElement('#create_dummy_persona', 2000);
         if (createBtn) {
             createBtn.click();
-            // 페르소나 추가 후 캐시 무효화
             cache.invalidate('personas');
             
-            // 딜레이 후 직접 리렌더 (ST가 페르소나 생성 완료할 때까지 대기)
-            setTimeout(async () => {
-                console.log('[ChatLobby] Persona created, refreshing bar');
-                cache.invalidate('personas'); // 한번 더 무효화
-                if (isLobbyOpen()) {
-                    await renderPersonaBar();
+            // 페르소나 드로어가 닫힐 때까지 감시 (최대 30초)
+            // 사용자가 이름 입력하고 확인 누르면 드로어가 닫힘
+            let checkCount = 0;
+            const maxChecks = 60; // 500ms * 60 = 30초
+            
+            const checkDrawerClosed = setInterval(() => {
+                checkCount++;
+                const drawer = document.getElementById('persona-management-button');
+                const isOpen = drawer?.classList.contains('openDrawer') || 
+                               drawer?.querySelector('.drawer-icon.openIcon');
+                
+                console.log('[ChatLobby] Checking persona drawer...', { isOpen, checkCount });
+                
+                if (!isOpen || checkCount >= maxChecks) {
+                    clearInterval(checkDrawerClosed);
+                    
+                    if (checkCount >= maxChecks) {
+                        console.log('[ChatLobby] Persona drawer check timeout');
+                    } else {
+                        console.log('[ChatLobby] Persona drawer closed, refreshing bar');
+                    }
+                    
+                    cache.invalidate('personas');
+                    if (isLobbyOpen()) {
+                        renderPersonaBar();
+                    }
                 }
-            }, 1500);
+            }, 500);
         } else {
             showToast('페르소나 생성 버튼을 찾을 수 없습니다', 'error');
         }

@@ -3001,9 +3001,15 @@ ${message}` : message;
       bindBatchModeButtons();
     }
     function bindBatchModeButtons() {
+      console.log("[ChatLobby] bindBatchModeButtons called");
       const batchMoveBtn = document.getElementById("batch-move-btn");
       const batchCancelBtn = document.getElementById("batch-cancel-btn");
       const batchModeBtn = document.getElementById("chat-lobby-batch-mode");
+      console.log("[ChatLobby] Batch buttons found:", {
+        moveBtn: !!batchMoveBtn,
+        cancelBtn: !!batchCancelBtn,
+        modeBtn: !!batchModeBtn
+      });
       if (batchMoveBtn) {
         createTouchClickHandler(batchMoveBtn, () => {
           console.log("[EventDelegation] batch-move-btn touched/clicked");
@@ -3181,13 +3187,26 @@ ${message}` : message;
       if (createBtn) {
         createBtn.click();
         cache.invalidate("personas");
-        setTimeout(async () => {
-          console.log("[ChatLobby] Persona created, refreshing bar");
-          cache.invalidate("personas");
-          if (isLobbyOpen()) {
-            await renderPersonaBar();
+        let checkCount = 0;
+        const maxChecks = 60;
+        const checkDrawerClosed = setInterval(() => {
+          checkCount++;
+          const drawer = document.getElementById("persona-management-button");
+          const isOpen = drawer?.classList.contains("openDrawer") || drawer?.querySelector(".drawer-icon.openIcon");
+          console.log("[ChatLobby] Checking persona drawer...", { isOpen, checkCount });
+          if (!isOpen || checkCount >= maxChecks) {
+            clearInterval(checkDrawerClosed);
+            if (checkCount >= maxChecks) {
+              console.log("[ChatLobby] Persona drawer check timeout");
+            } else {
+              console.log("[ChatLobby] Persona drawer closed, refreshing bar");
+            }
+            cache.invalidate("personas");
+            if (isLobbyOpen()) {
+              renderPersonaBar();
+            }
           }
-        }, 1500);
+        }, 500);
       } else {
         showToast("\uD398\uB974\uC18C\uB098 \uC0DD\uC131 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4", "error");
       }
