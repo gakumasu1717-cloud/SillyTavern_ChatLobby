@@ -389,14 +389,34 @@
     position: relative;
 }
 
-/* 캐릭터 즐겨찾기 배지 */
-.char-fav-badge {
+/* 캐릭터 즐겨찾기 버튼 */
+.char-fav-btn {
     position: absolute;
     top: 5px;
     right: 5px;
-    font-size: 0.9em;
-    z-index: 2;
+    font-size: 1.1em;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.4);
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    padding: 0;
+}
+
+.char-fav-btn:hover {
+    background: rgba(0, 0, 0, 0.6);
+    transform: scale(1.15);
+}
+
+.char-fav-btn:active {
+    transform: scale(0.95);
 }
 
 .lobby-char-card.is-char-fav {

@@ -120,14 +120,15 @@ function renderCharacterCard(char, index) {
     const safeAvatar = (char.avatar || '').replace(/"/g, '&quot;');
     
     const isFav = isFavoriteChar(char);
-    const favBadge = isFav ? '<span class="char-fav-badge">⭐</span>' : '';
+    // 즐겨찾기 버튼 (클릭 가능)
+    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
     
     return `
     <div class="lobby-char-card ${isFav ? 'is-char-fav' : ''}" 
          data-char-index="${index}" 
          data-char-avatar="${safeAvatar}" 
          data-is-fav="${isFav}">
-        ${favBadge}
+        ${favBtn}
         <img class="lobby-char-avatar" src="${avatarUrl}" alt="${name}" onerror="this.src='/img/ai4.png'">
         <div class="lobby-char-name">${escapeHtml(name)}</div>
     </div>
@@ -151,15 +152,15 @@ function isFavoriteChar(char) {
  */
 async function sortCharacters(characters, sortOption) {
     if (sortOption === 'chats') {
-        // 채팅 수 정렬 - 캐시된 데이터만 사용 (N+1 문제 방지)
-        // 캐시가 없으면 0으로 처리, 추가 API 호출 없음
+        // 채팅 수 정렬 - 캐시된 데이터 우선 사용 (N+1 문제 방지)
+        // 캐시가 없으면 0으로 처리 (맨 뒤로 보내지 않음)
         const results = characters.map(char => {
             // 캐시에서 직접 가져오기 (비동기 없음)
             const cachedCount = cache.get('chatCounts', char.avatar);
             return { 
                 char, 
-                count: cachedCount,  // undefined 유지 (캐시 미스 구분용)
-                hasCache: cachedCount !== undefined
+                // 캐시 미스 시 0으로 처리 (맨 뒤로 보내지 않고 정상 정렬)
+                count: typeof cachedCount === 'number' ? cachedCount : 0
             };
         });
         
@@ -169,13 +170,13 @@ async function sortCharacters(characters, sortOption) {
                 return isFavoriteChar(a.char) ? -1 : 1;
             }
             
-            // 2. 캐시 미스는 맨 뒤로
-            if (a.hasCache && !b.hasCache) return -1;
-            if (!a.hasCache && b.hasCache) return 1;
-            if (!a.hasCache && !b.hasCache) return 0;
+            // 2. 채팅 수 내림차순 (같으면 이름순)
+            if (b.count !== a.count) {
+                return b.count - a.count;
+            }
             
-            // 3. 채팅 수 내림차순
-            return b.count - a.count;
+            // 3. 채팅 수 같으면 이름순
+            return (a.char.name || '').localeCompare(b.char.name || '', 'ko');
         });
         
         return results.map(item => item.char);
@@ -191,12 +192,6 @@ async function sortCharacters(characters, sortOption) {
         
         if (sortOption === 'name') {
             return (a.name || '').localeCompare(b.name || '', 'ko');
-        }
-        
-        if (sortOption === 'created') {
-            const aDate = a.create_date || a.date_added || 0;
-            const bDate = b.create_date || b.date_added || 0;
-            return bDate - aDate;
         }
         
         // 기본: 최근 채팅순
@@ -215,8 +210,40 @@ async function sortCharacters(characters, sortOption) {
 function bindCharacterEvents(container) {
     container.querySelectorAll('.lobby-char-card').forEach((card, index) => {
         const charName = card.querySelector('.lobby-char-name')?.textContent || 'Unknown';
+        const charAvatar = card.dataset.charAvatar;
+        const favBtn = card.querySelector('.char-fav-btn');
         
+        // 즐겨찾기 버튼 이벤트
+        if (favBtn) {
+            createTouchClickHandler(favBtn, async (e) => {
+                e.stopPropagation();
+                
+                const currentFav = card.dataset.isFav === 'true';
+                const newFavState = !currentFav;
+                
+                // UI 즉시 업데이트
+                favBtn.textContent = newFavState ? '⭐' : '☆';
+                card.dataset.isFav = newFavState.toString();
+                card.classList.toggle('is-char-fav', newFavState);
+                
+                // API 호출
+                const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
+                
+                if (!success) {
+                    // 실패 시 롤백
+                    favBtn.textContent = currentFav ? '⭐' : '☆';
+                    card.dataset.isFav = currentFav.toString();
+                    card.classList.toggle('is-char-fav', currentFav);
+                    showToast('즐겨찾기 변경에 실패했습니다.', 'error');
+                } else {
+                    showToast(newFavState ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.', 'success');
+                }
+            }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
+        }
+        
+        // 캐릭터 카드 클릭 (선택)
         createTouchClickHandler(card, () => {
+            // 즐겨찾기 버튼 클릭은 무시 (위에서 처리됨)
             console.log('[CharacterGrid] Card click handler fired for:', charName);
             
             // 기존 선택 해제

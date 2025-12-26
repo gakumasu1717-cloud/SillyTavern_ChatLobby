@@ -82,8 +82,9 @@ async function renderPersonaList(container, personas) {
  * @param {HTMLElement} container
  */
 function bindPersonaEvents(container) {
-    container.querySelectorAll('.persona-item').forEach(item => {
+    container.querySelectorAll('.persona-item').forEach((item, index) => {
         const deleteBtn = item.querySelector('.persona-delete-btn');
+        const personaKey = item.dataset.persona;
         
         // 클릭 핸들러 - 바로 선택, 이미 선택됐으면 관리화면
         const handleItemClick = async (e) => {
@@ -97,27 +98,24 @@ function bindPersonaEvents(container) {
             }
         };
         
-        // PC: click
-        item.addEventListener('click', handleItemClick);
+        // createTouchClickHandler 사용으로 터치/클릭 통합 (스크롤 vs 클릭 구분 포함)
+        createTouchClickHandler(item, handleItemClick, {
+            preventDefault: true,
+            stopPropagation: false,
+            scrollThreshold: 10,
+            debugName: `persona-${index}-${personaKey}`
+        });
         
-        // 모바일: touchend
-        item.addEventListener('touchend', (e) => {
-            if (e.cancelable) e.preventDefault();
-            handleItemClick(e);
-        }, { passive: false });
-        
-        // 삭제 버튼
+        // 삭제 버튼도 createTouchClickHandler 사용
         if (deleteBtn) {
-            const handleDelete = async (e) => {
-                e.stopPropagation();
-                if (e.cancelable) e.preventDefault();
-                const personaKey = deleteBtn.dataset.persona;
+            createTouchClickHandler(deleteBtn, async (e) => {
                 const personaName = item.title || personaKey;
                 await deletePersona(personaKey, personaName);
-            };
-            
-            deleteBtn.addEventListener('click', handleDelete);
-            deleteBtn.addEventListener('touchend', handleDelete, { passive: false });
+            }, {
+                preventDefault: true,
+                stopPropagation: true,
+                debugName: `persona-del-${index}`
+            });
         }
     });
 }

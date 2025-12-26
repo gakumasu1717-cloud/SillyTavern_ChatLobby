@@ -8,9 +8,161 @@ import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { formatDate, getTimestamp } from '../utils/dateUtils.js';
-import { createTouchClickHandler } from '../utils/eventHelpers.js';
+import { createTouchClickHandler, isMobile } from '../utils/eventHelpers.js';
 import { showToast, showAlert } from './notifications.js';
 import { CONFIG } from '../config.js';
+
+// ============================================
+// 툴팁 관련 변수
+// ============================================
+
+let tooltipElement = null;
+let tooltipTimeout = null;
+let currentTooltipTarget = null;
+
+/**
+ * 툴팁 요소 생성 (한 번만)
+ */
+function ensureTooltipElement() {
+    if (tooltipElement) return tooltipElement;
+    
+    tooltipElement = document.createElement('div');
+    tooltipElement.id = 'chat-preview-tooltip';
+    tooltipElement.className = 'chat-preview-tooltip';
+    tooltipElement.style.cssText = `
+        position: fixed;
+        display: none;
+        max-width: 400px;
+        max-height: 300px;
+        padding: 12px 15px;
+        background: var(--SmartThemeBlurTintColor, rgba(20, 20, 30, 0.95));
+        border: 1px solid var(--SmartThemeBorderColor, rgba(255,255,255,0.2));
+        border-radius: 8px;
+        color: var(--SmartThemeBodyColor, #eee);
+        font-size: 0.9em;
+        line-height: 1.5;
+        z-index: 100000;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        pointer-events: none;
+        white-space: pre-wrap;
+        word-break: break-word;
+    `;
+    document.body.appendChild(tooltipElement);
+    return tooltipElement;
+}
+
+/**
+ * 툴팁 표시
+ * @param {string} content - 표시할 내용
+ * @param {MouseEvent} e - 마우스 이벤트
+ */
+function showTooltip(content, e) {
+    const tooltip = ensureTooltipElement();
+    tooltip.textContent = content;
+    tooltip.style.display = 'block';
+    
+    // 마우스 커서 바로 아래에 위치
+    const x = e.clientX;
+    const y = e.clientY + 15; // 커서 바로 아래
+    
+    // 화면 밖으로 나가지 않도록 조정
+    const rect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let finalX = x;
+    let finalY = y;
+    
+    // 오른쪽 경계 체크
+    if (x + rect.width > viewportWidth - 10) {
+        finalX = viewportWidth - rect.width - 10;
+    }
+    
+    // 아래쪽 경계 체크
+    if (y + rect.height > viewportHeight - 10) {
+        finalY = e.clientY - rect.height - 10; // 커서 위로 표시
+    }
+    
+    tooltip.style.left = `${finalX}px`;
+    tooltip.style.top = `${finalY}px`;
+}
+
+/**
+ * 툴팁 숨김
+ */
+function hideTooltip() {
+    if (tooltipTimeout) {
+        clearTimeout(tooltipTimeout);
+        tooltipTimeout = null;
+    }
+    if (tooltipElement) {
+        tooltipElement.style.display = 'none';
+    }
+    currentTooltipTarget = null;
+}
+
+/**
+ * 채팅 아이템에 툴팁 이벤트 바인딩 (PC 전용)
+ * @param {HTMLElement} container
+ */
+function bindTooltipEvents(container) {
+    // 모바일에서는 비활성화
+    if (isMobile()) return;
+    
+    container.querySelectorAll('.lobby-chat-item').forEach(item => {
+        const preview = item.querySelector('.chat-preview')?.textContent || '';
+        // data-full-preview 속성에 전문 저장 (렌더링 시 추가됨)
+        const fullPreview = item.dataset.fullPreview || preview;
+        
+        item.addEventListener('mouseenter', (e) => {
+            if (currentTooltipTarget === item) return;
+            
+            // 이전 타이머 취소
+            hideTooltip();
+            currentTooltipTarget = item;
+            
+            // 딜레이 후 툴팁 표시 (300ms)
+            tooltipTimeout = setTimeout(() => {
+                if (currentTooltipTarget === item && fullPreview) {
+                    showTooltip(fullPreview, e);
+                }
+            }, 300);
+        });
+        
+        item.addEventListener('mousemove', (e) => {
+            // 툴팁이 표시 중이면 위치 업데이트
+            if (tooltipElement && tooltipElement.style.display === 'block' && currentTooltipTarget === item) {
+                const tooltip = tooltipElement;
+                const x = e.clientX;
+                const y = e.clientY + 15;
+                
+                const rect = tooltip.getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                
+                let finalX = x;
+                let finalY = y;
+                
+                if (x + rect.width > viewportWidth - 10) {
+                    finalX = viewportWidth - rect.width - 10;
+                }
+                if (y + rect.height > viewportHeight - 10) {
+                    finalY = e.clientY - rect.height - 10;
+                }
+                
+                tooltip.style.left = `${finalX}px`;
+                tooltip.style.top = `${finalY}px`;
+            }
+        });
+        
+        item.addEventListener('mouseleave', () => {
+            if (currentTooltipTarget === item) {
+                hideTooltip();
+            }
+        });
+    });
+}
 
 // ============================================
 // 초기화
@@ -146,6 +298,9 @@ function renderChats(container, rawChats, charAvatar) {
     
     bindChatEvents(container, charAvatar);
     
+    // PC에서 툴팁 이벤트 바인딩
+    bindTooltipEvents(container);
+    
     // 드롭다운 동기화
     syncDropdowns(filterFolder, sortOption);
 }
@@ -273,13 +428,16 @@ function renderChatItem(chat, charAvatar, index) {
     const tooltipPreview = truncateText(preview, 500);
     const safeAvatar = (charAvatar || '').replace(/"/g, '&quot;');
     const safeFileName = (fileName || '').replace(/"/g, '&quot;');
+    // 툴팁용 전문 (HTML 이스케이프)
+    const safeFullPreview = escapeHtml(tooltipPreview).replace(/"/g, '&quot;');
     
     return `
     <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''}" 
          data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
-         data-folder-id="${folderId}">
+         data-folder-id="${folderId}"
+         data-full-preview="${safeFullPreview}">
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
