@@ -459,6 +459,19 @@ ${message}` : message;
             if (saved) {
               const data = JSON.parse(saved);
               this._data = { ...DEFAULT_DATA, ...data };
+              if (this._data.charSortOption === "chats") {
+                console.log('[Storage] Migrating charSortOption from "chats" to "recent"');
+                this._data.charSortOption = "recent";
+                this.save(this._data);
+              }
+              if (this._data.filterFolder && this._data.filterFolder !== "all") {
+                const folderExists = this._data.folders?.some((f) => f.id === this._data.filterFolder);
+                if (!folderExists) {
+                  console.log('[Storage] Resetting invalid filterFolder to "all"');
+                  this._data.filterFolder = "all";
+                  this.save(this._data);
+                }
+              }
               return this._data;
             }
           } catch (e) {
@@ -1658,7 +1671,6 @@ ${message}` : message;
                         <select id="chat-lobby-char-sort" title="\uCE90\uB9AD\uD130 \uC815\uB82C">
                             <option value="recent">\u{1F552} \uCD5C\uADFC \uCC44\uD305\uC21C</option>
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
-                            <option value="chats">\u{1F4AC} \uCC44\uD305 \uC218</option>
                         </select>
                     </div>
                     <div id="chat-lobby-characters">
@@ -2938,6 +2950,7 @@ ${message}` : message;
         renderPersonaBar();
         renderCharacterGrid();
         updateFolderDropdowns();
+        bindBatchModeButtons();
         const currentContext = api.getContext();
         if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
           const currentChar = currentContext.characters?.[currentContext.characterId];
@@ -3174,7 +3187,7 @@ ${message}` : message;
           if (isLobbyOpen()) {
             await renderPersonaBar();
           }
-        }, 800);
+        }, 1500);
       } else {
         showToast("\uD398\uB974\uC18C\uB098 \uC0DD\uC131 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4", "error");
       }

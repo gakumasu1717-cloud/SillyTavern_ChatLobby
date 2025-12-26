@@ -229,6 +229,9 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             // 폴더 드롭다운 업데이트
             updateFolderDropdowns();
             
+            // 배치 모드 버튼들 터치 이벤트 바인딩 (로비 열릴 때마다 필요)
+            bindBatchModeButtons();
+            
             // 현재 채팅 중인 캐릭터 자동 선택
             const currentContext = api.getContext();
             if (currentContext?.characterId !== undefined && currentContext.characterId >= 0) {
@@ -595,7 +598,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
                 if (isLobbyOpen()) {
                     await renderPersonaBar();
                 }
-            }, 800);
+            }, 1500);
         } else {
             showToast('페르소나 생성 버튼을 찾을 수 없습니다', 'error');
         }

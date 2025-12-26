@@ -36,6 +36,24 @@ class StorageManager {
             if (saved) {
                 const data = JSON.parse(saved);
                 this._data = { ...DEFAULT_DATA, ...data };
+                
+                // 마이그레이션: 'chats' 정렬 옵션은 더 이상 지원 안 함
+                if (this._data.charSortOption === 'chats') {
+                    console.log('[Storage] Migrating charSortOption from "chats" to "recent"');
+                    this._data.charSortOption = 'recent';
+                    this.save(this._data);
+                }
+                
+                // 마이그레이션: 존재하지 않는 폴더가 필터로 설정되어 있으면 'all'로 리셋
+                if (this._data.filterFolder && this._data.filterFolder !== 'all') {
+                    const folderExists = this._data.folders?.some(f => f.id === this._data.filterFolder);
+                    if (!folderExists) {
+                        console.log('[Storage] Resetting invalid filterFolder to "all"');
+                        this._data.filterFolder = 'all';
+                        this.save(this._data);
+                    }
+                }
+                
                 return this._data;
             }
         } catch (e) {
