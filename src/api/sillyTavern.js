@@ -265,6 +265,63 @@ class SillyTavernAPI {
     }
     
     /**
+     * 캐릭터 즐겨찾기 토글
+     * SillyTavern의 favorite_button 클릭과 동일하게 동작
+     * @param {string} charAvatar - 캐릭터 아바타
+     * @param {boolean} newFavState - 새로운 즐겨찾기 상태
+     * @returns {Promise<boolean>}
+     */
+    async toggleCharacterFavorite(charAvatar, newFavState) {
+        try {
+            console.log('[API] Toggling favorite for:', charAvatar, 'to:', newFavState);
+            
+            // SillyTavern context에서 캐릭터 찾기
+            const context = this.getContext();
+            const char = context?.characters?.find(c => c.avatar === charAvatar);
+            
+            if (!char) {
+                console.error('[API] Character not found:', charAvatar);
+                return false;
+            }
+            
+            // 캐릭터 데이터 복사 및 fav 설정
+            const editPayload = {
+                avatar_url: charAvatar,
+                ch_name: char.name,
+                fav: newFavState,
+                // extensions에도 설정
+                extensions: {
+                    ...(char.data?.extensions || {}),
+                    fav: newFavState
+                }
+            };
+            
+            const response = await this.fetchWithRetry('/api/characters/edit-attribute', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify(editPayload)
+            });
+            
+            if (response.ok) {
+                // context.characters 업데이트
+                char.fav = newFavState;
+                if (char.data?.extensions) {
+                    char.data.extensions.fav = newFavState;
+                }
+                cache.invalidate('characters');
+                console.log('[API] Favorite toggled successfully');
+                return true;
+            }
+            
+            console.error('[API] Response not ok:', response.status);
+            return false;
+        } catch (error) {
+            console.error('[API] Failed to toggle favorite:', error);
+            return false;
+        }
+    }
+    
+    /**
      * 캐릭터 삭제
      * @param {string} charAvatar - 캐릭터 아바타
      * @returns {Promise<boolean>}

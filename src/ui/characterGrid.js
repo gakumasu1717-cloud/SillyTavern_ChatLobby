@@ -255,18 +255,10 @@ function bindCharacterEvents(container) {
                 console.log('[CharacterGrid] Current fav:', currentFav, '-> New fav:', newFavState);
                 
                 try {
-                    // 해당 캐릭터 먼저 선택 (SillyTavern 내부 상태 변경 위해)
-                    console.log('[CharacterGrid] Selecting character...');
-                    await api.selectCharacterById(charIndex);
+                    // API로 직접 즐겨찾기 토글 (캐릭터 선택 없이)
+                    const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
                     
-                    // 잠시 대기 후 SillyTavern 즐겨찾기 버튼 클릭
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    const stFavBtn = document.getElementById('favorite_button');
-                    if (stFavBtn) {
-                        console.log('[CharacterGrid] Clicking ST favorite_button');
-                        stFavBtn.click();
-                        
+                    if (success) {
                         // UI 즉시 업데이트 (리렌더 없이)
                         console.log('[CharacterGrid] Updating UI only (no re-render)');
                         favBtn.textContent = newFavState ? '⭐' : '☆';
@@ -274,14 +266,10 @@ function bindCharacterEvents(container) {
                         card.classList.toggle('is-char-fav', newFavState);
                         
                         showToast(newFavState ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.', 'success');
-                        
-                        // 캐시 무효화 (리렌더는 CHARACTER_EDITED 이벤트가 처리)
-                        cache.invalidate('characters');
-                        
                         console.log('[CharacterGrid] ========== FAVORITE TOGGLE END ==========');
                     } else {
-                        console.error('[CharacterGrid] SillyTavern favorite_button not found');
-                        showToast('즐겨찾기 버튼을 찾을 수 없습니다.', 'error');
+                        console.error('[CharacterGrid] API call failed');
+                        showToast('즐겨찾기 변경에 실패했습니다.', 'error');
                     }
                 } catch (error) {
                     console.error('[CharacterGrid] Favorite toggle error:', error);

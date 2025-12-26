@@ -1130,6 +1130,53 @@ ${message}` : message;
           }
         }
         /**
+         * 캐릭터 즐겨찾기 토글
+         * SillyTavern의 favorite_button 클릭과 동일하게 동작
+         * @param {string} charAvatar - 캐릭터 아바타
+         * @param {boolean} newFavState - 새로운 즐겨찾기 상태
+         * @returns {Promise<boolean>}
+         */
+        async toggleCharacterFavorite(charAvatar, newFavState) {
+          try {
+            console.log("[API] Toggling favorite for:", charAvatar, "to:", newFavState);
+            const context = this.getContext();
+            const char = context?.characters?.find((c) => c.avatar === charAvatar);
+            if (!char) {
+              console.error("[API] Character not found:", charAvatar);
+              return false;
+            }
+            const editPayload = {
+              avatar_url: charAvatar,
+              ch_name: char.name,
+              fav: newFavState,
+              // extensions에도 설정
+              extensions: {
+                ...char.data?.extensions || {},
+                fav: newFavState
+              }
+            };
+            const response = await this.fetchWithRetry("/api/characters/edit-attribute", {
+              method: "POST",
+              headers: this.getRequestHeaders(),
+              body: JSON.stringify(editPayload)
+            });
+            if (response.ok) {
+              char.fav = newFavState;
+              if (char.data?.extensions) {
+                char.data.extensions.fav = newFavState;
+              }
+              cache.invalidate("characters");
+              console.log("[API] Favorite toggled successfully");
+              return true;
+            }
+            console.error("[API] Response not ok:", response.status);
+            return false;
+          } catch (error) {
+            console.error("[API] Failed to toggle favorite:", error);
+            return false;
+          }
+        }
+        /**
          * 캐릭터 삭제
          * @param {string} charAvatar - 캐릭터 아바타
          * @returns {Promise<boolean>}
@@ -1551,23 +1598,17 @@ ${message}` : message;
           const newFavState = !currentFav;
           console.log("[CharacterGrid] Current fav:", currentFav, "-> New fav:", newFavState);
           try {
-            console.log("[CharacterGrid] Selecting character...");
-            await api.selectCharacterById(charIndex);
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            const stFavBtn = document.getElementById("favorite_button");
-            if (stFavBtn) {
-              console.log("[CharacterGrid] Clicking ST favorite_button");
-              stFavBtn.click();
+            const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
+            if (success) {
               console.log("[CharacterGrid] Updating UI only (no re-render)");
               favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
               card.dataset.isFav = newFavState.toString();
               card.classList.toggle("is-char-fav", newFavState);
               showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
-              cache.invalidate("characters");
               console.log("[CharacterGrid] ========== FAVORITE TOGGLE END ==========");
             } else {
-              console.error("[CharacterGrid] SillyTavern favorite_button not found");
-              showToast("\uC990\uACA8\uCC3E\uAE30 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+              console.error("[CharacterGrid] API call failed");
+              showToast("\uC990\uACA8\uCC3E\uAE30 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
             }
           } catch (error) {
             console.error("[CharacterGrid] Favorite toggle error:", error);
@@ -1699,13 +1740,13 @@ ${message}` : message;
                             <button id="chat-lobby-folder-manage" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
                         </div>
                     </div>
+                    <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14: \uAC04\uB2E8\uD558\uAC8C \uC120\uD0DD \uC218 + \uD3F4\uB354 \uC774\uB3D9 \uB4DC\uB86D\uB2E4\uC6B4 -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
-                        <select id="batch-move-folder">
-                            <option value="">\uD3F4\uB354 \uC120\uD0DD...</option>
+                        <select id="batch-move-folder" title="\uC774\uB3D9\uD560 \uD3F4\uB354 \uC120\uD0DD">
+                            <option value="">\u{1F4C1} \uC774\uB3D9\uD560 \uD3F4\uB354...</option>
                         </select>
-                        <button id="batch-move-btn">\uC774\uB3D9</button>
-                        <button id="batch-cancel-btn">\uCDE8\uC18C</button>
+                        <button id="batch-cancel-btn" title="\uBC30\uCE58 \uBAA8\uB4DC \uC885\uB8CC">\u2715</button>
                     </div>
                     <div id="chat-lobby-chats-list">
                         <div class="lobby-empty-state">
@@ -3147,6 +3188,14 @@ ${message}` : message;
       document.getElementById("chat-lobby-chats-list")?.addEventListener("change", (e) => {
         if (e.target.classList.contains("chat-select-cb")) {
           updateBatchCount();
+        }
+      });
+      document.getElementById("batch-move-folder")?.addEventListener("change", (e) => {
+        const targetFolder = e.target.value;
+        console.log("[EventDelegation] batch-move-folder changed:", targetFolder);
+        if (targetFolder) {
+          executeBatchMove(targetFolder);
+          e.target.value = "";
         }
       });
     }
