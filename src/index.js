@@ -16,11 +16,18 @@ import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } f
 import { showToast } from './ui/notifications.js';
 import { debounce, isMobile, createTouchClickHandler } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
+import { intervalManager } from './utils/intervalManager.js';
 
 (function() {
     'use strict';
     
     console.log('[ChatLobby] Loading extension...');
+    
+    // ============================================
+    // 이벤트 핸들러 참조 저장 (cleanup용)
+    // ============================================
+    let eventHandlers = null;
+    let eventsRegistered = false;
     
     // ============================================
     // 초기화
@@ -66,6 +73,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     /**
      * SillyTavern 이벤트 리스닝 설정
      * 캐릭터 삭제/추가/수정 등의 이벤트를 감지하여 캐시 무효화
+     * 중복 등록 방지 + cleanup 지원
      */
     function setupSillyTavernEvents() {
         const context = window.SillyTavern?.getContext?.();
@@ -74,50 +82,81 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             return;
         }
         
-        const { eventSource, eventTypes } = context;
-        
-        // 캐릭터 삭제 시 캐시 무효화
-        eventSource.on(eventTypes.CHARACTER_DELETED, () => {
-            console.log('[ChatLobby] Character deleted, invalidating cache');
-            cache.invalidate('characters');
-            // 로비가 열려있으면 새로고침
-            if (isLobbyOpen()) {
-                renderCharacterGrid(store.searchTerm);
-            }
-        });
-        
-        // 캐릭터 수정 시 (즐겨찾기 포함)
-        // ⚠️ 의도적으로 리렌더 안 함:
-        // - 즐겨찾기 토글 시 UI만 업데이트 (별 아이콘)
-        // - 정렬은 사용자가 새로고침 버튼 누를 때 적용
-        // - 채팅 기록 즐겨찾기와 동일한 동작
-        if (eventTypes.CHARACTER_EDITED) {
-            eventSource.on(eventTypes.CHARACTER_EDITED, () => {
-                console.log('[ChatLobby] CHARACTER_EDITED - cache only (no re-render)');
-                cache.invalidate('characters');
-                // 리렌더 안 함 - 새로고침 버튼으로 수동 갱신
-            });
+        // 이미 등록되어 있으면 스킵
+        if (eventsRegistered) {
+            console.log('[ChatLobby] Events already registered, skipping');
+            return;
         }
         
-        // 캐릭터 추가 시 (임포트 포함)
-        if (eventTypes.CHARACTER_ADDED) {
-            eventSource.on(eventTypes.CHARACTER_ADDED, () => {
-                console.log('[ChatLobby] ========== CHARACTER_ADDED EVENT ==========');
+        const { eventSource, eventTypes } = context;
+        
+        // 핸들러 함수들을 별도로 정의 (off 호출 가능하도록)
+        eventHandlers = {
+            onCharacterDeleted: () => {
+                console.log('[ChatLobby] Character deleted, invalidating cache');
                 cache.invalidate('characters');
                 if (isLobbyOpen()) {
                     renderCharacterGrid(store.searchTerm);
                 }
-                console.log('[ChatLobby] ========== CHARACTER_ADDED END ==========');
-            });
+            },
+            onCharacterEdited: () => {
+                console.log('[ChatLobby] CHARACTER_EDITED - cache only (no re-render)');
+                cache.invalidate('characters');
+            },
+            onCharacterAdded: () => {
+                console.log('[ChatLobby] CHARACTER_ADDED');
+                cache.invalidate('characters');
+                if (isLobbyOpen()) {
+                    renderCharacterGrid(store.searchTerm);
+                }
+            },
+            onChatChanged: () => {
+                console.log('[ChatLobby] Chat changed, invalidating character cache');
+                cache.invalidate('characters');
+            }
+        };
+        
+        // 이벤트 등록
+        eventSource.on(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
+        
+        if (eventTypes.CHARACTER_EDITED) {
+            eventSource.on(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
         }
         
-        // 채팅 변경 시 (새 캐릭터 선택 포함)
-        eventSource.on(eventTypes.CHAT_CHANGED, () => {
-            console.log('[ChatLobby] Chat changed, invalidating character cache');
-            cache.invalidate('characters');
-        });
+        if (eventTypes.CHARACTER_ADDED) {
+            eventSource.on(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
+        }
         
+        eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+        
+        eventsRegistered = true;
         console.log('[ChatLobby] SillyTavern events registered');
+    }
+    
+    /**
+     * SillyTavern 이벤트 리스너 정리
+     * 확장 재로드 시 호출
+     */
+    function cleanupSillyTavernEvents() {
+        if (!eventHandlers || !eventsRegistered) return;
+        
+        const context = window.SillyTavern?.getContext?.();
+        if (!context?.eventSource) return;
+        
+        const { eventSource, eventTypes } = context;
+        
+        try {
+            eventSource.off?.(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
+            eventSource.off?.(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
+            eventSource.off?.(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
+            eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+            
+            eventsRegistered = false;
+            eventHandlers = null;
+            console.log('[ChatLobby] SillyTavern events cleaned up');
+        } catch (e) {
+            console.warn('[ChatLobby] Failed to cleanup events:', e);
+        }
     }
     
     /**
@@ -285,6 +324,9 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         
         if (container) container.style.display = 'none';
         if (fab) fab.style.display = 'flex';
+        
+        // 🧹 모든 interval 정리 (메모리 누수 방지)
+        intervalManager.clearAll();
         
         store.setLobbyOpen(false);
         store.reset(); // 상태 초기화
@@ -566,11 +608,11 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             
             importBtn.click();
             
-            // 캐릭터 수 변화 감지 (폴링)
-            const checkInterval = setInterval(async () => {
+            // 캐릭터 수 변화 감지 (폴링) - intervalManager 사용
+            const checkInterval = intervalManager.set(async () => {
                 const newCount = api.getCharacters().length;
                 if (newCount > currentCount) {
-                    clearInterval(checkInterval);
+                    intervalManager.clear(checkInterval);
                     console.log('[ChatLobby] Character imported! New count:', newCount);
                     cache.invalidate('characters');
                     if (isLobbyOpen()) {
@@ -581,7 +623,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             
             // 5초 후 타임아웃
             setTimeout(() => {
-                clearInterval(checkInterval);
+                intervalManager.clear(checkInterval);
                 console.log('[ChatLobby] Import check timeout');
             }, 5000);
         }
@@ -607,11 +649,11 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             cache.invalidate('personas');
             
             // 페르소나 드로어가 닫힐 때까지 감시 (최대 30초)
-            // 사용자가 이름 입력하고 확인 누르면 드로어가 닫힘
+            // intervalManager 사용
             let checkCount = 0;
             const maxChecks = 60; // 500ms * 60 = 30초
             
-            const checkDrawerClosed = setInterval(() => {
+            const checkDrawerClosed = intervalManager.set(() => {
                 checkCount++;
                 const drawer = document.getElementById('persona-management-button');
                 const isOpen = drawer?.classList.contains('openDrawer') || 
@@ -620,7 +662,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
                 console.log('[ChatLobby] Checking persona drawer...', { isOpen, checkCount });
                 
                 if (!isOpen || checkCount >= maxChecks) {
-                    clearInterval(checkDrawerClosed);
+                    intervalManager.clear(checkDrawerClosed);
                     
                     if (checkCount >= maxChecks) {
                         console.log('[ChatLobby] Persona drawer check timeout');

@@ -2901,9 +2901,62 @@ ${message}` : message;
   // src/index.js
   init_notifications();
   init_eventHelpers();
+
+  // src/utils/intervalManager.js
+  var IntervalManager = class {
+    constructor() {
+      this.intervals = /* @__PURE__ */ new Set();
+    }
+    /**
+     * setInterval 대신 사용
+     * @param {Function} callback
+     * @param {number} delay
+     * @returns {number} interval ID
+     */
+    set(callback, delay) {
+      const id = setInterval(callback, delay);
+      this.intervals.add(id);
+      console.log("[IntervalManager] Created interval:", id, "Total:", this.intervals.size);
+      return id;
+    }
+    /**
+     * 개별 interval 정리
+     * @param {number} id
+     */
+    clear(id) {
+      if (this.intervals.has(id)) {
+        clearInterval(id);
+        this.intervals.delete(id);
+        console.log("[IntervalManager] Cleared interval:", id, "Remaining:", this.intervals.size);
+      }
+    }
+    /**
+     * 모든 interval 정리 (로비 닫을 때 호출)
+     */
+    clearAll() {
+      if (this.intervals.size > 0) {
+        console.log("[IntervalManager] Clearing all intervals:", this.intervals.size);
+        this.intervals.forEach((id) => clearInterval(id));
+        this.intervals.clear();
+        console.log("[IntervalManager] \u{1F9F9} All intervals cleared");
+      }
+    }
+    /**
+     * 활성 interval 수
+     * @returns {number}
+     */
+    get count() {
+      return this.intervals.size;
+    }
+  };
+  var intervalManager = new IntervalManager();
+
+  // src/index.js
   (function() {
     "use strict";
     console.log("[ChatLobby] Loading extension...");
+    let eventHandlers = null;
+    let eventsRegistered = false;
     async function init() {
       console.log("[ChatLobby] Initializing...");
       removeExistingUI();
@@ -2925,35 +2978,62 @@ ${message}` : message;
         console.warn("[ChatLobby] SillyTavern eventSource not found");
         return;
       }
-      const { eventSource, eventTypes } = context;
-      eventSource.on(eventTypes.CHARACTER_DELETED, () => {
-        console.log("[ChatLobby] Character deleted, invalidating cache");
-        cache.invalidate("characters");
-        if (isLobbyOpen()) {
-          renderCharacterGrid(store.searchTerm);
-        }
-      });
-      if (eventTypes.CHARACTER_EDITED) {
-        eventSource.on(eventTypes.CHARACTER_EDITED, () => {
-          console.log("[ChatLobby] CHARACTER_EDITED - cache only (no re-render)");
-          cache.invalidate("characters");
-        });
+      if (eventsRegistered) {
+        console.log("[ChatLobby] Events already registered, skipping");
+        return;
       }
-      if (eventTypes.CHARACTER_ADDED) {
-        eventSource.on(eventTypes.CHARACTER_ADDED, () => {
-          console.log("[ChatLobby] ========== CHARACTER_ADDED EVENT ==========");
+      const { eventSource, eventTypes } = context;
+      eventHandlers = {
+        onCharacterDeleted: () => {
+          console.log("[ChatLobby] Character deleted, invalidating cache");
           cache.invalidate("characters");
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
           }
-          console.log("[ChatLobby] ========== CHARACTER_ADDED END ==========");
-        });
+        },
+        onCharacterEdited: () => {
+          console.log("[ChatLobby] CHARACTER_EDITED - cache only (no re-render)");
+          cache.invalidate("characters");
+        },
+        onCharacterAdded: () => {
+          console.log("[ChatLobby] CHARACTER_ADDED");
+          cache.invalidate("characters");
+          if (isLobbyOpen()) {
+            renderCharacterGrid(store.searchTerm);
+          }
+        },
+        onChatChanged: () => {
+          console.log("[ChatLobby] Chat changed, invalidating character cache");
+          cache.invalidate("characters");
+        }
+      };
+      eventSource.on(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
+      if (eventTypes.CHARACTER_EDITED) {
+        eventSource.on(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
       }
-      eventSource.on(eventTypes.CHAT_CHANGED, () => {
-        console.log("[ChatLobby] Chat changed, invalidating character cache");
-        cache.invalidate("characters");
-      });
+      if (eventTypes.CHARACTER_ADDED) {
+        eventSource.on(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
+      }
+      eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+      eventsRegistered = true;
       console.log("[ChatLobby] SillyTavern events registered");
+    }
+    function cleanupSillyTavernEvents() {
+      if (!eventHandlers || !eventsRegistered) return;
+      const context = window.SillyTavern?.getContext?.();
+      if (!context?.eventSource) return;
+      const { eventSource, eventTypes } = context;
+      try {
+        eventSource.off?.(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
+        eventSource.off?.(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
+        eventSource.off?.(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
+        eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+        eventsRegistered = false;
+        eventHandlers = null;
+        console.log("[ChatLobby] SillyTavern events cleaned up");
+      } catch (e) {
+        console.warn("[ChatLobby] Failed to cleanup events:", e);
+      }
     }
     function isLobbyOpen() {
       return store.isLobbyOpen;
@@ -3049,6 +3129,7 @@ ${message}` : message;
       const fab = document.getElementById("chat-lobby-fab");
       if (container) container.style.display = "none";
       if (fab) fab.style.display = "flex";
+      intervalManager.clearAll();
       store.setLobbyOpen(false);
       store.reset();
       closeChatPanel();
@@ -3226,10 +3307,10 @@ ${message}` : message;
         const currentCount = api.getCharacters().length;
         console.log("[ChatLobby] Import started, current count:", currentCount);
         importBtn.click();
-        const checkInterval = setInterval(async () => {
+        const checkInterval = intervalManager.set(async () => {
           const newCount = api.getCharacters().length;
           if (newCount > currentCount) {
-            clearInterval(checkInterval);
+            intervalManager.clear(checkInterval);
             console.log("[ChatLobby] Character imported! New count:", newCount);
             cache.invalidate("characters");
             if (isLobbyOpen()) {
@@ -3238,7 +3319,7 @@ ${message}` : message;
           }
         }, 500);
         setTimeout(() => {
-          clearInterval(checkInterval);
+          intervalManager.clear(checkInterval);
           console.log("[ChatLobby] Import check timeout");
         }, 5e3);
       }
@@ -3254,13 +3335,13 @@ ${message}` : message;
         cache.invalidate("personas");
         let checkCount = 0;
         const maxChecks = 60;
-        const checkDrawerClosed = setInterval(() => {
+        const checkDrawerClosed = intervalManager.set(() => {
           checkCount++;
           const drawer = document.getElementById("persona-management-button");
           const isOpen = drawer?.classList.contains("openDrawer") || drawer?.querySelector(".drawer-icon.openIcon");
           console.log("[ChatLobby] Checking persona drawer...", { isOpen, checkCount });
           if (!isOpen || checkCount >= maxChecks) {
-            clearInterval(checkDrawerClosed);
+            intervalManager.clear(checkDrawerClosed);
             if (checkCount >= maxChecks) {
               console.log("[ChatLobby] Persona drawer check timeout");
             } else {
