@@ -1917,20 +1917,21 @@ ${message}` : message;
         position: fixed;
         display: none;
         max-width: 400px;
-        max-height: 300px;
-        padding: 12px 15px;
-        background: var(--SmartThemeBlurTintColor, rgba(20, 20, 30, 0.95));
-        border: 1px solid var(--SmartThemeBorderColor, rgba(255,255,255,0.2));
-        border-radius: 8px;
-        color: var(--SmartThemeBodyColor, #eee);
-        font-size: 0.9em;
-        line-height: 1.5;
+        max-height: 250px;
+        padding: 12px 16px;
+        background: rgba(20, 20, 30, 0.95);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        color: #e0e0e0;
+        font-size: 13px;
+        line-height: 1.6;
         z-index: 100000;
         overflow-y: auto;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
         pointer-events: none;
         white-space: pre-wrap;
         word-break: break-word;
+        backdrop-filter: blur(10px);
     `;
     document.body.appendChild(tooltipElement);
     return tooltipElement;
@@ -2832,6 +2833,24 @@ ${message}` : message;
           renderCharacterGrid(store.searchTerm);
         }
       });
+      if (eventTypes.CHARACTER_EDITED) {
+        eventSource.on(eventTypes.CHARACTER_EDITED, () => {
+          console.log("[ChatLobby] Character edited, refreshing grid");
+          cache.invalidate("characters");
+          if (isLobbyOpen()) {
+            renderCharacterGrid(store.searchTerm);
+          }
+        });
+      }
+      if (eventTypes.CHARACTER_ADDED) {
+        eventSource.on(eventTypes.CHARACTER_ADDED, () => {
+          console.log("[ChatLobby] Character added, refreshing grid");
+          cache.invalidate("characters");
+          if (isLobbyOpen()) {
+            renderCharacterGrid(store.searchTerm);
+          }
+        });
+      }
       eventSource.on(eventTypes.CHAT_CHANGED, () => {
         console.log("[ChatLobby] Chat changed, invalidating character cache");
         cache.invalidate("characters");
@@ -2893,6 +2912,28 @@ ${message}` : message;
         renderPersonaBar();
         renderCharacterGrid();
         updateFolderDropdowns();
+        const currentContext = api.getContext();
+        if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
+          const currentChar = currentContext.characters?.[currentContext.characterId];
+          if (currentChar) {
+            console.log("[ChatLobby] Auto-selecting current character:", currentChar.name);
+            setTimeout(() => {
+              const charCard = document.querySelector(
+                `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
+              );
+              if (charCard) {
+                charCard.classList.add("selected");
+                const characterData = {
+                  index: currentContext.characterId,
+                  avatar: currentChar.avatar,
+                  name: currentChar.name,
+                  avatarSrc: `/characters/${encodeURIComponent(currentChar.avatar)}`
+                };
+                renderChatList(characterData);
+              }
+            }, 200);
+          }
+        }
         console.log("[ChatLobby] Lobby opened, handler status:", !!store.onCharacterSelect);
       }
     }

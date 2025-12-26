@@ -65,7 +65,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     
     /**
      * SillyTavern 이벤트 리스닝 설정
-     * 캐릭터 삭제/추가 등의 이벤트를 감지하여 캐시 무효화
+     * 캐릭터 삭제/추가/수정 등의 이벤트를 감지하여 캐시 무효화
      */
     function setupSillyTavernEvents() {
         const context = window.SillyTavern?.getContext?.();
@@ -85,6 +85,28 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
                 renderCharacterGrid(store.searchTerm);
             }
         });
+        
+        // 캐릭터 수정 시 (즐겨찾기 포함)
+        if (eventTypes.CHARACTER_EDITED) {
+            eventSource.on(eventTypes.CHARACTER_EDITED, () => {
+                console.log('[ChatLobby] Character edited, refreshing grid');
+                cache.invalidate('characters');
+                if (isLobbyOpen()) {
+                    renderCharacterGrid(store.searchTerm);
+                }
+            });
+        }
+        
+        // 캐릭터 추가 시 (임포트 포함)
+        if (eventTypes.CHARACTER_ADDED) {
+            eventSource.on(eventTypes.CHARACTER_ADDED, () => {
+                console.log('[ChatLobby] Character added, refreshing grid');
+                cache.invalidate('characters');
+                if (isLobbyOpen()) {
+                    renderCharacterGrid(store.searchTerm);
+                }
+            });
+        }
         
         // 채팅 변경 시 (새 캐릭터 선택 포함)
         eventSource.on(eventTypes.CHAT_CHANGED, () => {
@@ -203,6 +225,32 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             
             // 폴더 드롭다운 업데이트
             updateFolderDropdowns();
+            
+            // 현재 채팅 중인 캐릭터 자동 선택
+            const currentContext = api.getContext();
+            if (currentContext?.characterId !== undefined && currentContext.characterId >= 0) {
+                const currentChar = currentContext.characters?.[currentContext.characterId];
+                if (currentChar) {
+                    console.log('[ChatLobby] Auto-selecting current character:', currentChar.name);
+                    // 렌더링 완료 후 선택
+                    setTimeout(() => {
+                        const charCard = document.querySelector(
+                            `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
+                        );
+                        if (charCard) {
+                            charCard.classList.add('selected');
+                            // 채팅 목록도 로드
+                            const characterData = {
+                                index: currentContext.characterId,
+                                avatar: currentChar.avatar,
+                                name: currentChar.name,
+                                avatarSrc: `/characters/${encodeURIComponent(currentChar.avatar)}`
+                            };
+                            renderChatList(characterData);
+                        }
+                    }, 200);
+                }
+            }
             
             console.log('[ChatLobby] Lobby opened, handler status:', !!store.onCharacterSelect);
         }
