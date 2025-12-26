@@ -1292,9 +1292,12 @@ ${message}` : message;
       }
     }, { passive: true });
     element.addEventListener("touchend", (e) => {
+      console.log(`[EventHelper] ${debugName}: touchend event fired, isScrolling:`, isScrolling);
       if (!isScrolling) {
         touchHandled = true;
         wrappedHandler(e, "touchend");
+      } else {
+        console.log(`[EventHelper] ${debugName}: skipped (scrolling)`);
       }
       isScrolling = false;
     });
