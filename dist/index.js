@@ -1450,13 +1450,13 @@ ${message}` : message;
     const name = char.name || "Unknown";
     const safeAvatar = (char.avatar || "").replace(/"/g, "&quot;");
     const isFav = isFavoriteChar(char);
-    const favBadge = isFav ? '<span class="char-fav-badge">\u2B50</span>' : "";
+    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
          data-char-index="${index}" 
          data-char-avatar="${safeAvatar}" 
          data-is-fav="${isFav}">
-        ${favBadge}
+        ${favBtn}
         <img class="lobby-char-avatar" src="${avatarUrl}" alt="${name}" onerror="this.src='/img/ai4.png'">
         <div class="lobby-char-name">${escapeHtml2(name)}</div>
     </div>
@@ -1471,19 +1471,18 @@ ${message}` : message;
         const cachedCount = cache.get("chatCounts", char.avatar);
         return {
           char,
-          count: cachedCount,
-          // undefined 유지 (캐시 미스 구분용)
-          hasCache: cachedCount !== void 0
+          // 캐시 미스 시 0으로 처리 (맨 뒤로 보내지 않고 정상 정렬)
+          count: typeof cachedCount === "number" ? cachedCount : 0
         };
       });
       results.sort((a, b) => {
         if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
           return isFavoriteChar(a.char) ? -1 : 1;
         }
-        if (a.hasCache && !b.hasCache) return -1;
-        if (!a.hasCache && b.hasCache) return 1;
-        if (!a.hasCache && !b.hasCache) return 0;
-        return b.count - a.count;
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return (a.char.name || "").localeCompare(b.char.name || "", "ko");
       });
       return results.map((item) => item.char);
     }
@@ -1495,11 +1494,6 @@ ${message}` : message;
       if (sortOption === "name") {
         return (a.name || "").localeCompare(b.name || "", "ko");
       }
-      if (sortOption === "created") {
-        const aDate2 = a.create_date || a.date_added || 0;
-        const bDate2 = b.create_date || b.date_added || 0;
-        return bDate2 - aDate2;
-      }
       const aDate = a.date_last_chat || a.last_mes || 0;
       const bDate = b.date_last_chat || b.last_mes || 0;
       return bDate - aDate;
@@ -1509,6 +1503,47 @@ ${message}` : message;
   function bindCharacterEvents(container) {
     container.querySelectorAll(".lobby-char-card").forEach((card, index) => {
       const charName = card.querySelector(".lobby-char-name")?.textContent || "Unknown";
+      const charAvatar = card.dataset.charAvatar;
+      const favBtn = card.querySelector(".char-fav-btn");
+      if (favBtn) {
+        createTouchClickHandler(favBtn, async (e) => {
+          e.stopPropagation();
+          console.log("[CharacterGrid] Favorite button clicked for:", charName);
+          const context = api.getContext();
+          const characters = context?.characters || [];
+          const charIndex = characters.findIndex((c) => c.avatar === charAvatar);
+          if (charIndex === -1) {
+            console.error("[CharacterGrid] Character not found:", charAvatar);
+            showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+            return;
+          }
+          const currentFav = card.dataset.isFav === "true";
+          const newFavState = !currentFav;
+          try {
+            await api.selectCharacterById(charIndex);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            const stFavBtn = document.getElementById("favorite_button");
+            if (stFavBtn) {
+              console.log("[CharacterGrid] Clicking SillyTavern favorite_button");
+              stFavBtn.click();
+              favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+              card.dataset.isFav = newFavState.toString();
+              card.classList.toggle("is-char-fav", newFavState);
+              showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
+              cache.invalidate("characters");
+              setTimeout(() => {
+                renderCharacterGrid(store.searchTerm);
+              }, 500);
+            } else {
+              console.error("[CharacterGrid] SillyTavern favorite_button not found");
+              showToast("\uC990\uACA8\uCC3E\uAE30 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+            }
+          } catch (error) {
+            console.error("[CharacterGrid] Favorite toggle error:", error);
+            showToast("\uC990\uACA8\uCC3E\uAE30 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+          }
+        }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
+      }
       createTouchClickHandler(card, () => {
         console.log("[CharacterGrid] Card click handler fired for:", charName);
         container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
@@ -1597,7 +1632,6 @@ ${message}` : message;
                         <select id="chat-lobby-char-sort" title="\uCE90\uB9AD\uD130 \uC815\uB82C">
                             <option value="recent">\u{1F552} \uCD5C\uADFC \uCC44\uD305\uC21C</option>
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
-                            <option value="created">\u{1F4C5} \uC0DD\uC131\uC77C\uC21C</option>
                             <option value="chats">\u{1F4AC} \uCC44\uD305 \uC218</option>
                         </select>
                     </div>
@@ -1734,8 +1768,9 @@ ${message}` : message;
     bindPersonaEvents(container);
   }
   function bindPersonaEvents(container) {
-    container.querySelectorAll(".persona-item").forEach((item) => {
+    container.querySelectorAll(".persona-item").forEach((item, index) => {
       const deleteBtn = item.querySelector(".persona-delete-btn");
+      const personaKey = item.dataset.persona;
       const handleItemClick = async (e) => {
         if (e.target.closest(".persona-delete-btn")) return;
         if (store.isProcessingPersona) return;
@@ -1745,21 +1780,21 @@ ${message}` : message;
           await selectPersona(container, item);
         }
       };
-      item.addEventListener("click", handleItemClick);
-      item.addEventListener("touchend", (e) => {
-        if (e.cancelable) e.preventDefault();
-        handleItemClick(e);
-      }, { passive: false });
+      createTouchClickHandler(item, handleItemClick, {
+        preventDefault: true,
+        stopPropagation: false,
+        scrollThreshold: 10,
+        debugName: `persona-${index}-${personaKey}`
+      });
       if (deleteBtn) {
-        const handleDelete = async (e) => {
-          e.stopPropagation();
-          if (e.cancelable) e.preventDefault();
-          const personaKey = deleteBtn.dataset.persona;
+        createTouchClickHandler(deleteBtn, async (e) => {
           const personaName = item.title || personaKey;
           await deletePersona(personaKey, personaName);
-        };
-        deleteBtn.addEventListener("click", handleDelete);
-        deleteBtn.addEventListener("touchend", handleDelete, { passive: false });
+        }, {
+          preventDefault: true,
+          stopPropagation: true,
+          debugName: `persona-del-${index}`
+        });
       }
     });
   }
@@ -1870,6 +1905,118 @@ ${message}` : message;
   init_eventHelpers();
   init_notifications();
   init_config();
+  var tooltipElement = null;
+  var tooltipTimeout = null;
+  var currentTooltipTarget = null;
+  function ensureTooltipElement() {
+    if (tooltipElement) return tooltipElement;
+    tooltipElement = document.createElement("div");
+    tooltipElement.id = "chat-preview-tooltip";
+    tooltipElement.className = "chat-preview-tooltip";
+    tooltipElement.style.cssText = `
+        position: fixed;
+        display: none;
+        max-width: 400px;
+        max-height: 300px;
+        padding: 12px 15px;
+        background: var(--SmartThemeBlurTintColor, rgba(20, 20, 30, 0.95));
+        border: 1px solid var(--SmartThemeBorderColor, rgba(255,255,255,0.2));
+        border-radius: 8px;
+        color: var(--SmartThemeBodyColor, #eee);
+        font-size: 0.9em;
+        line-height: 1.5;
+        z-index: 100000;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        pointer-events: none;
+        white-space: pre-wrap;
+        word-break: break-word;
+    `;
+    document.body.appendChild(tooltipElement);
+    return tooltipElement;
+  }
+  function showTooltip(content, e) {
+    const tooltip = ensureTooltipElement();
+    tooltip.textContent = content;
+    tooltip.style.display = "block";
+    const x = e.clientX;
+    const y = e.clientY + 15;
+    const rect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let finalX = x;
+    let finalY = y;
+    if (x + rect.width > viewportWidth - 10) {
+      finalX = viewportWidth - rect.width - 10;
+    }
+    if (y + rect.height > viewportHeight - 10) {
+      finalY = e.clientY - rect.height - 10;
+    }
+    tooltip.style.left = `${finalX}px`;
+    tooltip.style.top = `${finalY}px`;
+  }
+  function hideTooltip() {
+    if (tooltipTimeout) {
+      clearTimeout(tooltipTimeout);
+      tooltipTimeout = null;
+    }
+    if (tooltipElement) {
+      tooltipElement.style.display = "none";
+    }
+    currentTooltipTarget = null;
+  }
+  function bindTooltipEvents(container) {
+    if (isMobile()) {
+      console.log("[ChatList] Tooltip disabled on mobile");
+      return;
+    }
+    console.log("[ChatList] Binding tooltip events (PC mode)");
+    container.querySelectorAll(".lobby-chat-item").forEach((item, idx) => {
+      const fullPreview = item.dataset.fullPreview || "";
+      if (!fullPreview) {
+        console.log(`[ChatList] Item ${idx} has no fullPreview data`);
+        return;
+      }
+      item.addEventListener("mouseenter", (e) => {
+        if (currentTooltipTarget === item) return;
+        console.log(`[ChatList] Mouse enter on item ${idx}`);
+        hideTooltip();
+        currentTooltipTarget = item;
+        tooltipTimeout = setTimeout(() => {
+          if (currentTooltipTarget === item && fullPreview) {
+            console.log(`[ChatList] Showing tooltip for item ${idx}`);
+            showTooltip(fullPreview, e);
+          }
+        }, 300);
+      });
+      item.addEventListener("mousemove", (e) => {
+        if (tooltipElement && tooltipElement.style.display === "block" && currentTooltipTarget === item) {
+          const tooltip = tooltipElement;
+          const x = e.clientX;
+          const y = e.clientY + 15;
+          const rect = tooltip.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          let finalX = x;
+          let finalY = y;
+          if (x + rect.width > viewportWidth - 10) {
+            finalX = viewportWidth - rect.width - 10;
+          }
+          if (y + rect.height > viewportHeight - 10) {
+            finalY = e.clientY - rect.height - 10;
+          }
+          tooltip.style.left = `${finalX}px`;
+          tooltip.style.top = `${finalY}px`;
+        }
+      });
+      item.addEventListener("mouseleave", () => {
+        if (currentTooltipTarget === item) {
+          console.log(`[ChatList] Mouse leave on item ${idx}`);
+          hideTooltip();
+        }
+      });
+    });
+  }
   function setChatHandlers(handlers) {
     store.setChatHandlers(handlers);
   }
@@ -1946,6 +2093,7 @@ ${message}` : message;
       (chat, idx) => renderChatItem(chat, charAvatar, idx)
     ).join("");
     bindChatEvents(container, charAvatar);
+    bindTooltipEvents(container);
     syncDropdowns(filterFolder, sortOption);
   }
   function normalizeChats(chats) {
@@ -2014,12 +2162,14 @@ ${message}` : message;
     const tooltipPreview = truncateText(preview, 500);
     const safeAvatar = (charAvatar || "").replace(/"/g, "&quot;");
     const safeFileName = (fileName || "").replace(/"/g, "&quot;");
+    const safeFullPreview = escapeHtml2(tooltipPreview).replace(/"/g, "&quot;");
     return `
     <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
          data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
-         data-folder-id="${folderId}">
+         data-folder-id="${folderId}"
+         data-full-preview="${safeFullPreview}">
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
@@ -2929,10 +3079,14 @@ ${message}` : message;
         return;
       }
       closeLobby();
-      await api.selectCharacterById(index);
-      const charSelected = await waitForCharacterSelect(character.avatar, 2e3);
-      if (!charSelected) {
-        console.warn("[ChatLobby] Character selection timeout");
+      const isAlreadySelected = context.characterId === index;
+      console.log("[ChatLobby] isAlreadySelected:", isAlreadySelected, "context.characterId:", context.characterId, "index:", index);
+      if (!isAlreadySelected) {
+        await api.selectCharacterById(index);
+        const charSelected = await waitForCharacterSelect(character.avatar, 2e3);
+        if (!charSelected) {
+          console.warn("[ChatLobby] Character selection timeout");
+        }
       }
       const rightNavIcon = document.getElementById("rightNavDrawerIcon");
       if (rightNavIcon) {

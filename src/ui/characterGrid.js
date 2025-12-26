@@ -269,7 +269,6 @@ function bindCharacterEvents(container) {
                 }
             }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
         }
-        }
         
         // 캐릭터 카드 클릭 (선택)
         createTouchClickHandler(card, () => {
