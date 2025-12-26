@@ -218,7 +218,6 @@ export async function deleteChat(chatInfo) {
                 }, CONFIG.timing.animationDuration);
             }
             // element 없어도 refreshChatList 안 함 - 캐시 무효화됐으니 다음에 새로 로드
-            }
             
             showToast('채팅이 삭제되었습니다.', 'success');
         } else {
