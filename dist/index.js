@@ -2105,13 +2105,19 @@ ${message}` : message;
         item.classList.toggle("is-favorite", isNowFav);
       }, { debugName: `fav-${index}` });
       createTouchClickHandler(delBtn, () => {
+        console.log("[DEBUG] delBtn \uD074\uB9AD\uB428, index:", index);
+        console.log("[DEBUG] store.chatHandlers:", store.chatHandlers);
+        console.log("[DEBUG] onDelete \uC874\uC7AC?:", !!store.chatHandlers?.onDelete);
         const handlers = store.chatHandlers;
-        if (handlers.onDelete) {
+        if (handlers?.onDelete) {
+          console.log("[DEBUG] onDelete \uD638\uCD9C\uD568");
           handlers.onDelete({
             fileName: item.dataset.fileName,
             charAvatar: item.dataset.charAvatar,
             element: item
           });
+        } else {
+          console.log("[DEBUG] onDelete\uAC00 \uC5C6\uC74C!");
         }
       }, { debugName: `del-${index}` });
     });
