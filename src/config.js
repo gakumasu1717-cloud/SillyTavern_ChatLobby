@@ -77,7 +77,7 @@ export const DEFAULT_DATA = {
     sortOption: 'recent',
     filterFolder: 'all',
     collapsedFolders: [],
-    charSortOption: 'recent',
+    charSortOption: 'name',  // 기본값: 이름순 (채팅수는 캐시 문제로 권장 안함)
     autoFavoriteRules: {
         recentDays: 0,
     }

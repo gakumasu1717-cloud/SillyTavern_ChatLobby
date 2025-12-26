@@ -87,7 +87,8 @@
         sortOption: "recent",
         filterFolder: "all",
         collapsedFolders: [],
-        charSortOption: "recent",
+        charSortOption: "name",
+        // 기본값: 이름순 (채팅수는 캐시 문제로 권장 안함)
         autoFavoriteRules: {
           recentDays: 0
         }
@@ -2984,6 +2985,30 @@ ${message}` : message;
         searchInput.addEventListener("input", (e) => handleSearch(e.target.value));
       }
       bindDropdownEvents();
+      bindBatchModeButtons();
+    }
+    function bindBatchModeButtons() {
+      const batchMoveBtn = document.getElementById("batch-move-btn");
+      const batchCancelBtn = document.getElementById("batch-cancel-btn");
+      const batchModeBtn = document.getElementById("chat-lobby-batch-mode");
+      if (batchMoveBtn) {
+        createTouchClickHandler(batchMoveBtn, () => {
+          console.log("[EventDelegation] batch-move-btn touched/clicked");
+          handleBatchMove();
+        }, { debugName: "batch-move-btn" });
+      }
+      if (batchCancelBtn) {
+        createTouchClickHandler(batchCancelBtn, () => {
+          console.log("[EventDelegation] batch-cancel-btn touched/clicked");
+          toggleBatchMode();
+        }, { debugName: "batch-cancel-btn" });
+      }
+      if (batchModeBtn) {
+        createTouchClickHandler(batchModeBtn, () => {
+          console.log("[EventDelegation] batch-mode-btn touched/clicked");
+          toggleBatchMode();
+        }, { debugName: "batch-mode-btn" });
+      }
     }
     function handleBodyClick(e) {
       const target = e.target;
@@ -3194,7 +3219,12 @@ ${message}` : message;
       }, CONFIG.timing.menuCloseDelay);
     }
     function handleBatchMove() {
-      const folder = document.getElementById("batch-move-folder")?.value;
+      console.log("[ChatLobby] ========== handleBatchMove CALLED ==========");
+      const folderSelect = document.getElementById("batch-move-folder");
+      const folder = folderSelect?.value;
+      console.log("[ChatLobby] Selected folder:", folder);
+      console.log("[ChatLobby] Folder select element:", folderSelect);
+      console.log("[ChatLobby] Folder options:", folderSelect?.options?.length);
       executeBatchMove(folder);
     }
     function addLobbyToOptionsMenu() {

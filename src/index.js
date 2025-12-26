@@ -14,7 +14,7 @@ import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange a
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast } from './ui/notifications.js';
-import { debounce, isMobile } from './utils/eventHelpers.js';
+import { debounce, isMobile, createTouchClickHandler } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 
 (function() {
@@ -307,6 +307,42 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         
         // 드롭다운 change 이벤트도 직접 바인딩
         bindDropdownEvents();
+        
+        // 배치 모드 버튼들 - 모바일 터치 이벤트 직접 바인딩
+        bindBatchModeButtons();
+    }
+    
+    /**
+     * 배치 모드 버튼들에 터치 이벤트 직접 바인딩 (모바일 호환)
+     */
+    function bindBatchModeButtons() {
+        const batchMoveBtn = document.getElementById('batch-move-btn');
+        const batchCancelBtn = document.getElementById('batch-cancel-btn');
+        const batchModeBtn = document.getElementById('chat-lobby-batch-mode');
+        
+        // 배치 이동 버튼
+        if (batchMoveBtn) {
+            createTouchClickHandler(batchMoveBtn, () => {
+                console.log('[EventDelegation] batch-move-btn touched/clicked');
+                handleBatchMove();
+            }, { debugName: 'batch-move-btn' });
+        }
+        
+        // 배치 취소 버튼
+        if (batchCancelBtn) {
+            createTouchClickHandler(batchCancelBtn, () => {
+                console.log('[EventDelegation] batch-cancel-btn touched/clicked');
+                toggleBatchMode();
+            }, { debugName: 'batch-cancel-btn' });
+        }
+        
+        // 배치 모드 진입 버튼
+        if (batchModeBtn) {
+            createTouchClickHandler(batchModeBtn, () => {
+                console.log('[EventDelegation] batch-mode-btn touched/clicked');
+                toggleBatchMode();
+            }, { debugName: 'batch-mode-btn' });
+        }
     }
     
     /**
@@ -630,7 +666,12 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
      * 배치 이동 처리
      */
     function handleBatchMove() {
-        const folder = document.getElementById('batch-move-folder')?.value;
+        console.log('[ChatLobby] ========== handleBatchMove CALLED ==========');
+        const folderSelect = document.getElementById('batch-move-folder');
+        const folder = folderSelect?.value;
+        console.log('[ChatLobby] Selected folder:', folder);
+        console.log('[ChatLobby] Folder select element:', folderSelect);
+        console.log('[ChatLobby] Folder options:', folderSelect?.options?.length);
         executeBatchMove(folder);
     }
     
