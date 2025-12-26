@@ -151,6 +151,10 @@ function isFavoriteChar(char) {
  * @returns {Promise<Array>}
  */
 async function sortCharacters(characters, sortOption) {
+    console.log('[CharacterGrid] ========== SORT START ==========');
+    console.log('[CharacterGrid] sortOption:', sortOption);
+    console.log('[CharacterGrid] characters count:', characters.length);
+    
     if (sortOption === 'chats') {
         // 채팅 수 정렬 - 캐시된 데이터 우선 사용 (N+1 문제 방지)
         // 캐시가 없으면 0으로 처리 (맨 뒤로 보내지 않음)
@@ -179,6 +183,8 @@ async function sortCharacters(characters, sortOption) {
             return (a.char.name || '').localeCompare(b.char.name || '', 'ko');
         });
         
+        console.log('[CharacterGrid] Sorted by chats, first 5:', results.slice(0, 5).map(r => ({ name: r.char.name, count: r.count, fav: isFavoriteChar(r.char) })));
+        console.log('[CharacterGrid] ========== SORT END ==========');
         return results.map(item => item.char);
     }
     
@@ -200,6 +206,8 @@ async function sortCharacters(characters, sortOption) {
         return bDate - aDate;
     });
     
+    console.log('[CharacterGrid] Sorted by', sortOption, ', first 5:', sorted.slice(0, 5).map(c => ({ name: c.name, fav: isFavoriteChar(c), date: c.date_last_chat })));
+    console.log('[CharacterGrid] ========== SORT END ==========');
     return sorted;
 }
 

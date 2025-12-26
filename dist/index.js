@@ -1466,6 +1466,9 @@ ${message}` : message;
     return !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
   }
   async function sortCharacters(characters, sortOption) {
+    console.log("[CharacterGrid] ========== SORT START ==========");
+    console.log("[CharacterGrid] sortOption:", sortOption);
+    console.log("[CharacterGrid] characters count:", characters.length);
     if (sortOption === "chats") {
       const results = characters.map((char) => {
         const cachedCount = cache.get("chatCounts", char.avatar);
@@ -1484,6 +1487,8 @@ ${message}` : message;
         }
         return (a.char.name || "").localeCompare(b.char.name || "", "ko");
       });
+      console.log("[CharacterGrid] Sorted by chats, first 5:", results.slice(0, 5).map((r) => ({ name: r.char.name, count: r.count, fav: isFavoriteChar(r.char) })));
+      console.log("[CharacterGrid] ========== SORT END ==========");
       return results.map((item) => item.char);
     }
     const sorted = [...characters];
@@ -1498,6 +1503,8 @@ ${message}` : message;
       const bDate = b.date_last_chat || b.last_mes || 0;
       return bDate - aDate;
     });
+    console.log("[CharacterGrid] Sorted by", sortOption, ", first 5:", sorted.slice(0, 5).map((c) => ({ name: c.name, fav: isFavoriteChar(c), date: c.date_last_chat })));
+    console.log("[CharacterGrid] ========== SORT END ==========");
     return sorted;
   }
   function bindCharacterEvents(container) {
@@ -2811,14 +2818,8 @@ ${message}` : message;
       });
       if (eventTypes.CHARACTER_EDITED) {
         eventSource.on(eventTypes.CHARACTER_EDITED, () => {
-          console.log("[ChatLobby] ========== CHARACTER_EDITED EVENT ==========");
-          console.log("[ChatLobby] Timestamp:", (/* @__PURE__ */ new Date()).toISOString());
+          console.log("[ChatLobby] CHARACTER_EDITED - cache only (no re-render)");
           cache.invalidate("characters");
-          if (isLobbyOpen()) {
-            console.log("[ChatLobby] Lobby is open, refreshing grid");
-            renderCharacterGrid(store.searchTerm);
-          }
-          console.log("[ChatLobby] ========== CHARACTER_EDITED END ==========");
         });
       }
       if (eventTypes.CHARACTER_ADDED) {
@@ -3100,10 +3101,11 @@ ${message}` : message;
         cache.invalidate("personas");
         setTimeout(async () => {
           console.log("[ChatLobby] Persona created, refreshing bar");
+          cache.invalidate("personas");
           if (isLobbyOpen()) {
             await renderPersonaBar();
           }
-        }, 500);
+        }, 800);
       } else {
         showToast("\uD398\uB974\uC18C\uB098 \uC0DD\uC131 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4", "error");
       }

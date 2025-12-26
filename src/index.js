@@ -87,16 +87,15 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         });
         
         // 캐릭터 수정 시 (즐겨찾기 포함)
+        // ⚠️ 의도적으로 리렌더 안 함:
+        // - 즐겨찾기 토글 시 UI만 업데이트 (별 아이콘)
+        // - 정렬은 사용자가 새로고침 버튼 누를 때 적용
+        // - 채팅 기록 즐겨찾기와 동일한 동작
         if (eventTypes.CHARACTER_EDITED) {
             eventSource.on(eventTypes.CHARACTER_EDITED, () => {
-                console.log('[ChatLobby] ========== CHARACTER_EDITED EVENT ==========');
-                console.log('[ChatLobby] Timestamp:', new Date().toISOString());
+                console.log('[ChatLobby] CHARACTER_EDITED - cache only (no re-render)');
                 cache.invalidate('characters');
-                if (isLobbyOpen()) {
-                    console.log('[ChatLobby] Lobby is open, refreshing grid');
-                    renderCharacterGrid(store.searchTerm);
-                }
-                console.log('[ChatLobby] ========== CHARACTER_EDITED END ==========');
+                // 리렌더 안 함 - 새로고침 버튼으로 수동 갱신
             });
         }
         
@@ -553,13 +552,14 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             // 페르소나 추가 후 캐시 무효화
             cache.invalidate('personas');
             
-            // 딜레이 후 직접 리렌더
+            // 딜레이 후 직접 리렌더 (ST가 페르소나 생성 완료할 때까지 대기)
             setTimeout(async () => {
                 console.log('[ChatLobby] Persona created, refreshing bar');
+                cache.invalidate('personas'); // 한번 더 무효화
                 if (isLobbyOpen()) {
                     await renderPersonaBar();
                 }
-            }, 500);
+            }, 800);
         } else {
             showToast('페르소나 생성 버튼을 찾을 수 없습니다', 'error');
         }
