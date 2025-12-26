@@ -205,19 +205,19 @@ export async function deleteChat(chatInfo) {
             }
             storage.save(data);
             
-            // UI에서 제거 (애니메이션 후 리렌더)
+            // UI에서 제거 (애니메이션만, 전체 리렌더 안 함)
             if (element) {
                 element.style.transition = `opacity ${CONFIG.timing.animationDuration}ms, transform ${CONFIG.timing.animationDuration}ms`;
                 element.style.opacity = '0';
                 element.style.transform = 'translateX(20px)';
                 
-                setTimeout(async () => {
+                setTimeout(() => {
                     element.remove();
-                    // 캐시에서도 확실히 제거되도록 리렌더
-                    await refreshChatList();
+                    updateChatCountAfterDelete();
+                    // refreshChatList() 제거 - 번쩍임 방지, 다음에 열 때 새로 로드됨
                 }, CONFIG.timing.animationDuration);
-            } else {
-                await refreshChatList();
+            }
+            // element 없어도 refreshChatList 안 함 - 캐시 무효화됐으니 다음에 새로 로드
             }
             
             showToast('채팅이 삭제되었습니다.', 'success');
