@@ -218,12 +218,15 @@ function bindCharacterEvents(container) {
             createTouchClickHandler(favBtn, async (e) => {
                 e.stopPropagation();
                 
-                console.log('[CharacterGrid] Favorite button clicked for:', charName);
+                console.log('[CharacterGrid] ========== FAVORITE TOGGLE START ==========');
+                console.log('[CharacterGrid] Target:', charName, charAvatar);
                 
                 // 해당 캐릭터의 인덱스 찾기
                 const context = api.getContext();
                 const characters = context?.characters || [];
                 const charIndex = characters.findIndex(c => c.avatar === charAvatar);
+                
+                console.log('[CharacterGrid] Character index:', charIndex);
                 
                 if (charIndex === -1) {
                     console.error('[CharacterGrid] Character not found:', charAvatar);
@@ -235,8 +238,11 @@ function bindCharacterEvents(container) {
                 const currentFav = card.dataset.isFav === 'true';
                 const newFavState = !currentFav;
                 
+                console.log('[CharacterGrid] Current fav:', currentFav, '-> New fav:', newFavState);
+                
                 try {
                     // 해당 캐릭터 먼저 선택 (SillyTavern 내부 상태 변경 위해)
+                    console.log('[CharacterGrid] Selecting character...');
                     await api.selectCharacterById(charIndex);
                     
                     // 잠시 대기 후 SillyTavern 즐겨찾기 버튼 클릭
@@ -244,21 +250,21 @@ function bindCharacterEvents(container) {
                     
                     const stFavBtn = document.getElementById('favorite_button');
                     if (stFavBtn) {
-                        console.log('[CharacterGrid] Clicking SillyTavern favorite_button');
+                        console.log('[CharacterGrid] Clicking ST favorite_button');
                         stFavBtn.click();
                         
-                        // UI 업데이트
+                        // UI 즉시 업데이트 (리렌더 없이)
+                        console.log('[CharacterGrid] Updating UI only (no re-render)');
                         favBtn.textContent = newFavState ? '⭐' : '☆';
                         card.dataset.isFav = newFavState.toString();
                         card.classList.toggle('is-char-fav', newFavState);
                         
                         showToast(newFavState ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.', 'success');
                         
-                        // 캐시 무효화 후 잠시 뒤 리렌더 (SillyTavern 상태 동기화)
+                        // 캐시 무효화 (리렌더는 CHARACTER_EDITED 이벤트가 처리)
                         cache.invalidate('characters');
-                        setTimeout(() => {
-                            renderCharacterGrid(store.searchTerm);
-                        }, 500);
+                        
+                        console.log('[CharacterGrid] ========== FAVORITE TOGGLE END ==========');
                     } else {
                         console.error('[CharacterGrid] SillyTavern favorite_button not found');
                         showToast('즐겨찾기 버튼을 찾을 수 없습니다.', 'error');

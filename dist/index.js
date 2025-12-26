@@ -1508,10 +1508,12 @@ ${message}` : message;
       if (favBtn) {
         createTouchClickHandler(favBtn, async (e) => {
           e.stopPropagation();
-          console.log("[CharacterGrid] Favorite button clicked for:", charName);
+          console.log("[CharacterGrid] ========== FAVORITE TOGGLE START ==========");
+          console.log("[CharacterGrid] Target:", charName, charAvatar);
           const context = api.getContext();
           const characters = context?.characters || [];
           const charIndex = characters.findIndex((c) => c.avatar === charAvatar);
+          console.log("[CharacterGrid] Character index:", charIndex);
           if (charIndex === -1) {
             console.error("[CharacterGrid] Character not found:", charAvatar);
             showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
@@ -1519,21 +1521,22 @@ ${message}` : message;
           }
           const currentFav = card.dataset.isFav === "true";
           const newFavState = !currentFav;
+          console.log("[CharacterGrid] Current fav:", currentFav, "-> New fav:", newFavState);
           try {
+            console.log("[CharacterGrid] Selecting character...");
             await api.selectCharacterById(charIndex);
             await new Promise((resolve) => setTimeout(resolve, 100));
             const stFavBtn = document.getElementById("favorite_button");
             if (stFavBtn) {
-              console.log("[CharacterGrid] Clicking SillyTavern favorite_button");
+              console.log("[CharacterGrid] Clicking ST favorite_button");
               stFavBtn.click();
+              console.log("[CharacterGrid] Updating UI only (no re-render)");
               favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
               card.dataset.isFav = newFavState.toString();
               card.classList.toggle("is-char-fav", newFavState);
               showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
               cache.invalidate("characters");
-              setTimeout(() => {
-                renderCharacterGrid(store.searchTerm);
-              }, 500);
+              console.log("[CharacterGrid] ========== FAVORITE TOGGLE END ==========");
             } else {
               console.error("[CharacterGrid] SillyTavern favorite_button not found");
               showToast("\uC990\uACA8\uCC3E\uAE30 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
@@ -1926,7 +1929,7 @@ ${message}` : message;
         font-size: 13px;
         line-height: 1.6;
         z-index: 100000;
-        overflow-y: auto;
+        overflow: hidden;
         box-shadow: 0 8px 32px rgba(0,0,0,0.6);
         pointer-events: none;
         white-space: pre-wrap;
@@ -1940,21 +1943,8 @@ ${message}` : message;
     const tooltip = ensureTooltipElement();
     tooltip.textContent = content;
     tooltip.style.display = "block";
-    const x = e.clientX;
-    const y = e.clientY + 15;
-    const rect = tooltip.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    let finalX = x;
-    let finalY = y;
-    if (x + rect.width > viewportWidth - 10) {
-      finalX = viewportWidth - rect.width - 10;
-    }
-    if (y + rect.height > viewportHeight - 10) {
-      finalY = e.clientY - rect.height - 10;
-    }
-    tooltip.style.left = `${finalX}px`;
-    tooltip.style.top = `${finalY}px`;
+    tooltip.style.left = `${e.clientX + 15}px`;
+    tooltip.style.top = `${e.clientY + 15}px`;
   }
   function hideTooltip() {
     if (tooltipTimeout) {
@@ -1992,22 +1982,8 @@ ${message}` : message;
       });
       item.addEventListener("mousemove", (e) => {
         if (tooltipElement && tooltipElement.style.display === "block" && currentTooltipTarget === item) {
-          const tooltip = tooltipElement;
-          const x = e.clientX;
-          const y = e.clientY + 15;
-          const rect = tooltip.getBoundingClientRect();
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
-          let finalX = x;
-          let finalY = y;
-          if (x + rect.width > viewportWidth - 10) {
-            finalX = viewportWidth - rect.width - 10;
-          }
-          if (y + rect.height > viewportHeight - 10) {
-            finalY = e.clientY - rect.height - 10;
-          }
-          tooltip.style.left = `${finalX}px`;
-          tooltip.style.top = `${finalY}px`;
+          tooltipElement.style.left = `${e.clientX + 15}px`;
+          tooltipElement.style.top = `${e.clientY + 15}px`;
         }
       });
       item.addEventListener("mouseleave", () => {
@@ -2835,20 +2811,24 @@ ${message}` : message;
       });
       if (eventTypes.CHARACTER_EDITED) {
         eventSource.on(eventTypes.CHARACTER_EDITED, () => {
-          console.log("[ChatLobby] Character edited, refreshing grid");
+          console.log("[ChatLobby] ========== CHARACTER_EDITED EVENT ==========");
+          console.log("[ChatLobby] Timestamp:", (/* @__PURE__ */ new Date()).toISOString());
           cache.invalidate("characters");
           if (isLobbyOpen()) {
+            console.log("[ChatLobby] Lobby is open, refreshing grid");
             renderCharacterGrid(store.searchTerm);
           }
+          console.log("[ChatLobby] ========== CHARACTER_EDITED END ==========");
         });
       }
       if (eventTypes.CHARACTER_ADDED) {
         eventSource.on(eventTypes.CHARACTER_ADDED, () => {
-          console.log("[ChatLobby] Character added, refreshing grid");
+          console.log("[ChatLobby] ========== CHARACTER_ADDED EVENT ==========");
           cache.invalidate("characters");
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
           }
+          console.log("[ChatLobby] ========== CHARACTER_ADDED END ==========");
         });
       }
       eventSource.on(eventTypes.CHAT_CHANGED, () => {
@@ -3089,7 +3069,24 @@ ${message}` : message;
     function handleImportCharacter() {
       const importBtn = document.getElementById("character_import_button");
       if (importBtn) {
+        const currentCount = api.getCharacters().length;
+        console.log("[ChatLobby] Import started, current count:", currentCount);
         importBtn.click();
+        const checkInterval = setInterval(async () => {
+          const newCount = api.getCharacters().length;
+          if (newCount > currentCount) {
+            clearInterval(checkInterval);
+            console.log("[ChatLobby] Character imported! New count:", newCount);
+            cache.invalidate("characters");
+            if (isLobbyOpen()) {
+              await renderCharacterGrid(store.searchTerm);
+            }
+          }
+        }, 500);
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          console.log("[ChatLobby] Import check timeout");
+        }, 5e3);
       }
     }
     async function handleAddPersona() {
@@ -3101,6 +3098,12 @@ ${message}` : message;
       if (createBtn) {
         createBtn.click();
         cache.invalidate("personas");
+        setTimeout(async () => {
+          console.log("[ChatLobby] Persona created, refreshing bar");
+          if (isLobbyOpen()) {
+            await renderPersonaBar();
+          }
+        }, 500);
       } else {
         showToast("\uD398\uB974\uC18C\uB098 \uC0DD\uC131 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4", "error");
       }

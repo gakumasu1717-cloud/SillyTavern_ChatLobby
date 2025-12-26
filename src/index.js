@@ -89,22 +89,26 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         // 캐릭터 수정 시 (즐겨찾기 포함)
         if (eventTypes.CHARACTER_EDITED) {
             eventSource.on(eventTypes.CHARACTER_EDITED, () => {
-                console.log('[ChatLobby] Character edited, refreshing grid');
+                console.log('[ChatLobby] ========== CHARACTER_EDITED EVENT ==========');
+                console.log('[ChatLobby] Timestamp:', new Date().toISOString());
                 cache.invalidate('characters');
                 if (isLobbyOpen()) {
+                    console.log('[ChatLobby] Lobby is open, refreshing grid');
                     renderCharacterGrid(store.searchTerm);
                 }
+                console.log('[ChatLobby] ========== CHARACTER_EDITED END ==========');
             });
         }
         
         // 캐릭터 추가 시 (임포트 포함)
         if (eventTypes.CHARACTER_ADDED) {
             eventSource.on(eventTypes.CHARACTER_ADDED, () => {
-                console.log('[ChatLobby] Character added, refreshing grid');
+                console.log('[ChatLobby] ========== CHARACTER_ADDED EVENT ==========');
                 cache.invalidate('characters');
                 if (isLobbyOpen()) {
                     renderCharacterGrid(store.searchTerm);
                 }
+                console.log('[ChatLobby] ========== CHARACTER_ADDED END ==========');
             });
         }
         
@@ -498,16 +502,35 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     /**
      * 캐릭터 임포트 처리
      * 로비를 닫지 않고 임포트 버튼만 클릭
-     * SillyTavern 이벤트가 context.characters를 자동 업데이트하므로
-     * 다음 렌더링 시 자동 반영됨
+     * 캐릭터 수 변화 감지하여 직접 리렌더
      */
     function handleImportCharacter() {
-        // 임포트 버튼 클릭 (로비는 유지)
         const importBtn = document.getElementById('character_import_button');
         if (importBtn) {
+            // 현재 캐릭터 수 저장
+            const currentCount = api.getCharacters().length;
+            console.log('[ChatLobby] Import started, current count:', currentCount);
+            
             importBtn.click();
-            // 임포트 완료 후 사용자가 로비로 돌아오면 
-            // context.characters에서 최신 데이터 가져옴
+            
+            // 캐릭터 수 변화 감지 (폴링)
+            const checkInterval = setInterval(async () => {
+                const newCount = api.getCharacters().length;
+                if (newCount > currentCount) {
+                    clearInterval(checkInterval);
+                    console.log('[ChatLobby] Character imported! New count:', newCount);
+                    cache.invalidate('characters');
+                    if (isLobbyOpen()) {
+                        await renderCharacterGrid(store.searchTerm);
+                    }
+                }
+            }, 500);
+            
+            // 5초 후 타임아웃
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                console.log('[ChatLobby] Import check timeout');
+            }, 5000);
         }
     }
     
@@ -529,6 +552,14 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             createBtn.click();
             // 페르소나 추가 후 캐시 무효화
             cache.invalidate('personas');
+            
+            // 딜레이 후 직접 리렌더
+            setTimeout(async () => {
+                console.log('[ChatLobby] Persona created, refreshing bar');
+                if (isLobbyOpen()) {
+                    await renderPersonaBar();
+                }
+            }, 500);
         } else {
             showToast('페르소나 생성 버튼을 찾을 수 없습니다', 'error');
         }

@@ -42,7 +42,7 @@ function ensureTooltipElement() {
         font-size: 13px;
         line-height: 1.6;
         z-index: 100000;
-        overflow-y: auto;
+        overflow: hidden;
         box-shadow: 0 8px 32px rgba(0,0,0,0.6);
         pointer-events: none;
         white-space: pre-wrap;
@@ -63,30 +63,9 @@ function showTooltip(content, e) {
     tooltip.textContent = content;
     tooltip.style.display = 'block';
     
-    // 마우스 커서 바로 아래에 위치
-    const x = e.clientX;
-    const y = e.clientY + 15; // 커서 바로 아래
-    
-    // 화면 밖으로 나가지 않도록 조정
-    const rect = tooltip.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    
-    let finalX = x;
-    let finalY = y;
-    
-    // 오른쪽 경계 체크
-    if (x + rect.width > viewportWidth - 10) {
-        finalX = viewportWidth - rect.width - 10;
-    }
-    
-    // 아래쪽 경계 체크
-    if (y + rect.height > viewportHeight - 10) {
-        finalY = e.clientY - rect.height - 10; // 커서 위로 표시
-    }
-    
-    tooltip.style.left = `${finalX}px`;
-    tooltip.style.top = `${finalY}px`;
+    // 항상 마우스 커서 우측 아래 (화면 밖 허용)
+    tooltip.style.left = `${e.clientX + 15}px`;
+    tooltip.style.top = `${e.clientY + 15}px`;
 }
 
 /**
@@ -144,28 +123,10 @@ function bindTooltipEvents(container) {
         });
         
         item.addEventListener('mousemove', (e) => {
-            // 툴팁이 표시 중이면 위치 업데이트
+            // 툴팁이 표시 중이면 위치 업데이트 (마우스 따라가기)
             if (tooltipElement && tooltipElement.style.display === 'block' && currentTooltipTarget === item) {
-                const tooltip = tooltipElement;
-                const x = e.clientX;
-                const y = e.clientY + 15;
-                
-                const rect = tooltip.getBoundingClientRect();
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                
-                let finalX = x;
-                let finalY = y;
-                
-                if (x + rect.width > viewportWidth - 10) {
-                    finalX = viewportWidth - rect.width - 10;
-                }
-                if (y + rect.height > viewportHeight - 10) {
-                    finalY = e.clientY - rect.height - 10;
-                }
-                
-                tooltip.style.left = `${finalX}px`;
-                tooltip.style.top = `${finalY}px`;
+                tooltipElement.style.left = `${e.clientX + 15}px`;
+                tooltipElement.style.top = `${e.clientY + 15}px`;
             }
         });
         
