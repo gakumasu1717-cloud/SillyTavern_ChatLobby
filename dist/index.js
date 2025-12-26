@@ -2365,6 +2365,10 @@ ${message}` : message;
       const success = await api.deleteChat(fileName, charAvatar);
       if (success) {
         cache.invalidate("chats", charAvatar);
+        const context = api.getContext();
+        if (context?.eventSource && context?.eventTypes?.CHAT_CHANGED) {
+          context.eventSource.emit(context.eventTypes.CHAT_CHANGED);
+        }
         const data = storage.load();
         const key = storage.getChatKey(charAvatar, fileName);
         delete data.chatAssignments[key];

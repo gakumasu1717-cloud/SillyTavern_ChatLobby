@@ -177,6 +177,12 @@ export async function deleteChat(chatInfo) {
             // 캐시 무효화 (중요: 먼저 해야 다른 곳에서 최신 데이터 조회 가능)
             cache.invalidate('chats', charAvatar);
             
+            // SillyTavern에 변경 알림 (실리↔로비 동기화)
+            const context = api.getContext();
+            if (context?.eventSource && context?.eventTypes?.CHAT_CHANGED) {
+                context.eventSource.emit(context.eventTypes.CHAT_CHANGED);
+            }
+            
             // 로컬 데이터 정리
             const data = storage.load();
             const key = storage.getChatKey(charAvatar, fileName);
