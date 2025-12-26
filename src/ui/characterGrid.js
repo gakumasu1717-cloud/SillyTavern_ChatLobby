@@ -156,28 +156,23 @@ async function sortCharacters(characters, sortOption) {
     console.log('[CharacterGrid] characters count:', characters.length);
     
     if (sortOption === 'chats') {
-        // 채팅 수 정렬 - 캐시된 데이터 우선 사용 (N+1 문제 방지)
-        // 캐시가 없으면 0으로 처리 (맨 뒤로 보내지 않음)
-        let cacheMissCount = 0;
-        
-        const results = characters.map(char => {
-            // 캐시에서 직접 가져오기 (비동기 없음)
-            const cachedCount = cache.get('chatCounts', char.avatar);
-            const isCacheMiss = typeof cachedCount !== 'number';
-            if (isCacheMiss) cacheMissCount++;
+        // 채팅 수 정렬 - 캐시 없으면 API 호출해서 가져옴
+        const results = await Promise.all(characters.map(async (char) => {
+            // 캐시 먼저 확인
+            let count = cache.get('chatCounts', char.avatar);
             
-            return { 
-                char, 
-                // 캐시 미스 시 0으로 처리 (맨 뒤로 보내지 않고 정상 정렬)
-                count: isCacheMiss ? 0 : cachedCount
-            };
-        });
-        
-        // 캐시 미스 경고
-        if (cacheMissCount > 0) {
-            console.warn(`[CharacterGrid] ⚠️ Cache miss: ${cacheMissCount}/${characters.length} characters have no chat count cached!`);
-            console.warn('[CharacterGrid] 💡 Tip: Click on characters to load their chats and populate cache, then sort again.');
-        }
+            // 캐시 없으면 API 호출
+            if (typeof count !== 'number') {
+                try {
+                    count = await api.getChatCount(char.avatar);
+                } catch (e) {
+                    console.error('[CharacterGrid] Failed to get chat count for:', char.name, e);
+                    count = 0;
+                }
+            }
+            
+            return { char, count };
+        }));
         
         results.sort((a, b) => {
             // 1. 즐겨찾기 우선

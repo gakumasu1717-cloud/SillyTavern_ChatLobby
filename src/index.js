@@ -317,22 +317,16 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
     
     /**
      * 배치 모드 버튼들에 터치 이벤트 직접 바인딩 (모바일 호환)
+     * 중복 바인딩 방지
      */
     function bindBatchModeButtons() {
-        console.log('[ChatLobby] bindBatchModeButtons called');
-        
         const batchMoveBtn = document.getElementById('batch-move-btn');
         const batchCancelBtn = document.getElementById('batch-cancel-btn');
         const batchModeBtn = document.getElementById('chat-lobby-batch-mode');
         
-        console.log('[ChatLobby] Batch buttons found:', {
-            moveBtn: !!batchMoveBtn,
-            cancelBtn: !!batchCancelBtn,
-            modeBtn: !!batchModeBtn
-        });
-        
-        // 배치 이동 버튼
-        if (batchMoveBtn) {
+        // 배치 이동 버튼 - 중복 바인딩 방지
+        if (batchMoveBtn && !batchMoveBtn.dataset.bound) {
+            batchMoveBtn.dataset.bound = 'true';
             createTouchClickHandler(batchMoveBtn, () => {
                 console.log('[EventDelegation] batch-move-btn touched/clicked');
                 handleBatchMove();
@@ -340,7 +334,8 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         }
         
         // 배치 취소 버튼
-        if (batchCancelBtn) {
+        if (batchCancelBtn && !batchCancelBtn.dataset.bound) {
+            batchCancelBtn.dataset.bound = 'true';
             createTouchClickHandler(batchCancelBtn, () => {
                 console.log('[EventDelegation] batch-cancel-btn touched/clicked');
                 toggleBatchMode();
@@ -348,7 +343,8 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         }
         
         // 배치 모드 진입 버튼
-        if (batchModeBtn) {
+        if (batchModeBtn && !batchModeBtn.dataset.bound) {
+            batchModeBtn.dataset.bound = 'true';
             createTouchClickHandler(batchModeBtn, () => {
                 console.log('[EventDelegation] batch-mode-btn touched/clicked');
                 toggleBatchMode();

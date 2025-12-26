@@ -622,10 +622,17 @@ export function handleSortChange(sortValue) {
  */
 export function toggleBatchMode() {
     const isActive = store.toggleBatchMode();
+    console.log('[ChatList] toggleBatchMode called, isActive:', isActive);
     
     const chatsList = document.getElementById('chat-lobby-chats-list');
     const toolbar = document.getElementById('chat-lobby-batch-toolbar');
     const batchBtn = document.getElementById('chat-lobby-batch-mode');
+    
+    console.log('[ChatList] Batch elements:', {
+        chatsList: !!chatsList,
+        toolbar: !!toolbar,
+        batchBtn: !!batchBtn
+    });
     
     if (isActive) {
         chatsList?.classList.add('batch-mode');

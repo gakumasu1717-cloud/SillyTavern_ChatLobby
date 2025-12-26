@@ -459,11 +459,6 @@ ${message}` : message;
             if (saved) {
               const data = JSON.parse(saved);
               this._data = { ...DEFAULT_DATA, ...data };
-              if (this._data.charSortOption === "chats") {
-                console.log('[Storage] Migrating charSortOption from "chats" to "recent"');
-                this._data.charSortOption = "recent";
-                this.save(this._data);
-              }
               if (this._data.filterFolder && this._data.filterFolder !== "all") {
                 const folderExists = this._data.folders?.some((f) => f.id === this._data.filterFolder);
                 if (!folderExists) {
@@ -1492,21 +1487,18 @@ ${message}` : message;
     console.log("[CharacterGrid] sortOption:", sortOption);
     console.log("[CharacterGrid] characters count:", characters.length);
     if (sortOption === "chats") {
-      let cacheMissCount = 0;
-      const results = characters.map((char) => {
-        const cachedCount = cache.get("chatCounts", char.avatar);
-        const isCacheMiss = typeof cachedCount !== "number";
-        if (isCacheMiss) cacheMissCount++;
-        return {
-          char,
-          // 캐시 미스 시 0으로 처리 (맨 뒤로 보내지 않고 정상 정렬)
-          count: isCacheMiss ? 0 : cachedCount
-        };
-      });
-      if (cacheMissCount > 0) {
-        console.warn(`[CharacterGrid] \u26A0\uFE0F Cache miss: ${cacheMissCount}/${characters.length} characters have no chat count cached!`);
-        console.warn("[CharacterGrid] \u{1F4A1} Tip: Click on characters to load their chats and populate cache, then sort again.");
-      }
+      const results = await Promise.all(characters.map(async (char) => {
+        let count = cache.get("chatCounts", char.avatar);
+        if (typeof count !== "number") {
+          try {
+            count = await api.getChatCount(char.avatar);
+          } catch (e) {
+            console.error("[CharacterGrid] Failed to get chat count for:", char.name, e);
+            count = 0;
+          }
+        }
+        return { char, count };
+      }));
       results.sort((a, b) => {
         if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
           return isFavoriteChar(a.char) ? -1 : 1;
@@ -1671,6 +1663,7 @@ ${message}` : message;
                         <select id="chat-lobby-char-sort" title="\uCE90\uB9AD\uD130 \uC815\uB82C">
                             <option value="recent">\u{1F552} \uCD5C\uADFC \uCC44\uD305\uC21C</option>
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
+                            <option value="chats">\u{1F4AC} \uCC44\uD305 \uC218</option>
                         </select>
                     </div>
                     <div id="chat-lobby-characters">
@@ -2319,9 +2312,15 @@ ${message}` : message;
   }
   function toggleBatchMode() {
     const isActive = store.toggleBatchMode();
+    console.log("[ChatList] toggleBatchMode called, isActive:", isActive);
     const chatsList = document.getElementById("chat-lobby-chats-list");
     const toolbar = document.getElementById("chat-lobby-batch-toolbar");
     const batchBtn = document.getElementById("chat-lobby-batch-mode");
+    console.log("[ChatList] Batch elements:", {
+      chatsList: !!chatsList,
+      toolbar: !!toolbar,
+      batchBtn: !!batchBtn
+    });
     if (isActive) {
       chatsList?.classList.add("batch-mode");
       toolbar?.classList.add("visible");
@@ -3001,28 +3000,25 @@ ${message}` : message;
       bindBatchModeButtons();
     }
     function bindBatchModeButtons() {
-      console.log("[ChatLobby] bindBatchModeButtons called");
       const batchMoveBtn = document.getElementById("batch-move-btn");
       const batchCancelBtn = document.getElementById("batch-cancel-btn");
       const batchModeBtn = document.getElementById("chat-lobby-batch-mode");
-      console.log("[ChatLobby] Batch buttons found:", {
-        moveBtn: !!batchMoveBtn,
-        cancelBtn: !!batchCancelBtn,
-        modeBtn: !!batchModeBtn
-      });
-      if (batchMoveBtn) {
+      if (batchMoveBtn && !batchMoveBtn.dataset.bound) {
+        batchMoveBtn.dataset.bound = "true";
         createTouchClickHandler(batchMoveBtn, () => {
           console.log("[EventDelegation] batch-move-btn touched/clicked");
           handleBatchMove();
         }, { debugName: "batch-move-btn" });
       }
-      if (batchCancelBtn) {
+      if (batchCancelBtn && !batchCancelBtn.dataset.bound) {
+        batchCancelBtn.dataset.bound = "true";
         createTouchClickHandler(batchCancelBtn, () => {
           console.log("[EventDelegation] batch-cancel-btn touched/clicked");
           toggleBatchMode();
         }, { debugName: "batch-cancel-btn" });
       }
-      if (batchModeBtn) {
+      if (batchModeBtn && !batchModeBtn.dataset.bound) {
+        batchModeBtn.dataset.bound = "true";
         createTouchClickHandler(batchModeBtn, () => {
           console.log("[EventDelegation] batch-mode-btn touched/clicked");
           toggleBatchMode();

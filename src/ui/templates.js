@@ -32,6 +32,7 @@ export function createLobbyHTML() {
                         <select id="chat-lobby-char-sort" title="캐릭터 정렬">
                             <option value="recent">🕒 최근 채팅순</option>
                             <option value="name">🔤 이름순</option>
+                            <option value="chats">💬 채팅 수</option>
                         </select>
                     </div>
                     <div id="chat-lobby-characters">
