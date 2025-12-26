@@ -84,22 +84,16 @@ function hideTooltip() {
 
 /**
  * 채팅 아이템에 툴팁 이벤트 바인딩 (PC 전용)
- * 터치스크린 PC도 지원: 마우스 이벤트는 별도로 작동
  * @param {HTMLElement} container
  */
 function bindTooltipEvents(container) {
-    // 순수 모바일(화면 작음 + 터치만 있음)에서만 비활성화
-    const isSmallScreen = window.innerWidth <= CONFIG.ui.mobileBreakpoint;
-    
-    if (isSmallScreen) {
-        console.log('[ChatList] Tooltip disabled (small screen)');
+    // 모바일에서는 비활성화
+    if (isMobile()) {
         return;
     }
     
-    const items = container.querySelectorAll('.lobby-chat-item');
-    console.log('[ChatList] Binding tooltip events for', items.length, 'items');
     
-    items.forEach((item, idx) => {
+    container.querySelectorAll('.lobby-chat-item').forEach((item, idx) => {
         // data-full-preview 속성에 전문 저장 (렌더링 시 추가됨)
         const fullPreview = item.dataset.fullPreview || '';
         
@@ -109,6 +103,7 @@ function bindTooltipEvents(container) {
         
         item.addEventListener('mouseenter', (e) => {
             if (currentTooltipTarget === item) return;
+            
             
             // 이전 타이머 취소
             hideTooltip();
@@ -168,7 +163,6 @@ export function getCurrentCharacter() {
  * @returns {Promise<void>}
  */
 export async function renderChatList(character) {
-    console.log('[ChatList] renderChatList called with:', character);
     
     if (!character || !character.avatar) {
         console.error('[ChatList] Invalid character data:', character);
@@ -185,7 +179,6 @@ export async function renderChatList(character) {
         return;
     }
     
-    console.log('[ChatList] Showing chat panel for:', character.name);
     
     // UI 표시
     chatsPanel.classList.add('visible');
@@ -324,14 +317,8 @@ function filterValidChats(chats) {
  * @returns {Array}
  */
 function filterByFolder(chats, charAvatar, filterFolder) {
-    console.log('[ChatList] ========== FILTER BY FOLDER ==========');
-    console.log('[ChatList] filterFolder:', filterFolder);
-    console.log('[ChatList] charAvatar:', charAvatar);
-    console.log('[ChatList] chats count before filter:', chats.length);
     
     const data = storage.load();
-    console.log('[ChatList] chatAssignments:', JSON.stringify(data.chatAssignments));
-    console.log('[ChatList] favorites:', JSON.stringify(data.favorites));
     
     const result = chats.filter(chat => {
         const fn = chat.file_name || chat.fileName || '';
@@ -339,18 +326,14 @@ function filterByFolder(chats, charAvatar, filterFolder) {
         
         if (filterFolder === 'favorites') {
             const isFav = data.favorites.includes(key);
-            console.log(`[ChatList] ${fn}: key=${key}, isFav=${isFav}`);
             return isFav;
         }
         
         const assigned = data.chatAssignments[key] || 'uncategorized';
         const match = assigned === filterFolder;
-        console.log(`[ChatList] ${fn}: key=${key}, assigned=${assigned}, match=${match}`);
         return match;
     });
     
-    console.log('[ChatList] chats count after filter:', result.length);
-    console.log('[ChatList] ========== FILTER END ==========');
     return result;
 }
 
@@ -450,7 +433,6 @@ function renderChatItem(chat, charAvatar, index) {
  * @param {string} charAvatar
  */
 function bindChatEvents(container, charAvatar) {
-    console.log('[ChatList] bindChatEvents called for:', charAvatar);
     
     container.querySelectorAll('.lobby-chat-item').forEach((item, index) => {
         const chatContent = item.querySelector('.chat-content');
@@ -460,10 +442,8 @@ function bindChatEvents(container, charAvatar) {
         
         // 채팅 열기
         createTouchClickHandler(chatContent, () => {
-            console.log('[ChatList] Chat item clicked:', fileName);
             
             if (store.batchModeActive) {
-                console.log('[ChatList] Batch mode active, toggling checkbox');
                 const cb = item.querySelector('.chat-select-cb');
                 if (cb) {
                     cb.checked = !cb.checked;
@@ -473,10 +453,6 @@ function bindChatEvents(container, charAvatar) {
             }
             
             const handlers = store.chatHandlers;
-            console.log('[ChatList] Chat handlers:', {
-                hasOnOpen: !!handlers.onOpen,
-                hasOnDelete: !!handlers.onDelete
-            });
             
             if (handlers.onOpen) {
                 // currentCharacter가 null인 경우 dataset에서 가져오기
@@ -488,7 +464,6 @@ function bindChatEvents(container, charAvatar) {
                     charIndex: charIndex
                 };
                 
-                console.log('[ChatList] Calling onOpen with:', chatInfo);
                 handlers.onOpen(chatInfo);
             } else {
                 console.error('[ChatList] onOpen handler not available!');
@@ -621,17 +596,11 @@ export function handleSortChange(sortValue) {
  */
 export function toggleBatchMode() {
     const isActive = store.toggleBatchMode();
-    console.log('[ChatList] toggleBatchMode called, isActive:', isActive);
     
     const chatsList = document.getElementById('chat-lobby-chats-list');
     const toolbar = document.getElementById('chat-lobby-batch-toolbar');
     const batchBtn = document.getElementById('chat-lobby-batch-mode');
     
-    console.log('[ChatList] Batch elements:', {
-        chatsList: !!chatsList,
-        toolbar: !!toolbar,
-        batchBtn: !!batchBtn
-    });
     
     if (isActive) {
         chatsList?.classList.add('batch-mode');
@@ -665,56 +634,40 @@ export function updateBatchCount() {
  * @param {string} targetFolder
  */
 export async function executeBatchMove(targetFolder) {
-    console.log('[ChatList] ========== BATCH MOVE START ==========');
-    console.log('[ChatList] targetFolder:', targetFolder);
     
     if (!targetFolder) {
-        console.log('[ChatList] No target folder selected');
         await showAlert('이동할 폴더를 선택하세요.');
         return;
     }
     
     const checked = document.querySelectorAll('.chat-select-cb:checked');
-    console.log('[ChatList] Checked checkboxes:', checked.length);
     
     const keys = [];
     
     checked.forEach((cb, idx) => {
         const item = cb.closest('.lobby-chat-item');
-        console.log(`[ChatList] Checkbox ${idx}:`, {
-            hasItem: !!item,
-            charAvatar: item?.dataset?.charAvatar,
-            fileName: item?.dataset?.fileName
-        });
         if (item) {
             const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
-            console.log(`[ChatList] Generated key: ${key}`);
             keys.push(key);
         }
     });
     
-    console.log('[ChatList] Total keys to move:', keys.length, keys);
     
     if (keys.length === 0) {
-        console.log('[ChatList] No keys to move - aborting');
         await showAlert('이동할 채팅을 선택하세요.');
         return;
     }
     
-    console.log('[ChatList] Calling storage.moveChatsBatch...');
     storage.moveChatsBatch(keys, targetFolder);
-    console.log('[ChatList] moveChatsBatch completed');
     
     toggleBatchMode();
     showToast(`${keys.length}개 채팅이 이동되었습니다.`, 'success');
     
     const character = store.currentCharacter;
-    console.log('[ChatList] Refreshing chat list for:', character?.name);
     if (character) {
         renderChatList(character);
     }
     
-    console.log('[ChatList] ========== BATCH MOVE END ==========');
 }
 
 /**

@@ -211,9 +211,7 @@ function openPersonaManagement() {
             // drawer가 닫혀있을 때만 클릭
             if (!drawerIcon.classList.contains('openIcon')) {
                 drawerIcon.click();
-                console.log('[PersonaBar] Opening persona management drawer');
             } else {
-                console.log('[PersonaBar] Drawer already open');
             }
         } else {
             // drawer-icon이 없으면 버튼 자체를 클릭

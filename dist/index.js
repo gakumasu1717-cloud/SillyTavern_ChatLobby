@@ -235,13 +235,11 @@
          * @returns {Promise<void>}
          */
         async preloadAll(api2) {
-          console.log("[Cache] Starting preload...");
           const promises = [];
           if (!this.preloadStatus.personas) {
             promises.push(
               this.preloadPersonas(api2).then(() => {
                 this.preloadStatus.personas = true;
-                console.log("[Cache] Personas preloaded");
               })
             );
           }
@@ -249,12 +247,10 @@
             promises.push(
               this.preloadCharacters(api2).then(() => {
                 this.preloadStatus.characters = true;
-                console.log("[Cache] Characters preloaded");
               })
             );
           }
           await Promise.all(promises);
-          console.log("[Cache] Preload complete");
         }
         /**
          * 페르소나 프리로딩
@@ -291,7 +287,6 @@
          * @returns {Promise<void>}
          */
         async preloadRecentChats(api2, recentCharacters) {
-          console.log("[Cache] Preloading recent chats for", recentCharacters.length, "characters");
           const promises = recentCharacters.map(async (char) => {
             if (this.isValid("chats", char.avatar)) return;
             try {
@@ -302,7 +297,6 @@
             }
           });
           await Promise.all(promises);
-          console.log("[Cache] Recent chats preload complete");
         }
       };
       cache = new CacheManager();
@@ -462,7 +456,6 @@ ${message}` : message;
               if (this._data.filterFolder && this._data.filterFolder !== "all") {
                 const folderExists = this._data.folders?.some((f) => f.id === this._data.filterFolder);
                 if (!folderExists) {
-                  console.log('[Storage] Resetting invalid filterFolder to "all"');
                   this._data.filterFolder = "all";
                   this.save(this._data);
                 }
@@ -696,19 +689,12 @@ ${message}` : message;
          * @param {string} targetFolderId - 대상 폴더 ID
          */
         moveChatsBatch(chatKeys, targetFolderId) {
-          console.log("[Storage] ========== MOVE BATCH START ==========");
-          console.log("[Storage] chatKeys:", chatKeys);
-          console.log("[Storage] targetFolderId:", targetFolderId);
           this.update((data) => {
-            console.log("[Storage] Before update - chatAssignments:", JSON.stringify(data.chatAssignments));
             chatKeys.forEach((key) => {
               const oldFolder = data.chatAssignments[key] || "uncategorized";
-              console.log(`[Storage] Moving "${key}": ${oldFolder} -> ${targetFolderId}`);
               data.chatAssignments[key] = targetFolderId;
             });
-            console.log("[Storage] After update - chatAssignments:", JSON.stringify(data.chatAssignments));
           });
-          console.log("[Storage] ========== MOVE BATCH END ==========");
         }
       };
       storage = new StorageManager();
@@ -722,139 +708,67 @@ ${message}` : message;
       Store = class {
         constructor() {
           this._state = {
-            // 캐릭터 관련
             currentCharacter: null,
-            // 배치 모드
             batchModeActive: false,
-            // 페르소나 처리 중
             isProcessingPersona: false,
-            // 로비 상태
             isLobbyOpen: false,
-            // 검색어
             searchTerm: "",
-            // 콜백 핸들러
             onCharacterSelect: null,
             chatHandlers: {
               onOpen: null,
               onDelete: null
             }
           };
-          this._listeners = /* @__PURE__ */ new Map();
         }
         // ============================================
         // Getters
         // ============================================
-        /**
-         * 현재 선택된 캐릭터 반환
-         * @returns {Character|null}
-         */
         get currentCharacter() {
           return this._state.currentCharacter;
         }
-        /**
-         * 배치 모드 활성화 여부
-         * @returns {boolean}
-         */
         get batchModeActive() {
           return this._state.batchModeActive;
         }
-        /**
-         * 페르소나 처리 중 여부
-         * @returns {boolean}
-         */
         get isProcessingPersona() {
           return this._state.isProcessingPersona;
         }
-        /**
-         * 로비 열림 여부
-         * @returns {boolean}
-         */
         get isLobbyOpen() {
           return this._state.isLobbyOpen;
         }
-        /**
-         * 검색어
-         * @returns {string}
-         */
         get searchTerm() {
           return this._state.searchTerm;
         }
-        /**
-         * 캐릭터 선택 핸들러
-         * @returns {Function|null}
-         */
         get onCharacterSelect() {
           return this._state.onCharacterSelect;
         }
-        /**
-         * 채팅 핸들러
-         * @returns {ChatHandlers}
-         */
         get chatHandlers() {
           return this._state.chatHandlers;
         }
         // ============================================
-        // Setters (상태 변경 + 리스너 알림)
+        // Setters
         // ============================================
-        /**
-         * 현재 캐릭터 설정
-         * @param {Character|null} character
-         */
         setCurrentCharacter(character) {
           this._state.currentCharacter = character;
-          this._notify("currentCharacter", character);
         }
-        /**
-         * 배치 모드 토글
-         * @returns {boolean} 새 배치 모드 상태
-         */
         toggleBatchMode() {
           this._state.batchModeActive = !this._state.batchModeActive;
-          this._notify("batchModeActive", this._state.batchModeActive);
           return this._state.batchModeActive;
         }
-        /**
-         * 배치 모드 직접 설정
-         * @param {boolean} active
-         */
         setBatchMode(active) {
           this._state.batchModeActive = active;
-          this._notify("batchModeActive", active);
         }
-        /**
-         * 페르소나 처리 중 상태 설정
-         * @param {boolean} processing
-         */
         setProcessingPersona(processing) {
           this._state.isProcessingPersona = processing;
         }
-        /**
-         * 로비 열림 상태 설정
-         * @param {boolean} open
-         */
         setLobbyOpen(open) {
           this._state.isLobbyOpen = open;
-          this._notify("isLobbyOpen", open);
         }
-        /**
-         * 검색어 설정
-         * @param {string} term
-         */
         setSearchTerm(term) {
           this._state.searchTerm = term;
-          this._notify("searchTerm", term);
         }
-        /**
-         * 캐릭터 선택 핸들러 설정
-         * @param {Function} handler
-         */
         setCharacterSelectHandler(handler) {
           this._state.onCharacterSelect = handler;
         }
-        /**
-         * 채팅 핸들러 설정
-         * @param {ChatHandlers} handlers
-         */
         setChatHandlers(handlers) {
           this._state.chatHandlers = {
             onOpen: handlers.onOpen || null,
@@ -866,46 +780,12 @@ ${message}` : message;
         // ============================================
         /**
          * 상태 초기화 (로비 닫을 때)
-         * 주의: 핸들러는 초기화하지 않음 (init에서 한 번만 설정)
+         * 주의: 핸들러는 초기화하지 않음
          */
         reset() {
           this._state.currentCharacter = null;
           this._state.batchModeActive = false;
           this._state.searchTerm = "";
-          console.log("[Store] State reset, handlers preserved");
-        }
-        // ============================================
-        // 리스너 (옵저버 패턴)
-        // ============================================
-        /**
-         * 상태 변경 구독
-         * @param {string} key - 상태 키
-         * @param {Function} callback - 콜백 함수
-         * @returns {Function} 구독 해제 함수
-         */
-        subscribe(key, callback) {
-          if (!this._listeners.has(key)) {
-            this._listeners.set(key, /* @__PURE__ */ new Set());
-          }
-          this._listeners.get(key).add(callback);
-          return () => {
-            this._listeners.get(key)?.delete(callback);
-          };
-        }
-        /**
-         * 리스너에게 상태 변경 알림
-         * @param {string} key
-         * @param {*} value
-         * @private
-         */
-        _notify(key, value) {
-          this._listeners.get(key)?.forEach((callback) => {
-            try {
-              callback(value);
-            } catch (e) {
-              console.error("[Store] Listener error:", e);
-            }
-          });
         }
       };
       store = new Store();
@@ -1091,7 +971,6 @@ ${message}` : message;
             });
             if (response.ok) {
               cache.invalidate("personas", null, true);
-              console.log("[API] Persona deleted, cache invalidated");
             }
             return response.ok;
           } catch (error) {
@@ -1138,7 +1017,6 @@ ${message}` : message;
          */
         async toggleCharacterFavorite(charAvatar, newFavState) {
           try {
-            console.log("[API] Toggling favorite for:", charAvatar, "to:", newFavState);
             const context = this.getContext();
             const char = context?.characters?.find((c) => c.avatar === charAvatar);
             if (!char) {
@@ -1151,7 +1029,6 @@ ${message}` : message;
               field: "fav",
               value: newFavState
             };
-            console.log("[API] Edit payload:", editPayload);
             const response = await this.fetchWithRetry("/api/characters/edit-attribute", {
               method: "POST",
               headers: this.getRequestHeaders(),
@@ -1163,7 +1040,6 @@ ${message}` : message;
                 char.data.fav = newFavState;
               }
               cache.invalidate("characters");
-              console.log("[API] Favorite toggled successfully");
               return true;
             }
             console.error("[API] Response not ok:", response.status);
@@ -1210,7 +1086,6 @@ ${message}` : message;
         async fetchChatsForCharacter(characterAvatar, forceRefresh = false) {
           if (!characterAvatar) return [];
           if (!forceRefresh && cache.isValid("chats", characterAvatar)) {
-            console.log("[API] Using cached chats for:", characterAvatar);
             return cache.get("chats", characterAvatar);
           }
           return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
@@ -1290,12 +1165,10 @@ ${message}` : message;
          * @returns {Promise<void>}
          */
         async openCharacterEditor(characterIndex) {
-          console.log("[API] Opening character editor for index:", characterIndex);
           await this.selectCharacterById(characterIndex);
           await this.delay(300);
           const settingsBtn = document.getElementById("option_settings");
           if (settingsBtn) {
-            console.log("[API] Clicking option_settings button");
             settingsBtn.click();
           } else {
             console.warn("[API] option_settings button not found");
@@ -1308,12 +1181,10 @@ ${message}` : message;
          * @returns {Promise<boolean>}
          */
         async openChatFile(fileName, characterAvatar) {
-          console.log("[API] Opening chat file:", fileName, "for character:", characterAvatar);
           const context = this.getContext();
           if (context?.openChat) {
             try {
               await context.openChat(fileName);
-              console.log("[API] Chat opened via context.openChat");
               return true;
             } catch (e) {
               console.warn("[API] context.openChat failed:", e);
@@ -1334,7 +1205,6 @@ ${message}` : message;
                   })
                 });
                 if (response.ok) {
-                  console.log("[API] Chat loaded via /api/chats/get");
                   location.reload();
                   return true;
                 }
@@ -1394,15 +1264,12 @@ ${message}` : message;
     const wrappedHandler = (e, source) => {
       const now = Date.now();
       if (now - lastHandleTime < 100) {
-        console.log(`[EventHelper] ${debugName}: Duplicate ${source} event ignored`);
         return;
       }
       if (isScrolling) {
-        console.log(`[EventHelper] ${debugName}: ${source} ignored (scrolling)`);
         return;
       }
       lastHandleTime = now;
-      console.log(`[EventHelper] ${debugName}: ${source} event fired`);
       if (preventDefault) e.preventDefault();
       if (stopPropagation) e.stopPropagation();
       try {
@@ -1435,7 +1302,6 @@ ${message}` : message;
       if (!touchHandled) {
         wrappedHandler(e, "click");
       } else {
-        console.log(`[EventHelper] ${debugName}: click ignored (touch already handled)`);
       }
       touchHandled = false;
     });
@@ -1527,9 +1393,6 @@ ${message}` : message;
     return !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
   }
   async function sortCharacters(characters, sortOption) {
-    console.log("[CharacterGrid] ========== SORT START ==========");
-    console.log("[CharacterGrid] sortOption:", sortOption);
-    console.log("[CharacterGrid] characters count:", characters.length);
     if (sortOption === "chats") {
       const results = await Promise.all(characters.map(async (char) => {
         let count = cache.get("chatCounts", char.avatar);
@@ -1552,8 +1415,6 @@ ${message}` : message;
         }
         return (a.char.name || "").localeCompare(b.char.name || "", "ko");
       });
-      console.log("[CharacterGrid] Sorted by chats, first 5:", results.slice(0, 5).map((r) => ({ name: r.char.name, count: r.count, fav: isFavoriteChar(r.char) })));
-      console.log("[CharacterGrid] ========== SORT END ==========");
       return results.map((item) => item.char);
     }
     const sorted = [...characters];
@@ -1568,8 +1429,6 @@ ${message}` : message;
       const bDate = b.date_last_chat || b.last_mes || 0;
       return bDate - aDate;
     });
-    console.log("[CharacterGrid] Sorted by", sortOption, ", first 5:", sorted.slice(0, 5).map((c) => ({ name: c.name, fav: isFavoriteChar(c), date: c.date_last_chat })));
-    console.log("[CharacterGrid] ========== SORT END ==========");
     return sorted;
   }
   function bindCharacterEvents(container) {
@@ -1580,12 +1439,9 @@ ${message}` : message;
       if (favBtn) {
         createTouchClickHandler(favBtn, async (e) => {
           e.stopPropagation();
-          console.log("[CharacterGrid] ========== FAVORITE TOGGLE START ==========");
-          console.log("[CharacterGrid] Target:", charName, charAvatar);
           const context = api.getContext();
           const characters = context?.characters || [];
           const charIndex = characters.findIndex((c) => c.avatar === charAvatar);
-          console.log("[CharacterGrid] Character index:", charIndex);
           if (charIndex === -1) {
             console.error("[CharacterGrid] Character not found:", charAvatar);
             showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
@@ -1593,16 +1449,13 @@ ${message}` : message;
           }
           const currentFav = card.dataset.isFav === "true";
           const newFavState = !currentFav;
-          console.log("[CharacterGrid] Current fav:", currentFav, "-> New fav:", newFavState);
           try {
             const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
             if (success) {
-              console.log("[CharacterGrid] Updating UI only (no re-render)");
               favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
               card.dataset.isFav = newFavState.toString();
               card.classList.toggle("is-char-fav", newFavState);
               showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
-              console.log("[CharacterGrid] ========== FAVORITE TOGGLE END ==========");
             } else {
               console.error("[CharacterGrid] API call failed");
               showToast("\uC990\uACA8\uCC3E\uAE30 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -1614,7 +1467,6 @@ ${message}` : message;
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
       createTouchClickHandler(card, () => {
-        console.log("[CharacterGrid] Card click handler fired for:", charName);
         container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
           el.classList.remove("selected");
         });
@@ -1625,10 +1477,8 @@ ${message}` : message;
           name: charName,
           avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
         };
-        console.log("[CharacterGrid] Character data:", characterData);
         const handler = store.onCharacterSelect;
         if (handler && typeof handler === "function") {
-          console.log("[CharacterGrid] Calling onCharacterSelect handler");
           try {
             handler(characterData);
           } catch (error) {
@@ -1923,9 +1773,7 @@ ${message}` : message;
       if (drawerIcon) {
         if (!drawerIcon.classList.contains("openIcon")) {
           drawerIcon.click();
-          console.log("[PersonaBar] Opening persona management drawer");
         } else {
-          console.log("[PersonaBar] Drawer already open");
         }
       } else {
         personaDrawer.click();
@@ -2021,14 +1869,10 @@ ${message}` : message;
     currentTooltipTarget = null;
   }
   function bindTooltipEvents(container) {
-    const isSmallScreen = window.innerWidth <= CONFIG.ui.mobileBreakpoint;
-    if (isSmallScreen) {
-      console.log("[ChatList] Tooltip disabled (small screen)");
+    if (isMobile()) {
       return;
     }
-    const items = container.querySelectorAll(".lobby-chat-item");
-    console.log("[ChatList] Binding tooltip events for", items.length, "items");
-    items.forEach((item, idx) => {
+    container.querySelectorAll(".lobby-chat-item").forEach((item, idx) => {
       const fullPreview = item.dataset.fullPreview || "";
       if (!fullPreview) {
         return;
@@ -2060,7 +1904,6 @@ ${message}` : message;
     store.setChatHandlers(handlers);
   }
   async function renderChatList(character) {
-    console.log("[ChatList] renderChatList called with:", character);
     if (!character || !character.avatar) {
       console.error("[ChatList] Invalid character data:", character);
       return;
@@ -2072,7 +1915,6 @@ ${message}` : message;
       console.error("[ChatList] Chat panel elements not found");
       return;
     }
-    console.log("[ChatList] Showing chat panel for:", character.name);
     chatsPanel.classList.add("visible");
     updateChatHeader(character);
     showFolderBar(true);
@@ -2156,28 +1998,18 @@ ${message}` : message;
     });
   }
   function filterByFolder(chats, charAvatar, filterFolder) {
-    console.log("[ChatList] ========== FILTER BY FOLDER ==========");
-    console.log("[ChatList] filterFolder:", filterFolder);
-    console.log("[ChatList] charAvatar:", charAvatar);
-    console.log("[ChatList] chats count before filter:", chats.length);
     const data = storage.load();
-    console.log("[ChatList] chatAssignments:", JSON.stringify(data.chatAssignments));
-    console.log("[ChatList] favorites:", JSON.stringify(data.favorites));
     const result = chats.filter((chat) => {
       const fn = chat.file_name || chat.fileName || "";
       const key = storage.getChatKey(charAvatar, fn);
       if (filterFolder === "favorites") {
         const isFav = data.favorites.includes(key);
-        console.log(`[ChatList] ${fn}: key=${key}, isFav=${isFav}`);
         return isFav;
       }
       const assigned = data.chatAssignments[key] || "uncategorized";
       const match = assigned === filterFolder;
-      console.log(`[ChatList] ${fn}: key=${key}, assigned=${assigned}, match=${match}`);
       return match;
     });
-    console.log("[ChatList] chats count after filter:", result.length);
-    console.log("[ChatList] ========== FILTER END ==========");
     return result;
   }
   function sortChats(chats, charAvatar, sortOption) {
@@ -2239,16 +2071,13 @@ ${message}` : message;
     `;
   }
   function bindChatEvents(container, charAvatar) {
-    console.log("[ChatList] bindChatEvents called for:", charAvatar);
     container.querySelectorAll(".lobby-chat-item").forEach((item, index) => {
       const chatContent = item.querySelector(".chat-content");
       const favBtn = item.querySelector(".chat-fav-btn");
       const delBtn = item.querySelector(".chat-delete-btn");
       const fileName = item.dataset.fileName;
       createTouchClickHandler(chatContent, () => {
-        console.log("[ChatList] Chat item clicked:", fileName);
         if (store.batchModeActive) {
-          console.log("[ChatList] Batch mode active, toggling checkbox");
           const cb = item.querySelector(".chat-select-cb");
           if (cb) {
             cb.checked = !cb.checked;
@@ -2257,10 +2086,6 @@ ${message}` : message;
           return;
         }
         const handlers = store.chatHandlers;
-        console.log("[ChatList] Chat handlers:", {
-          hasOnOpen: !!handlers.onOpen,
-          hasOnDelete: !!handlers.onDelete
-        });
         if (handlers.onOpen) {
           const charIndex = store.currentCharacter?.index || item.dataset.charIndex || null;
           const chatInfo = {
@@ -2268,7 +2093,6 @@ ${message}` : message;
             charAvatar: item.dataset.charAvatar,
             charIndex
           };
-          console.log("[ChatList] Calling onOpen with:", chatInfo);
           handlers.onOpen(chatInfo);
         } else {
           console.error("[ChatList] onOpen handler not available!");
@@ -2346,15 +2170,9 @@ ${message}` : message;
   }
   function toggleBatchMode() {
     const isActive = store.toggleBatchMode();
-    console.log("[ChatList] toggleBatchMode called, isActive:", isActive);
     const chatsList = document.getElementById("chat-lobby-chats-list");
     const toolbar = document.getElementById("chat-lobby-batch-toolbar");
     const batchBtn = document.getElementById("chat-lobby-batch-mode");
-    console.log("[ChatList] Batch elements:", {
-      chatsList: !!chatsList,
-      toolbar: !!toolbar,
-      batchBtn: !!batchBtn
-    });
     if (isActive) {
       chatsList?.classList.add("batch-mode");
       toolbar?.classList.add("visible");
@@ -2377,46 +2195,30 @@ ${message}` : message;
     if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
   }
   async function executeBatchMove(targetFolder) {
-    console.log("[ChatList] ========== BATCH MOVE START ==========");
-    console.log("[ChatList] targetFolder:", targetFolder);
     if (!targetFolder) {
-      console.log("[ChatList] No target folder selected");
       await showAlert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
     const checked = document.querySelectorAll(".chat-select-cb:checked");
-    console.log("[ChatList] Checked checkboxes:", checked.length);
     const keys = [];
     checked.forEach((cb, idx) => {
       const item = cb.closest(".lobby-chat-item");
-      console.log(`[ChatList] Checkbox ${idx}:`, {
-        hasItem: !!item,
-        charAvatar: item?.dataset?.charAvatar,
-        fileName: item?.dataset?.fileName
-      });
       if (item) {
         const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
-        console.log(`[ChatList] Generated key: ${key}`);
         keys.push(key);
       }
     });
-    console.log("[ChatList] Total keys to move:", keys.length, keys);
     if (keys.length === 0) {
-      console.log("[ChatList] No keys to move - aborting");
       await showAlert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
-    console.log("[ChatList] Calling storage.moveChatsBatch...");
     storage.moveChatsBatch(keys, targetFolder);
-    console.log("[ChatList] moveChatsBatch completed");
     toggleBatchMode();
     showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
     const character = store.currentCharacter;
-    console.log("[ChatList] Refreshing chat list for:", character?.name);
     if (character) {
       renderChatList(character);
     }
-    console.log("[ChatList] ========== BATCH MOVE END ==========");
   }
   function isBatchMode() {
     return store.batchModeActive;
@@ -2471,7 +2273,6 @@ ${message}` : message;
   init_eventHelpers();
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
-    console.log("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
     if (!charAvatar || !fileName) {
       console.error("[ChatHandlers] Missing chat data");
       showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
@@ -2481,32 +2282,26 @@ ${message}` : message;
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === charAvatar);
-      console.log("[ChatHandlers] Found character at index:", index);
       if (index === -1) {
         console.error("[ChatHandlers] Character not found");
         showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
       const chatFileName = fileName.replace(".jsonl", "");
-      console.log("[ChatHandlers] Selecting character");
       await api.selectCharacterById(index);
       const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
       if (!charSelected) {
         console.warn("[ChatHandlers] Character selection timeout, continuing anyway");
       }
-      console.log("[ChatHandlers] Closing lobby (keeping state)");
       closeLobbyKeepState();
       if (typeof context?.openCharacterChat === "function") {
-        console.log("[ChatHandlers] Using context.openCharacterChat:", chatFileName);
         try {
           await context.openCharacterChat(chatFileName);
-          console.log("[ChatHandlers] \u2705 Chat opened via context.openCharacterChat");
           return;
         } catch (err) {
           console.warn("[ChatHandlers] context.openCharacterChat failed:", err);
         }
       }
-      console.log("[ChatHandlers] Fallback: clicking chat item in UI");
       await openChatByFileName(fileName);
     } catch (error) {
       console.error("[ChatHandlers] Failed to open chat:", error);
@@ -2514,14 +2309,12 @@ ${message}` : message;
     }
   }
   async function openChatByFileName(fileName) {
-    console.log("[ChatHandlers] openChatByFileName called with:", fileName);
     const manageChatsBtn = document.getElementById("option_select_chat");
     if (!manageChatsBtn) {
       console.error("[ChatHandlers] Chat select button not found");
       showToast("\uCC44\uD305 \uC120\uD0DD \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    console.log("[ChatHandlers] Clicking option_select_chat button");
     manageChatsBtn.click();
     const listLoaded = await waitFor(() => {
       return document.querySelectorAll(".select_chat_block").length > 0;
@@ -2532,24 +2325,20 @@ ${message}` : message;
       return;
     }
     const searchName = fileName.replace(".jsonl", "").trim();
-    console.log("[ChatHandlers] Searching for:", searchName);
     function isExactMatch(itemName, target) {
       const cleanItem = itemName.replace(".jsonl", "").trim();
       const cleanTarget = target.replace(".jsonl", "").trim();
       return cleanItem === cleanTarget;
     }
     const chatItems = document.querySelectorAll(".select_chat_block");
-    console.log("[ChatHandlers] Found", chatItems.length, "chat items");
     for (const item of chatItems) {
       const itemFileName = item.getAttribute("file_name") || "";
       if (isExactMatch(itemFileName, searchName)) {
-        console.log("[ChatHandlers] \u2705 MATCH FOUND:", itemFileName);
         if (window.$) {
           window.$(item).trigger("click");
         } else {
           item.click();
         }
-        console.log("[ChatHandlers] Click executed");
         return;
       }
     }
@@ -2689,10 +2478,8 @@ ${message}` : message;
       storage.save(data);
       closeChatPanel();
       if (typeof context?.deleteCharacter === "function") {
-        console.log("[ChatLobby] Using SillyTavern deleteCharacter function");
         await context.deleteCharacter(char.avatar, { deleteChats: true });
       } else {
-        console.log("[ChatLobby] Using direct API call");
         const headers = api.getRequestHeaders();
         const avatarUrl = char.avatar.endsWith(".png") ? char.avatar : `${char.avatar}.png`;
         const response = await fetch("/api/characters/delete", {
@@ -2709,7 +2496,6 @@ ${message}` : message;
           throw new Error(`Delete failed: ${response.status} - ${errorText}`);
         }
         if (typeof context?.getCharacters === "function") {
-          console.log("[ChatLobby] Refreshing characters via getCharacters()");
           await context.getCharacters();
         }
       }
@@ -2861,9 +2647,7 @@ ${message}` : message;
     container.querySelectorAll(".folder-item").forEach((item) => {
       item.addEventListener("click", () => {
         const folderId = item.dataset.id;
-        console.log("[FolderHandlers] Folder clicked:", folderId, "isBatchMode:", isBatchMode());
         if (isBatchMode() && folderId && folderId !== "favorites") {
-          console.log("[FolderHandlers] Executing batch move to folder:", folderId);
           closeFolderModal();
           executeBatchMove(folderId);
         }
@@ -2914,7 +2698,6 @@ ${message}` : message;
     set(callback, delay) {
       const id = setInterval(callback, delay);
       this.intervals.add(id);
-      console.log("[IntervalManager] Created interval:", id, "Total:", this.intervals.size);
       return id;
     }
     /**
@@ -2925,7 +2708,6 @@ ${message}` : message;
       if (this.intervals.has(id)) {
         clearInterval(id);
         this.intervals.delete(id);
-        console.log("[IntervalManager] Cleared interval:", id, "Remaining:", this.intervals.size);
       }
     }
     /**
@@ -2933,10 +2715,8 @@ ${message}` : message;
      */
     clearAll() {
       if (this.intervals.size > 0) {
-        console.log("[IntervalManager] Clearing all intervals:", this.intervals.size);
         this.intervals.forEach((id) => clearInterval(id));
         this.intervals.clear();
-        console.log("[IntervalManager] \u{1F9F9} All intervals cleared");
       }
     }
     /**
@@ -2952,11 +2732,9 @@ ${message}` : message;
   // src/index.js
   (function() {
     "use strict";
-    console.log("[ChatLobby] Loading extension...");
     let eventHandlers = null;
     let eventsRegistered = false;
     async function init() {
-      console.log("[ChatLobby] Initializing...");
       removeExistingUI();
       document.body.insertAdjacentHTML("beforeend", createLobbyHTML());
       const fab = document.getElementById("chat-lobby-fab");
@@ -2968,7 +2746,6 @@ ${message}` : message;
       setupSillyTavernEvents();
       startBackgroundPreload();
       addLobbyToOptionsMenu();
-      console.log("[ChatLobby] Extension initialized");
     }
     function setupSillyTavernEvents() {
       const context = window.SillyTavern?.getContext?.();
@@ -2977,31 +2754,26 @@ ${message}` : message;
         return;
       }
       if (eventsRegistered) {
-        console.log("[ChatLobby] Events already registered, skipping");
         return;
       }
       const { eventSource, eventTypes } = context;
       eventHandlers = {
         onCharacterDeleted: () => {
-          console.log("[ChatLobby] Character deleted, invalidating cache");
           cache.invalidate("characters");
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
           }
         },
         onCharacterEdited: () => {
-          console.log("[ChatLobby] CHARACTER_EDITED - cache only (no re-render)");
           cache.invalidate("characters");
         },
         onCharacterAdded: () => {
-          console.log("[ChatLobby] CHARACTER_ADDED");
           cache.invalidate("characters");
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
           }
         },
         onChatChanged: () => {
-          console.log("[ChatLobby] Chat changed, invalidating character cache");
           cache.invalidate("characters");
         }
       };
@@ -3014,7 +2786,6 @@ ${message}` : message;
       }
       eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
       eventsRegistered = true;
-      console.log("[ChatLobby] SillyTavern events registered");
     }
     function cleanupSillyTavernEvents() {
       if (!eventHandlers || !eventsRegistered) return;
@@ -3028,7 +2799,6 @@ ${message}` : message;
         eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
         eventsRegistered = false;
         eventHandlers = null;
-        console.log("[ChatLobby] SillyTavern events cleaned up");
       } catch (e) {
         console.warn("[ChatLobby] Failed to cleanup events:", e);
       }
@@ -3062,10 +2832,8 @@ ${message}` : message;
       }, CONFIG.timing.preloadDelay);
     }
     function openLobby() {
-      console.log("[ChatLobby] Opening lobby...");
       const chatsPanel = document.getElementById("chat-lobby-chats");
       if (store.isLobbyOpen && chatsPanel?.classList.contains("visible")) {
-        console.log("[ChatLobby] Lobby already open with chat panel, ignoring");
         return;
       }
       const overlay = document.getElementById("chat-lobby-overlay");
@@ -3085,7 +2853,6 @@ ${message}` : message;
         if (data.filterFolder && data.filterFolder !== "all" && data.filterFolder !== "favorites" && data.filterFolder !== "uncategorized") {
           const folderExists = data.folders?.some((f) => f.id === data.filterFolder);
           if (!folderExists) {
-            console.log('[ChatLobby] Resetting invalid filterFolder to "all"');
             storage.setFilterFolder("all");
           }
         }
@@ -3101,7 +2868,6 @@ ${message}` : message;
         if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
           const currentChar = currentContext.characters?.[currentContext.characterId];
           if (currentChar) {
-            console.log("[ChatLobby] Auto-selecting current character:", currentChar.name);
             setTimeout(() => {
               const charCard = document.querySelector(
                 `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
@@ -3119,7 +2885,6 @@ ${message}` : message;
             }, 200);
           }
         }
-        console.log("[ChatLobby] Lobby opened, handler status:", !!store.onCharacterSelect);
       }
     }
     function closeLobby() {
@@ -3154,21 +2919,18 @@ ${message}` : message;
       if (batchMoveBtn && !batchMoveBtn.dataset.bound) {
         batchMoveBtn.dataset.bound = "true";
         createTouchClickHandler(batchMoveBtn, () => {
-          console.log("[EventDelegation] batch-move-btn touched/clicked");
           handleBatchMove();
         }, { debugName: "batch-move-btn" });
       }
       if (batchCancelBtn && !batchCancelBtn.dataset.bound) {
         batchCancelBtn.dataset.bound = "true";
         createTouchClickHandler(batchCancelBtn, () => {
-          console.log("[EventDelegation] batch-cancel-btn touched/clicked");
           toggleBatchMode();
         }, { debugName: "batch-cancel-btn" });
       }
       if (batchModeBtn && !batchModeBtn.dataset.bound) {
         batchModeBtn.dataset.bound = "true";
         createTouchClickHandler(batchModeBtn, () => {
-          console.log("[EventDelegation] batch-mode-btn touched/clicked");
           toggleBatchMode();
         }, { debugName: "batch-mode-btn" });
       }
@@ -3176,7 +2938,6 @@ ${message}` : message;
     function handleBodyClick(e) {
       const target = e.target;
       if (target.id === "chat-lobby-fab" || target.closest("#chat-lobby-fab")) {
-        console.log("[EventDelegation] FAB clicked");
         openLobby();
         return;
       }
@@ -3196,7 +2957,6 @@ ${message}` : message;
       const clickedEl = target.closest("button, [id]");
       const id = clickedEl?.id || target.id;
       if (!id) return;
-      console.log("[EventDelegation] Lobby click - id:", id);
       switch (id) {
         case "chat-lobby-fab":
           openLobby();
@@ -3291,7 +3051,6 @@ ${message}` : message;
       });
     }
     async function handleRefresh() {
-      console.log("[ChatLobby] Force refresh - invalidating all cache");
       cache.invalidateAll();
       await api.fetchPersonas();
       await api.fetchCharacters(true);
@@ -3303,13 +3062,11 @@ ${message}` : message;
       const importBtn = document.getElementById("character_import_button");
       if (importBtn) {
         const currentCount = api.getCharacters().length;
-        console.log("[ChatLobby] Import started, current count:", currentCount);
         importBtn.click();
         const checkInterval = intervalManager.set(async () => {
           const newCount = api.getCharacters().length;
           if (newCount > currentCount) {
             intervalManager.clear(checkInterval);
-            console.log("[ChatLobby] Character imported! New count:", newCount);
             cache.invalidate("characters");
             if (isLobbyOpen()) {
               await renderCharacterGrid(store.searchTerm);
@@ -3318,7 +3075,6 @@ ${message}` : message;
         }, 500);
         setTimeout(() => {
           intervalManager.clear(checkInterval);
-          console.log("[ChatLobby] Import check timeout");
         }, 5e3);
       }
     }
@@ -3337,13 +3093,10 @@ ${message}` : message;
           checkCount++;
           const drawer = document.getElementById("persona-management-button");
           const isOpen = drawer?.classList.contains("openDrawer") || drawer?.querySelector(".drawer-icon.openIcon");
-          console.log("[ChatLobby] Checking persona drawer...", { isOpen, checkCount });
           if (!isOpen || checkCount >= maxChecks) {
             intervalManager.clear(checkDrawerClosed);
             if (checkCount >= maxChecks) {
-              console.log("[ChatLobby] Persona drawer check timeout");
             } else {
-              console.log("[ChatLobby] Persona drawer closed, refreshing bar");
             }
             cache.invalidate("personas");
             if (isLobbyOpen()) {
@@ -3361,7 +3114,6 @@ ${message}` : message;
         console.warn("[ChatLobby] No character selected");
         return;
       }
-      console.log("[ChatLobby] Opening character editor for:", character.name);
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === character.avatar);
@@ -3371,7 +3123,6 @@ ${message}` : message;
       }
       closeLobby();
       const isAlreadySelected = context.characterId === index;
-      console.log("[ChatLobby] isAlreadySelected:", isAlreadySelected, "context.characterId:", context.characterId, "index:", index);
       if (!isAlreadySelected) {
         await api.selectCharacterById(index);
         const charSelected = await waitForCharacterSelect(character.avatar, 2e3);
@@ -3381,7 +3132,6 @@ ${message}` : message;
       }
       const rightNavIcon = document.getElementById("rightNavDrawerIcon");
       if (rightNavIcon) {
-        console.log("[ChatLobby] Clicking rightNavDrawerIcon");
         rightNavIcon.click();
       } else {
         console.warn("[ChatLobby] rightNavDrawerIcon not found");
@@ -3395,12 +3145,8 @@ ${message}` : message;
       }, CONFIG.timing.menuCloseDelay);
     }
     function handleBatchMove() {
-      console.log("[ChatLobby] ========== handleBatchMove CALLED ==========");
       const folderSelect = document.getElementById("batch-move-folder");
       const folder = folderSelect?.value;
-      console.log("[ChatLobby] Selected folder:", folder);
-      console.log("[ChatLobby] Folder select element:", folderSelect);
-      console.log("[ChatLobby] Folder options:", folderSelect?.options?.length);
       executeBatchMove(folder);
     }
     function addLobbyToOptionsMenu() {
@@ -3422,13 +3168,11 @@ ${message}` : message;
         openLobby();
       });
       optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
-      console.log("[ChatLobby] Added to options menu");
     }
     async function waitForSillyTavern(maxAttempts = 30, interval = 500) {
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const context = window.SillyTavern?.getContext?.();
         if (context && context.characters) {
-          console.log("[ChatLobby] SillyTavern context ready after", attempt * interval, "ms");
           return true;
         }
         await new Promise((resolve) => setTimeout(resolve, interval));

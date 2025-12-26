@@ -196,10 +196,8 @@ function bindFolderEvents(container) {
     container.querySelectorAll('.folder-item').forEach(item => {
         item.addEventListener('click', () => {
             const folderId = item.dataset.id;
-            console.log('[FolderHandlers] Folder clicked:', folderId, 'isBatchMode:', isBatchMode());
             
             if (isBatchMode() && folderId && folderId !== 'favorites') {
-                console.log('[FolderHandlers] Executing batch move to folder:', folderId);
                 closeFolderModal();
                 executeBatchMove(folderId);
             }

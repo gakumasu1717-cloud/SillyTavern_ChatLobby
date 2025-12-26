@@ -24,7 +24,6 @@ import { isMobile } from '../utils/eventHelpers.js';
 export async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
     
-    console.log('[ChatHandlers] openChat called:', { fileName, charAvatar, charIndex });
     
     if (!charAvatar || !fileName) {
         console.error('[ChatHandlers] Missing chat data');
@@ -37,7 +36,6 @@ export async function openChat(chatInfo) {
         const characters = context?.characters || [];
         const index = characters.findIndex(c => c.avatar === charAvatar);
         
-        console.log('[ChatHandlers] Found character at index:', index);
         
         if (index === -1) {
             console.error('[ChatHandlers] Character not found');
@@ -49,7 +47,6 @@ export async function openChat(chatInfo) {
         const chatFileName = fileName.replace('.jsonl', '');
         
         // 1. 캐릭터 선택
-        console.log('[ChatHandlers] Selecting character');
         await api.selectCharacterById(index);
         
         // 2. 캐릭터 선택 완료 대기 (조건 확인 방식)
@@ -59,15 +56,12 @@ export async function openChat(chatInfo) {
         }
         
         // 3. 로비 닫기 (상태 유지하면서)
-        console.log('[ChatHandlers] Closing lobby (keeping state)');
         closeLobbyKeepState();
         
         // 4. SillyTavern openCharacterChat 함수 사용
         if (typeof context?.openCharacterChat === 'function') {
-            console.log('[ChatHandlers] Using context.openCharacterChat:', chatFileName);
             try {
                 await context.openCharacterChat(chatFileName);
-                console.log('[ChatHandlers] ✅ Chat opened via context.openCharacterChat');
                 return;
             } catch (err) {
                 console.warn('[ChatHandlers] context.openCharacterChat failed:', err);
@@ -75,7 +69,6 @@ export async function openChat(chatInfo) {
         }
         
         // 5. Fallback: 채팅 선택 UI 클릭
-        console.log('[ChatHandlers] Fallback: clicking chat item in UI');
         await openChatByFileName(fileName);
         
     } catch (error) {
@@ -90,7 +83,6 @@ export async function openChat(chatInfo) {
  * @returns {Promise<void>}
  */
 async function openChatByFileName(fileName) {
-    console.log('[ChatHandlers] openChatByFileName called with:', fileName);
     
     const manageChatsBtn = document.getElementById('option_select_chat');
     
@@ -100,7 +92,6 @@ async function openChatByFileName(fileName) {
         return;
     }
     
-    console.log('[ChatHandlers] Clicking option_select_chat button');
     manageChatsBtn.click();
     
     // 채팅 목록이 로드될 때까지 대기 (조건 확인 방식)
@@ -117,7 +108,6 @@ async function openChatByFileName(fileName) {
     // 파일명에서 확장자 제거하고 정규화
     const searchName = fileName.replace('.jsonl', '').trim();
     
-    console.log('[ChatHandlers] Searching for:', searchName);
     
     /**
      * 정확한 파일명 매칭
@@ -130,14 +120,12 @@ async function openChatByFileName(fileName) {
     
     // 채팅 목록에서 해당 파일 찾기
     const chatItems = document.querySelectorAll('.select_chat_block');
-    console.log('[ChatHandlers] Found', chatItems.length, 'chat items');
     
     for (const item of chatItems) {
         // file_name 속성에서 파일명 가져오기 (SillyTavern 표준)
         const itemFileName = item.getAttribute('file_name') || '';
         
         if (isExactMatch(itemFileName, searchName)) {
-            console.log('[ChatHandlers] ✅ MATCH FOUND:', itemFileName);
             
             // jQuery 클릭 (SillyTavern 방식)
             if (window.$) {
@@ -146,7 +134,6 @@ async function openChatByFileName(fileName) {
                 item.click();
             }
             
-            console.log('[ChatHandlers] Click executed');
             return;
         }
     }
@@ -359,11 +346,9 @@ export async function deleteCharacter() {
         // (위에서 가져온 context 재사용 - 레이스 컨디션 방지)
         if (typeof context?.deleteCharacter === 'function') {
             // SillyTavern 내장 함수 사용 (context.characters 자동 갱신됨)
-            console.log('[ChatLobby] Using SillyTavern deleteCharacter function');
             await context.deleteCharacter(char.avatar, { deleteChats: true });
         } else {
             // Fallback: 직접 API 호출 후 getCharacters로 갱신
-            console.log('[ChatLobby] Using direct API call');
             const headers = api.getRequestHeaders();
             const avatarUrl = char.avatar.endsWith('.png') ? char.avatar : `${char.avatar}.png`;
             
@@ -384,7 +369,6 @@ export async function deleteCharacter() {
             
             // API 삭제 성공 후 SillyTavern의 characters 배열 갱신
             if (typeof context?.getCharacters === 'function') {
-                console.log('[ChatLobby] Refreshing characters via getCharacters()');
                 await context.getCharacters();
             }
         }

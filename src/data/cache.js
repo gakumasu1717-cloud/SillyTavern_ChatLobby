@@ -182,7 +182,6 @@ class CacheManager {
      * @returns {Promise<void>}
      */
     async preloadAll(api) {
-        console.log('[Cache] Starting preload...');
         
         // 병렬로 프리로딩
         const promises = [];
@@ -191,7 +190,6 @@ class CacheManager {
             promises.push(
                 this.preloadPersonas(api).then(() => {
                     this.preloadStatus.personas = true;
-                    console.log('[Cache] Personas preloaded');
                 })
             );
         }
@@ -200,13 +198,11 @@ class CacheManager {
             promises.push(
                 this.preloadCharacters(api).then(() => {
                     this.preloadStatus.characters = true;
-                    console.log('[Cache] Characters preloaded');
                 })
             );
         }
         
         await Promise.all(promises);
-        console.log('[Cache] Preload complete');
     }
     
     /**
@@ -248,7 +244,6 @@ class CacheManager {
      * @returns {Promise<void>}
      */
     async preloadRecentChats(api, recentCharacters) {
-        console.log('[Cache] Preloading recent chats for', recentCharacters.length, 'characters');
         
         const promises = recentCharacters.map(async (char) => {
             if (this.isValid('chats', char.avatar)) return;
@@ -262,7 +257,6 @@ class CacheManager {
         });
         
         await Promise.all(promises);
-        console.log('[Cache] Recent chats preload complete');
     }
 }
 

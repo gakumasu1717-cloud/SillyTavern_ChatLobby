@@ -21,7 +21,6 @@ class IntervalManager {
     set(callback, delay) {
         const id = setInterval(callback, delay);
         this.intervals.add(id);
-        console.log('[IntervalManager] Created interval:', id, 'Total:', this.intervals.size);
         return id;
     }
     
@@ -33,7 +32,6 @@ class IntervalManager {
         if (this.intervals.has(id)) {
             clearInterval(id);
             this.intervals.delete(id);
-            console.log('[IntervalManager] Cleared interval:', id, 'Remaining:', this.intervals.size);
         }
     }
     
@@ -42,10 +40,8 @@ class IntervalManager {
      */
     clearAll() {
         if (this.intervals.size > 0) {
-            console.log('[IntervalManager] Clearing all intervals:', this.intervals.size);
             this.intervals.forEach(id => clearInterval(id));
             this.intervals.clear();
-            console.log('[IntervalManager] 🧹 All intervals cleared');
         }
     }
     

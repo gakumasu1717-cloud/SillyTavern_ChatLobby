@@ -221,7 +221,6 @@ class SillyTavernAPI {
             if (response.ok) {
                 // 캐시 무효화 + pending request 제거
                 cache.invalidate('personas', null, true);
-                console.log('[API] Persona deleted, cache invalidated');
             }
             return response.ok;
         } catch (error) {
@@ -273,7 +272,6 @@ class SillyTavernAPI {
      */
     async toggleCharacterFavorite(charAvatar, newFavState) {
         try {
-            console.log('[API] Toggling favorite for:', charAvatar, 'to:', newFavState);
             
             // SillyTavern context에서 캐릭터 찾기
             const context = this.getContext();
@@ -292,7 +290,6 @@ class SillyTavernAPI {
                 value: newFavState
             };
             
-            console.log('[API] Edit payload:', editPayload);
             
             const response = await this.fetchWithRetry('/api/characters/edit-attribute', {
                 method: 'POST',
@@ -307,7 +304,6 @@ class SillyTavernAPI {
                     char.data.fav = newFavState;
                 }
                 cache.invalidate('characters');
-                console.log('[API] Favorite toggled successfully');
                 return true;
             }
             
@@ -361,7 +357,6 @@ class SillyTavernAPI {
         
         // 캐시 우선 (forceRefresh가 아닐 때)
         if (!forceRefresh && cache.isValid('chats', characterAvatar)) {
-            console.log('[API] Using cached chats for:', characterAvatar);
             return cache.get('chats', characterAvatar);
         }
         
@@ -454,7 +449,6 @@ class SillyTavernAPI {
      * @returns {Promise<void>}
      */
     async openCharacterEditor(characterIndex) {
-        console.log('[API] Opening character editor for index:', characterIndex);
         
         // 먼저 캐릭터 선택
         await this.selectCharacterById(characterIndex);
@@ -465,7 +459,6 @@ class SillyTavernAPI {
         // 캐릭터 설정/편집 버튼 찾기 및 클릭
         const settingsBtn = document.getElementById('option_settings');
         if (settingsBtn) {
-            console.log('[API] Clicking option_settings button');
             settingsBtn.click();
         } else {
             console.warn('[API] option_settings button not found');
@@ -479,7 +472,6 @@ class SillyTavernAPI {
      * @returns {Promise<boolean>}
      */
     async openChatFile(fileName, characterAvatar) {
-        console.log('[API] Opening chat file:', fileName, 'for character:', characterAvatar);
         
         const context = this.getContext();
         
@@ -487,7 +479,6 @@ class SillyTavernAPI {
         if (context?.openChat) {
             try {
                 await context.openChat(fileName);
-                console.log('[API] Chat opened via context.openChat');
                 return true;
             } catch (e) {
                 console.warn('[API] context.openChat failed:', e);
@@ -517,7 +508,6 @@ class SillyTavernAPI {
                     });
                     
                     if (response.ok) {
-                        console.log('[API] Chat loaded via /api/chats/get');
                         // 페이지 새로고침으로 채팅 적용
                         location.reload();
                         return true;

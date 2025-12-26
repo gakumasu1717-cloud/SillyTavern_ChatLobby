@@ -68,17 +68,14 @@ export function createTouchClickHandler(element, handler, options = {}) {
         
         // 중복 실행 방지 (100ms 내 중복 무시)
         if (now - lastHandleTime < 100) {
-            console.log(`[EventHelper] ${debugName}: Duplicate ${source} event ignored`);
             return;
         }
         
         if (isScrolling) {
-            console.log(`[EventHelper] ${debugName}: ${source} ignored (scrolling)`);
             return;
         }
         
         lastHandleTime = now;
-        console.log(`[EventHelper] ${debugName}: ${source} event fired`);
         
         if (preventDefault) e.preventDefault();
         if (stopPropagation) e.stopPropagation();
@@ -119,7 +116,6 @@ export function createTouchClickHandler(element, handler, options = {}) {
         if (!touchHandled) {
             wrappedHandler(e, 'click');
         } else {
-            console.log(`[EventHelper] ${debugName}: click ignored (touch already handled)`);
         }
         touchHandled = false;
     });

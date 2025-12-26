@@ -21,7 +21,6 @@ import { intervalManager } from './utils/intervalManager.js';
 (function() {
     'use strict';
     
-    console.log('[ChatLobby] Loading extension...');
     
     // ============================================
     // 이벤트 핸들러 참조 저장 (cleanup용)
@@ -38,7 +37,6 @@ import { intervalManager } from './utils/intervalManager.js';
      * @returns {Promise<void>}
      */
     async function init() {
-        console.log('[ChatLobby] Initializing...');
         
         // 기존 UI 제거
         removeExistingUI();
@@ -67,7 +65,6 @@ import { intervalManager } from './utils/intervalManager.js';
         // 옵션 메뉴에 버튼 추가
         addLobbyToOptionsMenu();
         
-        console.log('[ChatLobby] Extension initialized');
     }
     
     /**
@@ -84,7 +81,6 @@ import { intervalManager } from './utils/intervalManager.js';
         
         // 이미 등록되어 있으면 스킵
         if (eventsRegistered) {
-            console.log('[ChatLobby] Events already registered, skipping');
             return;
         }
         
@@ -93,25 +89,21 @@ import { intervalManager } from './utils/intervalManager.js';
         // 핸들러 함수들을 별도로 정의 (off 호출 가능하도록)
         eventHandlers = {
             onCharacterDeleted: () => {
-                console.log('[ChatLobby] Character deleted, invalidating cache');
                 cache.invalidate('characters');
                 if (isLobbyOpen()) {
                     renderCharacterGrid(store.searchTerm);
                 }
             },
             onCharacterEdited: () => {
-                console.log('[ChatLobby] CHARACTER_EDITED - cache only (no re-render)');
                 cache.invalidate('characters');
             },
             onCharacterAdded: () => {
-                console.log('[ChatLobby] CHARACTER_ADDED');
                 cache.invalidate('characters');
                 if (isLobbyOpen()) {
                     renderCharacterGrid(store.searchTerm);
                 }
             },
             onChatChanged: () => {
-                console.log('[ChatLobby] Chat changed, invalidating character cache');
                 cache.invalidate('characters');
             }
         };
@@ -130,7 +122,6 @@ import { intervalManager } from './utils/intervalManager.js';
         eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
         
         eventsRegistered = true;
-        console.log('[ChatLobby] SillyTavern events registered');
     }
     
     /**
@@ -153,7 +144,6 @@ import { intervalManager } from './utils/intervalManager.js';
             
             eventsRegistered = false;
             eventHandlers = null;
-            console.log('[ChatLobby] SillyTavern events cleaned up');
         } catch (e) {
             console.warn('[ChatLobby] Failed to cleanup events:', e);
         }
@@ -225,12 +215,10 @@ import { intervalManager } from './utils/intervalManager.js';
      * context.characters를 직접 사용하므로 캐시 무효화 불필요
      */
     function openLobby() {
-        console.log('[ChatLobby] Opening lobby...');
         
         // 이미 열려있고 채팅 패널이 표시 중이면 무시
         const chatsPanel = document.getElementById('chat-lobby-chats');
         if (store.isLobbyOpen && chatsPanel?.classList.contains('visible')) {
-            console.log('[ChatLobby] Lobby already open with chat panel, ignoring');
             return;
         }
         
@@ -259,7 +247,6 @@ import { intervalManager } from './utils/intervalManager.js';
             if (data.filterFolder && data.filterFolder !== 'all' && data.filterFolder !== 'favorites' && data.filterFolder !== 'uncategorized') {
                 const folderExists = data.folders?.some(f => f.id === data.filterFolder);
                 if (!folderExists) {
-                    console.log('[ChatLobby] Resetting invalid filterFolder to "all"');
                     storage.setFilterFolder('all');
                 }
             }
@@ -287,7 +274,6 @@ import { intervalManager } from './utils/intervalManager.js';
             if (currentContext?.characterId !== undefined && currentContext.characterId >= 0) {
                 const currentChar = currentContext.characters?.[currentContext.characterId];
                 if (currentChar) {
-                    console.log('[ChatLobby] Auto-selecting current character:', currentChar.name);
                     // 렌더링 완료 후 선택
                     setTimeout(() => {
                         const charCard = document.querySelector(
@@ -308,7 +294,6 @@ import { intervalManager } from './utils/intervalManager.js';
                 }
             }
             
-            console.log('[ChatLobby] Lobby opened, handler status:', !!store.onCharacterSelect);
         }
     }
     
@@ -381,7 +366,6 @@ import { intervalManager } from './utils/intervalManager.js';
         if (batchMoveBtn && !batchMoveBtn.dataset.bound) {
             batchMoveBtn.dataset.bound = 'true';
             createTouchClickHandler(batchMoveBtn, () => {
-                console.log('[EventDelegation] batch-move-btn touched/clicked');
                 handleBatchMove();
             }, { debugName: 'batch-move-btn' });
         }
@@ -390,7 +374,6 @@ import { intervalManager } from './utils/intervalManager.js';
         if (batchCancelBtn && !batchCancelBtn.dataset.bound) {
             batchCancelBtn.dataset.bound = 'true';
             createTouchClickHandler(batchCancelBtn, () => {
-                console.log('[EventDelegation] batch-cancel-btn touched/clicked');
                 toggleBatchMode();
             }, { debugName: 'batch-cancel-btn' });
         }
@@ -399,7 +382,6 @@ import { intervalManager } from './utils/intervalManager.js';
         if (batchModeBtn && !batchModeBtn.dataset.bound) {
             batchModeBtn.dataset.bound = 'true';
             createTouchClickHandler(batchModeBtn, () => {
-                console.log('[EventDelegation] batch-mode-btn touched/clicked');
                 toggleBatchMode();
             }, { debugName: 'batch-mode-btn' });
         }
@@ -414,7 +396,6 @@ import { intervalManager } from './utils/intervalManager.js';
         
         // FAB 버튼은 로비 외부에 있으므로 별도 처리
         if (target.id === 'chat-lobby-fab' || target.closest('#chat-lobby-fab')) {
-            console.log('[EventDelegation] FAB clicked');
             openLobby();
             return;
         }
@@ -446,7 +427,6 @@ import { intervalManager } from './utils/intervalManager.js';
         
         if (!id) return;
         
-        console.log('[EventDelegation] Lobby click - id:', id);
         
         switch (id) {
             case 'chat-lobby-fab':
@@ -577,7 +557,6 @@ import { intervalManager } from './utils/intervalManager.js';
      * 새로고침 처리 - 캐시 완전 무효화 후 강제 리로드
      */
     async function handleRefresh() {
-        console.log('[ChatLobby] Force refresh - invalidating all cache');
         cache.invalidateAll();
         
         // 강제로 API 재호출 (forceRefresh=true)
@@ -604,7 +583,6 @@ import { intervalManager } from './utils/intervalManager.js';
         if (importBtn) {
             // 현재 캐릭터 수 저장
             const currentCount = api.getCharacters().length;
-            console.log('[ChatLobby] Import started, current count:', currentCount);
             
             importBtn.click();
             
@@ -613,7 +591,6 @@ import { intervalManager } from './utils/intervalManager.js';
                 const newCount = api.getCharacters().length;
                 if (newCount > currentCount) {
                     intervalManager.clear(checkInterval);
-                    console.log('[ChatLobby] Character imported! New count:', newCount);
                     cache.invalidate('characters');
                     if (isLobbyOpen()) {
                         await renderCharacterGrid(store.searchTerm);
@@ -624,7 +601,6 @@ import { intervalManager } from './utils/intervalManager.js';
             // 5초 후 타임아웃
             setTimeout(() => {
                 intervalManager.clear(checkInterval);
-                console.log('[ChatLobby] Import check timeout');
             }, 5000);
         }
     }
@@ -659,15 +635,12 @@ import { intervalManager } from './utils/intervalManager.js';
                 const isOpen = drawer?.classList.contains('openDrawer') || 
                                drawer?.querySelector('.drawer-icon.openIcon');
                 
-                console.log('[ChatLobby] Checking persona drawer...', { isOpen, checkCount });
                 
                 if (!isOpen || checkCount >= maxChecks) {
                     intervalManager.clear(checkDrawerClosed);
                     
                     if (checkCount >= maxChecks) {
-                        console.log('[ChatLobby] Persona drawer check timeout');
                     } else {
-                        console.log('[ChatLobby] Persona drawer closed, refreshing bar');
                     }
                     
                     cache.invalidate('personas');
@@ -691,7 +664,6 @@ import { intervalManager } from './utils/intervalManager.js';
             return;
         }
         
-        console.log('[ChatLobby] Opening character editor for:', character.name);
         
         // 캐릭터 선택
         const context = api.getContext();
@@ -708,7 +680,6 @@ import { intervalManager } from './utils/intervalManager.js';
         
         // 이미 선택된 캐릭터인지 확인
         const isAlreadySelected = (context.characterId === index);
-        console.log('[ChatLobby] isAlreadySelected:', isAlreadySelected, 'context.characterId:', context.characterId, 'index:', index);
         
         if (!isAlreadySelected) {
             // 다른 캐릭터면 선택 먼저
@@ -724,7 +695,6 @@ import { intervalManager } from './utils/intervalManager.js';
         // 바로 드로어 열기
         const rightNavIcon = document.getElementById('rightNavDrawerIcon');
         if (rightNavIcon) {
-            console.log('[ChatLobby] Clicking rightNavDrawerIcon');
             rightNavIcon.click();
         } else {
             console.warn('[ChatLobby] rightNavDrawerIcon not found');
@@ -746,12 +716,8 @@ import { intervalManager } from './utils/intervalManager.js';
      * 배치 이동 처리
      */
     function handleBatchMove() {
-        console.log('[ChatLobby] ========== handleBatchMove CALLED ==========');
         const folderSelect = document.getElementById('batch-move-folder');
         const folder = folderSelect?.value;
-        console.log('[ChatLobby] Selected folder:', folder);
-        console.log('[ChatLobby] Folder select element:', folderSelect);
-        console.log('[ChatLobby] Folder options:', folderSelect?.options?.length);
         executeBatchMove(folder);
     }
     
@@ -787,7 +753,6 @@ import { intervalManager } from './utils/intervalManager.js';
         });
         
         optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
-        console.log('[ChatLobby] Added to options menu');
     }
     
     // ============================================
@@ -804,7 +769,6 @@ import { intervalManager } from './utils/intervalManager.js';
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const context = window.SillyTavern?.getContext?.();
             if (context && context.characters) {
-                console.log('[ChatLobby] SillyTavern context ready after', attempt * interval, 'ms');
                 return true;
             }
             await new Promise(resolve => setTimeout(resolve, interval));

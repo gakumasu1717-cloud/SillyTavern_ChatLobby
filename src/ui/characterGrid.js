@@ -151,9 +151,6 @@ function isFavoriteChar(char) {
  * @returns {Promise<Array>}
  */
 async function sortCharacters(characters, sortOption) {
-    console.log('[CharacterGrid] ========== SORT START ==========');
-    console.log('[CharacterGrid] sortOption:', sortOption);
-    console.log('[CharacterGrid] characters count:', characters.length);
     
     if (sortOption === 'chats') {
         // 채팅 수 정렬 - 캐시 없으면 API 호출해서 가져옴
@@ -189,8 +186,6 @@ async function sortCharacters(characters, sortOption) {
             return (a.char.name || '').localeCompare(b.char.name || '', 'ko');
         });
         
-        console.log('[CharacterGrid] Sorted by chats, first 5:', results.slice(0, 5).map(r => ({ name: r.char.name, count: r.count, fav: isFavoriteChar(r.char) })));
-        console.log('[CharacterGrid] ========== SORT END ==========');
         return results.map(item => item.char);
     }
     
@@ -212,8 +207,6 @@ async function sortCharacters(characters, sortOption) {
         return bDate - aDate;
     });
     
-    console.log('[CharacterGrid] Sorted by', sortOption, ', first 5:', sorted.slice(0, 5).map(c => ({ name: c.name, fav: isFavoriteChar(c), date: c.date_last_chat })));
-    console.log('[CharacterGrid] ========== SORT END ==========');
     return sorted;
 }
 
@@ -232,15 +225,12 @@ function bindCharacterEvents(container) {
             createTouchClickHandler(favBtn, async (e) => {
                 e.stopPropagation();
                 
-                console.log('[CharacterGrid] ========== FAVORITE TOGGLE START ==========');
-                console.log('[CharacterGrid] Target:', charName, charAvatar);
                 
                 // 해당 캐릭터의 인덱스 찾기
                 const context = api.getContext();
                 const characters = context?.characters || [];
                 const charIndex = characters.findIndex(c => c.avatar === charAvatar);
                 
-                console.log('[CharacterGrid] Character index:', charIndex);
                 
                 if (charIndex === -1) {
                     console.error('[CharacterGrid] Character not found:', charAvatar);
@@ -252,7 +242,6 @@ function bindCharacterEvents(container) {
                 const currentFav = card.dataset.isFav === 'true';
                 const newFavState = !currentFav;
                 
-                console.log('[CharacterGrid] Current fav:', currentFav, '-> New fav:', newFavState);
                 
                 try {
                     // API로 직접 즐겨찾기 토글 (캐릭터 선택 없이)
@@ -260,13 +249,11 @@ function bindCharacterEvents(container) {
                     
                     if (success) {
                         // UI 즉시 업데이트 (리렌더 없이)
-                        console.log('[CharacterGrid] Updating UI only (no re-render)');
                         favBtn.textContent = newFavState ? '⭐' : '☆';
                         card.dataset.isFav = newFavState.toString();
                         card.classList.toggle('is-char-fav', newFavState);
                         
                         showToast(newFavState ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.', 'success');
-                        console.log('[CharacterGrid] ========== FAVORITE TOGGLE END ==========');
                     } else {
                         console.error('[CharacterGrid] API call failed');
                         showToast('즐겨찾기 변경에 실패했습니다.', 'error');
@@ -281,7 +268,6 @@ function bindCharacterEvents(container) {
         // 캐릭터 카드 클릭 (선택)
         createTouchClickHandler(card, () => {
             // 즐겨찾기 버튼 클릭은 무시 (위에서 처리됨)
-            console.log('[CharacterGrid] Card click handler fired for:', charName);
             
             // 기존 선택 해제
             container.querySelectorAll('.lobby-char-card.selected').forEach(el => {
@@ -299,12 +285,10 @@ function bindCharacterEvents(container) {
                 avatarSrc: card.querySelector('.lobby-char-avatar')?.src || ''
             };
             
-            console.log('[CharacterGrid] Character data:', characterData);
             
             // 콜백 호출
             const handler = store.onCharacterSelect;
             if (handler && typeof handler === 'function') {
-                console.log('[CharacterGrid] Calling onCharacterSelect handler');
                 try {
                     handler(characterData);
                 } catch (error) {

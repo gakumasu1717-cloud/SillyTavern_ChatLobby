@@ -41,7 +41,6 @@ class StorageManager {
                 if (this._data.filterFolder && this._data.filterFolder !== 'all') {
                     const folderExists = this._data.folders?.some(f => f.id === this._data.filterFolder);
                     if (!folderExists) {
-                        console.log('[Storage] Resetting invalid filterFolder to "all"');
                         this._data.filterFolder = 'all';
                         this.save(this._data);
                     }
@@ -303,23 +302,16 @@ class StorageManager {
      * @param {string} targetFolderId - 대상 폴더 ID
      */
     moveChatsBatch(chatKeys, targetFolderId) {
-        console.log('[Storage] ========== MOVE BATCH START ==========');
-        console.log('[Storage] chatKeys:', chatKeys);
-        console.log('[Storage] targetFolderId:', targetFolderId);
         
         this.update((data) => {
-            console.log('[Storage] Before update - chatAssignments:', JSON.stringify(data.chatAssignments));
             
             chatKeys.forEach(key => {
                 const oldFolder = data.chatAssignments[key] || 'uncategorized';
-                console.log(`[Storage] Moving "${key}": ${oldFolder} -> ${targetFolderId}`);
                 data.chatAssignments[key] = targetFolderId;
             });
             
-            console.log('[Storage] After update - chatAssignments:', JSON.stringify(data.chatAssignments));
         });
         
-        console.log('[Storage] ========== MOVE BATCH END ==========');
     }
 }
 
