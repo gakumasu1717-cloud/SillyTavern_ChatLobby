@@ -1292,12 +1292,9 @@ ${message}` : message;
       }
     }, { passive: true });
     element.addEventListener("touchend", (e) => {
-      console.log(`[EventHelper] ${debugName}: touchend event fired, isScrolling:`, isScrolling);
       if (!isScrolling) {
         touchHandled = true;
         wrappedHandler(e, "touchend");
-      } else {
-        console.log(`[EventHelper] ${debugName}: skipped (scrolling)`);
       }
       isScrolling = false;
     });
@@ -2108,19 +2105,13 @@ ${message}` : message;
         item.classList.toggle("is-favorite", isNowFav);
       }, { debugName: `fav-${index}` });
       createTouchClickHandler(delBtn, () => {
-        console.log("[DEBUG] delBtn \uD074\uB9AD\uB428, index:", index);
-        console.log("[DEBUG] store.chatHandlers:", store.chatHandlers);
-        console.log("[DEBUG] onDelete \uC874\uC7AC?:", !!store.chatHandlers?.onDelete);
         const handlers = store.chatHandlers;
         if (handlers?.onDelete) {
-          console.log("[DEBUG] onDelete \uD638\uCD9C\uD568");
           handlers.onDelete({
             fileName: item.dataset.fileName,
             charAvatar: item.dataset.charAvatar,
             element: item
           });
-        } else {
-          console.log("[DEBUG] onDelete\uAC00 \uC5C6\uC74C!");
         }
       }, { debugName: `del-${index}` });
     });
@@ -2356,13 +2347,11 @@ ${message}` : message;
   }
   async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
-    console.log("[DEBUG] deleteChat \uC2DC\uC791:", { fileName, charAvatar, hasElement: !!element });
     if (!fileName || !charAvatar) {
       console.error("[ChatHandlers] Missing chat data for delete");
       showToast("\uC0AD\uC81C\uD560 \uCC44\uD305 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    console.log("[DEBUG] showConfirm \uD638\uCD9C \uC9C1\uC804");
     const displayName = fileName.replace(".jsonl", "");
     const confirmed = await showConfirm(
       `"${displayName}" \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
@@ -2379,6 +2368,12 @@ ${message}` : message;
         const context = api.getContext();
         if (context?.eventSource && context?.eventTypes?.CHAT_CHANGED) {
           context.eventSource.emit(context.eventTypes.CHAT_CHANGED);
+        }
+        if (context?.reloadCurrentChat) {
+          try {
+            await context.reloadCurrentChat();
+          } catch (e) {
+          }
         }
         const data = storage.load();
         const key = storage.getChatKey(charAvatar, fileName);

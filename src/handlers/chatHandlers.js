@@ -154,8 +154,6 @@ async function openChatByFileName(fileName) {
 export async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
     
-    console.log('[DEBUG] deleteChat 시작:', { fileName, charAvatar, hasElement: !!element });
-    
     if (!fileName || !charAvatar) {
         console.error('[ChatHandlers] Missing chat data for delete');
         showToast('삭제할 채팅 정보가 없습니다.', 'error');
@@ -163,7 +161,6 @@ export async function deleteChat(chatInfo) {
     }
     
     // 삭제 확인
-    console.log('[DEBUG] showConfirm 호출 직전');
     const displayName = fileName.replace('.jsonl', '');
     const confirmed = await showConfirm(
         `"${displayName}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,
@@ -177,13 +174,24 @@ export async function deleteChat(chatInfo) {
         const success = await api.deleteChat(fileName, charAvatar);
         
         if (success) {
-            // 캐시 무효화 (중요: 먼저 해야 다른 곳에서 최신 데이터 조회 가능)
+            // 캐시 무효화
             cache.invalidate('chats', charAvatar);
             
-            // SillyTavern에 변경 알림 (실리↔로비 동기화)
+            // SillyTavern 동기화 (중요!)
             const context = api.getContext();
+            
+            // CHAT_CHANGED 이벤트 emit
             if (context?.eventSource && context?.eventTypes?.CHAT_CHANGED) {
                 context.eventSource.emit(context.eventTypes.CHAT_CHANGED);
+            }
+            
+            // 현재 열린 채팅이 삭제된 채팅이면 리로드
+            if (context?.reloadCurrentChat) {
+                try {
+                    await context.reloadCurrentChat();
+                } catch (e) {
+                    // 삭제된 채팅이라 리로드 실패할 수 있음 - 무시
+                }
             }
             
             // 로컬 데이터 정리

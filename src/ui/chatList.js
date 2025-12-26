@@ -480,20 +480,13 @@ function bindChatEvents(container, charAvatar) {
         
         // 삭제
         createTouchClickHandler(delBtn, () => {
-            console.log('[DEBUG] delBtn 클릭됨, index:', index);
-            console.log('[DEBUG] store.chatHandlers:', store.chatHandlers);
-            console.log('[DEBUG] onDelete 존재?:', !!store.chatHandlers?.onDelete);
-            
             const handlers = store.chatHandlers;
             if (handlers?.onDelete) {
-                console.log('[DEBUG] onDelete 호출함');
                 handlers.onDelete({
                     fileName: item.dataset.fileName,
                     charAvatar: item.dataset.charAvatar,
                     element: item
                 });
-            } else {
-                console.log('[DEBUG] onDelete가 없음!');
             }
         }, { debugName: `del-${index}` });
     });
