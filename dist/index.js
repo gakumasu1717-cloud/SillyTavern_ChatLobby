@@ -199,12 +199,15 @@
           }
         }
         /**
-         * 전체 캐시 무효화
+         * 캐시 무효화
+         * @param {string} [type] - 특정 타입만 무효화, 없으면 전체
          */
-        invalidateAll() {
-          Object.keys(this.stores).forEach((type) => {
+        invalidateAll(type = null) {
+          if (type) {
             this.invalidate(type);
-          });
+          } else {
+            Object.keys(this.stores).forEach((t) => this.invalidate(t));
+          }
         }
         // ============================================
         // 중복 요청 방지
@@ -1919,7 +1922,7 @@ ${message}` : message;
     updateChatHeader(character);
     showFolderBar(true);
     const cachedChats = cache.get("chats", character.avatar);
-    if (cachedChats && cachedChats.length > 0) {
+    if (cachedChats && cachedChats.length > 0 && cache.isValid("chats", character.avatar)) {
       renderChats(chatsList, cachedChats, character.avatar);
       return;
     }
@@ -2772,10 +2775,7 @@ ${message}` : message;
         },
         onChatChanged: () => {
           cache.invalidate("characters");
-          cache.invalidateAll("chats");
-          if (isLobbyOpen() && store.currentCharacter) {
-            renderChatList(store.currentCharacter);
-          }
+          cache.invalidate("chats");
         }
       };
       eventSource.on(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);

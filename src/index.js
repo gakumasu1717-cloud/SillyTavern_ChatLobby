@@ -105,12 +105,8 @@ import { intervalManager } from './utils/intervalManager.js';
             },
             onChatChanged: () => {
                 cache.invalidate('characters');
-                cache.invalidateAll('chats');
-                
-                // 로비가 열려있고 캐릭터가 선택되어 있으면 채팅 목록 리렌더
-                if (isLobbyOpen() && store.currentCharacter) {
-                    renderChatList(store.currentCharacter);
-                }
+                cache.invalidate('chats');
+                // 리렌더 제거 - 삭제는 deleteChat에서 element.remove()로 처리
             }
         };
         

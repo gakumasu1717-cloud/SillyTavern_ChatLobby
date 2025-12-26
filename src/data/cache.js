@@ -138,12 +138,15 @@ class CacheManager {
     }
     
     /**
-     * 전체 캐시 무효화
+     * 캐시 무효화
+     * @param {string} [type] - 특정 타입만 무효화, 없으면 전체
      */
-    invalidateAll() {
-        Object.keys(this.stores).forEach(type => {
+    invalidateAll(type = null) {
+        if (type) {
             this.invalidate(type);
-        });
+        } else {
+            Object.keys(this.stores).forEach(t => this.invalidate(t));
+        }
     }
     
     // ============================================

@@ -185,9 +185,9 @@ export async function renderChatList(character) {
     updateChatHeader(character);
     showFolderBar(true);
     
-    // 캐시된 데이터가 있으면 즉시 렌더링하고 끝 (번쩍임 방지)
+    // 캐시된 데이터가 있고 유효하면 즉시 렌더링 (번첩임 방지)
     const cachedChats = cache.get('chats', character.avatar);
-    if (cachedChats && cachedChats.length > 0) {
+    if (cachedChats && cachedChats.length > 0 && cache.isValid('chats', character.avatar)) {
         renderChats(chatsList, cachedChats, character.avatar);
         return; // 캐시 유효하면 API 호출 안 함
     }
