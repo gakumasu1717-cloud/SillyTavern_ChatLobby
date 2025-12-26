@@ -154,13 +154,16 @@ async function openChatByFileName(fileName) {
 export async function deleteChat(chatInfo) {
     const { fileName, charAvatar, element } = chatInfo;
     
+    console.log('[DEBUG] deleteChat 시작:', { fileName, charAvatar, hasElement: !!element });
+    
     if (!fileName || !charAvatar) {
         console.error('[ChatHandlers] Missing chat data for delete');
         showToast('삭제할 채팅 정보가 없습니다.', 'error');
         return;
     }
     
-    // 삭제 확인 (캐시 체크 제거 - 캐시가 무효화되면 두 번째부터 안 뜨는 버그 있었음)
+    // 삭제 확인
+    console.log('[DEBUG] showConfirm 호출 직전');
     const displayName = fileName.replace('.jsonl', '');
     const confirmed = await showConfirm(
         `"${displayName}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,
