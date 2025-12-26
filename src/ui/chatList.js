@@ -185,13 +185,15 @@ export async function renderChatList(character) {
     updateChatHeader(character);
     showFolderBar(true);
     
-    // 캐시된 데이터가 있으면 즉시 렌더링
+    // 캐시된 데이터가 있으면 즉시 렌더링하고 끝 (번쩍임 방지)
     const cachedChats = cache.get('chats', character.avatar);
     if (cachedChats && cachedChats.length > 0) {
         renderChats(chatsList, cachedChats, character.avatar);
-    } else {
-        chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
+        return; // 캐시 유효하면 API 호출 안 함
     }
+    
+    // 캐시 없으면 로딩 표시 후 API 호출
+    chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
     
     try {
         // 최신 데이터 가져오기

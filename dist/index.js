@@ -1921,9 +1921,9 @@ ${message}` : message;
     const cachedChats = cache.get("chats", character.avatar);
     if (cachedChats && cachedChats.length > 0) {
       renderChats(chatsList, cachedChats, character.avatar);
-    } else {
-      chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
+      return;
     }
+    chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
     try {
       const chats = await api.fetchChatsForCharacter(character.avatar);
       if (!chats || chats.length === 0) {
