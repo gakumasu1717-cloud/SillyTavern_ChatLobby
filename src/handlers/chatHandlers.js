@@ -185,6 +185,9 @@ export async function deleteChat(chatInfo) {
         const success = await api.deleteChat(fileName, charAvatar);
         
         if (success) {
+            // 캐시 무효화 (중요: 먼저 해야 다른 곳에서 최신 데이터 조회 가능)
+            cache.invalidate('chats', charAvatar);
+            
             // 로컬 데이터 정리
             const data = storage.load();
             const key = storage.getChatKey(charAvatar, fileName);

@@ -105,6 +105,7 @@ import { intervalManager } from './utils/intervalManager.js';
             },
             onChatChanged: () => {
                 cache.invalidate('characters');
+                cache.invalidateAll('chats'); // 실리에서 채팅 삭제/변경 시 캐시 무효화
             }
         };
         

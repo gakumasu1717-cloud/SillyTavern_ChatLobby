@@ -2373,6 +2373,7 @@ ${message}` : message;
     try {
       const success = await api.deleteChat(fileName, charAvatar);
       if (success) {
+        cache.invalidate("chats", charAvatar);
         const data = storage.load();
         const key = storage.getChatKey(charAvatar, fileName);
         delete data.chatAssignments[key];
@@ -2775,6 +2776,7 @@ ${message}` : message;
         },
         onChatChanged: () => {
           cache.invalidate("characters");
+          cache.invalidateAll("chats");
         }
       };
       eventSource.on(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
