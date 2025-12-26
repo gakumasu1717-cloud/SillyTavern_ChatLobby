@@ -194,15 +194,16 @@ export async function deleteChat(chatInfo) {
             }
             storage.save(data);
             
-            // UI에서 제거
+            // UI에서 제거 (애니메이션 후 리렌더)
             if (element) {
                 element.style.transition = `opacity ${CONFIG.timing.animationDuration}ms, transform ${CONFIG.timing.animationDuration}ms`;
                 element.style.opacity = '0';
                 element.style.transform = 'translateX(20px)';
                 
-                setTimeout(() => {
+                setTimeout(async () => {
                     element.remove();
-                    updateChatCountAfterDelete();
+                    // 캐시에서도 확실히 제거되도록 리렌더
+                    await refreshChatList();
                 }, CONFIG.timing.animationDuration);
             } else {
                 await refreshChatList();

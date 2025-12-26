@@ -2381,9 +2381,9 @@ ${message}` : message;
           element.style.transition = `opacity ${CONFIG.timing.animationDuration}ms, transform ${CONFIG.timing.animationDuration}ms`;
           element.style.opacity = "0";
           element.style.transform = "translateX(20px)";
-          setTimeout(() => {
+          setTimeout(async () => {
             element.remove();
-            updateChatCountAfterDelete();
+            await refreshChatList();
           }, CONFIG.timing.animationDuration);
         } else {
           await refreshChatList();
@@ -2395,24 +2395,6 @@ ${message}` : message;
     } catch (error) {
       console.error("[ChatHandlers] Error deleting chat:", error);
       showToast("\uCC44\uD305 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
-    }
-  }
-  function updateChatCountAfterDelete() {
-    const remaining = document.querySelectorAll(".lobby-chat-item").length;
-    const countEl = document.getElementById("chat-panel-count");
-    if (countEl) {
-      countEl.textContent = remaining > 0 ? `${remaining}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
-    }
-    if (remaining === 0) {
-      const chatsList = document.getElementById("chat-lobby-chats-list");
-      if (chatsList) {
-        chatsList.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>\u{1F4AC}</i>
-                    <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                </div>
-            `;
-      }
     }
   }
   async function startNewChat() {
@@ -2832,6 +2814,7 @@ ${message}` : message;
       }, CONFIG.timing.preloadDelay);
     }
     function openLobby() {
+      cache.invalidateAll("chats");
       const chatsPanel = document.getElementById("chat-lobby-chats");
       if (store.isLobbyOpen && chatsPanel?.classList.contains("visible")) {
         return;

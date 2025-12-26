@@ -218,9 +218,10 @@ import { intervalManager } from './utils/intervalManager.js';
     
     /**
      * 로비 열기
-     * context.characters를 직접 사용하므로 캐시 무효화 불필요
      */
     function openLobby() {
+        // 채팅 캐시 무효화 (실리에서 삭제/추가된 채팅 반영)
+        cache.invalidateAll('chats');
         
         // 이미 열려있고 채팅 패널이 표시 중이면 무시
         const chatsPanel = document.getElementById('chat-lobby-chats');
