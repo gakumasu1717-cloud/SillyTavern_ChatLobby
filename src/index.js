@@ -214,6 +214,17 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
             store.reset();
             store.setLobbyOpen(true);
             
+            // 폴더 필터 강제 리셋 (버그 방지)
+            // 존재하지 않는 폴더로 필터링되어 채팅이 안 보이는 문제 해결
+            const data = storage.load();
+            if (data.filterFolder && data.filterFolder !== 'all' && data.filterFolder !== 'favorites' && data.filterFolder !== 'uncategorized') {
+                const folderExists = data.folders?.some(f => f.id === data.filterFolder);
+                if (!folderExists) {
+                    console.log('[ChatLobby] Resetting invalid filterFolder to "all"');
+                    storage.setFilterFolder('all');
+                }
+            }
+            
             // 배치 모드 리셋
             if (store.batchModeActive) {
                 toggleBatchMode();

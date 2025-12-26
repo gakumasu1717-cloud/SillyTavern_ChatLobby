@@ -2942,6 +2942,14 @@ ${message}` : message;
         }
         store.reset();
         store.setLobbyOpen(true);
+        const data = storage.load();
+        if (data.filterFolder && data.filterFolder !== "all" && data.filterFolder !== "favorites" && data.filterFolder !== "uncategorized") {
+          const folderExists = data.folders?.some((f) => f.id === data.filterFolder);
+          if (!folderExists) {
+            console.log('[ChatLobby] Resetting invalid filterFolder to "all"');
+            storage.setFilterFolder("all");
+          }
+        }
         if (store.batchModeActive) {
           toggleBatchMode();
         }
