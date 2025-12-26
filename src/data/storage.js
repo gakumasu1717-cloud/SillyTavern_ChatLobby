@@ -292,11 +292,23 @@ class StorageManager {
      * @param {string} targetFolderId - 대상 폴더 ID
      */
     moveChatsBatch(chatKeys, targetFolderId) {
+        console.log('[Storage] ========== MOVE BATCH START ==========');
+        console.log('[Storage] chatKeys:', chatKeys);
+        console.log('[Storage] targetFolderId:', targetFolderId);
+        
         this.update((data) => {
+            console.log('[Storage] Before update - chatAssignments:', JSON.stringify(data.chatAssignments));
+            
             chatKeys.forEach(key => {
+                const oldFolder = data.chatAssignments[key] || 'uncategorized';
+                console.log(`[Storage] Moving "${key}": ${oldFolder} -> ${targetFolderId}`);
                 data.chatAssignments[key] = targetFolderId;
             });
+            
+            console.log('[Storage] After update - chatAssignments:', JSON.stringify(data.chatAssignments));
         });
+        
+        console.log('[Storage] ========== MOVE BATCH END ==========');
     }
 }
 

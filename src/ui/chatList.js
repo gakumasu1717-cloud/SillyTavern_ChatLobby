@@ -325,19 +325,34 @@ function filterValidChats(chats) {
  * @returns {Array}
  */
 function filterByFolder(chats, charAvatar, filterFolder) {
-    const data = storage.load();
+    console.log('[ChatList] ========== FILTER BY FOLDER ==========');
+    console.log('[ChatList] filterFolder:', filterFolder);
+    console.log('[ChatList] charAvatar:', charAvatar);
+    console.log('[ChatList] chats count before filter:', chats.length);
     
-    return chats.filter(chat => {
+    const data = storage.load();
+    console.log('[ChatList] chatAssignments:', JSON.stringify(data.chatAssignments));
+    console.log('[ChatList] favorites:', JSON.stringify(data.favorites));
+    
+    const result = chats.filter(chat => {
         const fn = chat.file_name || chat.fileName || '';
         const key = storage.getChatKey(charAvatar, fn);
         
         if (filterFolder === 'favorites') {
-            return data.favorites.includes(key);
+            const isFav = data.favorites.includes(key);
+            console.log(`[ChatList] ${fn}: key=${key}, isFav=${isFav}`);
+            return isFav;
         }
         
         const assigned = data.chatAssignments[key] || 'uncategorized';
-        return assigned === filterFolder;
+        const match = assigned === filterFolder;
+        console.log(`[ChatList] ${fn}: key=${key}, assigned=${assigned}, match=${match}`);
+        return match;
     });
+    
+    console.log('[ChatList] chats count after filter:', result.length);
+    console.log('[ChatList] ========== FILTER END ==========');
+    return result;
 }
 
 /**
@@ -644,35 +659,56 @@ export function updateBatchCount() {
  * @param {string} targetFolder
  */
 export async function executeBatchMove(targetFolder) {
+    console.log('[ChatList] ========== BATCH MOVE START ==========');
+    console.log('[ChatList] targetFolder:', targetFolder);
+    
     if (!targetFolder) {
+        console.log('[ChatList] No target folder selected');
         await showAlert('이동할 폴더를 선택하세요.');
         return;
     }
     
     const checked = document.querySelectorAll('.chat-select-cb:checked');
+    console.log('[ChatList] Checked checkboxes:', checked.length);
+    
     const keys = [];
     
-    checked.forEach(cb => {
+    checked.forEach((cb, idx) => {
         const item = cb.closest('.lobby-chat-item');
+        console.log(`[ChatList] Checkbox ${idx}:`, {
+            hasItem: !!item,
+            charAvatar: item?.dataset?.charAvatar,
+            fileName: item?.dataset?.fileName
+        });
         if (item) {
             const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
+            console.log(`[ChatList] Generated key: ${key}`);
             keys.push(key);
         }
     });
     
+    console.log('[ChatList] Total keys to move:', keys.length, keys);
+    
     if (keys.length === 0) {
+        console.log('[ChatList] No keys to move - aborting');
         await showAlert('이동할 채팅을 선택하세요.');
         return;
     }
     
+    console.log('[ChatList] Calling storage.moveChatsBatch...');
     storage.moveChatsBatch(keys, targetFolder);
+    console.log('[ChatList] moveChatsBatch completed');
+    
     toggleBatchMode();
     showToast(`${keys.length}개 채팅이 이동되었습니다.`, 'success');
     
     const character = store.currentCharacter;
+    console.log('[ChatList] Refreshing chat list for:', character?.name);
     if (character) {
         renderChatList(character);
     }
+    
+    console.log('[ChatList] ========== BATCH MOVE END ==========');
 }
 
 /**

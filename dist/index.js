@@ -687,11 +687,19 @@ ${message}` : message;
          * @param {string} targetFolderId - 대상 폴더 ID
          */
         moveChatsBatch(chatKeys, targetFolderId) {
+          console.log("[Storage] ========== MOVE BATCH START ==========");
+          console.log("[Storage] chatKeys:", chatKeys);
+          console.log("[Storage] targetFolderId:", targetFolderId);
           this.update((data) => {
+            console.log("[Storage] Before update - chatAssignments:", JSON.stringify(data.chatAssignments));
             chatKeys.forEach((key) => {
+              const oldFolder = data.chatAssignments[key] || "uncategorized";
+              console.log(`[Storage] Moving "${key}": ${oldFolder} -> ${targetFolderId}`);
               data.chatAssignments[key] = targetFolderId;
             });
+            console.log("[Storage] After update - chatAssignments:", JSON.stringify(data.chatAssignments));
           });
+          console.log("[Storage] ========== MOVE BATCH END ==========");
         }
       };
       storage = new StorageManager();
@@ -1470,14 +1478,21 @@ ${message}` : message;
     console.log("[CharacterGrid] sortOption:", sortOption);
     console.log("[CharacterGrid] characters count:", characters.length);
     if (sortOption === "chats") {
+      let cacheMissCount = 0;
       const results = characters.map((char) => {
         const cachedCount = cache.get("chatCounts", char.avatar);
+        const isCacheMiss = typeof cachedCount !== "number";
+        if (isCacheMiss) cacheMissCount++;
         return {
           char,
           // 캐시 미스 시 0으로 처리 (맨 뒤로 보내지 않고 정상 정렬)
-          count: typeof cachedCount === "number" ? cachedCount : 0
+          count: isCacheMiss ? 0 : cachedCount
         };
       });
+      if (cacheMissCount > 0) {
+        console.warn(`[CharacterGrid] \u26A0\uFE0F Cache miss: ${cacheMissCount}/${characters.length} characters have no chat count cached!`);
+        console.warn("[CharacterGrid] \u{1F4A1} Tip: Click on characters to load their chats and populate cache, then sort again.");
+      }
       results.sort((a, b) => {
         if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
           return isFavoriteChar(a.char) ? -1 : 1;
@@ -2101,16 +2116,29 @@ ${message}` : message;
     });
   }
   function filterByFolder(chats, charAvatar, filterFolder) {
+    console.log("[ChatList] ========== FILTER BY FOLDER ==========");
+    console.log("[ChatList] filterFolder:", filterFolder);
+    console.log("[ChatList] charAvatar:", charAvatar);
+    console.log("[ChatList] chats count before filter:", chats.length);
     const data = storage.load();
-    return chats.filter((chat) => {
+    console.log("[ChatList] chatAssignments:", JSON.stringify(data.chatAssignments));
+    console.log("[ChatList] favorites:", JSON.stringify(data.favorites));
+    const result = chats.filter((chat) => {
       const fn = chat.file_name || chat.fileName || "";
       const key = storage.getChatKey(charAvatar, fn);
       if (filterFolder === "favorites") {
-        return data.favorites.includes(key);
+        const isFav = data.favorites.includes(key);
+        console.log(`[ChatList] ${fn}: key=${key}, isFav=${isFav}`);
+        return isFav;
       }
       const assigned = data.chatAssignments[key] || "uncategorized";
-      return assigned === filterFolder;
+      const match = assigned === filterFolder;
+      console.log(`[ChatList] ${fn}: key=${key}, assigned=${assigned}, match=${match}`);
+      return match;
     });
+    console.log("[ChatList] chats count after filter:", result.length);
+    console.log("[ChatList] ========== FILTER END ==========");
+    return result;
   }
   function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
@@ -2303,30 +2331,46 @@ ${message}` : message;
     if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
   }
   async function executeBatchMove(targetFolder) {
+    console.log("[ChatList] ========== BATCH MOVE START ==========");
+    console.log("[ChatList] targetFolder:", targetFolder);
     if (!targetFolder) {
+      console.log("[ChatList] No target folder selected");
       await showAlert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
     const checked = document.querySelectorAll(".chat-select-cb:checked");
+    console.log("[ChatList] Checked checkboxes:", checked.length);
     const keys = [];
-    checked.forEach((cb) => {
+    checked.forEach((cb, idx) => {
       const item = cb.closest(".lobby-chat-item");
+      console.log(`[ChatList] Checkbox ${idx}:`, {
+        hasItem: !!item,
+        charAvatar: item?.dataset?.charAvatar,
+        fileName: item?.dataset?.fileName
+      });
       if (item) {
         const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
+        console.log(`[ChatList] Generated key: ${key}`);
         keys.push(key);
       }
     });
+    console.log("[ChatList] Total keys to move:", keys.length, keys);
     if (keys.length === 0) {
+      console.log("[ChatList] No keys to move - aborting");
       await showAlert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
+    console.log("[ChatList] Calling storage.moveChatsBatch...");
     storage.moveChatsBatch(keys, targetFolder);
+    console.log("[ChatList] moveChatsBatch completed");
     toggleBatchMode();
     showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
     const character = store.currentCharacter;
+    console.log("[ChatList] Refreshing chat list for:", character?.name);
     if (character) {
       renderChatList(character);
     }
+    console.log("[ChatList] ========== BATCH MOVE END ==========");
   }
   async function refreshChatList() {
     const character = store.currentCharacter;
