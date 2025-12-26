@@ -108,15 +108,26 @@ function hideTooltip() {
  */
 function bindTooltipEvents(container) {
     // 모바일에서는 비활성화
-    if (isMobile()) return;
+    if (isMobile()) {
+        console.log('[ChatList] Tooltip disabled on mobile');
+        return;
+    }
     
-    container.querySelectorAll('.lobby-chat-item').forEach(item => {
-        const preview = item.querySelector('.chat-preview')?.textContent || '';
+    console.log('[ChatList] Binding tooltip events (PC mode)');
+    
+    container.querySelectorAll('.lobby-chat-item').forEach((item, idx) => {
         // data-full-preview 속성에 전문 저장 (렌더링 시 추가됨)
-        const fullPreview = item.dataset.fullPreview || preview;
+        const fullPreview = item.dataset.fullPreview || '';
+        
+        if (!fullPreview) {
+            console.log(`[ChatList] Item ${idx} has no fullPreview data`);
+            return;
+        }
         
         item.addEventListener('mouseenter', (e) => {
             if (currentTooltipTarget === item) return;
+            
+            console.log(`[ChatList] Mouse enter on item ${idx}`);
             
             // 이전 타이머 취소
             hideTooltip();
@@ -125,6 +136,7 @@ function bindTooltipEvents(container) {
             // 딜레이 후 툴팁 표시 (300ms)
             tooltipTimeout = setTimeout(() => {
                 if (currentTooltipTarget === item && fullPreview) {
+                    console.log(`[ChatList] Showing tooltip for item ${idx}`);
                     showTooltip(fullPreview, e);
                 }
             }, 300);
@@ -158,6 +170,7 @@ function bindTooltipEvents(container) {
         
         item.addEventListener('mouseleave', () => {
             if (currentTooltipTarget === item) {
+                console.log(`[ChatList] Mouse leave on item ${idx}`);
                 hideTooltip();
             }
         });

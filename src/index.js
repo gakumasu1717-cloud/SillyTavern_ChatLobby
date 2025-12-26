@@ -511,16 +511,22 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
         // 로비 닫기 (상태 초기화)
         closeLobby();
         
-        // 캐릭터 선택
-        await api.selectCharacterById(index);
+        // 이미 선택된 캐릭터인지 확인
+        const isAlreadySelected = (context.characterId === index);
+        console.log('[ChatLobby] isAlreadySelected:', isAlreadySelected, 'context.characterId:', context.characterId, 'index:', index);
         
-        // 캐릭터 선택 완료 대기 (조건 확인 방식)
-        const charSelected = await waitForCharacterSelect(character.avatar, 2000);
-        if (!charSelected) {
-            console.warn('[ChatLobby] Character selection timeout');
+        if (!isAlreadySelected) {
+            // 다른 캐릭터면 선택 먼저
+            await api.selectCharacterById(index);
+            
+            // 캐릭터 선택 완료 대기 (조건 확인 방식)
+            const charSelected = await waitForCharacterSelect(character.avatar, 2000);
+            if (!charSelected) {
+                console.warn('[ChatLobby] Character selection timeout');
+            }
         }
         
-        // rightNavDrawerIcon 클릭
+        // 바로 드로어 열기
         const rightNavIcon = document.getElementById('rightNavDrawerIcon');
         if (rightNavIcon) {
             console.log('[ChatLobby] Clicking rightNavDrawerIcon');
