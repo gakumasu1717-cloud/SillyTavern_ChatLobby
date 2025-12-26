@@ -7,16 +7,16 @@ import { storage } from '../data/storage.js';
 // 메인 로비 HTML
 export function createLobbyHTML() {
     return `
-    <div id="chat-lobby-fab" title="Chat Lobby 열기">💬</div>
+    <div id="chat-lobby-fab" data-action="open-lobby" title="Chat Lobby 열기">💬</div>
     <div id="chat-lobby-overlay" style="display: none;">
         <div id="chat-lobby-container">
             <div id="chat-lobby-header">
                 <h2>Chat Lobby</h2>
                 <div class="header-actions">
-                    <button id="chat-lobby-refresh" title="새로고침">🔄</button>
-                    <button id="chat-lobby-import-char" title="캐릭터 임포트">📥</button>
-                    <button id="chat-lobby-add-persona" title="페르소나 추가">👤</button>
-                    <button id="chat-lobby-close">✕</button>
+                    <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
+                    <button id="chat-lobby-import-char" data-action="import-char" title="캐릭터 임포트">📥</button>
+                    <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
+                    <button id="chat-lobby-close" data-action="close-lobby">✕</button>
                 </div>
             </div>
             <div id="chat-lobby-main">
@@ -42,14 +42,14 @@ export function createLobbyHTML() {
                 <!-- 오른쪽 패널: 채팅 목록 -->
                 <div id="chat-lobby-chats">
                     <div id="chat-lobby-chats-header">
-                        <button id="chat-lobby-chats-back" title="뒤로">←</button>
-                        <img src="" alt="avatar" id="chat-panel-avatar" title="캐릭터 설정" style="display:none;">
+                        <button id="chat-lobby-chats-back" data-action="close-chat-panel" title="뒤로">←</button>
+                        <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="캐릭터 설정" style="display:none;">
                         <div class="char-info">
                             <div class="char-name" id="chat-panel-name">캐릭터를 선택하세요</div>
                             <div class="chat-count" id="chat-panel-count"></div>
                         </div>
-                        <button id="chat-lobby-delete-char" title="캐릭터 삭제" style="display:none;">🗑️</button>
-                        <button id="chat-lobby-new-chat" style="display:none;">+ 새 채팅</button>
+                        <button id="chat-lobby-delete-char" data-action="delete-char" title="캐릭터 삭제" style="display:none;">🗑️</button>
+                        <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ 새 채팅</button>
                     </div>
                     <div id="chat-lobby-folder-bar" style="display:none;">
                         <div class="folder-filter">
@@ -64,15 +64,15 @@ export function createLobbyHTML() {
                             </select>
                         </div>
                         <div class="folder-actions">
-                            <button id="chat-lobby-batch-mode" title="다중 선택">☑️</button>
-                            <button id="chat-lobby-folder-manage" title="폴더 관리">📁</button>
+                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
+                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
                         </div>
                     </div>
-                    <!-- 배치 모드 툴바: 선택 수 + 취소 버튼만 (폴더 이동은 📁 버튼으로) -->
+                    <!-- 배치 모드 툴바 -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0개 선택</span>
                         <span id="batch-help-text">📁 클릭으로 이동</span>
-                        <button id="batch-cancel-btn" title="배치 모드 종료">✕</button>
+                        <button id="batch-cancel-btn" data-action="batch-cancel" title="배치 모드 종료">✕</button>
                     </div>
                     <div id="chat-lobby-chats-list">
                         <div class="lobby-empty-state">
@@ -89,12 +89,12 @@ export function createLobbyHTML() {
         <div class="folder-modal-content">
             <div class="folder-modal-header">
                 <h3>📁 폴더 관리</h3>
-                <button id="folder-modal-close">✕</button>
+                <button id="folder-modal-close" data-action="close-folder-modal">✕</button>
             </div>
             <div class="folder-modal-body">
                 <div class="folder-add-row">
                     <input type="text" id="new-folder-name" placeholder="새 폴더 이름...">
-                    <button id="add-folder-btn">추가</button>
+                    <button id="add-folder-btn" data-action="add-folder">추가</button>
                 </div>
                 <div id="folder-list"></div>
             </div>

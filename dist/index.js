@@ -1526,16 +1526,16 @@ ${message}` : message;
   init_storage();
   function createLobbyHTML() {
     return `
-    <div id="chat-lobby-fab" title="Chat Lobby \uC5F4\uAE30">\u{1F4AC}</div>
+    <div id="chat-lobby-fab" data-action="open-lobby" title="Chat Lobby \uC5F4\uAE30">\u{1F4AC}</div>
     <div id="chat-lobby-overlay" style="display: none;">
         <div id="chat-lobby-container">
             <div id="chat-lobby-header">
                 <h2>Chat Lobby</h2>
                 <div class="header-actions">
-                    <button id="chat-lobby-refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
-                    <button id="chat-lobby-import-char" title="\uCE90\uB9AD\uD130 \uC784\uD3EC\uD2B8">\u{1F4E5}</button>
-                    <button id="chat-lobby-add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
-                    <button id="chat-lobby-close">\u2715</button>
+                    <button id="chat-lobby-refresh" data-action="refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
+                    <button id="chat-lobby-import-char" data-action="import-char" title="\uCE90\uB9AD\uD130 \uC784\uD3EC\uD2B8">\u{1F4E5}</button>
+                    <button id="chat-lobby-add-persona" data-action="add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
+                    <button id="chat-lobby-close" data-action="close-lobby">\u2715</button>
                 </div>
             </div>
             <div id="chat-lobby-main">
@@ -1561,14 +1561,14 @@ ${message}` : message;
                 <!-- \uC624\uB978\uCABD \uD328\uB110: \uCC44\uD305 \uBAA9\uB85D -->
                 <div id="chat-lobby-chats">
                     <div id="chat-lobby-chats-header">
-                        <button id="chat-lobby-chats-back" title="\uB4A4\uB85C">\u2190</button>
-                        <img src="" alt="avatar" id="chat-panel-avatar" title="\uCE90\uB9AD\uD130 \uC124\uC815" style="display:none;">
+                        <button id="chat-lobby-chats-back" data-action="close-chat-panel" title="\uB4A4\uB85C">\u2190</button>
+                        <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="\uCE90\uB9AD\uD130 \uC124\uC815" style="display:none;">
                         <div class="char-info">
                             <div class="char-name" id="chat-panel-name">\uCE90\uB9AD\uD130\uB97C \uC120\uD0DD\uD558\uC138\uC694</div>
                             <div class="chat-count" id="chat-panel-count"></div>
                         </div>
-                        <button id="chat-lobby-delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
-                        <button id="chat-lobby-new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
+                        <button id="chat-lobby-delete-char" data-action="delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
+                        <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
                     </div>
                     <div id="chat-lobby-folder-bar" style="display:none;">
                         <div class="folder-filter">
@@ -1583,15 +1583,15 @@ ${message}` : message;
                             </select>
                         </div>
                         <div class="folder-actions">
-                            <button id="chat-lobby-batch-mode" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
-                            <button id="chat-lobby-folder-manage" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
+                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
                         </div>
                     </div>
-                    <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14: \uC120\uD0DD \uC218 + \uCDE8\uC18C \uBC84\uD2BC\uB9CC (\uD3F4\uB354 \uC774\uB3D9\uC740 \u{1F4C1} \uBC84\uD2BC\uC73C\uB85C) -->
+                    <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
                         <span id="batch-help-text">\u{1F4C1} \uD074\uB9AD\uC73C\uB85C \uC774\uB3D9</span>
-                        <button id="batch-cancel-btn" title="\uBC30\uCE58 \uBAA8\uB4DC \uC885\uB8CC">\u2715</button>
+                        <button id="batch-cancel-btn" data-action="batch-cancel" title="\uBC30\uCE58 \uBAA8\uB4DC \uC885\uB8CC">\u2715</button>
                     </div>
                     <div id="chat-lobby-chats-list">
                         <div class="lobby-empty-state">
@@ -1608,12 +1608,12 @@ ${message}` : message;
         <div class="folder-modal-content">
             <div class="folder-modal-header">
                 <h3>\u{1F4C1} \uD3F4\uB354 \uAD00\uB9AC</h3>
-                <button id="folder-modal-close">\u2715</button>
+                <button id="folder-modal-close" data-action="close-folder-modal">\u2715</button>
             </div>
             <div class="folder-modal-body">
                 <div class="folder-add-row">
                     <input type="text" id="new-folder-name" placeholder="\uC0C8 \uD3F4\uB354 \uC774\uB984...">
-                    <button id="add-folder-btn">\uCD94\uAC00</button>
+                    <button id="add-folder-btn" data-action="add-folder">\uCD94\uAC00</button>
                 </div>
                 <div id="folder-list"></div>
             </div>
@@ -2863,7 +2863,6 @@ ${message}` : message;
         renderPersonaBar();
         renderCharacterGrid();
         updateFolderDropdowns();
-        bindBatchModeButtons();
         const currentContext = api.getContext();
         if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
           const currentChar = currentContext.characters?.[currentContext.characterId];
@@ -2910,30 +2909,6 @@ ${message}` : message;
         searchInput.addEventListener("input", (e) => handleSearch(e.target.value));
       }
       bindDropdownEvents();
-      bindBatchModeButtons();
-    }
-    function bindBatchModeButtons() {
-      const batchMoveBtn = document.getElementById("batch-move-btn");
-      const batchCancelBtn = document.getElementById("batch-cancel-btn");
-      const batchModeBtn = document.getElementById("chat-lobby-batch-mode");
-      if (batchMoveBtn && !batchMoveBtn.dataset.bound) {
-        batchMoveBtn.dataset.bound = "true";
-        createTouchClickHandler(batchMoveBtn, () => {
-          handleBatchMove();
-        }, { debugName: "batch-move-btn" });
-      }
-      if (batchCancelBtn && !batchCancelBtn.dataset.bound) {
-        batchCancelBtn.dataset.bound = "true";
-        createTouchClickHandler(batchCancelBtn, () => {
-          toggleBatchMode();
-        }, { debugName: "batch-cancel-btn" });
-      }
-      if (batchModeBtn && !batchModeBtn.dataset.bound) {
-        batchModeBtn.dataset.bound = "true";
-        createTouchClickHandler(batchModeBtn, () => {
-          toggleBatchMode();
-        }, { debugName: "batch-mode-btn" });
-      }
     }
     function handleBodyClick(e) {
       const target = e.target;
@@ -2954,56 +2929,6 @@ ${message}` : message;
         handleAction(actionEl.dataset.action, actionEl, e);
         return;
       }
-      const clickedEl = target.closest("button, [id]");
-      const id = clickedEl?.id || target.id;
-      if (!id) return;
-      switch (id) {
-        case "chat-lobby-fab":
-          openLobby();
-          break;
-        case "chat-lobby-close":
-          closeLobby();
-          break;
-        case "chat-lobby-chats-back":
-          if (isMobile()) closeChatPanel();
-          break;
-        case "chat-lobby-refresh":
-          handleRefresh();
-          break;
-        case "chat-lobby-new-chat":
-          startNewChat();
-          break;
-        case "chat-lobby-delete-char":
-          deleteCharacter();
-          break;
-        case "chat-lobby-import-char":
-          handleImportCharacter();
-          break;
-        case "chat-lobby-add-persona":
-          handleAddPersona();
-          break;
-        case "chat-panel-avatar":
-          handleGoToCharacter();
-          break;
-        case "chat-lobby-batch-mode":
-          toggleBatchMode();
-          break;
-        case "batch-move-btn":
-          handleBatchMove();
-          break;
-        case "batch-cancel-btn":
-          toggleBatchMode();
-          break;
-        case "chat-lobby-folder-manage":
-          openFolderModal();
-          break;
-        case "folder-modal-close":
-          closeFolderModal();
-          break;
-        case "add-folder-btn":
-          addFolder();
-          break;
-      }
     }
     function handleAction(action, el, e) {
       switch (action) {
@@ -3016,8 +2941,38 @@ ${message}` : message;
         case "refresh":
           handleRefresh();
           break;
+        case "new-chat":
+          startNewChat();
+          break;
+        case "delete-char":
+          deleteCharacter();
+          break;
+        case "import-char":
+          handleImportCharacter();
+          break;
+        case "add-persona":
+          handleAddPersona();
+          break;
         case "toggle-batch":
           toggleBatchMode();
+          break;
+        case "batch-cancel":
+          toggleBatchMode();
+          break;
+        case "open-folder-modal":
+          openFolderModal();
+          break;
+        case "close-folder-modal":
+          closeFolderModal();
+          break;
+        case "add-folder":
+          addFolder();
+          break;
+        case "close-chat-panel":
+          if (isMobile()) closeChatPanel();
+          break;
+        case "go-to-character":
+          handleGoToCharacter();
           break;
       }
     }
@@ -3143,11 +3098,6 @@ ${message}` : message;
         const charInfoBtn = document.getElementById("option_settings");
         if (charInfoBtn) charInfoBtn.click();
       }, CONFIG.timing.menuCloseDelay);
-    }
-    function handleBatchMove() {
-      const folderSelect = document.getElementById("batch-move-folder");
-      const folder = folderSelect?.value;
-      executeBatchMove(folder);
     }
     function addLobbyToOptionsMenu() {
       const optionsMenu = document.getElementById("options");

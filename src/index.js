@@ -7,14 +7,14 @@ import { cache } from './data/cache.js';
 import { storage } from './data/storage.js';
 import { store } from './data/store.js';
 import { api } from './api/sillyTavern.js';
-import { createLobbyHTML, getBatchFoldersHTML } from './ui/templates.js';
+import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange } from './ui/characterGrid.js';
-import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, executeBatchMove, updateBatchCount, closeChatPanel } from './ui/chatList.js';
+import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast } from './ui/notifications.js';
-import { debounce, isMobile, createTouchClickHandler } from './utils/eventHelpers.js';
+import { debounce, isMobile } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 import { intervalManager } from './utils/intervalManager.js';
 
@@ -266,9 +266,6 @@ import { intervalManager } from './utils/intervalManager.js';
             // 폴더 드롭다운 업데이트
             updateFolderDropdowns();
             
-            // 배치 모드 버튼들 터치 이벤트 바인딩 (로비 열릴 때마다 필요)
-            bindBatchModeButtons();
-            
             // 현재 채팅 중인 캐릭터 자동 선택
             const currentContext = api.getContext();
             if (currentContext?.characterId !== undefined && currentContext.characterId >= 0) {
@@ -348,43 +345,6 @@ import { intervalManager } from './utils/intervalManager.js';
         
         // 드롭다운 change 이벤트도 직접 바인딩
         bindDropdownEvents();
-        
-        // 배치 모드 버튼들 - 모바일 터치 이벤트 직접 바인딩
-        bindBatchModeButtons();
-    }
-    
-    /**
-     * 배치 모드 버튼들에 터치 이벤트 직접 바인딩 (모바일 호환)
-     * 중복 바인딩 방지
-     */
-    function bindBatchModeButtons() {
-        const batchMoveBtn = document.getElementById('batch-move-btn');
-        const batchCancelBtn = document.getElementById('batch-cancel-btn');
-        const batchModeBtn = document.getElementById('chat-lobby-batch-mode');
-        
-        // 배치 이동 버튼 - 중복 바인딩 방지
-        if (batchMoveBtn && !batchMoveBtn.dataset.bound) {
-            batchMoveBtn.dataset.bound = 'true';
-            createTouchClickHandler(batchMoveBtn, () => {
-                handleBatchMove();
-            }, { debugName: 'batch-move-btn' });
-        }
-        
-        // 배치 취소 버튼
-        if (batchCancelBtn && !batchCancelBtn.dataset.bound) {
-            batchCancelBtn.dataset.bound = 'true';
-            createTouchClickHandler(batchCancelBtn, () => {
-                toggleBatchMode();
-            }, { debugName: 'batch-cancel-btn' });
-        }
-        
-        // 배치 모드 진입 버튼
-        if (batchModeBtn && !batchModeBtn.dataset.bound) {
-            batchModeBtn.dataset.bound = 'true';
-            createTouchClickHandler(batchModeBtn, () => {
-                toggleBatchMode();
-            }, { debugName: 'batch-mode-btn' });
-        }
     }
     
     /**
@@ -420,62 +380,6 @@ import { intervalManager } from './utils/intervalManager.js';
             handleAction(actionEl.dataset.action, actionEl, e);
             return;
         }
-        
-        // ID 기반 분기 (기존 HTML과 호환)
-        const clickedEl = target.closest('button, [id]');
-        const id = clickedEl?.id || target.id;
-        
-        if (!id) return;
-        
-        
-        switch (id) {
-            case 'chat-lobby-fab':
-                openLobby();
-                break;
-            case 'chat-lobby-close':
-                closeLobby();
-                break;
-            case 'chat-lobby-chats-back':
-                if (isMobile()) closeChatPanel();
-                break;
-            case 'chat-lobby-refresh':
-                handleRefresh();
-                break;
-            case 'chat-lobby-new-chat':
-                startNewChat();
-                break;
-            case 'chat-lobby-delete-char':
-                deleteCharacter();
-                break;
-            case 'chat-lobby-import-char':
-                handleImportCharacter();
-                break;
-            case 'chat-lobby-add-persona':
-                handleAddPersona();
-                break;
-            case 'chat-panel-avatar':
-                // 선택된 캐릭터 화면으로 이동
-                handleGoToCharacter();
-                break;
-            case 'chat-lobby-batch-mode':
-                toggleBatchMode();
-                break;
-            case 'batch-move-btn':
-                handleBatchMove();
-                break;
-            case 'batch-cancel-btn':
-                toggleBatchMode();
-                break;
-            case 'chat-lobby-folder-manage':
-                openFolderModal();
-                break;
-            case 'folder-modal-close':
-                closeFolderModal();
-                break;
-            case 'add-folder-btn':
-                addFolder();
-                break;
-        }
     }
     
     /**
@@ -495,10 +399,39 @@ import { intervalManager } from './utils/intervalManager.js';
             case 'refresh':
                 handleRefresh();
                 break;
+            case 'new-chat':
+                startNewChat();
+                break;
+            case 'delete-char':
+                deleteCharacter();
+                break;
+            case 'import-char':
+                handleImportCharacter();
+                break;
+            case 'add-persona':
+                handleAddPersona();
+                break;
             case 'toggle-batch':
                 toggleBatchMode();
                 break;
-            // 필요에 따라 추가
+            case 'batch-cancel':
+                toggleBatchMode();
+                break;
+            case 'open-folder-modal':
+                openFolderModal();
+                break;
+            case 'close-folder-modal':
+                closeFolderModal();
+                break;
+            case 'add-folder':
+                addFolder();
+                break;
+            case 'close-chat-panel':
+                if (isMobile()) closeChatPanel();
+                break;
+            case 'go-to-character':
+                handleGoToCharacter();
+                break;
         }
     }
     
@@ -710,15 +643,6 @@ import { intervalManager } from './utils/intervalManager.js';
             const charInfoBtn = document.getElementById('option_settings');
             if (charInfoBtn) charInfoBtn.click();
         }, CONFIG.timing.menuCloseDelay);
-    }
-    
-    /**
-     * 배치 이동 처리
-     */
-    function handleBatchMove() {
-        const folderSelect = document.getElementById('batch-move-folder');
-        const folder = folderSelect?.value;
-        executeBatchMove(folder);
     }
     
     // ============================================
