@@ -284,17 +284,15 @@ class SillyTavernAPI {
                 return false;
             }
             
-            // 캐릭터 데이터 복사 및 fav 설정
+            // edit-attribute API는 field와 value를 요구함
             const editPayload = {
                 avatar_url: charAvatar,
                 ch_name: char.name,
-                fav: newFavState,
-                // extensions에도 설정
-                extensions: {
-                    ...(char.data?.extensions || {}),
-                    fav: newFavState
-                }
+                field: 'fav',
+                value: newFavState
             };
+            
+            console.log('[API] Edit payload:', editPayload);
             
             const response = await this.fetchWithRetry('/api/characters/edit-attribute', {
                 method: 'POST',
@@ -305,8 +303,8 @@ class SillyTavernAPI {
             if (response.ok) {
                 // context.characters 업데이트
                 char.fav = newFavState;
-                if (char.data?.extensions) {
-                    char.data.extensions.fav = newFavState;
+                if (char.data) {
+                    char.data.fav = newFavState;
                 }
                 cache.invalidate('characters');
                 console.log('[API] Favorite toggled successfully');

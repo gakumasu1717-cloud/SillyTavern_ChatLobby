@@ -1148,13 +1148,10 @@ ${message}` : message;
             const editPayload = {
               avatar_url: charAvatar,
               ch_name: char.name,
-              fav: newFavState,
-              // extensions에도 설정
-              extensions: {
-                ...char.data?.extensions || {},
-                fav: newFavState
-              }
+              field: "fav",
+              value: newFavState
             };
+            console.log("[API] Edit payload:", editPayload);
             const response = await this.fetchWithRetry("/api/characters/edit-attribute", {
               method: "POST",
               headers: this.getRequestHeaders(),
@@ -1162,8 +1159,8 @@ ${message}` : message;
             });
             if (response.ok) {
               char.fav = newFavState;
-              if (char.data?.extensions) {
-                char.data.extensions.fav = newFavState;
+              if (char.data) {
+                char.data.fav = newFavState;
               }
               cache.invalidate("characters");
               console.log("[API] Favorite toggled successfully");
@@ -1740,12 +1737,10 @@ ${message}` : message;
                             <button id="chat-lobby-folder-manage" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
                         </div>
                     </div>
-                    <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14: \uAC04\uB2E8\uD558\uAC8C \uC120\uD0DD \uC218 + \uD3F4\uB354 \uC774\uB3D9 \uB4DC\uB86D\uB2E4\uC6B4 -->
+                    <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14: \uC120\uD0DD \uC218 + \uCDE8\uC18C \uBC84\uD2BC\uB9CC (\uD3F4\uB354 \uC774\uB3D9\uC740 \u{1F4C1} \uBC84\uD2BC\uC73C\uB85C) -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
-                        <select id="batch-move-folder" title="\uC774\uB3D9\uD560 \uD3F4\uB354 \uC120\uD0DD">
-                            <option value="">\u{1F4C1} \uC774\uB3D9\uD560 \uD3F4\uB354...</option>
-                        </select>
+                        <span id="batch-help-text">\u{1F4C1} \uD074\uB9AD\uC73C\uB85C \uC774\uB3D9</span>
                         <button id="batch-cancel-btn" title="\uBC30\uCE58 \uBAA8\uB4DC \uC885\uB8CC">\u2715</button>
                     </div>
                     <div id="chat-lobby-chats-list">
@@ -2425,6 +2420,9 @@ ${message}` : message;
     }
     console.log("[ChatList] ========== BATCH MOVE END ==========");
   }
+  function isBatchMode() {
+    return store.batchModeActive;
+  }
   async function refreshChatList() {
     const character = store.currentCharacter;
     if (character) {
@@ -2746,6 +2744,15 @@ ${message}` : message;
   function openFolderModal() {
     const modal = document.getElementById("chat-lobby-folder-modal");
     if (!modal) return;
+    const header = modal.querySelector(".folder-modal-header h3");
+    const addRow = modal.querySelector(".folder-add-row");
+    if (isBatchMode()) {
+      if (header) header.textContent = "\u{1F4C1} \uC774\uB3D9\uD560 \uD3F4\uB354 \uC120\uD0DD";
+      if (addRow) addRow.style.display = "none";
+    } else {
+      if (header) header.textContent = "\u{1F4C1} \uD3F4\uB354 \uAD00\uB9AC";
+      if (addRow) addRow.style.display = "flex";
+    }
     modal.style.display = "flex";
     refreshFolderList();
   }
@@ -2838,17 +2845,30 @@ ${message}` : message;
   }
   function bindFolderEvents(container) {
     container.querySelectorAll(".folder-delete-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const folderId = btn.dataset.id;
         const folderName = btn.dataset.name;
         deleteFolder(folderId, folderName);
       });
     });
     container.querySelectorAll(".folder-edit-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const folderId = btn.dataset.id;
         const currentName = btn.dataset.name;
         renameFolder(folderId, currentName);
+      });
+    });
+    container.querySelectorAll(".folder-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const folderId = item.dataset.id;
+        console.log("[FolderHandlers] Folder clicked:", folderId, "isBatchMode:", isBatchMode());
+        if (isBatchMode() && folderId && folderId !== "favorites") {
+          console.log("[FolderHandlers] Executing batch move to folder:", folderId);
+          closeFolderModal();
+          executeBatchMove(folderId);
+        }
       });
     });
   }
@@ -3188,14 +3208,6 @@ ${message}` : message;
       document.getElementById("chat-lobby-chats-list")?.addEventListener("change", (e) => {
         if (e.target.classList.contains("chat-select-cb")) {
           updateBatchCount();
-        }
-      });
-      document.getElementById("batch-move-folder")?.addEventListener("change", (e) => {
-        const targetFolder = e.target.value;
-        console.log("[EventDelegation] batch-move-folder changed:", targetFolder);
-        if (targetFolder) {
-          executeBatchMove(targetFolder);
-          e.target.value = "";
         }
       });
     }

@@ -5,7 +5,7 @@
 import { storage } from '../data/storage.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { getBatchFoldersHTML } from '../ui/templates.js';
-import { refreshChatList } from '../ui/chatList.js';
+import { refreshChatList, isBatchMode, executeBatchMove, toggleBatchMode } from '../ui/chatList.js';
 import { showToast, showConfirm, showPrompt } from '../ui/notifications.js';
 
 // ============================================
@@ -18,6 +18,19 @@ import { showToast, showConfirm, showPrompt } from '../ui/notifications.js';
 export function openFolderModal() {
     const modal = document.getElementById('chat-lobby-folder-modal');
     if (!modal) return;
+    
+    // 배치 모드일 때 모달 헤더 변경
+    const header = modal.querySelector('.folder-modal-header h3');
+    const addRow = modal.querySelector('.folder-add-row');
+    
+    if (isBatchMode()) {
+        if (header) header.textContent = '📁 이동할 폴더 선택';
+        if (addRow) addRow.style.display = 'none';
+    } else {
+        if (header) header.textContent = '📁 폴더 관리';
+        if (addRow) addRow.style.display = 'flex';
+    }
+    
     modal.style.display = 'flex';
     refreshFolderList();
 }
@@ -161,7 +174,8 @@ export function refreshFolderList() {
 function bindFolderEvents(container) {
     // 삭제 버튼
     container.querySelectorAll('.folder-delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 폴더 클릭 이벤트 방지
             const folderId = btn.dataset.id;
             const folderName = btn.dataset.name;
             deleteFolder(folderId, folderName);
@@ -170,10 +184,25 @@ function bindFolderEvents(container) {
     
     // 편집 버튼
     container.querySelectorAll('.folder-edit-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 폴더 클릭 이벤트 방지
             const folderId = btn.dataset.id;
             const currentName = btn.dataset.name;
             renameFolder(folderId, currentName);
+        });
+    });
+    
+    // 배치 모드일 때: 폴더 클릭 시 선택한 채팅들 이동
+    container.querySelectorAll('.folder-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const folderId = item.dataset.id;
+            console.log('[FolderHandlers] Folder clicked:', folderId, 'isBatchMode:', isBatchMode());
+            
+            if (isBatchMode() && folderId && folderId !== 'favorites') {
+                console.log('[FolderHandlers] Executing batch move to folder:', folderId);
+                closeFolderModal();
+                executeBatchMove(folderId);
+            }
         });
     });
 }

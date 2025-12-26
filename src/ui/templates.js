@@ -68,12 +68,10 @@ export function createLobbyHTML() {
                             <button id="chat-lobby-folder-manage" title="폴더 관리">📁</button>
                         </div>
                     </div>
-                    <!-- 배치 모드 툴바: 간단하게 선택 수 + 폴더 이동 드롭다운 -->
+                    <!-- 배치 모드 툴바: 선택 수 + 취소 버튼만 (폴더 이동은 📁 버튼으로) -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0개 선택</span>
-                        <select id="batch-move-folder" title="이동할 폴더 선택">
-                            <option value="">📁 이동할 폴더...</option>
-                        </select>
+                        <span id="batch-help-text">📁 클릭으로 이동</span>
                         <button id="batch-cancel-btn" title="배치 모드 종료">✕</button>
                     </div>
                     <div id="chat-lobby-chats-list">

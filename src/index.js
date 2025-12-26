@@ -525,17 +525,6 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
                 updateBatchCount();
             }
         });
-        
-        // 배치 이동 폴더 선택 시 바로 이동 (버튼 클릭 없이)
-        document.getElementById('batch-move-folder')?.addEventListener('change', (e) => {
-            const targetFolder = e.target.value;
-            console.log('[EventDelegation] batch-move-folder changed:', targetFolder);
-            if (targetFolder) {
-                executeBatchMove(targetFolder);
-                // 드롭다운 초기화
-                e.target.value = '';
-            }
-        });
     }
     
     // ============================================
