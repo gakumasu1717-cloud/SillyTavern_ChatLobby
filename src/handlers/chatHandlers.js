@@ -160,18 +160,7 @@ export async function deleteChat(chatInfo) {
         return;
     }
     
-    // 삭제 전 실제 존재 여부 확인 (이중 클릭/레이스컨디션 방지)
-    const cachedChats = cache.get('chats', charAvatar);
-    const chatExists = cachedChats?.some(c => 
-        (c.file_name || c.fileName) === fileName
-    );
-    
-    if (!chatExists) {
-        showToast('이미 삭제되었거나 찾을 수 없는 채팅입니다.', 'warning');
-        if (element) element.remove();
-        return;
-    }
-    
+    // 삭제 확인 (캐시 체크 제거 - 캐시가 무효화되면 두 번째부터 안 뜨는 버그 있었음)
     const displayName = fileName.replace('.jsonl', '');
     const confirmed = await showConfirm(
         `"${displayName}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,

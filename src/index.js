@@ -105,7 +105,12 @@ import { intervalManager } from './utils/intervalManager.js';
             },
             onChatChanged: () => {
                 cache.invalidate('characters');
-                cache.invalidateAll('chats'); // 실리에서 채팅 삭제/변경 시 캐시 무효화
+                cache.invalidateAll('chats');
+                
+                // 로비가 열려있고 캐릭터가 선택되어 있으면 채팅 목록 리렌더
+                if (isLobbyOpen() && store.currentCharacter) {
+                    renderChatList(store.currentCharacter);
+                }
             }
         };
         

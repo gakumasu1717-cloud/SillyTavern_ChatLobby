@@ -2352,15 +2352,6 @@ ${message}` : message;
       showToast("\uC0AD\uC81C\uD560 \uCC44\uD305 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    const cachedChats = cache.get("chats", charAvatar);
-    const chatExists = cachedChats?.some(
-      (c) => (c.file_name || c.fileName) === fileName
-    );
-    if (!chatExists) {
-      showToast("\uC774\uBBF8 \uC0AD\uC81C\uB418\uC5C8\uAC70\uB098 \uCC3E\uC744 \uC218 \uC5C6\uB294 \uCC44\uD305\uC785\uB2C8\uB2E4.", "warning");
-      if (element) element.remove();
-      return;
-    }
     const displayName = fileName.replace(".jsonl", "");
     const confirmed = await showConfirm(
       `"${displayName}" \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
@@ -2777,6 +2768,9 @@ ${message}` : message;
         onChatChanged: () => {
           cache.invalidate("characters");
           cache.invalidateAll("chats");
+          if (isLobbyOpen() && store.currentCharacter) {
+            renderChatList(store.currentCharacter);
+          }
         }
       };
       eventSource.on(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
