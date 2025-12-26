@@ -174,30 +174,9 @@ export async function deleteChat(chatInfo) {
         const success = await api.deleteChat(fileName, charAvatar);
         
         if (success) {
-            // 캐시 무효화
-            cache.invalidate('chats', charAvatar);
-            
-            // SillyTavern 동기화 (중요!)
-            const context = api.getContext();
-            
-            // CHAT_CHANGED 이벤트 emit
-            if (context?.eventSource && context?.eventTypes?.CHAT_CHANGED) {
-                context.eventSource.emit(context.eventTypes.CHAT_CHANGED);
-            }
-            
-            // 현재 열린 채팅이 삭제된 채팅이면 리로드
-            if (context?.reloadCurrentChat) {
-                try {
-                    await context.reloadCurrentChat();
-                } catch (e) {
-                    // 삭제된 채팅이라 리로드 실패할 수 있음 - 무시
-                }
-            }
-            
             // 로컬 데이터 정리
             const data = storage.load();
             const key = storage.getChatKey(charAvatar, fileName);
-            
             delete data.chatAssignments[key];
             const favIndex = data.favorites.indexOf(key);
             if (favIndex > -1) {
@@ -205,19 +184,25 @@ export async function deleteChat(chatInfo) {
             }
             storage.save(data);
             
-            // UI에서 제거 (애니메이션만, 전체 리렌더 안 함)
+            // 캐시 무효화
+            cache.invalidate('chats', charAvatar);
+            
+            // UI에서 해당 요소만 제거 (전체 리렌더 X)
             if (element) {
-                element.style.transition = `opacity ${CONFIG.timing.animationDuration}ms, transform ${CONFIG.timing.animationDuration}ms`;
+                element.style.transition = 'opacity 0.2s, transform 0.2s';
                 element.style.opacity = '0';
                 element.style.transform = 'translateX(20px)';
-                
                 setTimeout(() => {
                     element.remove();
                     updateChatCountAfterDelete();
-                    // refreshChatList() 제거 - 번쩍임 방지, 다음에 열 때 새로 로드됨
-                }, CONFIG.timing.animationDuration);
+                }, 200);
             }
-            // element 없어도 refreshChatList 안 함 - 캐시 무효화됐으니 다음에 새로 로드
+            
+            // 실리 동기화
+            const context = api.getContext();
+            if (context?.reloadCurrentChat) {
+                try { await context.reloadCurrentChat(); } catch(e) {}
+            }
             
             showToast('채팅이 삭제되었습니다.', 'success');
         } else {

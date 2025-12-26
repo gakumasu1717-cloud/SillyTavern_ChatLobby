@@ -2364,17 +2364,6 @@ ${message}` : message;
     try {
       const success = await api.deleteChat(fileName, charAvatar);
       if (success) {
-        cache.invalidate("chats", charAvatar);
-        const context = api.getContext();
-        if (context?.eventSource && context?.eventTypes?.CHAT_CHANGED) {
-          context.eventSource.emit(context.eventTypes.CHAT_CHANGED);
-        }
-        if (context?.reloadCurrentChat) {
-          try {
-            await context.reloadCurrentChat();
-          } catch (e) {
-          }
-        }
         const data = storage.load();
         const key = storage.getChatKey(charAvatar, fileName);
         delete data.chatAssignments[key];
@@ -2383,14 +2372,22 @@ ${message}` : message;
           data.favorites.splice(favIndex, 1);
         }
         storage.save(data);
+        cache.invalidate("chats", charAvatar);
         if (element) {
-          element.style.transition = `opacity ${CONFIG.timing.animationDuration}ms, transform ${CONFIG.timing.animationDuration}ms`;
+          element.style.transition = "opacity 0.2s, transform 0.2s";
           element.style.opacity = "0";
           element.style.transform = "translateX(20px)";
           setTimeout(() => {
             element.remove();
             updateChatCountAfterDelete();
-          }, CONFIG.timing.animationDuration);
+          }, 200);
+        }
+        const context = api.getContext();
+        if (context?.reloadCurrentChat) {
+          try {
+            await context.reloadCurrentChat();
+          } catch (e) {
+          }
         }
         showToast("\uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
       } else {
