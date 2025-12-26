@@ -2021,25 +2021,24 @@ ${message}` : message;
     currentTooltipTarget = null;
   }
   function bindTooltipEvents(container) {
-    if (isMobile()) {
-      console.log("[ChatList] Tooltip disabled on mobile");
+    const isSmallScreen = window.innerWidth <= CONFIG.ui.mobileBreakpoint;
+    if (isSmallScreen) {
+      console.log("[ChatList] Tooltip disabled (small screen)");
       return;
     }
-    console.log("[ChatList] Binding tooltip events (PC mode)");
-    container.querySelectorAll(".lobby-chat-item").forEach((item, idx) => {
+    const items = container.querySelectorAll(".lobby-chat-item");
+    console.log("[ChatList] Binding tooltip events for", items.length, "items");
+    items.forEach((item, idx) => {
       const fullPreview = item.dataset.fullPreview || "";
       if (!fullPreview) {
-        console.log(`[ChatList] Item ${idx} has no fullPreview data`);
         return;
       }
       item.addEventListener("mouseenter", (e) => {
         if (currentTooltipTarget === item) return;
-        console.log(`[ChatList] Mouse enter on item ${idx}`);
         hideTooltip();
         currentTooltipTarget = item;
         tooltipTimeout = setTimeout(() => {
           if (currentTooltipTarget === item && fullPreview) {
-            console.log(`[ChatList] Showing tooltip for item ${idx}`);
             showTooltip(fullPreview, e);
           }
         }, 300);
@@ -2052,7 +2051,6 @@ ${message}` : message;
       });
       item.addEventListener("mouseleave", () => {
         if (currentTooltipTarget === item) {
-          console.log(`[ChatList] Mouse leave on item ${idx}`);
           hideTooltip();
         }
       });

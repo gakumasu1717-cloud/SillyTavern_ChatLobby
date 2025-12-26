@@ -84,30 +84,31 @@ function hideTooltip() {
 
 /**
  * 채팅 아이템에 툴팁 이벤트 바인딩 (PC 전용)
+ * 터치스크린 PC도 지원: 마우스 이벤트는 별도로 작동
  * @param {HTMLElement} container
  */
 function bindTooltipEvents(container) {
-    // 모바일에서는 비활성화
-    if (isMobile()) {
-        console.log('[ChatList] Tooltip disabled on mobile');
+    // 순수 모바일(화면 작음 + 터치만 있음)에서만 비활성화
+    const isSmallScreen = window.innerWidth <= CONFIG.ui.mobileBreakpoint;
+    
+    if (isSmallScreen) {
+        console.log('[ChatList] Tooltip disabled (small screen)');
         return;
     }
     
-    console.log('[ChatList] Binding tooltip events (PC mode)');
+    const items = container.querySelectorAll('.lobby-chat-item');
+    console.log('[ChatList] Binding tooltip events for', items.length, 'items');
     
-    container.querySelectorAll('.lobby-chat-item').forEach((item, idx) => {
+    items.forEach((item, idx) => {
         // data-full-preview 속성에 전문 저장 (렌더링 시 추가됨)
         const fullPreview = item.dataset.fullPreview || '';
         
         if (!fullPreview) {
-            console.log(`[ChatList] Item ${idx} has no fullPreview data`);
             return;
         }
         
         item.addEventListener('mouseenter', (e) => {
             if (currentTooltipTarget === item) return;
-            
-            console.log(`[ChatList] Mouse enter on item ${idx}`);
             
             // 이전 타이머 취소
             hideTooltip();
@@ -116,7 +117,6 @@ function bindTooltipEvents(container) {
             // 딜레이 후 툴팁 표시 (300ms)
             tooltipTimeout = setTimeout(() => {
                 if (currentTooltipTarget === item && fullPreview) {
-                    console.log(`[ChatList] Showing tooltip for item ${idx}`);
                     showTooltip(fullPreview, e);
                 }
             }, 300);
@@ -132,7 +132,6 @@ function bindTooltipEvents(container) {
         
         item.addEventListener('mouseleave', () => {
             if (currentTooltipTarget === item) {
-                console.log(`[ChatList] Mouse leave on item ${idx}`);
                 hideTooltip();
             }
         });
