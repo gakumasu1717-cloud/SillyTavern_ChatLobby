@@ -2999,7 +2999,7 @@ ${message}` : message;
           addFolder();
           break;
         case "close-chat-panel":
-          if (isMobile()) closeChatPanel();
+          closeChatPanel();
           break;
         case "go-to-character":
           handleGoToCharacter();

@@ -432,7 +432,8 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 addFolder();
                 break;
             case 'close-chat-panel':
-                if (isMobile()) closeChatPanel();
+                // CSS에서 850px 이하일 때만 버튼이 보이므로, 조건 체크 불필요
+                closeChatPanel();
                 break;
             case 'go-to-character':
                 handleGoToCharacter();
