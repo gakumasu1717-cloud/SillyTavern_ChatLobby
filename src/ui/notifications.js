@@ -3,6 +3,7 @@
 // ============================================
 
 import { CONFIG } from '../config.js';
+import { escapeHtml } from '../utils/textUtils.js';
 
 /**
  * @typedef {'success' | 'error' | 'warning' | 'info'} ToastType
@@ -124,18 +125,6 @@ function removeToast(toast) {
     if (!toast.parentNode) return;
     toast.classList.add('fade-out');
     setTimeout(() => toast.remove(), CONFIG.timing.animationDuration);
-}
-
-/**
- * HTML 이스케이프
- * @param {string} str
- * @returns {string}
- */
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
 }
 
 // ============================================

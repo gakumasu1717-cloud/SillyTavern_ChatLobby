@@ -4,6 +4,7 @@
 
 import { cache } from '../data/cache.js';
 import { CONFIG } from '../config.js';
+import { sortPersonas } from '../utils/sortUtils.js';
 
 /**
  * @typedef {Object} ApiResponse
@@ -147,27 +148,11 @@ class SillyTavernAPI {
                     name: personaNames[avatarId] || avatarId.replace(/\.(png|jpg|webp)$/i, '')
                 }));
                 
-                // 정렬 (숫자 → 영문 → 한글)
-                personas.sort((a, b) => {
-                    const aName = a.name.toLowerCase();
-                    const bName = b.name.toLowerCase();
-                    
-                    const getType = (str) => {
-                        const c = str.charAt(0);
-                        if (/[0-9]/.test(c)) return 0;
-                        if (/[a-z]/.test(c)) return 1;
-                        if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(c)) return 2;
-                        return 3;
-                    };
-                    
-                    const typeA = getType(aName);
-                    const typeB = getType(bName);
-                    if (typeA !== typeB) return typeA - typeB;
-                    return aName.localeCompare(bName, 'ko');
-                });
+                // 정렬 (숫자 → 영문 → 한글) - sortUtils 사용
+                const sortedPersonas = sortPersonas(personas);
                 
-                cache.set('personas', personas);
-                return personas;
+                cache.set('personas', sortedPersonas);
+                return sortedPersonas;
             } catch (error) {
                 console.error('[API] Failed to load personas:', error);
                 return [];

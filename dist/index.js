@@ -306,6 +306,23 @@
     }
   });
 
+  // src/utils/textUtils.js
+  function escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  function truncateText(text, maxLength) {
+    if (!text) return "";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  }
+  var init_textUtils = __esm({
+    "src/utils/textUtils.js"() {
+    }
+  });
+
   // src/ui/notifications.js
   var notifications_exports = {};
   __export(notifications_exports, {
@@ -403,12 +420,6 @@
     toast.classList.add("fade-out");
     setTimeout(() => toast.remove(), CONFIG.timing.animationDuration);
   }
-  function escapeHtml(str) {
-    if (!str) return "";
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
   function showAlert(message, title = "\uC54C\uB9BC") {
     const fullMessage = title ? `[${title}]
 
@@ -432,6 +443,7 @@ ${message}` : message;
   var init_notifications = __esm({
     "src/ui/notifications.js"() {
       init_config();
+      init_textUtils();
       toastContainer = null;
     }
   });
@@ -795,12 +807,37 @@ ${message}` : message;
     }
   });
 
+  // src/utils/sortUtils.js
+  function koreanSort(a, b) {
+    const aName = (a || "").toLowerCase();
+    const bName = (b || "").toLowerCase();
+    const getType = (str) => {
+      const c = str.charAt(0);
+      if (/[0-9]/.test(c)) return 0;
+      if (/[a-z]/.test(c)) return 1;
+      if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(c)) return 2;
+      return 3;
+    };
+    const typeA = getType(aName);
+    const typeB = getType(bName);
+    if (typeA !== typeB) return typeA - typeB;
+    return aName.localeCompare(bName, "ko");
+  }
+  function sortPersonas(personas) {
+    return [...personas].sort((a, b) => koreanSort(a.name, b.name));
+  }
+  var init_sortUtils = __esm({
+    "src/utils/sortUtils.js"() {
+    }
+  });
+
   // src/api/sillyTavern.js
   var SillyTavernAPI, api;
   var init_sillyTavern = __esm({
     "src/api/sillyTavern.js"() {
       init_cache();
       init_config();
+      init_sortUtils();
       SillyTavernAPI = class {
         constructor() {
         }
@@ -908,23 +945,9 @@ ${message}` : message;
                 key: avatarId,
                 name: personaNames[avatarId] || avatarId.replace(/\.(png|jpg|webp)$/i, "")
               }));
-              personas.sort((a, b) => {
-                const aName = a.name.toLowerCase();
-                const bName = b.name.toLowerCase();
-                const getType = (str) => {
-                  const c = str.charAt(0);
-                  if (/[0-9]/.test(c)) return 0;
-                  if (/[a-z]/.test(c)) return 1;
-                  if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(c)) return 2;
-                  return 3;
-                };
-                const typeA = getType(aName);
-                const typeB = getType(bName);
-                if (typeA !== typeB) return typeA - typeB;
-                return aName.localeCompare(bName, "ko");
-              });
-              cache.set("personas", personas);
-              return personas;
+              const sortedPersonas = sortPersonas(personas);
+              cache.set("personas", sortedPersonas);
+              return sortedPersonas;
             } catch (error) {
               console.error("[API] Failed to load personas:", error);
               return [];
@@ -1234,23 +1257,6 @@ ${message}` : message;
     }
   });
 
-  // src/utils/textUtils.js
-  function escapeHtml2(text) {
-    if (!text) return "";
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
-  function truncateText(text, maxLength) {
-    if (!text) return "";
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
-  }
-  var init_textUtils = __esm({
-    "src/utils/textUtils.js"() {
-    }
-  });
-
   // src/utils/eventHelpers.js
   function debounce(func, wait = CONFIG.ui.debounceWait) {
     let timeout;
@@ -1389,7 +1395,7 @@ ${message}` : message;
   function renderCharacterCard(char, index) {
     const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
     const name = char.name || "Unknown";
-    const safeAvatar = escapeHtml2(char.avatar || "");
+    const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
@@ -1398,8 +1404,8 @@ ${message}` : message;
          data-char-avatar="${safeAvatar}" 
          data-is-fav="${isFav}">
         ${favBtn}
-        <img class="lobby-char-avatar" src="${avatarUrl}" alt="${escapeHtml2(name)}" onerror="this.src='/img/ai4.png'">
-        <div class="lobby-char-name">${escapeHtml2(name)}</div>
+        <img class="lobby-char-avatar" src="${avatarUrl}" alt="${escapeHtml(name)}" onerror="this.src='/img/ai4.png'">
+        <div class="lobby-char-name">${escapeHtml(name)}</div>
     </div>
     `;
   }
@@ -1729,10 +1735,10 @@ ${message}` : message;
       const isSelected = persona.key === currentPersona ? "selected" : "";
       const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
       html += `
-        <div class="persona-item ${isSelected}" data-persona="${escapeHtml2(persona.key)}" title="${escapeHtml2(persona.name)}">
+        <div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
             <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>\u{1F464}</div>'">
-            <span class="persona-name">${escapeHtml2(persona.name)}</span>
-            <button class="persona-delete-btn" data-persona="${escapeHtml2(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
+            <span class="persona-name">${escapeHtml(persona.name)}</span>
+            <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
         </div>`;
     });
     container.innerHTML = html;
@@ -2086,9 +2092,9 @@ ${message}` : message;
     const folder = data.folders.find((f) => f.id === folderId);
     const folderName = folder?.name || "";
     const tooltipPreview = truncateText(preview, 500);
-    const safeAvatar = escapeHtml2(charAvatar || "");
-    const safeFileName = escapeHtml2(fileName || "");
-    const safeFullPreview = escapeHtml2(tooltipPreview);
+    const safeAvatar = escapeHtml(charAvatar || "");
+    const safeFileName = escapeHtml(fileName || "");
+    const safeFullPreview = escapeHtml(tooltipPreview);
     return `
     <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
          data-file-name="${safeFileName}" 
@@ -2101,11 +2107,11 @@ ${message}` : message;
         </div>
         <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
         <div class="chat-content">
-            <div class="chat-name">${escapeHtml2(displayName)}</div>
-            <div class="chat-preview">${escapeHtml2(truncateText(preview, 80))}</div>
+            <div class="chat-name">${escapeHtml(displayName)}</div>
+            <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
             <div class="chat-meta">
                 ${messageCount > 0 ? `<span>\u{1F4AC} ${messageCount}\uAC1C</span>` : ""}
-                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml2(folderName)}</span>` : ""}
+                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
             </div>
         </div>
         <button class="chat-delete-btn" title="\uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F</button>
@@ -2650,8 +2656,8 @@ ${message}` : message;
       let html = "";
       sorted.forEach((f) => {
         const isSystem = f.isSystem ? "system" : "";
-        const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}" data-name="${escapeHtml2(f.name)}">\u{1F5D1}\uFE0F</button>`;
-        const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}" data-name="${escapeHtml2(f.name)}">\u270F\uFE0F</button>`;
+        const deleteBtn = f.isSystem ? "" : `<button class="folder-delete-btn" data-id="${f.id}" data-name="${escapeHtml(f.name)}">\u{1F5D1}\uFE0F</button>`;
+        const editBtn = f.isSystem ? "" : `<button class="folder-edit-btn" data-id="${f.id}" data-name="${escapeHtml(f.name)}">\u270F\uFE0F</button>`;
         let count = 0;
         if (f.id === "favorites") {
           count = data.favorites.length;
@@ -2660,7 +2666,7 @@ ${message}` : message;
         }
         html += `
             <div class="folder-item ${isSystem}" data-id="${f.id}">
-                <span class="folder-name">${escapeHtml2(f.name)}</span>
+                <span class="folder-name">${escapeHtml(f.name)}</span>
                 <span class="folder-count">${count}\uAC1C</span>
                 ${editBtn}
                 ${deleteBtn}
@@ -2711,7 +2717,7 @@ ${message}` : message;
         html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
         sorted.forEach((f) => {
           if (f.id !== "favorites") {
-            html += `<option value="${f.id}">${escapeHtml2(f.name)}</option>`;
+            html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
           }
         });
         filterSelect.innerHTML = html;
