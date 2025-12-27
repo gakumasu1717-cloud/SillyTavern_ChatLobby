@@ -704,32 +704,27 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * CustomTheme 확장이 있으면 사이드바에 버튼 추가
      */
     function addToCustomThemeSidebar() {
-        // CustomTheme 사이드바 찾기 (여러 가능한 셀렉터)
-        const sidebar = document.querySelector('#st-custom-sidebar, .st-sidebar, [data-st-sidebar]');
-        if (!sidebar) return false;
+        // CustomTheme 사이드바 top 컨테이너 직접 찾기
+        const sidebarTop = document.getElementById('st-sidebar-top-container');
+        if (!sidebarTop) return false;
         
         // 이미 추가됐으면 스킵
         if (document.getElementById('st-chatlobby-sidebar-btn')) return true;
         
-        // 버튼 컨테이너 찾기
-        const sidebarTop = sidebar.querySelector('.st-sidebar-top, .sidebar-top, .st-sidebar-items');
-        if (!sidebarTop) return false;
-        
-        // 버튼 만들기
+        // CustomTheme 스타일에 맞는 버튼 만들기
         const btn = document.createElement('div');
         btn.id = 'st-chatlobby-sidebar-btn';
         btn.className = 'st-sidebar-item';
         btn.title = 'Chat Lobby';
         btn.innerHTML = `
             <i class="fa-solid fa-comments"></i>
-            <span class="st-sidebar-label">채팅 로비</span>
+            <span class="st-sidebar-label">Chat Lobby</span>
         `;
-        btn.style.cssText = 'cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 12px;';
         btn.addEventListener('click', () => {
             openLobby();
         });
         
-        // 사이드바에 추가
+        // 사이드바 top에 추가
         sidebarTop.appendChild(btn);
         
         return true;

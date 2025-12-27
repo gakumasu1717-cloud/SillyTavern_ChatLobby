@@ -3159,20 +3159,17 @@ ${message}` : message;
       optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
     }
     function addToCustomThemeSidebar() {
-      const sidebar = document.querySelector("#st-custom-sidebar, .st-sidebar, [data-st-sidebar]");
-      if (!sidebar) return false;
-      if (document.getElementById("st-chatlobby-sidebar-btn")) return true;
-      const sidebarTop = sidebar.querySelector(".st-sidebar-top, .sidebar-top, .st-sidebar-items");
+      const sidebarTop = document.getElementById("st-sidebar-top-container");
       if (!sidebarTop) return false;
+      if (document.getElementById("st-chatlobby-sidebar-btn")) return true;
       const btn = document.createElement("div");
       btn.id = "st-chatlobby-sidebar-btn";
       btn.className = "st-sidebar-item";
       btn.title = "Chat Lobby";
       btn.innerHTML = `
             <i class="fa-solid fa-comments"></i>
-            <span class="st-sidebar-label">\uCC44\uD305 \uB85C\uBE44</span>
+            <span class="st-sidebar-label">Chat Lobby</span>
         `;
-      btn.style.cssText = "cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 12px;";
       btn.addEventListener("click", () => {
         openLobby();
       });
