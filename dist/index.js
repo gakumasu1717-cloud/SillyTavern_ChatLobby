@@ -3159,41 +3159,54 @@ ${message}` : message;
       optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
     }
     function addToCustomThemeSidebar() {
-      const addButtons = () => {
-        const hamburgerDropdown = document.getElementById("st-hamburger-dropdown-content");
-        if (hamburgerDropdown && !document.getElementById("st-chatlobby-hamburger-btn")) {
-          const btn = document.createElement("div");
-          btn.id = "st-chatlobby-hamburger-btn";
-          btn.className = "st-dropdown-item";
-          btn.style.cssText = "color: var(--st-sidebar-icon-color, #999) !important;";
-          btn.innerHTML = `
-                    <i class="fa-solid fa-comments" style="color: inherit !important;"></i>
-                    <span>Chat Lobby</span>
-                `;
-          btn.addEventListener("click", () => {
-            openLobby();
-            const dropdown = document.getElementById("st-hamburger-dropdown");
-            if (dropdown) dropdown.classList.remove("st-dropdown-open");
-          });
-          hamburgerDropdown.appendChild(btn);
-        }
-        const sidebarTop = document.getElementById("st-sidebar-top-container");
-        if (sidebarTop && !document.getElementById("st-chatlobby-sidebar-btn")) {
-          const btn = document.createElement("div");
-          btn.id = "st-chatlobby-sidebar-btn";
-          btn.className = "st-sidebar-item";
-          btn.title = "Chat Lobby";
-          btn.style.cssText = "color: var(--st-sidebar-icon-color, #999) !important;";
-          btn.innerHTML = `
-                    <i class="fa-solid fa-comments" style="color: inherit !important;"></i>
-                    <span class="st-sidebar-label">Chat Lobby</span>
-                `;
-          btn.addEventListener("click", () => openLobby());
-          sidebarTop.appendChild(btn);
-        }
+      const addSidebarButton = () => {
+        const container = document.getElementById("st-sidebar-top-container");
+        if (!container) return false;
+        if (document.getElementById("st-chatlobby-sidebar-btn")) return true;
+        const btn = document.createElement("div");
+        btn.id = "st-chatlobby-sidebar-btn";
+        btn.className = "st-sidebar-item";
+        btn.title = "Chat Lobby";
+        btn.innerHTML = `
+                <i class="fa-solid fa-comments"></i>
+                <span class="st-sidebar-label">Chat Lobby</span>
+            `;
+        btn.addEventListener("click", () => openLobby());
+        container.appendChild(btn);
+        return true;
       };
-      addButtons();
-      setInterval(addButtons, 2e3);
+      const addHamburgerButton = () => {
+        const dropdown = document.getElementById("st-hamburger-dropdown-content");
+        if (!dropdown) return;
+        if (document.getElementById("st-chatlobby-hamburger-btn")) return;
+        const btn = document.createElement("div");
+        btn.id = "st-chatlobby-hamburger-btn";
+        btn.className = "st-dropdown-item";
+        btn.innerHTML = `
+                <i class="fa-solid fa-comments"></i>
+                <span>Chat Lobby</span>
+            `;
+        btn.addEventListener("click", () => {
+          openLobby();
+          const dropdown2 = document.getElementById("st-hamburger-dropdown");
+          if (dropdown2) dropdown2.classList.remove("st-dropdown-open");
+        });
+        dropdown.appendChild(btn);
+      };
+      if (!addSidebarButton()) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (addSidebarButton() || attempts >= 20) {
+            clearInterval(interval);
+          }
+        }, 500);
+      }
+      document.addEventListener("click", (e) => {
+        if (e.target.closest("#st-hamburger-btn")) {
+          setTimeout(addHamburgerButton, 100);
+        }
+      });
       return true;
     }
     async function waitForSillyTavern(maxAttempts = 30, interval = 500) {
