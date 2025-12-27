@@ -720,7 +720,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             btn.className = 'st-sidebar-item';
             btn.title = 'Chat Lobby';
             btn.innerHTML = `
-                <i class="fa-solid fa-comments"></i>
+                <i class="fa-solid fa-comments" style="color: inherit;"></i>
                 <span class="st-sidebar-label">Chat Lobby</span>
             `;
             btn.addEventListener('click', () => openLobby());
