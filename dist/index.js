@@ -3122,7 +3122,7 @@ ${message}` : message;
           console.warn("[ChatLobby] Character selection timeout");
         }
       }
-      if (!openDrawerSafely("right-nav-panel")) {
+      if (!openDrawerSafely("rightNavHolder")) {
         const rightNavIcon = document.getElementById("rightNavDrawerIcon");
         if (rightNavIcon) {
           rightNavIcon.click();

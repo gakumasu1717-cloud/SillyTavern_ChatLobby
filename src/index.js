@@ -642,7 +642,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         }
         
         // 바로 드로어 열기 (CustomTheme 호환 - 클릭 대신 클래스 조작)
-        if (!openDrawerSafely('right-nav-panel')) {
+        if (!openDrawerSafely('rightNavHolder')) {
             // fallback: rightNavDrawerIcon 클릭 시도
             const rightNavIcon = document.getElementById('rightNavDrawerIcon');
             if (rightNavIcon) {
