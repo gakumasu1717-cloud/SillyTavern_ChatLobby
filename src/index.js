@@ -700,34 +700,50 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     }
     
     /**
-     * CustomTheme 사이드바에 Chat Lobby 버튼 추가
-     * CustomTheme 확장이 있으면 사이드바에 버튼 추가
+     * CustomTheme 사이드바/햄버거 메뉴에 Chat Lobby 버튼 추가
+     * CustomTheme 확장이 있으면 사이드바와 모바일 메뉴에 버튼 추가
      */
     function addToCustomThemeSidebar() {
-        // CustomTheme 사이드바 top 컨테이너 직접 찾기
+        let added = false;
+        
+        // === 사이드바 (PC) ===
         const sidebarTop = document.getElementById('st-sidebar-top-container');
-        if (!sidebarTop) return false;
+        if (sidebarTop && !document.getElementById('st-chatlobby-sidebar-btn')) {
+            const btn = document.createElement('div');
+            btn.id = 'st-chatlobby-sidebar-btn';
+            btn.className = 'st-sidebar-item';
+            btn.title = 'Chat Lobby';
+            btn.style.color = 'var(--st-sidebar-icon-color, inherit)';
+            btn.innerHTML = `
+                <i class="fa-solid fa-comments"></i>
+                <span class="st-sidebar-label">Chat Lobby</span>
+            `;
+            btn.addEventListener('click', () => openLobby());
+            sidebarTop.appendChild(btn);
+            added = true;
+        }
         
-        // 이미 추가됐으면 스킵
-        if (document.getElementById('st-chatlobby-sidebar-btn')) return true;
+        // === 햄버거 드롭다운 (모바일) ===
+        const hamburgerDropdown = document.getElementById('st-hamburger-dropdown-content');
+        if (hamburgerDropdown && !document.getElementById('st-chatlobby-hamburger-btn')) {
+            const btn = document.createElement('div');
+            btn.id = 'st-chatlobby-hamburger-btn';
+            btn.className = 'st-dropdown-item';
+            btn.innerHTML = `
+                <i class="fa-solid fa-comments"></i>
+                <span>Chat Lobby</span>
+            `;
+            btn.addEventListener('click', () => {
+                openLobby();
+                // 드롭다운 닫기
+                const dropdown = document.getElementById('st-hamburger-dropdown');
+                if (dropdown) dropdown.classList.remove('st-dropdown-open');
+            });
+            hamburgerDropdown.appendChild(btn);
+            added = true;
+        }
         
-        // CustomTheme 스타일에 맞는 버튼 만들기
-        const btn = document.createElement('div');
-        btn.id = 'st-chatlobby-sidebar-btn';
-        btn.className = 'st-sidebar-item';
-        btn.title = 'Chat Lobby';
-        btn.innerHTML = `
-            <i class="fa-solid fa-comments"></i>
-            <span class="st-sidebar-label">Chat Lobby</span>
-        `;
-        btn.addEventListener('click', () => {
-            openLobby();
-        });
-        
-        // 사이드바 top에 추가
-        sidebarTop.appendChild(btn);
-        
-        return true;
+        return added || document.getElementById('st-chatlobby-sidebar-btn') !== null;
     }
 
     // ============================================

@@ -3159,22 +3159,40 @@ ${message}` : message;
       optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
     }
     function addToCustomThemeSidebar() {
+      let added = false;
       const sidebarTop = document.getElementById("st-sidebar-top-container");
-      if (!sidebarTop) return false;
-      if (document.getElementById("st-chatlobby-sidebar-btn")) return true;
-      const btn = document.createElement("div");
-      btn.id = "st-chatlobby-sidebar-btn";
-      btn.className = "st-sidebar-item";
-      btn.title = "Chat Lobby";
-      btn.innerHTML = `
-            <i class="fa-solid fa-comments"></i>
-            <span class="st-sidebar-label">Chat Lobby</span>
-        `;
-      btn.addEventListener("click", () => {
-        openLobby();
-      });
-      sidebarTop.appendChild(btn);
-      return true;
+      if (sidebarTop && !document.getElementById("st-chatlobby-sidebar-btn")) {
+        const btn = document.createElement("div");
+        btn.id = "st-chatlobby-sidebar-btn";
+        btn.className = "st-sidebar-item";
+        btn.title = "Chat Lobby";
+        btn.style.color = "var(--st-sidebar-icon-color, inherit)";
+        btn.innerHTML = `
+                <i class="fa-solid fa-comments"></i>
+                <span class="st-sidebar-label">Chat Lobby</span>
+            `;
+        btn.addEventListener("click", () => openLobby());
+        sidebarTop.appendChild(btn);
+        added = true;
+      }
+      const hamburgerDropdown = document.getElementById("st-hamburger-dropdown-content");
+      if (hamburgerDropdown && !document.getElementById("st-chatlobby-hamburger-btn")) {
+        const btn = document.createElement("div");
+        btn.id = "st-chatlobby-hamburger-btn";
+        btn.className = "st-dropdown-item";
+        btn.innerHTML = `
+                <i class="fa-solid fa-comments"></i>
+                <span>Chat Lobby</span>
+            `;
+        btn.addEventListener("click", () => {
+          openLobby();
+          const dropdown = document.getElementById("st-hamburger-dropdown");
+          if (dropdown) dropdown.classList.remove("st-dropdown-open");
+        });
+        hamburgerDropdown.appendChild(btn);
+        added = true;
+      }
+      return added || document.getElementById("st-chatlobby-sidebar-btn") !== null;
     }
     async function waitForSillyTavern(maxAttempts = 30, interval = 500) {
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
