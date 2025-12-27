@@ -1101,7 +1101,8 @@ ${message}` : message;
           if (!forceRefresh && cache.isValid("chats", characterAvatar)) {
             return cache.get("chats", characterAvatar);
           }
-          return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
+          const cacheKey = `chats_${characterAvatar}`;
+          return cache.getOrFetch(cacheKey, async () => {
             try {
               const response = await this.fetchWithRetry("/api/characters/chats", {
                 method: "POST",
@@ -2937,11 +2938,13 @@ ${message}` : message;
       store.reset();
       closeChatPanel();
     }
-    window.chatLobbyRefresh = async function() {
+    window.ChatLobby = window.ChatLobby || {};
+    window.ChatLobby.refresh = async function() {
       cache.invalidateAll();
       await renderPersonaBar();
       await renderCharacterGrid();
     };
+    window.chatLobbyRefresh = window.ChatLobby.refresh;
     let eventsInitialized = false;
     function setupEventDelegation() {
       if (eventsInitialized) return;
@@ -3229,10 +3232,10 @@ ${message}` : message;
       };
       if (!addSidebarButton()) {
         let attempts = 0;
-        const interval = setInterval(() => {
+        const interval = intervalManager.set(() => {
           attempts++;
           if (addSidebarButton() || attempts >= 20) {
-            clearInterval(interval);
+            intervalManager.clear(interval);
           }
         }, 500);
       }

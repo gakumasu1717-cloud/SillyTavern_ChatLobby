@@ -375,8 +375,9 @@ class SillyTavernAPI {
             return cache.get('chats', characterAvatar);
         }
         
-        // 중복 요청 방지 (pendingRequests용 키, cache.stores 키와 다름)
-        return cache.getOrFetch(`chats_${characterAvatar}`, async () => {
+        // 중복 요청 방지
+        const cacheKey = `chats_${characterAvatar}`;
+        return cache.getOrFetch(cacheKey, async () => {
             try {
                 const response = await this.fetchWithRetry('/api/characters/chats', {
                     method: 'POST',
@@ -396,6 +397,7 @@ class SillyTavernAPI {
                 if (data?.error === true) return [];
                 
                 const result = data || [];
+                // 캐시 저장 (키 형식 통일: chats, characterAvatar)
                 cache.set('chats', result, characterAvatar);
                 
                 // 채팅 수도 같이 캐시 (추가 API 호출 방지)

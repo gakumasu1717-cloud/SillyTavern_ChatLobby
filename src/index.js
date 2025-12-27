@@ -320,12 +320,15 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         closeChatPanel();
     }
     
-    // 전역 새로고침 함수
-    window.chatLobbyRefresh = async function() {
+    // 전역 API (네임스페이스 정리)
+    window.ChatLobby = window.ChatLobby || {};
+    window.ChatLobby.refresh = async function() {
         cache.invalidateAll();
         await renderPersonaBar();
         await renderCharacterGrid();
     };
+    // 하위 호환성 유지
+    window.chatLobbyRefresh = window.ChatLobby.refresh;
     
     // ============================================
     // 이벤트 위임 (Event Delegation)
@@ -785,10 +788,10 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         // 4. 사이드바: 즉시 시도 → 실패 시 polling (최대 20회, 10초)
         if (!addSidebarButton()) {
             let attempts = 0;
-            const interval = setInterval(() => {
+            const interval = intervalManager.set(() => {
                 attempts++;
                 if (addSidebarButton() || attempts >= 20) {
-                    clearInterval(interval);
+                    intervalManager.clear(interval);
                 }
             }, 500);
         }
