@@ -253,20 +253,8 @@ function bindCharacterEvents(container) {
                 favBtn._favSaving = true;
                 
                 try {
-                    // 해당 캐릭터의 인덱스 찾기
-                    const context = api.getContext();
-                    const characters = context?.characters || [];
-                    const charIndex = characters.findIndex(c => c.avatar === charAvatar);
-                    
-                    if (charIndex === -1) {
-                        console.error('[CharacterGrid] Character not found:', charAvatar);
-                        showToast('캐릭터를 찾을 수 없습니다.', 'error');
-                        return;
-                    }
-                    
-                    // 현재 상태 확인
-                    const char = characters[charIndex];
-                    const currentFav = isFavoriteChar(char);
+                    // 현재 상태 확인 (UI에서 직접 읽기 - 가장 신뢰할 수 있음)
+                    const currentFav = card.dataset.isFav === 'true';
                     const newFavState = !currentFav;
                     
                     // 1. UI 즉시 업데이트 (optimistic)
@@ -288,11 +276,14 @@ function bindCharacterEvents(container) {
                         throw new Error(`저장 실패: ${response.status}`);
                     }
                     
-                    // 3. 로컬 데이터도 업데이트
-                    char.fav = newFavState;
-                    if (!char.data) char.data = {};
-                    if (!char.data.extensions) char.data.extensions = {};
-                    char.data.extensions.fav = newFavState;
+                    // 3. 로컬 데이터도 업데이트 (있으면)
+                    const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
+                    if (char) {
+                        char.fav = newFavState;
+                        if (!char.data) char.data = {};
+                        if (!char.data.extensions) char.data.extensions = {};
+                        char.data.extensions.fav = newFavState;
+                    }
                     
                     console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
                     showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
@@ -302,7 +293,7 @@ function bindCharacterEvents(container) {
                     
                     // 실패 시 UI 롤백
                     const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
-                    const actualState = char ? isFavoriteChar(char) : false;
+                    const actualState = char ? isFavoriteChar(char) : (card.dataset.isFav !== 'true');
                     favBtn.textContent = actualState ? '⭐' : '☆';
                     card.dataset.isFav = actualState.toString();
                     card.classList.toggle('is-char-fav', actualState);

@@ -1518,16 +1518,7 @@ ${message}` : message;
           if (favBtn._favSaving) return;
           favBtn._favSaving = true;
           try {
-            const context = api.getContext();
-            const characters = context?.characters || [];
-            const charIndex = characters.findIndex((c) => c.avatar === charAvatar);
-            if (charIndex === -1) {
-              console.error("[CharacterGrid] Character not found:", charAvatar);
-              showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
-              return;
-            }
-            const char = characters[charIndex];
-            const currentFav = isFavoriteChar(char);
+            const currentFav = card.dataset.isFav === "true";
             const newFavState = !currentFav;
             favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
             card.dataset.isFav = newFavState.toString();
@@ -1543,16 +1534,19 @@ ${message}` : message;
             if (!response.ok) {
               throw new Error(`\uC800\uC7A5 \uC2E4\uD328: ${response.status}`);
             }
-            char.fav = newFavState;
-            if (!char.data) char.data = {};
-            if (!char.data.extensions) char.data.extensions = {};
-            char.data.extensions.fav = newFavState;
+            const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
+            if (char) {
+              char.fav = newFavState;
+              if (!char.data) char.data = {};
+              if (!char.data.extensions) char.data.extensions = {};
+              char.data.extensions.fav = newFavState;
+            }
             console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
             showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
           } catch (error) {
             console.error("[CharacterGrid] Failed to save favorite:", error);
             const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
-            const actualState = char ? isFavoriteChar(char) : false;
+            const actualState = char ? isFavoriteChar(char) : card.dataset.isFav !== "true";
             favBtn.textContent = actualState ? "\u2B50" : "\u2606";
             card.dataset.isFav = actualState.toString();
             card.classList.toggle("is-char-fav", actualState);
