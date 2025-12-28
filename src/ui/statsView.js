@@ -26,8 +26,10 @@ export async function openStatsView() {
     // 기존 내용 숨기기
     const leftPanel = document.getElementById('chat-lobby-left');
     const chatsPanel = document.getElementById('chat-lobby-chats');
+    const lobbyHeader = document.getElementById('chat-lobby-header');
     if (leftPanel) leftPanel.style.display = 'none';
     if (chatsPanel) chatsPanel.style.display = 'none';
+    if (lobbyHeader) lobbyHeader.style.display = 'none';
     
     // 통계 화면 생성
     const statsView = document.createElement('div');
@@ -67,8 +69,10 @@ export function closeStatsView() {
     // 기존 패널 복원
     const leftPanel = document.getElementById('chat-lobby-left');
     const chatsPanel = document.getElementById('chat-lobby-chats');
+    const lobbyHeader = document.getElementById('chat-lobby-header');
     if (leftPanel) leftPanel.style.display = '';
     if (chatsPanel) chatsPanel.style.display = '';
+    if (lobbyHeader) lobbyHeader.style.display = '';
 }
 
 /**

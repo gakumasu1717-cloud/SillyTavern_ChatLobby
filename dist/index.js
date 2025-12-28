@@ -1711,17 +1711,21 @@ ${message}` : message;
                     <section id="chat-lobby-filters" style="display:none;">
                         <div id="chat-lobby-char-tags"></div>
                         <div class="filters-row">
-                            <select id="chat-lobby-chat-sort">
-                                <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
-                                <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
-                                <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
-                            </select>
-                            <select id="chat-lobby-folder-filter">
-                                <option value="all">\u{1F4C1} \uC804\uCCB4</option>
-                                <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
-                            </select>
-                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
-                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                            <div class="filter-group">
+                                <select id="chat-lobby-chat-sort">
+                                    <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
+                                    <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
+                                    <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
+                                </select>
+                                <select id="chat-lobby-folder-filter">
+                                    <option value="all">\u{1F4C1} \uC804\uCCB4</option>
+                                    <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
+                                </select>
+                            </div>
+                            <div class="tools-group">
+                                <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
+                                <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                            </div>
                         </div>
                     </section>
                     <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
@@ -2894,8 +2898,10 @@ ${message}` : message;
     if (!container) return;
     const leftPanel = document.getElementById("chat-lobby-left");
     const chatsPanel = document.getElementById("chat-lobby-chats");
+    const lobbyHeader = document.getElementById("chat-lobby-header");
     if (leftPanel) leftPanel.style.display = "none";
     if (chatsPanel) chatsPanel.style.display = "none";
+    if (lobbyHeader) lobbyHeader.style.display = "none";
     const statsView = document.createElement("div");
     statsView.id = "chat-lobby-stats-view";
     statsView.className = "stats-view";
@@ -2922,8 +2928,10 @@ ${message}` : message;
     if (statsView) statsView.remove();
     const leftPanel = document.getElementById("chat-lobby-left");
     const chatsPanel = document.getElementById("chat-lobby-chats");
+    const lobbyHeader = document.getElementById("chat-lobby-header");
     if (leftPanel) leftPanel.style.display = "";
     if (chatsPanel) chatsPanel.style.display = "";
+    if (lobbyHeader) lobbyHeader.style.display = "";
   }
   function isStatsViewOpen() {
     return isStatsOpen;

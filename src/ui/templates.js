@@ -59,17 +59,21 @@ export function createLobbyHTML() {
                     <section id="chat-lobby-filters" style="display:none;">
                         <div id="chat-lobby-char-tags"></div>
                         <div class="filters-row">
-                            <select id="chat-lobby-chat-sort">
-                                <option value="recent">🕐 최신순</option>
-                                <option value="name">🔤 이름순</option>
-                                <option value="messages">💬 메시지수</option>
-                            </select>
-                            <select id="chat-lobby-folder-filter">
-                                <option value="all">📁 전체</option>
-                                <option value="favorites">⭐ 즐겨찾기</option>
-                            </select>
-                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
-                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
+                            <div class="filter-group">
+                                <select id="chat-lobby-chat-sort">
+                                    <option value="recent">🕐 최신순</option>
+                                    <option value="name">🔤 이름순</option>
+                                    <option value="messages">💬 메시지수</option>
+                                </select>
+                                <select id="chat-lobby-folder-filter">
+                                    <option value="all">📁 전체</option>
+                                    <option value="favorites">⭐ 즐겨찾기</option>
+                                </select>
+                            </div>
+                            <div class="tools-group">
+                                <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
+                                <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
+                            </div>
                         </div>
                     </section>
                     <!-- 배치 모드 툴바 -->

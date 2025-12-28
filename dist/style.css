@@ -447,8 +447,10 @@
     color: var(--SmartThemeBodyColor, #fff);
     font-size: 0.95em;
     font-weight: 500;
-    word-break: break-word;
     max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #chat-lobby-chats-header {
@@ -511,6 +513,10 @@
     color: var(--SmartThemeBodyColor, #fff);
     font-weight: 600;
     font-size: 1.1em;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #chat-lobby-chats-header .chat-count {
@@ -943,9 +949,22 @@
 #chat-lobby-filters .filters-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
     flex-wrap: nowrap;
     height: 36px;
+}
+
+/* 왼쪽 필터 그룹 */
+#chat-lobby-filters .filters-row .filter-group {
+    display: flex;
+    gap: 6px;
+}
+
+/* 오른쪽 툴 그룹 */
+#chat-lobby-filters .filters-row .tools-group {
+    display: flex;
+    gap: 6px;
 }
 
 #chat-lobby-filters .filters-row select {
@@ -1517,7 +1536,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     height: 24px;
     padding: 0 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--SmartThemeBorderColor, #444);
     color: var(--SmartThemeBodyColor, #aaa);
     font-size: 12px;
@@ -1526,18 +1545,20 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     user-select: none;
     white-space: nowrap;
     flex-shrink: 0;
+    opacity: 0.5;
 }
 
 .lobby-tag-item:hover {
-    background: var(--SmartThemeBlurTintColor, rgba(70, 70, 70, 0.9));
+    opacity: 0.7;
+    background: rgba(255, 255, 255, 0.08);
     border-color: var(--SmartThemeQuoteColor, #6a9fb5);
-    color: var(--SmartThemeBodyColor, #fff);
 }
 
 .lobby-tag-item.active {
-    background: var(--SmartThemeQuoteColor, #4a9eff);
+    opacity: 1;
+    background: rgba(74, 158, 255, 0.2);
     border-color: var(--SmartThemeQuoteColor, #4a9eff);
-    color: #fff;
+    color: #4a9eff;
 }
 
 .lobby-tag-count {
@@ -1585,13 +1606,14 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     height: 24px;
     padding: 0 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--SmartThemeBorderColor, #444);
     color: var(--SmartThemeBodyColor, #ccc);
     font-size: 12px;
     white-space: nowrap;
     flex-shrink: 0;
     user-select: none;
+    opacity: 0.5;
 }
 
 /* 모바일 필터 섹션 */
