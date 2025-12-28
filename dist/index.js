@@ -500,14 +500,45 @@ ${message}` : message;
             localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
           } catch (e) {
             console.error("[Storage] Failed to save:", e);
+            if (e.name === "QuotaExceededError") {
+              console.warn("[Storage] Quota exceeded, cleaning up old data...");
+              this.cleanup(data);
+              try {
+                localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
+                console.log("[Storage] Saved after cleanup");
+                return;
+              } catch (e2) {
+                console.error("[Storage] Still failed after cleanup:", e2);
+              }
+            }
             if (typeof window !== "undefined") {
               Promise.resolve().then(() => (init_notifications(), notifications_exports)).then(({ showToast: showToast2 }) => {
-                showToast2("\uB370\uC774\uD130 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC800\uC7A5 \uACF5\uAC04\uC744 \uD655\uC778\uD574\uC8FC\uC138\uC694.", "error");
+                showToast2("\uC800\uC7A5 \uACF5\uAC04\uC774 \uBD80\uC871\uD569\uB2C8\uB2E4. \uC624\uB798\uB41C \uB370\uC774\uD130\uB97C \uC815\uB9AC\uD574\uC8FC\uC138\uC694.", "error");
               }).catch(() => {
-                alert("\uB370\uC774\uD130 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
               });
             }
           }
+        }
+        /**
+         * 오래된/불필요한 데이터 정리
+         * @param {LobbyData} data
+         */
+        cleanup(data) {
+          const assignments = Object.entries(data.chatAssignments || {});
+          if (assignments.length > 500) {
+            const toKeep = assignments.slice(-500);
+            data.chatAssignments = Object.fromEntries(toKeep);
+            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} \u2192 500`);
+          }
+          if (data.favorites && data.favorites.length > 200) {
+            data.favorites = data.favorites.slice(-200);
+            console.log(`[Storage] Cleaned favorites`);
+          }
+          if (data.characterFavorites && data.characterFavorites.length > 100) {
+            data.characterFavorites = data.characterFavorites.slice(-100);
+            console.log(`[Storage] Cleaned characterFavorites`);
+          }
+          this._data = data;
         }
         /**
          * 데이터 업데이트 (load → update → save 한번에)

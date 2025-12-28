@@ -74,16 +74,56 @@ class StorageManager {
         } catch (e) {
             console.error('[Storage] Failed to save:', e);
             
-            // 사용자에게 알림 (QuotaExceededError 등)
+            // QuotaExceededError인 경우 자동 정리 시도
+            if (e.name === 'QuotaExceededError') {
+                console.warn('[Storage] Quota exceeded, cleaning up old data...');
+                this.cleanup(data);
+                
+                // 정리 후 다시 저장 시도
+                try {
+                    localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
+                    console.log('[Storage] Saved after cleanup');
+                    return;
+                } catch (e2) {
+                    console.error('[Storage] Still failed after cleanup:', e2);
+                }
+            }
+            
+            // 사용자에게 알림
             if (typeof window !== 'undefined') {
                 import('../ui/notifications.js').then(({ showToast }) => {
-                    showToast('데이터 저장에 실패했습니다. 저장 공간을 확인해주세요.', 'error');
-                }).catch(() => {
-                    // notifications 로드 실패 시 alert fallback
-                    alert('데이터 저장에 실패했습니다.');
-                });
+                    showToast('저장 공간이 부족합니다. 오래된 데이터를 정리해주세요.', 'error');
+                }).catch(() => {});
             }
         }
+    }
+    
+    /**
+     * 오래된/불필요한 데이터 정리
+     * @param {LobbyData} data
+     */
+    cleanup(data) {
+        // 1. chatAssignments 크기 제한 (최대 500개)
+        const assignments = Object.entries(data.chatAssignments || {});
+        if (assignments.length > 500) {
+            const toKeep = assignments.slice(-500);  // 최근 500개만 유지
+            data.chatAssignments = Object.fromEntries(toKeep);
+            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} → 500`);
+        }
+        
+        // 2. favorites 크기 제한 (최대 200개)
+        if (data.favorites && data.favorites.length > 200) {
+            data.favorites = data.favorites.slice(-200);
+            console.log(`[Storage] Cleaned favorites`);
+        }
+        
+        // 3. characterFavorites 크기 제한 (최대 100개)
+        if (data.characterFavorites && data.characterFavorites.length > 100) {
+            data.characterFavorites = data.characterFavorites.slice(-100);
+            console.log(`[Storage] Cleaned characterFavorites`);
+        }
+        
+        this._data = data;
     }
     
     /**
