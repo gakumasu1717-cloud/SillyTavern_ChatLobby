@@ -1534,12 +1534,9 @@ ${message}` : message;
             if (!response.ok) {
               throw new Error(`\uC800\uC7A5 \uC2E4\uD328: ${response.status}`);
             }
-            const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
-            if (char) {
-              char.fav = newFavState;
-              if (!char.data) char.data = {};
-              if (!char.data.extensions) char.data.extensions = {};
-              char.data.extensions.fav = newFavState;
+            const context = api.getContext();
+            if (typeof context?.getCharacters === "function") {
+              await context.getCharacters();
             }
             console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
             showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");

@@ -276,13 +276,10 @@ function bindCharacterEvents(container) {
                         throw new Error(`저장 실패: ${response.status}`);
                     }
                     
-                    // 3. 로컬 데이터도 업데이트 (있으면)
-                    const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
-                    if (char) {
-                        char.fav = newFavState;
-                        if (!char.data) char.data = {};
-                        if (!char.data.extensions) char.data.extensions = {};
-                        char.data.extensions.fav = newFavState;
+                    // 3. SillyTavern 메모리 강제 갱신 (서버에서 다시 가져오기)
+                    const context = api.getContext();
+                    if (typeof context?.getCharacters === 'function') {
+                        await context.getCharacters();
                     }
                     
                     console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
