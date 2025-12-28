@@ -6,7 +6,6 @@ import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
-import { queueFavoriteChange } from '../data/pendingChanges.js';  // deprecated, 하위 호환용
 import { escapeHtml } from '../utils/textUtils.js';
 import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
@@ -149,13 +148,13 @@ function renderCharacterCard(char, index) {
 }
 
 /**
- * 캐릭터가 즐겨찾기인지 확인
+ * 캐릭터가 즐겨찾기인지 확인 (로컬 스토리지 기준)
  * @param {Object} char - 캐릭터 객체
  * @returns {boolean}
  */
 function isFavoriteChar(char) {
-    // SillyTavern은 char.fav만 업데이트하고 extensions.fav는 안 건드림
-    return !!(char.fav === true || char.fav === 'true');
+    // 로컬 스토리지에서 확인 (SillyTavern API 안 쓰는 독립 방식)
+    return storage.isCharacterFavorite(char.avatar);
 }
 
 /**
@@ -243,63 +242,22 @@ function bindCharacterEvents(container) {
         const charAvatar = card.dataset.charAvatar;
         const favBtn = card.querySelector('.char-fav-btn');
         
-        // 즐겨찾기 버튼 이벤트 - 즉시 서버 저장
+        // 즐겨찾기 버튼 이벤트 - 로컬 스토리지만 사용 (API 호출 없음)
         if (favBtn) {
-            createTouchClickHandler(favBtn, async (e) => {
+            createTouchClickHandler(favBtn, (e) => {
                 e.stopPropagation();
                 
-                // 연타 방지
-                if (favBtn._favSaving) return;
-                favBtn._favSaving = true;
+                // 로컬 스토리지에 토글
+                const newFavState = storage.toggleCharacterFavorite(charAvatar);
                 
-                // 현재 상태 확인 (UI에서 직접 읽기)
-                const currentFav = card.dataset.isFav === 'true';
-                const newFavState = !currentFav;
-                
-                // 1. UI 즉시 업데이트 (optimistic)
+                // UI 업데이트
                 favBtn.textContent = newFavState ? '⭐' : '☆';
                 card.dataset.isFav = newFavState.toString();
                 card.classList.toggle('is-char-fav', newFavState);
                 
-                try {
-                    // 2. 서버에 저장
-                    const response = await fetch('/api/characters/merge-attributes', {
-                        method: 'POST',
-                        headers: api.getRequestHeaders(),
-                        body: JSON.stringify({
-                            avatar: charAvatar,
-                            data: { extensions: { fav: newFavState } }
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`저장 실패: ${response.status}`);
-                    }
-                    
-                    // 3. 로컬 메모리만 직접 업데이트 (getCharacters 호출 안 함)
-                    const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
-                    if (char) {
-                        char.fav = newFavState;
-                        if (!char.data) char.data = {};
-                        if (!char.data.extensions) char.data.extensions = {};
-                        char.data.extensions.fav = newFavState;
-                    }
-                    
-                    console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
-                    showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
-                    
-                } catch (error) {
-                    console.error('[CharacterGrid] Failed to save favorite:', error);
-                    
-                    // 실패 시 UI 롤백
-                    favBtn.textContent = currentFav ? '⭐' : '☆';
-                    card.dataset.isFav = currentFav.toString();
-                    card.classList.toggle('is-char-fav', currentFav);
-                    
-                    showToast('즐겨찾기 저장 실패', 'error');
-                } finally {
-                    favBtn._favSaving = false;
-                }
+                console.log(`[CharacterGrid] Favorite toggled: ${charAvatar} = ${newFavState}`);
+                showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
+                
             }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
         }
         

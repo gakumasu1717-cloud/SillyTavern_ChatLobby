@@ -74,6 +74,7 @@ export const DEFAULT_DATA = {
     ],
     chatAssignments: {},
     favorites: [],
+    characterFavorites: [],  // 캐릭터 즐겨찾기 (avatar 목록)
     sortOption: 'recent',
     filterFolder: 'all',
     collapsedFolders: [],

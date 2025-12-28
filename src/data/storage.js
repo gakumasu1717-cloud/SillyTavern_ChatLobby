@@ -320,6 +320,66 @@ class StorageManager {
         });
         
     }
+    
+    // ============================================
+    // 캐릭터 즐겨찾기 (로컬 전용)
+    // ============================================
+    
+    /**
+     * 캐릭터가 즐겨찾기인지 확인
+     * @param {string} avatar - 캐릭터 아바타
+     * @returns {boolean}
+     */
+    isCharacterFavorite(avatar) {
+        const data = this.load();
+        return (data.characterFavorites || []).includes(avatar);
+    }
+    
+    /**
+     * 캐릭터 즐겨찾기 토글
+     * @param {string} avatar - 캐릭터 아바타
+     * @returns {boolean} 새로운 즐겨찾기 상태
+     */
+    toggleCharacterFavorite(avatar) {
+        return this.update((data) => {
+            if (!data.characterFavorites) data.characterFavorites = [];
+            
+            const index = data.characterFavorites.indexOf(avatar);
+            if (index === -1) {
+                data.characterFavorites.push(avatar);
+                return true;
+            } else {
+                data.characterFavorites.splice(index, 1);
+                return false;
+            }
+        });
+    }
+    
+    /**
+     * 캐릭터 즐겨찾기 설정
+     * @param {string} avatar - 캐릭터 아바타
+     * @param {boolean} isFav - 즐겨찾기 여부
+     */
+    setCharacterFavorite(avatar, isFav) {
+        this.update((data) => {
+            if (!data.characterFavorites) data.characterFavorites = [];
+            
+            const index = data.characterFavorites.indexOf(avatar);
+            if (isFav && index === -1) {
+                data.characterFavorites.push(avatar);
+            } else if (!isFav && index !== -1) {
+                data.characterFavorites.splice(index, 1);
+            }
+        });
+    }
+    
+    /**
+     * 모든 캐릭터 즐겨찾기 목록
+     * @returns {string[]}
+     */
+    getCharacterFavorites() {
+        return this.load().characterFavorites || [];
+    }
 }
 
 // 싱글톤 인스턴스

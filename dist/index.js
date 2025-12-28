@@ -84,6 +84,8 @@
         ],
         chatAssignments: {},
         favorites: [],
+        characterFavorites: [],
+        // 캐릭터 즐겨찾기 (avatar 목록)
         sortOption: "recent",
         filterFolder: "all",
         collapsedFolders: [],
@@ -716,6 +718,59 @@ ${message}` : message;
             });
           });
         }
+        // ============================================
+        // 캐릭터 즐겨찾기 (로컬 전용)
+        // ============================================
+        /**
+         * 캐릭터가 즐겨찾기인지 확인
+         * @param {string} avatar - 캐릭터 아바타
+         * @returns {boolean}
+         */
+        isCharacterFavorite(avatar) {
+          const data = this.load();
+          return (data.characterFavorites || []).includes(avatar);
+        }
+        /**
+         * 캐릭터 즐겨찾기 토글
+         * @param {string} avatar - 캐릭터 아바타
+         * @returns {boolean} 새로운 즐겨찾기 상태
+         */
+        toggleCharacterFavorite(avatar) {
+          return this.update((data) => {
+            if (!data.characterFavorites) data.characterFavorites = [];
+            const index = data.characterFavorites.indexOf(avatar);
+            if (index === -1) {
+              data.characterFavorites.push(avatar);
+              return true;
+            } else {
+              data.characterFavorites.splice(index, 1);
+              return false;
+            }
+          });
+        }
+        /**
+         * 캐릭터 즐겨찾기 설정
+         * @param {string} avatar - 캐릭터 아바타
+         * @param {boolean} isFav - 즐겨찾기 여부
+         */
+        setCharacterFavorite(avatar, isFav) {
+          this.update((data) => {
+            if (!data.characterFavorites) data.characterFavorites = [];
+            const index = data.characterFavorites.indexOf(avatar);
+            if (isFav && index === -1) {
+              data.characterFavorites.push(avatar);
+            } else if (!isFav && index !== -1) {
+              data.characterFavorites.splice(index, 1);
+            }
+          });
+        }
+        /**
+         * 모든 캐릭터 즐겨찾기 목록
+         * @returns {string[]}
+         */
+        getCharacterFavorites() {
+          return this.load().characterFavorites || [];
+        }
       };
       storage = new StorageManager();
     }
@@ -825,18 +880,6 @@ ${message}` : message;
         }
       };
       store = new Store();
-    }
-  });
-
-  // src/data/pendingChanges.js
-  function hasPendingChanges() {
-    return false;
-  }
-  async function flushFavoriteChanges() {
-    return true;
-  }
-  var init_pendingChanges = __esm({
-    "src/data/pendingChanges.js"() {
     }
   });
 
@@ -1458,7 +1501,7 @@ ${message}` : message;
     `;
   }
   function isFavoriteChar(char) {
-    return !!(char.fav === true || char.fav === "true");
+    return storage.isCharacterFavorite(char.avatar);
   }
   async function sortCharacters(characters, sortOption) {
     if (sortOption === "chats") {
@@ -1513,45 +1556,14 @@ ${message}` : message;
       const charAvatar = card.dataset.charAvatar;
       const favBtn = card.querySelector(".char-fav-btn");
       if (favBtn) {
-        createTouchClickHandler(favBtn, async (e) => {
+        createTouchClickHandler(favBtn, (e) => {
           e.stopPropagation();
-          if (favBtn._favSaving) return;
-          favBtn._favSaving = true;
-          const currentFav = card.dataset.isFav === "true";
-          const newFavState = !currentFav;
+          const newFavState = storage.toggleCharacterFavorite(charAvatar);
           favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
           card.dataset.isFav = newFavState.toString();
           card.classList.toggle("is-char-fav", newFavState);
-          try {
-            const response = await fetch("/api/characters/merge-attributes", {
-              method: "POST",
-              headers: api.getRequestHeaders(),
-              body: JSON.stringify({
-                avatar: charAvatar,
-                data: { extensions: { fav: newFavState } }
-              })
-            });
-            if (!response.ok) {
-              throw new Error(`\uC800\uC7A5 \uC2E4\uD328: ${response.status}`);
-            }
-            const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
-            if (char) {
-              char.fav = newFavState;
-              if (!char.data) char.data = {};
-              if (!char.data.extensions) char.data.extensions = {};
-              char.data.extensions.fav = newFavState;
-            }
-            console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
-            showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
-          } catch (error) {
-            console.error("[CharacterGrid] Failed to save favorite:", error);
-            favBtn.textContent = currentFav ? "\u2B50" : "\u2606";
-            card.dataset.isFav = currentFav.toString();
-            card.classList.toggle("is-char-fav", currentFav);
-            showToast("\uC990\uACA8\uCC3E\uAE30 \uC800\uC7A5 \uC2E4\uD328", "error");
-          } finally {
-            favBtn._favSaving = false;
-          }
+          console.log(`[CharacterGrid] Favorite toggled: ${charAvatar} = ${newFavState}`);
+          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
       createTouchClickHandler(card, () => {
@@ -1647,7 +1659,6 @@ ${message}` : message;
       init_cache();
       init_storage();
       init_store();
-      init_pendingChanges();
       init_textUtils();
       init_eventHelpers();
       init_notifications();
@@ -1663,7 +1674,16 @@ ${message}` : message;
   init_cache();
   init_storage();
   init_store();
-  init_pendingChanges();
+
+  // src/data/pendingChanges.js
+  function hasPendingChanges() {
+    return false;
+  }
+  async function flushFavoriteChanges() {
+    return true;
+  }
+
+  // src/index.js
   init_sillyTavern();
 
   // src/ui/templates.js
@@ -2462,7 +2482,6 @@ ${message}` : message;
   init_cache();
   init_storage();
   init_store();
-  init_pendingChanges();
   init_notifications();
   init_config();
 
