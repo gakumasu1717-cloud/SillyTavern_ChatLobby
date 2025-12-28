@@ -1499,3 +1499,39 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
         font-size: 10px;
     }
 }
+
+/* ============================================
+   캐릭터 태그 (채팅 목록 화면)
+   ============================================ */
+#chat-lobby-char-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 15px;
+    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
+}
+
+.lobby-char-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: var(--SmartThemeBlurTintColor, rgba(50, 50, 50, 0.8));
+    color: var(--SmartThemeBodyColor, #aaa);
+    font-size: 11px;
+    user-select: none;
+}
+
+/* 모바일 캐릭터 태그 */
+@media (max-width: 768px) {
+    #chat-lobby-char-tags {
+        padding: 6px 12px;
+        gap: 4px;
+    }
+    
+    .lobby-char-tag {
+        padding: 2px 6px;
+        font-size: 10px;
+    }
+}

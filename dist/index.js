@@ -1439,7 +1439,7 @@ ${message}` : message;
     `;
   }
   function isFavoriteChar(char) {
-    return !!(char.fav === true || char.fav === "true" || char.data?.extensions?.fav);
+    return !!(char.fav === true || char.fav === "true");
   }
   async function sortCharacters(characters, sortOption) {
     if (sortOption === "chats") {
@@ -1707,6 +1707,7 @@ ${message}` : message;
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
                     </div>
+                    <div id="chat-lobby-char-tags" style="display:none;"></div>
                     <div id="chat-lobby-folder-bar" style="display:none;">
                         <div class="folder-filter">
                             <select id="chat-lobby-folder-filter">
@@ -2302,6 +2303,32 @@ ${message}` : message;
       newChatBtn.dataset.charAvatar = character.avatar;
     }
     document.getElementById("chat-panel-count").textContent = "\uCC44\uD305 \uB85C\uB529 \uC911...";
+    renderCharacterTags(character.avatar);
+  }
+  function getCharacterTags2(charAvatar) {
+    const context = api.getContext();
+    if (!context?.tagMap || !context?.tags || !charAvatar) {
+      return [];
+    }
+    const tagIds = context.tagMap[charAvatar] || [];
+    return tagIds.map((tagId) => {
+      const tag = context.tags.find((t) => t.id === tagId);
+      return tag?.name || null;
+    }).filter(Boolean);
+  }
+  function renderCharacterTags(charAvatar) {
+    const container = document.getElementById("chat-lobby-char-tags");
+    if (!container) return;
+    const tags = getCharacterTags2(charAvatar);
+    if (tags.length === 0) {
+      container.style.display = "none";
+      container.innerHTML = "";
+      return;
+    }
+    container.style.display = "flex";
+    container.innerHTML = tags.map(
+      (tag) => `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
+    ).join("");
   }
   function updateChatCount(count) {
     const el = document.getElementById("chat-panel-count");

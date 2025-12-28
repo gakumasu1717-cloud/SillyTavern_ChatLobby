@@ -153,7 +153,8 @@ function renderCharacterCard(char, index) {
  * @returns {boolean}
  */
 function isFavoriteChar(char) {
-    return !!(char.fav === true || char.fav === 'true' || char.data?.extensions?.fav);
+    // SillyTavern은 char.fav만 업데이트하고 extensions.fav는 안 건드림
+    return !!(char.fav === true || char.fav === 'true');
 }
 
 /**

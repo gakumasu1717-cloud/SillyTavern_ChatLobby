@@ -525,6 +525,49 @@ function updateChatHeader(character) {
     }
     
     document.getElementById('chat-panel-count').textContent = '채팅 로딩 중...';
+    
+    // 캐릭터 태그 표시
+    renderCharacterTags(character.avatar);
+}
+
+/**
+ * 캐릭터의 태그 가져오기 (SillyTavern 원본에서)
+ * @param {string} charAvatar - 캐릭터 아바타 파일명
+ * @returns {string[]}
+ */
+function getCharacterTags(charAvatar) {
+    const context = api.getContext();
+    if (!context?.tagMap || !context?.tags || !charAvatar) {
+        return [];
+    }
+    
+    const tagIds = context.tagMap[charAvatar] || [];
+    return tagIds.map(tagId => {
+        const tag = context.tags.find(t => t.id === tagId);
+        return tag?.name || null;
+    }).filter(Boolean);
+}
+
+/**
+ * 캐릭터 태그바 렌더링
+ * @param {string} charAvatar - 캐릭터 아바타 파일명
+ */
+function renderCharacterTags(charAvatar) {
+    const container = document.getElementById('chat-lobby-char-tags');
+    if (!container) return;
+    
+    const tags = getCharacterTags(charAvatar);
+    
+    if (tags.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    container.innerHTML = tags.map(tag => 
+        `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
+    ).join('');
 }
 
 /**

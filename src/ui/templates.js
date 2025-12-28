@@ -55,6 +55,7 @@ export function createLobbyHTML() {
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="캐릭터 삭제" style="display:none;">🗑️</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ 새 채팅</button>
                     </div>
+                    <div id="chat-lobby-char-tags" style="display:none;"></div>
                     <div id="chat-lobby-folder-bar" style="display:none;">
                         <div class="folder-filter">
                             <select id="chat-lobby-folder-filter">
