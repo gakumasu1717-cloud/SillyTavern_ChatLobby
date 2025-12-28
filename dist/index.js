@@ -828,6 +828,18 @@ ${message}` : message;
     }
   });
 
+  // src/data/pendingChanges.js
+  function hasPendingChanges() {
+    return false;
+  }
+  async function flushFavoriteChanges() {
+    return true;
+  }
+  var init_pendingChanges = __esm({
+    "src/data/pendingChanges.js"() {
+    }
+  });
+
   // src/utils/sortUtils.js
   function koreanSort(a, b) {
     const aName = (a || "").toLowerCase();
@@ -1285,80 +1297,6 @@ ${message}` : message;
     }
   });
 
-  // src/data/pendingChanges.js
-  function queueFavoriteChange(avatar, newState) {
-    pendingFavorites.set(avatar, newState);
-    const context = api.getContext();
-    const char = context?.characters?.find((c) => c.avatar === avatar);
-    if (char) {
-      char.fav = newState;
-      if (char.data) {
-        char.data.fav = newState;
-      }
-      if (char.data?.extensions) {
-        char.data.extensions.fav = newState;
-      }
-    }
-  }
-  function hasPendingChanges() {
-    return pendingFavorites.size > 0;
-  }
-  async function flushFavoriteChanges() {
-    if (pendingFavorites.size === 0) {
-      return true;
-    }
-    console.log(`[PendingChanges] Flushing ${pendingFavorites.size} favorite changes...`);
-    const changes = [...pendingFavorites.entries()];
-    let allSuccess = true;
-    for (const [avatar, state] of changes) {
-      try {
-        const context = api.getContext();
-        const char = context?.characters?.find((c) => c.avatar === avatar);
-        if (!char) {
-          console.warn(`[PendingChanges] Character not found: ${avatar}`);
-          continue;
-        }
-        const response = await fetch("/api/characters/merge-attributes", {
-          method: "POST",
-          headers: api.getRequestHeaders(),
-          body: JSON.stringify({
-            avatar,
-            fav: state,
-            data: {
-              extensions: {
-                fav: state
-              }
-            }
-          })
-        });
-        if (response.ok) {
-          pendingFavorites.delete(avatar);
-          console.log(`[PendingChanges] Saved ${avatar} = ${state}`);
-        } else {
-          const errorText = await response.text();
-          console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status, errorText);
-          allSuccess = false;
-        }
-      } catch (error) {
-        console.error(`[PendingChanges] Error saving ${avatar}:`, error);
-        allSuccess = false;
-      }
-    }
-    if (changes.length > 0) {
-      cache.invalidate("characters");
-    }
-    console.log(`[PendingChanges] Flush complete. Success: ${allSuccess}, Saved: ${changes.length}`);
-    return allSuccess;
-  }
-  var pendingFavorites;
-  var init_pendingChanges = __esm({
-    "src/data/pendingChanges.js"() {
-      init_sillyTavern();
-      init_cache();
-      pendingFavorites = /* @__PURE__ */ new Map();
-    }
-  });
-
   // src/utils/eventHelpers.js
   function debounce(func, wait = CONFIG.ui.debounceWait) {
     let timeout;
@@ -1577,22 +1515,51 @@ ${message}` : message;
       if (favBtn) {
         createTouchClickHandler(favBtn, async (e) => {
           e.stopPropagation();
-          const context = api.getContext();
-          const characters = context?.characters || [];
-          const charIndex = characters.findIndex((c) => c.avatar === charAvatar);
-          if (charIndex === -1) {
-            console.error("[CharacterGrid] Character not found:", charAvatar);
-            showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
-            return;
+          if (favBtn._favSaving) return;
+          favBtn._favSaving = true;
+          try {
+            const context = api.getContext();
+            const characters = context?.characters || [];
+            const charIndex = characters.findIndex((c) => c.avatar === charAvatar);
+            if (charIndex === -1) {
+              console.error("[CharacterGrid] Character not found:", charAvatar);
+              showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+              return;
+            }
+            const char = characters[charIndex];
+            const currentFav = isFavoriteChar(char);
+            const newFavState = !currentFav;
+            favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+            card.dataset.isFav = newFavState.toString();
+            card.classList.toggle("is-char-fav", newFavState);
+            const response = await fetch("/api/characters/merge-attributes", {
+              method: "POST",
+              headers: api.getRequestHeaders(),
+              body: JSON.stringify({
+                avatar: charAvatar,
+                data: { extensions: { fav: newFavState } }
+              })
+            });
+            if (!response.ok) {
+              throw new Error(`\uC800\uC7A5 \uC2E4\uD328: ${response.status}`);
+            }
+            char.fav = newFavState;
+            if (!char.data) char.data = {};
+            if (!char.data.extensions) char.data.extensions = {};
+            char.data.extensions.fav = newFavState;
+            console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
+            showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
+          } catch (error) {
+            console.error("[CharacterGrid] Failed to save favorite:", error);
+            const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
+            const actualState = char ? isFavoriteChar(char) : false;
+            favBtn.textContent = actualState ? "\u2B50" : "\u2606";
+            card.dataset.isFav = actualState.toString();
+            card.classList.toggle("is-char-fav", actualState);
+            showToast("\uC990\uACA8\uCC3E\uAE30 \uC800\uC7A5 \uC2E4\uD328", "error");
+          } finally {
+            favBtn._favSaving = false;
           }
-          const char = characters[charIndex];
-          const currentFav = isFavoriteChar(char);
-          const newFavState = !currentFav;
-          queueFavoriteChange(charAvatar, newFavState);
-          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
-          card.dataset.isFav = newFavState.toString();
-          card.classList.toggle("is-char-fav", newFavState);
-          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
       createTouchClickHandler(card, () => {
