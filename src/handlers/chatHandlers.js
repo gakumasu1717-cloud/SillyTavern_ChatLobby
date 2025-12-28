@@ -6,7 +6,6 @@ import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
-import { flushFavoriteChanges } from '../data/pendingChanges.js';
 import { refreshChatList, getCurrentCharacter, closeChatPanel } from '../ui/chatList.js';
 import { showToast, showConfirm, showAlert } from '../ui/notifications.js';
 import { CONFIG } from '../config.js';
@@ -24,9 +23,6 @@ import { isMobile } from '../utils/eventHelpers.js';
  */
 export async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
-    
-    // 대기 중인 즐겨찾기 변경사항 먼저 저장
-    await flushFavoriteChanges();
     
     if (!charAvatar || !fileName) {
         console.error('[ChatHandlers] Missing chat data');

@@ -1121,54 +1121,6 @@ ${message}` : message;
           }
         }
         /**
-         * 캐릭터 즐겨찾기 토글
-         * SillyTavern의 favorite_button 클릭과 동일하게 동작
-         * @param {string} charAvatar - 캐릭터 아바타
-         * @param {boolean} newFavState - 새로운 즐겨찾기 상태
-         * @returns {Promise<boolean>}
-         */
-        async toggleCharacterFavorite(charAvatar, newFavState) {
-          try {
-            const context = this.getContext();
-            const char = context?.characters?.find((c) => c.avatar === charAvatar);
-            if (!char) {
-              console.error("[API] Character not found:", charAvatar);
-              return false;
-            }
-            const editPayload = {
-              avatar_url: charAvatar,
-              ch_name: char.name,
-              field: "fav",
-              value: newFavState
-            };
-            const response = await this.fetchWithRetry("/api/characters/edit-attribute", {
-              method: "POST",
-              headers: this.getRequestHeaders(),
-              body: JSON.stringify(editPayload)
-            });
-            if (response.ok) {
-              if (typeof context?.getCharacters === "function") {
-                await context.getCharacters();
-              } else {
-                char.fav = newFavState;
-                if (char.data) {
-                  char.data.fav = newFavState;
-                }
-                if (char.data?.extensions) {
-                  char.data.extensions.fav = newFavState;
-                }
-              }
-              cache.invalidate("characters");
-              return true;
-            }
-            console.error("[API] Response not ok:", response.status);
-            return false;
-          } catch (error) {
-            console.error("[API] Failed to toggle favorite:", error);
-            return false;
-          }
-        }
-        /**
          * 캐릭터 삭제
          * @param {string} charAvatar - 캐릭터 아바타
          * @returns {Promise<boolean>}
@@ -1674,16 +1626,6 @@ ${message}` : message;
   init_cache();
   init_storage();
   init_store();
-
-  // src/data/pendingChanges.js
-  function hasPendingChanges() {
-    return false;
-  }
-  async function flushFavoriteChanges() {
-    return true;
-  }
-
-  // src/index.js
   init_sillyTavern();
 
   // src/ui/templates.js
@@ -2514,7 +2456,6 @@ ${message}` : message;
   init_eventHelpers();
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
-    await flushFavoriteChanges();
     if (!charAvatar || !fileName) {
       console.error("[ChatHandlers] Missing chat data");
       showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
@@ -3473,9 +3414,6 @@ ${message}` : message;
         }
         store.reset();
         store.setLobbyOpen(true);
-        if (hasPendingChanges()) {
-          await flushFavoriteChanges();
-        }
         try {
           const context = api.getContext();
           if (typeof context?.getCharacters === "function") {
@@ -3522,9 +3460,6 @@ ${message}` : message;
       }
     }
     async function closeLobby() {
-      if (hasPendingChanges()) {
-        await flushFavoriteChanges();
-      }
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
       if (container) container.style.display = "none";
@@ -3542,7 +3477,6 @@ ${message}` : message;
     }
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
-      await flushFavoriteChanges();
       cache.invalidateAll();
       const context = api.getContext();
       if (typeof context?.getCharacters === "function") {

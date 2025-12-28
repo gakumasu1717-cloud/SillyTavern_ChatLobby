@@ -264,64 +264,6 @@ class SillyTavernAPI {
     }
     
     /**
-     * 캐릭터 즐겨찾기 토글
-     * SillyTavern의 favorite_button 클릭과 동일하게 동작
-     * @param {string} charAvatar - 캐릭터 아바타
-     * @param {boolean} newFavState - 새로운 즐겨찾기 상태
-     * @returns {Promise<boolean>}
-     */
-    async toggleCharacterFavorite(charAvatar, newFavState) {
-        try {
-            // SillyTavern context에서 캐릭터 찾기
-            const context = this.getContext();
-            const char = context?.characters?.find(c => c.avatar === charAvatar);
-            
-            if (!char) {
-                console.error('[API] Character not found:', charAvatar);
-                return false;
-            }
-            
-            // edit-attribute API로 서버에 저장
-            const editPayload = {
-                avatar_url: charAvatar,
-                ch_name: char.name,
-                field: 'fav',
-                value: newFavState
-            };
-            
-            const response = await this.fetchWithRetry('/api/characters/edit-attribute', {
-                method: 'POST',
-                headers: this.getRequestHeaders(),
-                body: JSON.stringify(editPayload)
-            });
-            
-            if (response.ok) {
-                // SillyTavern의 characters 배열 강제 갱신
-                if (typeof context?.getCharacters === 'function') {
-                    await context.getCharacters();
-                } else {
-                    // fallback: 로컬 메모리만 업데이트
-                    char.fav = newFavState;
-                    if (char.data) {
-                        char.data.fav = newFavState;
-                    }
-                    if (char.data?.extensions) {
-                        char.data.extensions.fav = newFavState;
-                    }
-                }
-                cache.invalidate('characters');
-                return true;
-            }
-            
-            console.error('[API] Response not ok:', response.status);
-            return false;
-        } catch (error) {
-            console.error('[API] Failed to toggle favorite:', error);
-            return false;
-        }
-    }
-    
-    /**
      * 캐릭터 삭제
      * @param {string} charAvatar - 캐릭터 아바타
      * @returns {Promise<boolean>}

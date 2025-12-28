@@ -6,7 +6,6 @@ import { CONFIG } from './config.js';
 import { cache } from './data/cache.js';
 import { storage } from './data/storage.js';
 import { store } from './data/store.js';
-import { flushFavoriteChanges, hasPendingChanges } from './data/pendingChanges.js';
 import { api } from './api/sillyTavern.js';
 import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
@@ -248,12 +247,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             store.reset();
             store.setLobbyOpen(true);
             
-            // 1. 먼저 대기 중인 즐겨찾기 변경사항 저장
-            if (hasPendingChanges()) {
-                await flushFavoriteChanges();
-            }
-            
-            // 2. SillyTavern 캐릭터 목록 최신화
+            // SillyTavern 캐릭터 목록 최신화
             try {
                 const context = api.getContext();
                 if (typeof context?.getCharacters === 'function') {
@@ -323,11 +317,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * - ESC 키, 닫기 버튼, 오버레이 클릭 시 사용
      */
     async function closeLobby() {
-        // 대기 중인 즐겨찾기 변경사항 먼저 저장
-        if (hasPendingChanges()) {
-            await flushFavoriteChanges();
-        }
-        
         const container = document.getElementById('chat-lobby-container');
         const fab = document.getElementById('chat-lobby-fab');
         
@@ -353,9 +342,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     // 전역 API (네임스페이스 정리)
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
-        // 대기 중인 즐겨찾기 변경사항 먼저 저장
-        await flushFavoriteChanges();
-        
         cache.invalidateAll();
         
         // SillyTavern의 캐릭터 목록 강제 갱신
