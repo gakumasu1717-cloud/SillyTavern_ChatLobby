@@ -379,9 +379,8 @@ export async function deleteCharacter() {
         // 그리드 새로고침 (로비가 열려있으면)
         const overlay = document.getElementById('chat-lobby-overlay');
         if (overlay?.style.display === 'flex') {
-            // 동적 import로 순환 참조 방지
-            const { renderCharacterGrid } = await import('../ui/characterGrid.js');
-            await renderCharacterGrid();
+            // 이벤트로 순환 참조 방지
+            window.dispatchEvent(new CustomEvent('chatlobby:refresh-grid'));
         }
         
     } catch (error) {

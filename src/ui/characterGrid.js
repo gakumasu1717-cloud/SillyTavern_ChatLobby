@@ -11,6 +11,10 @@ import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
 import { CONFIG } from '../config.js';
 
+// 렌더링 중복 방지
+let isRendering = false;
+let pendingRender = null;
+
 // ============================================
 // 초기화
 // ============================================
@@ -35,27 +39,46 @@ export function setCharacterSelectHandler(handler) {
  * @returns {Promise<void>}
  */
 export async function renderCharacterGrid(searchTerm = '', sortOverride = null) {
-    const container = document.getElementById('chat-lobby-characters');
-    if (!container) return;
-    
-    // 검색어 저장
-    store.setSearchTerm(searchTerm);
-    
-    // context에서 직접 캐릭터 가져오기 (항상 최신)
-    const characters = api.getCharacters();
-    
-    if (characters.length === 0) {
-        container.innerHTML = `
-            <div class="lobby-empty-state">
-                <i>👥</i>
-                <div>캐릭터가 없습니다</div>
-                <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
-            </div>
-        `;
+    // 렌더링 중복 방지
+    if (isRendering) {
+        pendingRender = { searchTerm, sortOverride };
         return;
     }
     
-    await renderCharacterList(container, characters, searchTerm, sortOverride);
+    isRendering = true;
+    
+    try {
+        const container = document.getElementById('chat-lobby-characters');
+        if (!container) return;
+        
+        // 검색어 저장
+        store.setSearchTerm(searchTerm);
+        
+        // context에서 직접 캐릭터 가져오기 (항상 최신)
+        const characters = api.getCharacters();
+        
+        if (characters.length === 0) {
+            container.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>👥</i>
+                    <div>캐릭터가 없습니다</div>
+                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">새로고침</button>
+                </div>
+            `;
+            return;
+        }
+        
+        await renderCharacterList(container, characters, searchTerm, sortOverride);
+    } finally {
+        isRendering = false;
+        
+        // 대기 중인 렌더 있으면 실행
+        if (pendingRender) {
+            const { searchTerm: s, sortOverride: o } = pendingRender;
+            pendingRender = null;
+            renderCharacterGrid(s, o);
+        }
+    }
 }
 
 /**
@@ -109,12 +132,12 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         return;
     }
     
-    // 원본 인덱스 보존 (context.characters 기준)
+    // 원본 인덱스 보존 (context.characters 기준) - Map으로 O(1) 룩업
     const originalCharacters = api.getCharacters();
+    const indexMap = new Map(originalCharacters.map((c, i) => [c, i]));
     
     container.innerHTML = filtered.map(char => {
-        const originalIndex = originalCharacters.indexOf(char);
-        return renderCharacterCard(char, originalIndex);
+        return renderCharacterCard(char, indexMap.get(char));
     }).join('');
     
     bindCharacterEvents(container);

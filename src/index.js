@@ -385,6 +385,11 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         
         // 드롭다운 change 이벤트도 직접 바인딩
         bindDropdownEvents();
+        
+        // 순환참조 방지용 이벤트 리스너
+        window.addEventListener('chatlobby:refresh-grid', () => {
+            renderCharacterGrid(store.searchTerm);
+        });
     }
     
     /**
