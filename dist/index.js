@@ -1080,6 +1080,14 @@ ${message}` : message;
               console.error("[API] Character not found:", charAvatar);
               return false;
             }
+            if (typeof window.setFavorite === "function") {
+              const charIndex = context.characters.indexOf(char);
+              if (charIndex !== -1) {
+                await window.setFavorite(charIndex, newFavState);
+                cache.invalidate("characters");
+                return true;
+              }
+            }
             const editPayload = {
               avatar_url: charAvatar,
               ch_name: char.name,
@@ -1510,10 +1518,8 @@ ${message}` : message;
           try {
             const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
             if (success) {
-              favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
-              card.dataset.isFav = newFavState.toString();
-              card.classList.toggle("is-char-fav", newFavState);
               showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
+              await renderCharacterGrid();
             } else {
               console.error("[CharacterGrid] API call failed");
               showToast("\uC990\uACA8\uCC3E\uAE30 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");

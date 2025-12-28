@@ -272,7 +272,6 @@ class SillyTavernAPI {
      */
     async toggleCharacterFavorite(charAvatar, newFavState) {
         try {
-            
             // SillyTavern context에서 캐릭터 찾기
             const context = this.getContext();
             const char = context?.characters?.find(c => c.avatar === charAvatar);
@@ -282,14 +281,23 @@ class SillyTavernAPI {
                 return false;
             }
             
-            // edit-attribute API는 field와 value를 요구함
+            // 방법 1: SillyTavern의 내장 함수 사용 (있으면)
+            if (typeof window.setFavorite === 'function') {
+                const charIndex = context.characters.indexOf(char);
+                if (charIndex !== -1) {
+                    await window.setFavorite(charIndex, newFavState);
+                    cache.invalidate('characters');
+                    return true;
+                }
+            }
+            
+            // 방법 2: edit-attribute API 사용
             const editPayload = {
                 avatar_url: charAvatar,
                 ch_name: char.name,
                 field: 'fav',
                 value: newFavState
             };
-            
             
             const response = await this.fetchWithRetry('/api/characters/edit-attribute', {
                 method: 'POST',

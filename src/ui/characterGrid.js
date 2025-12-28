@@ -271,12 +271,10 @@ function bindCharacterEvents(container) {
                     const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
                     
                     if (success) {
-                        // UI 즉시 업데이트 (리렌더 없이)
-                        favBtn.textContent = newFavState ? '⭐' : '☆';
-                        card.dataset.isFav = newFavState.toString();
-                        card.classList.toggle('is-char-fav', newFavState);
-                        
                         showToast(newFavState ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.', 'success');
+                        
+                        // 그리드 다시 렌더링 (정렬 반영)
+                        await renderCharacterGrid();
                     } else {
                         console.error('[CharacterGrid] API call failed');
                         showToast('즐겨찾기 변경에 실패했습니다.', 'error');
