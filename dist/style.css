@@ -898,6 +898,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px 15px;
+    border: none;
     border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
     background: transparent;
     gap: 10px;
@@ -1513,11 +1514,13 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .lobby-char-tag {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    background: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.08));
-    color: var(--SmartThemeBodyColor, #bbb);
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: 6px;
+    background: var(--SmartThemeBlurTintColor, rgba(80, 80, 80, 0.6));
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    color: var(--SmartThemeBodyColor, #ccc);
     font-size: 12px;
     user-select: none;
 }
@@ -1529,7 +1532,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     justify-content: space-between;
     gap: 8px;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
+    border: none;
     background: transparent;
 }
 
