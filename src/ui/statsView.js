@@ -144,21 +144,11 @@ async function fetchRankings(characters) {
                     
                     const chatCount = Array.isArray(chats) ? chats.length : 0;
                     
-                    // 메시지 수 합산
-                    // SillyTavern API 응답 필드: mes (배열길이), chat_metadata.mes_count 등
+                    // 메시지 수 합산 (chat_items가 메시지 개수!)
                     let messageCount = 0;
                     if (Array.isArray(chats)) {
                         messageCount = chats.reduce((sum, chat) => {
-                            // 우선순위: mes 배열 길이 > chat_metadata 필드들 > 직접 필드들
-                            if (Array.isArray(chat.mes)) {
-                                return sum + chat.mes.length;
-                            }
-                            const count = chat.chat_metadata?.mes_count
-                                ?? chat.chat_metadata?.message_count
-                                ?? chat.mes_count
-                                ?? chat.message_count
-                                ?? 0;
-                            return sum + count;
+                            return sum + (chat.chat_items || 0);
                         }, 0);
                     }
                     

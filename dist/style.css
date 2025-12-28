@@ -695,20 +695,36 @@
     border-radius: 4px;
 }
 
-/* 검색창 */
+/* 검색창 + 정렬 한 줄 */
 #chat-lobby-search {
-    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
     background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
 }
 
 #chat-lobby-search input {
-    width: 100%;
-    padding: 10px 15px;
+    flex: 1;
+    padding: 8px 12px;
     border: 1px solid var(--SmartThemeBorderColor, #444);
-    border-radius: 8px;
+    border-radius: 6px;
     background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.5));
     color: var(--SmartThemeBodyColor, #fff);
-    font-size: 0.95em;
+    font-size: 13px;
+    min-width: 0;
+}
+
+#chat-lobby-search select {
+    flex-shrink: 0;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+    background: var(--SmartThemeBlurTintColor, rgba(40, 40, 40, 0.9));
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    color: var(--SmartThemeBodyColor, #ddd);
+    border-radius: 6px;
+    cursor: pointer;
 }
 
 #chat-lobby-search input::placeholder {
@@ -896,43 +912,47 @@
 #chat-lobby-filters {
     display: flex;
     flex-direction: column;
-    padding: 10px 15px;
+    padding: 8px 15px;
     border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
     background: transparent;
-    gap: 8px;
+    gap: 6px;
 }
 
-/* 태그 영역 - 가로 스크롤 */
+/* 태그 영역 - 알약 횡스크롤 */
 #chat-lobby-filters #chat-lobby-char-tags {
     display: flex;
     flex-wrap: nowrap;
     gap: 6px;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
+    padding: 2px 0;
 }
 
+/* 스크롤바 숨김 */
 #chat-lobby-filters #chat-lobby-char-tags::-webkit-scrollbar {
-    height: 4px;
+    display: none;
 }
 
-#chat-lobby-filters #chat-lobby-char-tags::-webkit-scrollbar-thumb {
-    background: var(--SmartThemeBorderColor, #444);
-    border-radius: 2px;
+#chat-lobby-filters #chat-lobby-char-tags {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 /* 필터+툴 행 */
 #chat-lobby-filters .filters-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: nowrap;
+    height: 36px;
 }
 
 #chat-lobby-filters .filters-row select {
     flex-shrink: 0;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
 }
 
 #chat-lobby-filters .filters-row button {
@@ -940,13 +960,13 @@
     background: transparent;
     border: 1px solid var(--SmartThemeBorderColor, #444);
     color: var(--SmartThemeBodyColor, #ccc);
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 1em;
+    font-size: 14px;
     transition: all 0.2s;
-    min-width: 40px;
-    min-height: 36px;
+    height: 28px;
+    min-width: 32px;
 }
 
 #chat-lobby-filters .filters-row button:hover {
@@ -1462,22 +1482,31 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 /* ============================================
-   태그바 스타일
+   태그바 스타일 (캐릭터 선택 화면)
    ============================================ */
 #chat-lobby-tag-bar {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 8px 20px;
+    gap: 6px;
+    padding: 6px 20px;
     background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
     border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
-    min-height: 36px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 스크롤바 숨김 */
+#chat-lobby-tag-bar::-webkit-scrollbar {
+    display: none;
+}
+#chat-lobby-tag-bar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 #chat-lobby-tag-list {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
     align-items: center;
 }
@@ -1485,15 +1514,18 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 .lobby-tag-item {
     display: inline-flex;
     align-items: center;
-    padding: 4px 10px;
-    border-radius: 12px;
-    background: var(--SmartThemeBlurTintColor, rgba(50, 50, 50, 0.8));
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--SmartThemeBorderColor, #444);
     color: var(--SmartThemeBodyColor, #aaa);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
     user-select: none;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .lobby-tag-item:hover {
@@ -1514,24 +1546,8 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-size: 11px;
 }
 
-.lobby-tag-more {
-    background: transparent;
-    border: none;
-    color: var(--SmartThemeQuoteColor, #6a9fb5);
-    font-size: 12px;
-    cursor: pointer;
-    padding: 4px 8px;
-    transition: opacity 0.2s;
-}
-
-.lobby-tag-more:hover {
-    opacity: 0.8;
-    text-decoration: underline;
-}
-
 /* 태그가 없을 때 태그바 숨김 */
-#chat-lobby-tag-bar:empty,
-#chat-lobby-tag-list:empty + .lobby-tag-more[style*="display: none"] {
+#chat-lobby-tag-bar:empty {
     display: none;
 }
 
@@ -1557,33 +1573,36 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
    ============================================ */
 #chat-lobby-char-tags {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 16px;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px 0;
     background: transparent;
-    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
 }
 
 .lobby-char-tag {
     display: inline-flex;
     align-items: center;
-    padding: 5px 12px;
-    border-radius: 6px;
-    background: var(--SmartThemeBlurTintColor, rgba(80, 80, 80, 0.6));
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--SmartThemeBorderColor, #444);
     color: var(--SmartThemeBodyColor, #ccc);
     font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
     user-select: none;
 }
 
-/* 모바일 캐릭터 태그 */
+/* 모바일 필터 섹션 */
 @media (max-width: 768px) {
     #chat-lobby-filters {
-        padding: 8px 12px;
+        padding: 6px 12px;
     }
     
     .lobby-char-tag {
-        padding: 3px 8px;
+        height: 22px;
+        padding: 0 8px;
         font-size: 11px;
     }
 }

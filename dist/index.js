@@ -1690,7 +1690,6 @@ ${message}` : message;
                     </div>
                     <div id="chat-lobby-tag-bar">
                         <div id="chat-lobby-tag-list"></div>
-                        <button id="chat-lobby-tag-more" class="lobby-tag-more" style="display:none;">...\uB354\uBCF4\uAE30</button>
                     </div>
                     <div id="chat-lobby-characters">
                         <div class="lobby-loading">\uCE90\uB9AD\uD130 \uB85C\uB529 \uC911...</div>
@@ -2972,11 +2971,7 @@ ${message}` : message;
             let messageCount = 0;
             if (Array.isArray(chats)) {
               messageCount = chats.reduce((sum, chat) => {
-                if (Array.isArray(chat.mes)) {
-                  return sum + chat.mes.length;
-                }
-                const count = chat.chat_metadata?.mes_count ?? chat.chat_metadata?.message_count ?? chat.mes_count ?? chat.message_count ?? 0;
-                return sum + count;
+                return sum + (chat.chat_items || 0);
               }, 0);
             }
             return {

@@ -38,7 +38,6 @@ export function createLobbyHTML() {
                     </div>
                     <div id="chat-lobby-tag-bar">
                         <div id="chat-lobby-tag-list"></div>
-                        <button id="chat-lobby-tag-more" class="lobby-tag-more" style="display:none;">...더보기</button>
                     </div>
                     <div id="chat-lobby-characters">
                         <div class="lobby-loading">캐릭터 로딩 중...</div>
