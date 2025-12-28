@@ -75,19 +75,22 @@
 
 .header-actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .header-actions button {
     background: transparent;
     border: 1px solid var(--SmartThemeBorderColor, #555);
     color: var(--SmartThemeBodyColor, #fff);
-    font-size: 1.2em;
+    font-size: 1em;
     cursor: pointer;
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
     transition: all 0.2s;
+    flex-shrink: 0;
 }
 
 .header-actions button:hover {
@@ -1335,8 +1338,8 @@
     }
     
     .header-actions button {
-        padding: 6px 10px;
-        font-size: 1.1em;
+        padding: 5px 8px;
+        font-size: 0.95em;
     }
     
     #chat-lobby-folder-bar {
@@ -1529,15 +1532,21 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
 }
 
-/* 스크롤바 숨김 */
+/* PC 스크롤바 스타일 */
 #chat-lobby-tag-bar::-webkit-scrollbar {
-    display: none;
+    height: 4px;
 }
-#chat-lobby-tag-bar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+
+#chat-lobby-tag-bar::-webkit-scrollbar-thumb {
+    background: var(--SmartThemeBorderColor, #444);
+    border-radius: 2px;
+}
+
+#chat-lobby-tag-bar::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 #chat-lobby-tag-list {
