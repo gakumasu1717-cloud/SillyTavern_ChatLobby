@@ -1408,3 +1408,94 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     color: inherit !important;
     background: none !important;
 }
+
+/* ============================================
+   태그바 스타일
+   ============================================ */
+#chat-lobby-tag-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
+    min-height: 36px;
+}
+
+#chat-lobby-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.lobby-tag-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--SmartThemeBlurTintColor, rgba(50, 50, 50, 0.8));
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    color: var(--SmartThemeBodyColor, #aaa);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.lobby-tag-item:hover {
+    background: var(--SmartThemeBlurTintColor, rgba(70, 70, 70, 0.9));
+    border-color: var(--SmartThemeQuoteColor, #6a9fb5);
+    color: var(--SmartThemeBodyColor, #fff);
+}
+
+.lobby-tag-item.active {
+    background: var(--SmartThemeQuoteColor, #4a9eff);
+    border-color: var(--SmartThemeQuoteColor, #4a9eff);
+    color: #fff;
+}
+
+.lobby-tag-count {
+    margin-left: 4px;
+    opacity: 0.7;
+    font-size: 11px;
+}
+
+.lobby-tag-more {
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeQuoteColor, #6a9fb5);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: opacity 0.2s;
+}
+
+.lobby-tag-more:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* 태그가 없을 때 태그바 숨김 */
+#chat-lobby-tag-bar:empty,
+#chat-lobby-tag-list:empty + .lobby-tag-more[style*="display: none"] {
+    display: none;
+}
+
+/* 모바일 태그바 */
+@media (max-width: 768px) {
+    #chat-lobby-tag-bar {
+        padding: 6px 15px;
+        gap: 6px;
+    }
+    
+    .lobby-tag-item {
+        padding: 3px 8px;
+        font-size: 11px;
+    }
+    
+    .lobby-tag-count {
+        font-size: 10px;
+    }
+}

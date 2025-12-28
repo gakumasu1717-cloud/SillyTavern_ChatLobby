@@ -733,6 +733,8 @@ ${message}` : message;
             isProcessingPersona: false,
             isLobbyOpen: false,
             searchTerm: "",
+            selectedTag: null,
+            tagBarExpanded: false,
             onCharacterSelect: null,
             chatHandlers: {
               onOpen: null,
@@ -757,6 +759,12 @@ ${message}` : message;
         }
         get searchTerm() {
           return this._state.searchTerm;
+        }
+        get selectedTag() {
+          return this._state.selectedTag;
+        }
+        get tagBarExpanded() {
+          return this._state.tagBarExpanded;
         }
         get onCharacterSelect() {
           return this._state.onCharacterSelect;
@@ -786,6 +794,12 @@ ${message}` : message;
         setSearchTerm(term) {
           this._state.searchTerm = term;
         }
+        setSelectedTag(tag) {
+          this._state.selectedTag = tag;
+        }
+        setTagBarExpanded(expanded) {
+          this._state.tagBarExpanded = expanded;
+        }
         setCharacterSelectHandler(handler) {
           this._state.onCharacterSelect = handler;
         }
@@ -806,6 +820,8 @@ ${message}` : message;
           this._state.currentCharacter = null;
           this._state.batchModeActive = false;
           this._state.searchTerm = "";
+          this._state.selectedTag = null;
+          this._state.tagBarExpanded = false;
         }
       };
       store = new Store();
@@ -1375,6 +1391,14 @@ ${message}` : message;
         (char) => (char.name || "").toLowerCase().includes(term)
       );
     }
+    const selectedTag = store.selectedTag;
+    if (selectedTag) {
+      filtered = filtered.filter((char) => {
+        const charTags = getCharacterTags(char);
+        return charTags.includes(selectedTag);
+      });
+    }
+    renderTagBar(characters);
     const sortOption = sortOverride || storage.getCharSortOption();
     filtered = await sortCharacters(filtered, sortOption);
     const sortSelect = document.getElementById("chat-lobby-char-sort");
@@ -1480,7 +1504,8 @@ ${message}` : message;
             showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
             return;
           }
-          const currentFav = card.dataset.isFav === "true";
+          const char = characters[charIndex];
+          const currentFav = isFavoriteChar(char);
           const newFavState = !currentFav;
           try {
             const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
@@ -1531,7 +1556,81 @@ ${message}` : message;
     const searchTerm = store.searchTerm;
     renderCharacterGrid(searchTerm, sortOption);
   }
-  var handleSearch;
+  function getCharacterTags(char) {
+    const context = api.getContext();
+    if (context?.tagMap && context?.tags && char.avatar) {
+      const charTags = context.tagMap[char.avatar] || [];
+      return charTags.map((tagId) => {
+        const tag = context.tags.find((t) => t.id === tagId);
+        return tag?.name || "";
+      }).filter(Boolean);
+    }
+    if (Array.isArray(char.tags)) {
+      return char.tags;
+    }
+    return [];
+  }
+  function aggregateTags(characters) {
+    const tagCounts = {};
+    characters.forEach((char) => {
+      const tags = getCharacterTags(char);
+      tags.forEach((tag) => {
+        if (tag) {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      });
+    });
+    return Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, count }));
+  }
+  function renderTagBar(characters) {
+    const container = document.getElementById("chat-lobby-tag-list");
+    const moreBtn = document.getElementById("chat-lobby-tag-more");
+    if (!container) return;
+    const tags = aggregateTags(characters);
+    if (tags.length === 0) {
+      container.innerHTML = "";
+      if (moreBtn) moreBtn.style.display = "none";
+      return;
+    }
+    const expanded = store.tagBarExpanded;
+    const selectedTag = store.selectedTag;
+    const visibleTags = expanded ? tags : tags.slice(0, MAX_VISIBLE_TAGS);
+    const hasMore = tags.length > MAX_VISIBLE_TAGS;
+    container.innerHTML = visibleTags.map(({ tag, count }) => {
+      const isActive = selectedTag === tag;
+      return `<span class="lobby-tag-item ${isActive ? "active" : ""}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="lobby-tag-count">(${count})</span></span>`;
+    }).join("");
+    if (moreBtn) {
+      if (hasMore) {
+        moreBtn.style.display = "inline";
+        moreBtn.textContent = expanded ? "\uC811\uAE30" : `...\uB354\uBCF4\uAE30 (+${tags.length - MAX_VISIBLE_TAGS})`;
+      } else {
+        moreBtn.style.display = "none";
+      }
+    }
+    bindTagEvents(container, moreBtn);
+  }
+  function bindTagEvents(container, moreBtn) {
+    container.querySelectorAll(".lobby-tag-item").forEach((item) => {
+      createTouchClickHandler(item, () => {
+        const tag = item.dataset.tag;
+        if (store.selectedTag === tag) {
+          store.setSelectedTag(null);
+        } else {
+          store.setSelectedTag(tag);
+        }
+        renderCharacterGrid(store.searchTerm);
+      }, { debugName: `tag-${item.dataset.tag}` });
+    });
+    if (moreBtn) {
+      createTouchClickHandler(moreBtn, () => {
+        store.setTagBarExpanded(!store.tagBarExpanded);
+        const characters = api.getCharacters();
+        renderTagBar(characters);
+      }, { debugName: "tag-more" });
+    }
+  }
+  var handleSearch, MAX_VISIBLE_TAGS;
   var init_characterGrid = __esm({
     "src/ui/characterGrid.js"() {
       init_sillyTavern();
@@ -1545,6 +1644,7 @@ ${message}` : message;
       handleSearch = debounce((searchTerm) => {
         renderCharacterGrid(searchTerm);
       }, CONFIG.ui.debounceWait);
+      MAX_VISIBLE_TAGS = 5;
     }
   });
 
@@ -1586,6 +1686,10 @@ ${message}` : message;
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
                             <option value="chats">\u{1F4AC} \uCC44\uD305 \uC218</option>
                         </select>
+                    </div>
+                    <div id="chat-lobby-tag-bar">
+                        <div id="chat-lobby-tag-list"></div>
+                        <button id="chat-lobby-tag-more" class="lobby-tag-more" style="display:none;">...\uB354\uBCF4\uAE30</button>
                     </div>
                     <div id="chat-lobby-characters">
                         <div class="lobby-loading">\uCE90\uB9AD\uD130 \uB85C\uB529 \uC911...</div>

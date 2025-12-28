@@ -77,6 +77,18 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         );
     }
     
+    // 태그 필터 (AND 조건 - 검색과 함께 적용)
+    const selectedTag = store.selectedTag;
+    if (selectedTag) {
+        filtered = filtered.filter(char => {
+            const charTags = getCharacterTags(char);
+            return charTags.includes(selectedTag);
+        });
+    }
+    
+    // 태그바 렌더링 (필터 전 전체 캐릭터 기준으로 집계)
+    renderTagBar(characters);
+    
     // 정렬
     const sortOption = sortOverride || storage.getCharSortOption();
     filtered = await sortCharacters(filtered, sortOption);
@@ -247,8 +259,9 @@ function bindCharacterEvents(container) {
                     return;
                 }
                 
-                // 현재 즐겨찾기 상태 확인 (UI 업데이트용)
-                const currentFav = card.dataset.isFav === 'true';
+                // SillyTavern 원본 데이터에서 현재 상태 확인 (UI dataset 대신)
+                const char = characters[charIndex];
+                const currentFav = isFavoriteChar(char);
                 const newFavState = !currentFav;
                 
                 
@@ -333,4 +346,135 @@ export function handleSortChange(sortOption) {
     storage.setCharSortOption(sortOption);
     const searchTerm = store.searchTerm;
     renderCharacterGrid(searchTerm, sortOption);
+}
+
+// ============================================
+// 태그 관련 함수
+// ============================================
+
+/** 태그바에 표시할 최대 태그 수 (접힌 상태) */
+const MAX_VISIBLE_TAGS = 5;
+
+/**
+ * 캐릭터의 태그 가져오기 (SillyTavern 원본에서)
+ * @param {Object} char - 캐릭터 객체
+ * @returns {string[]}
+ */
+function getCharacterTags(char) {
+    // SillyTavern 태그 구조: char.tags 또는 context.tagMap 사용
+    const context = api.getContext();
+    
+    // 1. context.tagMap에서 태그 가져오기 (SillyTavern 표준)
+    if (context?.tagMap && context?.tags && char.avatar) {
+        const charTags = context.tagMap[char.avatar] || [];
+        return charTags.map(tagId => {
+            const tag = context.tags.find(t => t.id === tagId);
+            return tag?.name || '';
+        }).filter(Boolean);
+    }
+    
+    // 2. Fallback: char.tags 직접 사용
+    if (Array.isArray(char.tags)) {
+        return char.tags;
+    }
+    
+    return [];
+}
+
+/**
+ * 전체 캐릭터의 태그 집계
+ * @param {Array} characters - 캐릭터 배열
+ * @returns {Array<{tag: string, count: number}>}
+ */
+function aggregateTags(characters) {
+    const tagCounts = {};
+    
+    characters.forEach(char => {
+        const tags = getCharacterTags(char);
+        tags.forEach(tag => {
+            if (tag) {
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+            }
+        });
+    });
+    
+    // 개수순 정렬
+    return Object.entries(tagCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag, count]) => ({ tag, count }));
+}
+
+/**
+ * 태그바 렌더링
+ * @param {Array} characters - 전체 캐릭터 배열
+ */
+function renderTagBar(characters) {
+    const container = document.getElementById('chat-lobby-tag-list');
+    const moreBtn = document.getElementById('chat-lobby-tag-more');
+    if (!container) return;
+    
+    const tags = aggregateTags(characters);
+    
+    if (tags.length === 0) {
+        container.innerHTML = '';
+        if (moreBtn) moreBtn.style.display = 'none';
+        return;
+    }
+    
+    const expanded = store.tagBarExpanded;
+    const selectedTag = store.selectedTag;
+    const visibleTags = expanded ? tags : tags.slice(0, MAX_VISIBLE_TAGS);
+    const hasMore = tags.length > MAX_VISIBLE_TAGS;
+    
+    container.innerHTML = visibleTags.map(({ tag, count }) => {
+        const isActive = selectedTag === tag;
+        return `<span class="lobby-tag-item ${isActive ? 'active' : ''}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="lobby-tag-count">(${count})</span></span>`;
+    }).join('');
+    
+    // 더보기 버튼
+    if (moreBtn) {
+        if (hasMore) {
+            moreBtn.style.display = 'inline';
+            moreBtn.textContent = expanded ? '접기' : `...더보기 (+${tags.length - MAX_VISIBLE_TAGS})`;
+        } else {
+            moreBtn.style.display = 'none';
+        }
+    }
+    
+    // 이벤트 바인딩
+    bindTagEvents(container, moreBtn);
+}
+
+/**
+ * 태그 이벤트 바인딩
+ * @param {HTMLElement} container - 태그 목록 컨테이너
+ * @param {HTMLElement|null} moreBtn - 더보기 버튼
+ */
+function bindTagEvents(container, moreBtn) {
+    // 태그 클릭
+    container.querySelectorAll('.lobby-tag-item').forEach(item => {
+        createTouchClickHandler(item, () => {
+            const tag = item.dataset.tag;
+            
+            // 같은 태그 클릭 시 필터 해제
+            if (store.selectedTag === tag) {
+                store.setSelectedTag(null);
+            } else {
+                store.setSelectedTag(tag);
+            }
+            
+            // 리렌더
+            renderCharacterGrid(store.searchTerm);
+        }, { debugName: `tag-${item.dataset.tag}` });
+    });
+    
+    // 더보기 클릭
+    if (moreBtn) {
+        createTouchClickHandler(moreBtn, () => {
+            store.setTagBarExpanded(!store.tagBarExpanded);
+            // 태그바만 리렌더 (캐릭터 리스트는 그대로)
+            const characters = api.getCharacters();
+            renderTagBar(characters);
+        }, { debugName: 'tag-more' });
+    }
 }

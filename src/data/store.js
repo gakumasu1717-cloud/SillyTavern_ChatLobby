@@ -23,6 +23,8 @@
  * @property {boolean} isProcessingPersona - 페르소나 처리 중 여부
  * @property {boolean} isLobbyOpen - 로비 열림 여부
  * @property {string} searchTerm - 캐릭터 검색어
+ * @property {string|null} selectedTag - 선택된 태그 필터
+ * @property {boolean} tagBarExpanded - 태그바 펼침 상태
  * @property {Function|null} onCharacterSelect - 캐릭터 선택 콜백
  * @property {ChatHandlers} chatHandlers - 채팅 핸들러
  */
@@ -36,6 +38,8 @@ class Store {
             isProcessingPersona: false,
             isLobbyOpen: false,
             searchTerm: '',
+            selectedTag: null,
+            tagBarExpanded: false,
             onCharacterSelect: null,
             chatHandlers: {
                 onOpen: null,
@@ -66,6 +70,14 @@ class Store {
     
     get searchTerm() {
         return this._state.searchTerm;
+    }
+    
+    get selectedTag() {
+        return this._state.selectedTag;
+    }
+    
+    get tagBarExpanded() {
+        return this._state.tagBarExpanded;
     }
     
     get onCharacterSelect() {
@@ -105,6 +117,14 @@ class Store {
         this._state.searchTerm = term;
     }
     
+    setSelectedTag(tag) {
+        this._state.selectedTag = tag;
+    }
+    
+    setTagBarExpanded(expanded) {
+        this._state.tagBarExpanded = expanded;
+    }
+    
     setCharacterSelectHandler(handler) {
         this._state.onCharacterSelect = handler;
     }
@@ -128,6 +148,8 @@ class Store {
         this._state.currentCharacter = null;
         this._state.batchModeActive = false;
         this._state.searchTerm = '';
+        this._state.selectedTag = null;
+        this._state.tagBarExpanded = false;
     }
 }
 
