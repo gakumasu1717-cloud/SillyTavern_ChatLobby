@@ -1708,25 +1708,21 @@ ${message}` : message;
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
                     </div>
-                    <!-- \uD544\uD130 \uC139\uC158: \uD0DC\uADF8 + \uD3F4\uB354\uD544\uD130 + \uD234 -->
+                    <!-- \uD544\uD130 \uC139\uC158: \uD0DC\uADF8 + \uD544\uD130/\uD234 -->
                     <section id="chat-lobby-filters" style="display:none;">
                         <div id="chat-lobby-char-tags"></div>
                         <div class="filters-row">
-                            <div class="folder-filter">
-                                <select id="chat-lobby-folder-filter">
-                                    <option value="all">\u{1F4C1} \uC804\uCCB4</option>
-                                    <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
-                                </select>
-                                <select id="chat-lobby-chat-sort">
-                                    <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
-                                    <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
-                                    <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
-                                </select>
-                            </div>
-                            <div class="list-tools">
-                                <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
-                                <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
-                            </div>
+                            <select id="chat-lobby-chat-sort">
+                                <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
+                                <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
+                                <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
+                            </select>
+                            <select id="chat-lobby-folder-filter">
+                                <option value="all">\u{1F4C1} \uC804\uCCB4</option>
+                                <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
+                            </select>
+                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
+                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
                         </div>
                     </section>
                     <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
@@ -2976,7 +2972,10 @@ ${message}` : message;
             let messageCount = 0;
             if (Array.isArray(chats)) {
               messageCount = chats.reduce((sum, chat) => {
-                const count = chat.chat_metadata?.message_count || chat.message_count || chat.mes_count || 0;
+                if (Array.isArray(chat.mes)) {
+                  return sum + chat.mes.length;
+                }
+                const count = chat.chat_metadata?.mes_count ?? chat.chat_metadata?.message_count ?? chat.mes_count ?? chat.message_count ?? 0;
                 return sum + count;
               }, 0);
             }
