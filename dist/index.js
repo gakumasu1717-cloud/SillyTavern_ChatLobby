@@ -3500,7 +3500,7 @@ ${message}` : message;
         }
       }, CONFIG.timing.preloadDelay);
     }
-    function openLobby() {
+    async function openLobby() {
       const chatsPanel = document.getElementById("chat-lobby-chats");
       if (store.isLobbyOpen && chatsPanel?.classList.contains("visible")) {
         return;
@@ -3518,6 +3518,17 @@ ${message}` : message;
         }
         store.reset();
         store.setLobbyOpen(true);
+        if (hasPendingChanges()) {
+          await flushFavoriteChanges();
+        }
+        try {
+          const context = api.getContext();
+          if (typeof context?.getCharacters === "function") {
+            await context.getCharacters();
+          }
+        } catch (error) {
+          console.warn("[ChatLobby] Failed to refresh characters:", error);
+        }
         const data = storage.load();
         if (data.filterFolder && data.filterFolder !== "all" && data.filterFolder !== "favorites" && data.filterFolder !== "uncategorized") {
           const folderExists = data.folders?.some((f) => f.id === data.filterFolder);

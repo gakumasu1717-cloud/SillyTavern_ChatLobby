@@ -222,7 +222,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * 로비 열기
      * 캐시는 이벤트로 동기화함 (onChatChanged)
      */
-    function openLobby() {
+    async function openLobby() {
         // 이미 열려있고 채팅 패널이 표시 중이면 무시
         const chatsPanel = document.getElementById('chat-lobby-chats');
         if (store.isLobbyOpen && chatsPanel?.classList.contains('visible')) {
@@ -247,6 +247,21 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지)
             store.reset();
             store.setLobbyOpen(true);
+            
+            // 1. 먼저 대기 중인 즐겨찾기 변경사항 저장
+            if (hasPendingChanges()) {
+                await flushFavoriteChanges();
+            }
+            
+            // 2. SillyTavern 캐릭터 목록 최신화
+            try {
+                const context = api.getContext();
+                if (typeof context?.getCharacters === 'function') {
+                    await context.getCharacters();
+                }
+            } catch (error) {
+                console.warn('[ChatLobby] Failed to refresh characters:', error);
+            }
             
             // 폴더 필터 강제 리셋 (버그 방지)
             // 존재하지 않는 폴더로 필터링되어 채팅이 안 보이는 문제 해결
