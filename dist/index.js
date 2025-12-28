@@ -2101,6 +2101,8 @@ ${message}` : message;
   function renderChats(container, rawChats, charAvatar) {
     let chatArray = normalizeChats(rawChats);
     chatArray = filterValidChats(chatArray);
+    const totalChatCount = chatArray.length;
+    updateHasChats(totalChatCount);
     if (chatArray.length === 0) {
       updateChatCount(0);
       container.innerHTML = `
@@ -2118,6 +2120,15 @@ ${message}` : message;
     const sortOption = storage.getSortOption();
     chatArray = sortChats(chatArray, charAvatar, sortOption);
     updateChatCount(chatArray.length);
+    if (chatArray.length === 0) {
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F4C1}</i>
+                <div>\uC774 \uD3F4\uB354\uC5D0\uB294 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+            </div>
+        `;
+      return;
+    }
     container.innerHTML = chatArray.map(
       (chat, idx) => renderChatItem(chat, charAvatar, idx)
     ).join("");
@@ -2317,8 +2328,10 @@ ${message}` : message;
   function updateChatCount(count) {
     const el = document.getElementById("chat-panel-count");
     if (el) el.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
+  }
+  function updateHasChats(totalCount) {
     const newChatBtn = document.getElementById("chat-lobby-new-chat");
-    if (newChatBtn) newChatBtn.dataset.hasChats = count > 0 ? "true" : "false";
+    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 0 ? "true" : "false";
   }
   function showFolderBar(visible) {
     const filtersSection = document.getElementById("chat-lobby-filters");
@@ -2867,12 +2880,19 @@ ${message}` : message;
   init_sillyTavern();
   init_cache();
   init_textUtils();
-  init_notifications();
   var MAX_RANKING = 20;
   var isStatsOpen = false;
+  var currentStep = 0;
+  var rankingsData = [];
+  var totalStatsData = {};
+  var userGuessChar = null;
+  var userGuessMessages = 0;
   async function openStatsView() {
     if (isStatsOpen) return;
     isStatsOpen = true;
+    currentStep = 0;
+    userGuessChar = null;
+    userGuessMessages = 0;
     const container = document.getElementById("chat-lobby-main");
     if (!container) return;
     const leftPanel = document.getElementById("chat-lobby-left");
@@ -2883,22 +2903,18 @@ ${message}` : message;
     if (lobbyHeader) lobbyHeader.style.display = "none";
     const statsView = document.createElement("div");
     statsView.id = "chat-lobby-stats-view";
-    statsView.className = "stats-view";
+    statsView.className = "stats-view wrapped-view";
     statsView.innerHTML = `
-        <div class="stats-header">
-            <button class="stats-back" data-action="close-stats">\u2190</button>
-            <h3>\u{1F4CA} \uD1B5\uACC4</h3>
-        </div>
-        <div class="stats-content">
-            <div class="stats-loading">
+        <div class="wrapped-container">
+            <div class="wrapped-loading">
                 <div class="stats-spinner"></div>
-                <div>\uD1B5\uACC4 \uBD88\uB7EC\uC624\uB294 \uC911...</div>
+                <div>\uB370\uC774\uD130 \uBD88\uB7EC\uC624\uB294 \uC911...</div>
             </div>
         </div>
     `;
     container.appendChild(statsView);
-    statsView.querySelector(".stats-back").addEventListener("click", closeStatsView);
-    await loadStats(statsView.querySelector(".stats-content"));
+    await loadWrappedData();
+    showStep(1);
   }
   function closeStatsView() {
     if (!isStatsOpen) return;
@@ -2915,31 +2931,19 @@ ${message}` : message;
   function isStatsViewOpen() {
     return isStatsOpen;
   }
-  async function loadStats(contentEl) {
+  async function loadWrappedData() {
     try {
       const characters = api.getCharacters();
       if (!characters || characters.length === 0) {
-        contentEl.innerHTML = `
-                <div class="stats-empty">
-                    <i>\u{1F4CA}</i>
-                    <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                </div>
-            `;
+        showError("\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4");
         return;
       }
       const topCharacters = characters.slice(0, MAX_RANKING);
-      const rankings = await fetchRankings(topCharacters);
-      const totalStats = calculateTotalStats(rankings, characters.length);
-      contentEl.innerHTML = renderStatsHTML(rankings, totalStats);
-      animateCards(contentEl);
+      rankingsData = await fetchRankings(topCharacters);
+      totalStatsData = calculateTotalStats(rankingsData, characters.length);
     } catch (error) {
-      console.error("[StatsView] Failed to load stats:", error);
-      contentEl.innerHTML = `
-            <div class="stats-empty">
-                <i>\u26A0\uFE0F</i>
-                <div>\uD1B5\uACC4 \uB85C\uB529 \uC2E4\uD328</div>
-            </div>
-        `;
+      console.error("[Wrapped] Failed to load:", error);
+      showError("\uB370\uC774\uD130 \uB85C\uB529 \uC2E4\uD328");
     }
   }
   async function fetchRankings(characters) {
@@ -2957,53 +2961,190 @@ ${message}` : message;
             const chatCount = Array.isArray(chats) ? chats.length : 0;
             let messageCount = 0;
             if (Array.isArray(chats)) {
-              messageCount = chats.reduce((sum, chat) => {
-                return sum + (chat.chat_items || 0);
-              }, 0);
+              messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
             }
-            return {
-              name: char.name,
-              avatar: char.avatar,
-              chatCount,
-              messageCount
-            };
+            return { name: char.name, avatar: char.avatar, chatCount, messageCount };
           } catch (e) {
-            console.warn("[StatsView] Failed to get stats for:", char.name);
-            return {
-              name: char.name,
-              avatar: char.avatar,
-              chatCount: 0,
-              messageCount: 0
-            };
+            return { name: char.name, avatar: char.avatar, chatCount: 0, messageCount: 0 };
           }
         })
       );
       results.push(...batchResults);
     }
     return results.sort((a, b) => {
-      if (b.messageCount !== a.messageCount) {
-        return b.messageCount - a.messageCount;
-      }
+      if (b.messageCount !== a.messageCount) return b.messageCount - a.messageCount;
       return b.chatCount - a.chatCount;
     });
   }
   function calculateTotalStats(rankings, totalCharacters) {
     const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
     const totalMessages = rankings.reduce((sum, r) => sum + r.messageCount, 0);
-    return {
-      characters: totalCharacters,
-      chats: totalChats,
-      messages: totalMessages
-    };
+    return { characters: totalCharacters, chats: totalChats, messages: totalMessages };
   }
-  function renderStatsHTML(rankings, totalStats) {
+  function showStep(step) {
+    currentStep = step;
+    const container = document.querySelector(".wrapped-container");
+    if (!container) return;
+    switch (step) {
+      case 1:
+        showIntro(container);
+        break;
+      case 2:
+        showQuiz(container);
+        break;
+      case 3:
+        showQuizResult(container);
+        break;
+      case 4:
+        showMessageQuiz(container);
+        break;
+      case 5:
+        showMessageResult(container);
+        break;
+      case 6:
+        showFinalStats(container);
+        break;
+      default:
+        closeStatsView();
+    }
+  }
+  function showIntro(container) {
+    container.innerHTML = `
+        <div class="wrapped-step intro-step">
+            <div class="wrapped-emoji">\u{1F38A}</div>
+            <h2>Chat Lobby Wrapped</h2>
+            <p class="wrapped-subtitle">\uC774\uB54C\uAE4C\uC9C0 \uB2F9\uC2E0\uC740 \uB204\uAD6C\uC640<br>\uAC00\uC7A5 \uB9CE\uC774 \uB300\uD654\uD588\uC744\uAE4C\uC694?</p>
+            <button class="wrapped-btn primary" data-action="next">\uC2DC\uC791\uD558\uAE30</button>
+            <button class="wrapped-btn secondary" data-action="skip">\uAC74\uB108\uB6F0\uAE30</button>
+        </div>
+    `;
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(2));
+    container.querySelector('[data-action="skip"]').addEventListener("click", () => showStep(6));
+  }
+  function showQuiz(container) {
+    if (rankingsData.length < 3) {
+      showStep(6);
+      return;
+    }
+    const top3 = rankingsData.slice(0, 3);
+    const shuffled = [...top3].sort(() => Math.random() - 0.5);
+    container.innerHTML = `
+        <div class="wrapped-step quiz-step">
+            <div class="wrapped-emoji">\u{1F914}</div>
+            <h2>\uAC00\uC7A5 \uB9CE\uC774 \uB300\uD654\uD55C \uCE90\uB9AD\uD130\uB294?</h2>
+            <div class="quiz-options">
+                ${shuffled.map((char, i) => {
+      const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
+      return `
+                        <div class="quiz-option spin-animation" data-name="${escapeHtml(char.name)}" style="animation-delay: ${i * 0.2}s">
+                            <img src="${avatarUrl}" alt="${escapeHtml(char.name)}" onerror="this.src='/img/ai4.png'">
+                            <span>${escapeHtml(char.name)}</span>
+                        </div>
+                    `;
+    }).join("")}
+            </div>
+        </div>
+    `;
+    container.querySelectorAll(".quiz-option").forEach((opt) => {
+      opt.addEventListener("click", () => {
+        userGuessChar = opt.dataset.name;
+        showStep(3);
+      });
+    });
+  }
+  function showQuizResult(container) {
+    const correct = rankingsData[0];
+    const isCorrect = userGuessChar === correct.name;
+    const avatarUrl = correct.avatar ? `/characters/${encodeURIComponent(correct.avatar)}` : "/img/ai4.png";
+    if (isCorrect) {
+      showConfetti();
+    }
+    container.innerHTML = `
+        <div class="wrapped-step result-step ${isCorrect ? "result-correct" : "result-wrong"}">
+            <div class="wrapped-emoji">${isCorrect ? "\u{1F389}" : "\u{1F605}"}</div>
+            <h2>${isCorrect ? "\uC815\uB2F5\uC774\uC5D0\uC694!" : "\uC544\uC26C\uC6CC\uC694!"}</h2>
+            ${!isCorrect ? `<p class="wrapped-subtitle">\uC815\uB2F5\uC740 <strong>${escapeHtml(correct.name)}</strong> \uC774\uC5C8\uC5B4\uC694!</p>` : ""}
+            <div class="result-avatar ${isCorrect ? "sparkle-animation" : ""}">
+                <img src="${avatarUrl}" alt="${escapeHtml(correct.name)}" onerror="this.src='/img/ai4.png'">
+                <span>${escapeHtml(correct.name)}</span>
+            </div>
+            <button class="wrapped-btn primary" data-action="next">\uB2E4\uC74C</button>
+        </div>
+    `;
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(4));
+  }
+  function showMessageQuiz(container) {
+    const top = rankingsData[0];
+    container.innerHTML = `
+        <div class="wrapped-step message-quiz-step">
+            <div class="wrapped-emoji">\u{1F4AC}</div>
+            <h2>\uADF8\uB7FC, ${escapeHtml(top.name)}\uACFC<br>\uBA87 \uAC1C\uC758 \uBA54\uC2DC\uC9C0\uB97C \uB098\uB234\uC744\uAE4C\uC694?</h2>
+            <div class="message-input-wrap">
+                <input type="number" id="message-guess" placeholder="\uC608\uC0C1 \uBA54\uC2DC\uC9C0 \uC218" min="0">
+            </div>
+            <button class="wrapped-btn primary" data-action="submit">\uD655\uC778\uD558\uAE30</button>
+        </div>
+    `;
+    const input = container.querySelector("#message-guess");
+    const btn = container.querySelector('[data-action="submit"]');
+    btn.addEventListener("click", () => {
+      userGuessMessages = parseInt(input.value) || 0;
+      showStep(5);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        userGuessMessages = parseInt(input.value) || 0;
+        showStep(5);
+      }
+    });
+  }
+  function showMessageResult(container) {
+    const top = rankingsData[0];
+    const actual = top.messageCount;
+    const guess = userGuessMessages;
+    const result = judgeMessageGuess(actual, guess);
+    let emoji, title, subtitle;
+    if (result === "accurate") {
+      emoji = "\u{1F3AF}";
+      title = "\uB300\uB2E8\uD574\uC694!";
+      subtitle = "\uAC70\uC758 \uC815\uD655\uD574\uC694!";
+    } else if (result === "too_high") {
+      emoji = "\u{1F4C9}";
+      title = "\uC557!";
+      subtitle = "\uC2E4\uC81C\uB85C\uB294 \uD6E8\uC52C \uC801\uAC8C \uBA54\uC2DC\uC9C0\uB97C \uBCF4\uB0B4\uC168\uC5B4\uC694!";
+    } else {
+      emoji = "\u{1F4C8}";
+      title = "\uC640!";
+      subtitle = "\uC2E4\uC81C\uB85C\uB294 \uD6E8\uC52C \uB9CE\uC740 \uBA54\uC2DC\uC9C0\uB97C \uBCF4\uB0B4\uC168\uC5B4\uC694!";
+    }
+    container.innerHTML = `
+        <div class="wrapped-step message-result-step">
+            <div class="wrapped-emoji">${emoji}</div>
+            <h2>${title}</h2>
+            <p class="wrapped-subtitle">${subtitle}</p>
+            <div class="message-compare">
+                <div class="compare-item">
+                    <span class="compare-label">\uC2E4\uC81C \uBA54\uC2DC\uC9C0</span>
+                    <span class="compare-value ${result} count-up">${actual.toLocaleString()}\uAC1C</span>
+                </div>
+                <div class="compare-item">
+                    <span class="compare-label">\uB2F9\uC2E0\uC758 \uC608\uC0C1</span>
+                    <span class="compare-value">${guess.toLocaleString()}\uAC1C</span>
+                </div>
+            </div>
+            <button class="wrapped-btn primary" data-action="next">\uACB0\uACFC \uBCF4\uAE30</button>
+        </div>
+    `;
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(6));
+  }
+  function showFinalStats(container) {
     const medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
-    const rankingHTML = rankings.map((r, i) => {
+    const top = rankingsData[0];
+    const rankingHTML = rankingsData.slice(0, 10).map((r, i) => {
       const medal = i < 3 ? medals[i] : `${i + 1}\uC704`;
-      const isTop3 = i < 3;
       const avatarUrl = r.avatar ? `/characters/${encodeURIComponent(r.avatar)}` : "/img/ai4.png";
       return `
-            <div class="stats-rank-item ${isTop3 ? "top-3" : ""}" data-rank="${i + 1}">
+            <div class="stats-rank-item ${i < 3 ? "top-3" : ""}" style="animation-delay: ${i * 0.05}s">
                 <span class="rank-medal">${medal}</span>
                 <img class="rank-avatar" src="${avatarUrl}" alt="${escapeHtml(r.name)}" onerror="this.src='/img/ai4.png'">
                 <div class="rank-info">
@@ -3013,43 +3154,102 @@ ${message}` : message;
             </div>
         `;
     }).join("");
-    return `
-        <div class="stats-section">
-            <h4>\u{1F3C6} \uCC44\uD305 \uB7AD\uD0B9 (\uC0C1\uC704 ${MAX_RANKING}\uAC1C)</h4>
-            <div class="stats-ranking">
-                ${rankingHTML}
+    const encouragement = getEncouragement(top?.name);
+    container.innerHTML = `
+        <div class="wrapped-step final-step">
+            <div class="final-header">
+                <button class="wrapped-back" data-action="close">\u2190</button>
+                <h2>\u{1F4CA} \uB2F9\uC2E0\uC758 Chat Lobby \uAE30\uB85D</h2>
             </div>
-        </div>
-        <div class="stats-section stats-total">
-            <h4>\u{1F4C8} \uC804\uCCB4 \uD1B5\uACC4</h4>
-            <div class="stats-grid">
-                <div class="stats-item">
-                    <div class="stats-value">${totalStats.characters}</div>
-                    <div class="stats-label">\uCD1D \uCE90\uB9AD\uD130</div>
+            <div class="final-content">
+                <div class="stats-section">
+                    <h4>\u{1F3C6} \uCC44\uD305 \uB7AD\uD0B9 (\uC0C1\uC704 10\uAC1C)</h4>
+                    <div class="stats-ranking slide-in">
+                        ${rankingHTML}
+                    </div>
                 </div>
-                <div class="stats-item">
-                    <div class="stats-value">${totalStats.chats}</div>
-                    <div class="stats-label">\uCD1D \uCC44\uD305</div>
+                <div class="stats-section stats-total">
+                    <div class="stats-grid">
+                        <div class="stats-item">
+                            <div class="stats-value">${totalStatsData.characters}</div>
+                            <div class="stats-label">\uCD1D \uCE90\uB9AD\uD130</div>
+                        </div>
+                        <div class="stats-item">
+                            <div class="stats-value">${totalStatsData.chats}</div>
+                            <div class="stats-label">\uCD1D \uCC44\uD305</div>
+                        </div>
+                        <div class="stats-item">
+                            <div class="stats-value">${totalStatsData.messages.toLocaleString()}</div>
+                            <div class="stats-label">\uCD1D \uBA54\uC2DC\uC9C0</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="stats-item">
-                    <div class="stats-value">${totalStats.messages.toLocaleString()}</div>
-                    <div class="stats-label">\uCD1D \uBA54\uC2DC\uC9C0</div>
+                <div class="encouragement">
+                    "${encouragement}"
                 </div>
             </div>
+            <button class="wrapped-btn primary" data-action="close">\uB2EB\uAE30</button>
         </div>
     `;
+    container.querySelectorAll('[data-action="close"]').forEach((btn) => {
+      btn.addEventListener("click", closeStatsView);
+    });
+    animateCards(container);
+  }
+  function judgeMessageGuess(actual, guess) {
+    if (actual === 0) return "accurate";
+    const diff = Math.abs(actual - guess);
+    const threshold = actual * 0.15;
+    if (diff <= threshold) return "accurate";
+    if (guess > actual) return "too_high";
+    return "too_low";
+  }
+  function getEncouragement(topCharName) {
+    const messages = [
+      `\uB2E4\uC74C\uC5D0\uB3C4 ${topCharName}\uACFC \uD568\uAED8\uD574\uC694! \u{1F495}`,
+      `${topCharName}\uC774(\uAC00) \uB2F9\uC2E0\uC744 \uAE30\uB2E4\uB9AC\uACE0 \uC788\uC5B4\uC694! \u2728`,
+      `\uC55E\uC73C\uB85C\uB3C4 \uC990\uAC70\uC6B4 \uB300\uD654 \uB098\uB220\uC694! \u{1F38A}`,
+      `${topCharName}\uACFC\uC758 \uCD94\uC5B5\uC774 \uC313\uC774\uACE0 \uC788\uC5B4\uC694! \u{1F4DA}`
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  }
+  function showError(message) {
+    const container = document.querySelector(".wrapped-container");
+    if (!container) return;
+    container.innerHTML = `
+        <div class="wrapped-step error-step">
+            <div class="wrapped-emoji">\u{1F622}</div>
+            <h2>${message}</h2>
+            <button class="wrapped-btn primary" data-action="close">\uB2EB\uAE30</button>
+        </div>
+    `;
+    container.querySelector('[data-action="close"]').addEventListener("click", closeStatsView);
   }
   function animateCards(container) {
     const items = container.querySelectorAll(".stats-rank-item");
     items.forEach((item, i) => {
       item.style.opacity = "0";
-      item.style.transform = "translateY(20px)";
+      item.style.transform = "translateX(20px)";
       setTimeout(() => {
         item.style.transition = "opacity 0.3s ease, transform 0.3s ease";
         item.style.opacity = "1";
-        item.style.transform = "translateY(0)";
+        item.style.transform = "translateX(0)";
       }, i * 50);
     });
+  }
+  function showConfetti() {
+    const container = document.createElement("div");
+    container.className = "confetti-container";
+    document.body.appendChild(container);
+    for (let i = 0; i < 30; i++) {
+      const confetti = document.createElement("div");
+      confetti.className = "confetti";
+      confetti.style.left = Math.random() * 100 + "%";
+      confetti.style.animationDelay = Math.random() * 2 + "s";
+      confetti.style.animationDuration = 2 + Math.random() * 2 + "s";
+      container.appendChild(confetti);
+    }
+    setTimeout(() => container.remove(), 5e3);
   }
 
   // src/index.js

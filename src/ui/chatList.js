@@ -238,6 +238,10 @@ function renderChats(container, rawChats, charAvatar) {
     // 유효한 채팅만 필터링
     chatArray = filterValidChats(chatArray);
     
+    // 💡 hasChats는 필터 전 전체 수로 설정 (새 채팅 버튼용)
+    const totalChatCount = chatArray.length;
+    updateHasChats(totalChatCount);
+    
     if (chatArray.length === 0) {
         updateChatCount(0);
         container.innerHTML = `
@@ -260,6 +264,17 @@ function renderChats(container, rawChats, charAvatar) {
     chatArray = sortChats(chatArray, charAvatar, sortOption);
     
     updateChatCount(chatArray.length);
+    
+    // 필터 결과가 0이면 빈 상태 표시
+    if (chatArray.length === 0) {
+        container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>📁</i>
+                <div>이 폴더에는 채팅이 없습니다</div>
+            </div>
+        `;
+        return;
+    }
     
     container.innerHTML = chatArray.map((chat, idx) => 
         renderChatItem(chat, charAvatar, idx)
@@ -574,15 +589,21 @@ function renderCharacterTags(charAvatar) {
 }
 
 /**
- * 채팅 수 업데이트
+ * 채팅 수 업데이트 (필터 후 표시용)
  * @param {number} count
  */
 function updateChatCount(count) {
     const el = document.getElementById('chat-panel-count');
     if (el) el.textContent = count > 0 ? `${count}개 채팅` : '채팅 없음';
-    
+}
+
+/**
+ * hasChats 업데이트 (필터 전 전체 수, 새 채팅 버튼용)
+ * @param {number} totalCount
+ */
+function updateHasChats(totalCount) {
     const newChatBtn = document.getElementById('chat-lobby-new-chat');
-    if (newChatBtn) newChatBtn.dataset.hasChats = count > 0 ? 'true' : 'false';
+    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 0 ? 'true' : 'false';
 }
 
 /**
