@@ -108,8 +108,8 @@ async function loadWrappedData() {
             return;
         }
         
-        const topCharacters = characters.slice(0, MAX_RANKING);
-        rankingsData = await fetchRankings(topCharacters);
+        // 🔧 모든 캐릭터에서 랭킹 계산 (상위 20개 제한 제거)
+        rankingsData = await fetchRankings(characters);
         totalStatsData = calculateTotalStats(rankingsData, characters.length);
         
     } catch (error) {

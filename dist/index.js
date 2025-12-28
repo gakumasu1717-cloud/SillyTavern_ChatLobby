@@ -2880,7 +2880,6 @@ ${message}` : message;
   init_sillyTavern();
   init_cache();
   init_textUtils();
-  var MAX_RANKING = 20;
   var isStatsOpen = false;
   var currentStep = 0;
   var rankingsData = [];
@@ -2938,8 +2937,7 @@ ${message}` : message;
         showError("\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4");
         return;
       }
-      const topCharacters = characters.slice(0, MAX_RANKING);
-      rankingsData = await fetchRankings(topCharacters);
+      rankingsData = await fetchRankings(characters);
       totalStatsData = calculateTotalStats(rankingsData, characters.length);
     } catch (error) {
       console.error("[Wrapped] Failed to load:", error);
