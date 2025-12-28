@@ -361,7 +361,7 @@ function showFinalStats(container) {
         <div class="wrapped-step final-step">
             <div class="final-header">
                 <button class="wrapped-back" data-action="close">←</button>
-                <h2>📊 당신의 Chat Lobby 기록</h2>
+                <h2>📊 당신의 채팅 기록</h2>
             </div>
             <div class="final-content">
                 <div class="stats-section">

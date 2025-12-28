@@ -1791,6 +1791,8 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-size: 1.3em;
     min-width: 35px;
     text-align: center;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .rank-avatar {

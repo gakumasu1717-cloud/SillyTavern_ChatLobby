@@ -3159,7 +3159,7 @@ ${message}` : message;
         <div class="wrapped-step final-step">
             <div class="final-header">
                 <button class="wrapped-back" data-action="close">\u2190</button>
-                <h2>\u{1F4CA} \uB2F9\uC2E0\uC758 Chat Lobby \uAE30\uB85D</h2>
+                <h2>\u{1F4CA} \uB2F9\uC2E0\uC758 \uCC44\uD305 \uAE30\uB85D</h2>
             </div>
             <div class="final-content">
                 <div class="stats-section">
