@@ -985,6 +985,10 @@
     height: 28px;
     padding: 0 8px;
     font-size: 12px;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #chat-lobby-filters .filters-row button {
