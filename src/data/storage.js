@@ -103,23 +103,23 @@ class StorageManager {
      * @param {LobbyData} data
      */
     cleanup(data) {
-        // 1. chatAssignments 크기 제한 (최대 500개)
+        // 1. chatAssignments 크기 제한 (최대 2000개)
         const assignments = Object.entries(data.chatAssignments || {});
-        if (assignments.length > 500) {
-            const toKeep = assignments.slice(-500);  // 최근 500개만 유지
+        if (assignments.length > 2000) {
+            const toKeep = assignments.slice(-2000);  // 최근 2000개만 유지
             data.chatAssignments = Object.fromEntries(toKeep);
-            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} → 500`);
+            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} → 2000`);
         }
         
-        // 2. favorites 크기 제한 (최대 200개)
-        if (data.favorites && data.favorites.length > 200) {
-            data.favorites = data.favorites.slice(-200);
+        // 2. favorites 크기 제한 (최대 500개)
+        if (data.favorites && data.favorites.length > 500) {
+            data.favorites = data.favorites.slice(-500);
             console.log(`[Storage] Cleaned favorites`);
         }
         
-        // 3. characterFavorites 크기 제한 (최대 100개)
-        if (data.characterFavorites && data.characterFavorites.length > 100) {
-            data.characterFavorites = data.characterFavorites.slice(-100);
+        // 3. characterFavorites 크기 제한 (최대 300개)
+        if (data.characterFavorites && data.characterFavorites.length > 300) {
+            data.characterFavorites = data.characterFavorites.slice(-300);
             console.log(`[Storage] Cleaned characterFavorites`);
         }
         
@@ -349,16 +349,11 @@ class StorageManager {
      * @param {string} targetFolderId - 대상 폴더 ID
      */
     moveChatsBatch(chatKeys, targetFolderId) {
-        
         this.update((data) => {
-            
             chatKeys.forEach(key => {
-                const oldFolder = data.chatAssignments[key] || 'uncategorized';
                 data.chatAssignments[key] = targetFolderId;
             });
-            
         });
-        
     }
     
     // ============================================

@@ -525,17 +525,17 @@ ${message}` : message;
          */
         cleanup(data) {
           const assignments = Object.entries(data.chatAssignments || {});
-          if (assignments.length > 500) {
-            const toKeep = assignments.slice(-500);
+          if (assignments.length > 2e3) {
+            const toKeep = assignments.slice(-2e3);
             data.chatAssignments = Object.fromEntries(toKeep);
-            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} \u2192 500`);
+            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} \u2192 2000`);
           }
-          if (data.favorites && data.favorites.length > 200) {
-            data.favorites = data.favorites.slice(-200);
+          if (data.favorites && data.favorites.length > 500) {
+            data.favorites = data.favorites.slice(-500);
             console.log(`[Storage] Cleaned favorites`);
           }
-          if (data.characterFavorites && data.characterFavorites.length > 100) {
-            data.characterFavorites = data.characterFavorites.slice(-100);
+          if (data.characterFavorites && data.characterFavorites.length > 300) {
+            data.characterFavorites = data.characterFavorites.slice(-300);
             console.log(`[Storage] Cleaned characterFavorites`);
           }
           this._data = data;
@@ -744,7 +744,6 @@ ${message}` : message;
         moveChatsBatch(chatKeys, targetFolderId) {
           this.update((data) => {
             chatKeys.forEach((key) => {
-              const oldFolder = data.chatAssignments[key] || "uncategorized";
               data.chatAssignments[key] = targetFolderId;
             });
           });
