@@ -1080,14 +1080,6 @@ ${message}` : message;
               console.error("[API] Character not found:", charAvatar);
               return false;
             }
-            if (typeof window.setFavorite === "function") {
-              const charIndex = context.characters.indexOf(char);
-              if (charIndex !== -1) {
-                await window.setFavorite(charIndex, newFavState);
-                cache.invalidate("characters");
-                return true;
-              }
-            }
             const editPayload = {
               avatar_url: charAvatar,
               ch_name: char.name,
@@ -1100,9 +1092,16 @@ ${message}` : message;
               body: JSON.stringify(editPayload)
             });
             if (response.ok) {
-              char.fav = newFavState;
-              if (char.data) {
-                char.data.fav = newFavState;
+              if (typeof context?.getCharacters === "function") {
+                await context.getCharacters();
+              } else {
+                char.fav = newFavState;
+                if (char.data) {
+                  char.data.fav = newFavState;
+                }
+                if (char.data?.extensions) {
+                  char.data.extensions.fav = newFavState;
+                }
               }
               cache.invalidate("characters");
               return true;

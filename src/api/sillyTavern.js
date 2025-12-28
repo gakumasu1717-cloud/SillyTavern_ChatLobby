@@ -281,17 +281,7 @@ class SillyTavernAPI {
                 return false;
             }
             
-            // 방법 1: SillyTavern의 내장 함수 사용 (있으면)
-            if (typeof window.setFavorite === 'function') {
-                const charIndex = context.characters.indexOf(char);
-                if (charIndex !== -1) {
-                    await window.setFavorite(charIndex, newFavState);
-                    cache.invalidate('characters');
-                    return true;
-                }
-            }
-            
-            // 방법 2: edit-attribute API 사용
+            // edit-attribute API로 서버에 저장
             const editPayload = {
                 avatar_url: charAvatar,
                 ch_name: char.name,
@@ -306,10 +296,18 @@ class SillyTavernAPI {
             });
             
             if (response.ok) {
-                // context.characters 업데이트
-                char.fav = newFavState;
-                if (char.data) {
-                    char.data.fav = newFavState;
+                // SillyTavern의 characters 배열 강제 갱신
+                if (typeof context?.getCharacters === 'function') {
+                    await context.getCharacters();
+                } else {
+                    // fallback: 로컬 메모리만 업데이트
+                    char.fav = newFavState;
+                    if (char.data) {
+                        char.data.fav = newFavState;
+                    }
+                    if (char.data?.extensions) {
+                        char.data.extensions.fav = newFavState;
+                    }
                 }
                 cache.invalidate('characters');
                 return true;
