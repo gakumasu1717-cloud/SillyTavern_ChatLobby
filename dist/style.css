@@ -899,7 +899,7 @@
     align-items: center;
     padding: 10px 15px;
     border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
-    background: rgba(0, 0, 0, 0.2);
+    background: transparent;
     gap: 10px;
 }
 
@@ -1506,32 +1506,31 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 #chat-lobby-char-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 15px;
-    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.98));
+    gap: 8px;
+    padding: 10px 16px;
+    background: transparent;
     border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
 }
 
 .lobby-char-tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 8px;
-    border-radius: 10px;
-    background: var(--SmartThemeBlurTintColor, rgba(50, 50, 50, 0.8));
-    color: var(--SmartThemeBodyColor, #aaa);
-    font-size: 11px;
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.08));
+    color: var(--SmartThemeBodyColor, #bbb);
+    font-size: 12px;
     user-select: none;
 }
 
 /* 모바일 캐릭터 태그 */
 @media (max-width: 768px) {
     #chat-lobby-char-tags {
-        padding: 6px 12px;
-        gap: 4px;
+        padding: 8px 12px;
+        gap: 6px;
     }
     
     .lobby-char-tag {
-        padding: 2px 6px;
-        font-size: 10px;
+        padding: 3px 8px;
+        font-size: 11px;
     }
 }
