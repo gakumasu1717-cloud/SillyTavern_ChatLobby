@@ -252,17 +252,17 @@ function bindCharacterEvents(container) {
                 if (favBtn._favSaving) return;
                 favBtn._favSaving = true;
                 
+                // 현재 상태 확인 (UI에서 직접 읽기)
+                const currentFav = card.dataset.isFav === 'true';
+                const newFavState = !currentFav;
+                
+                // 1. UI 즉시 업데이트 (optimistic)
+                favBtn.textContent = newFavState ? '⭐' : '☆';
+                card.dataset.isFav = newFavState.toString();
+                card.classList.toggle('is-char-fav', newFavState);
+                
                 try {
-                    // 현재 상태 확인 (UI에서 직접 읽기 - 가장 신뢰할 수 있음)
-                    const currentFav = card.dataset.isFav === 'true';
-                    const newFavState = !currentFav;
-                    
-                    // 1. UI 즉시 업데이트 (optimistic)
-                    favBtn.textContent = newFavState ? '⭐' : '☆';
-                    card.dataset.isFav = newFavState.toString();
-                    card.classList.toggle('is-char-fav', newFavState);
-                    
-                    // 2. 서버에 즉시 저장
+                    // 2. 서버에 저장
                     const response = await fetch('/api/characters/merge-attributes', {
                         method: 'POST',
                         headers: api.getRequestHeaders(),
@@ -276,10 +276,13 @@ function bindCharacterEvents(container) {
                         throw new Error(`저장 실패: ${response.status}`);
                     }
                     
-                    // 3. SillyTavern 메모리 강제 갱신 (서버에서 다시 가져오기)
-                    const context = api.getContext();
-                    if (typeof context?.getCharacters === 'function') {
-                        await context.getCharacters();
+                    // 3. 로컬 메모리만 직접 업데이트 (getCharacters 호출 안 함)
+                    const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
+                    if (char) {
+                        char.fav = newFavState;
+                        if (!char.data) char.data = {};
+                        if (!char.data.extensions) char.data.extensions = {};
+                        char.data.extensions.fav = newFavState;
                     }
                     
                     console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
@@ -289,11 +292,9 @@ function bindCharacterEvents(container) {
                     console.error('[CharacterGrid] Failed to save favorite:', error);
                     
                     // 실패 시 UI 롤백
-                    const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
-                    const actualState = char ? isFavoriteChar(char) : (card.dataset.isFav !== 'true');
-                    favBtn.textContent = actualState ? '⭐' : '☆';
-                    card.dataset.isFav = actualState.toString();
-                    card.classList.toggle('is-char-fav', actualState);
+                    favBtn.textContent = currentFav ? '⭐' : '☆';
+                    card.dataset.isFav = currentFav.toString();
+                    card.classList.toggle('is-char-fav', currentFav);
                     
                     showToast('즐겨찾기 저장 실패', 'error');
                 } finally {

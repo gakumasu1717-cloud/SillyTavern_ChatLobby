@@ -1517,12 +1517,12 @@ ${message}` : message;
           e.stopPropagation();
           if (favBtn._favSaving) return;
           favBtn._favSaving = true;
+          const currentFav = card.dataset.isFav === "true";
+          const newFavState = !currentFav;
+          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          card.dataset.isFav = newFavState.toString();
+          card.classList.toggle("is-char-fav", newFavState);
           try {
-            const currentFav = card.dataset.isFav === "true";
-            const newFavState = !currentFav;
-            favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
-            card.dataset.isFav = newFavState.toString();
-            card.classList.toggle("is-char-fav", newFavState);
             const response = await fetch("/api/characters/merge-attributes", {
               method: "POST",
               headers: api.getRequestHeaders(),
@@ -1534,19 +1534,20 @@ ${message}` : message;
             if (!response.ok) {
               throw new Error(`\uC800\uC7A5 \uC2E4\uD328: ${response.status}`);
             }
-            const context = api.getContext();
-            if (typeof context?.getCharacters === "function") {
-              await context.getCharacters();
+            const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
+            if (char) {
+              char.fav = newFavState;
+              if (!char.data) char.data = {};
+              if (!char.data.extensions) char.data.extensions = {};
+              char.data.extensions.fav = newFavState;
             }
             console.log(`[CharacterGrid] Favorite saved: ${charAvatar} = ${newFavState}`);
             showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
           } catch (error) {
             console.error("[CharacterGrid] Failed to save favorite:", error);
-            const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
-            const actualState = char ? isFavoriteChar(char) : card.dataset.isFav !== "true";
-            favBtn.textContent = actualState ? "\u2B50" : "\u2606";
-            card.dataset.isFav = actualState.toString();
-            card.classList.toggle("is-char-fav", actualState);
+            favBtn.textContent = currentFav ? "\u2B50" : "\u2606";
+            card.dataset.isFav = currentFav.toString();
+            card.classList.toggle("is-char-fav", currentFav);
             showToast("\uC990\uACA8\uCC3E\uAE30 \uC800\uC7A5 \uC2E4\uD328", "error");
           } finally {
             favBtn._favSaving = false;
