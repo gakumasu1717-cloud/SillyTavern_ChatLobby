@@ -821,9 +821,22 @@
         height: 40px;
     }
     
-    /* 검색창 */
+    /* 검색창 + 정렬 한 줄 (모바일에서도 유지) */
     #chat-lobby-search {
+        display: flex;
+        flex-direction: row;
         padding: 8px 15px;
+        gap: 8px;
+    }
+    
+    #chat-lobby-search input {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    #chat-lobby-search select {
+        flex-shrink: 0;
+        width: auto;
     }
     
     /* 캐릭터 그리드 - 모바일 최적화 */

@@ -1584,33 +1584,20 @@ ${message}` : message;
   }
   function renderTagBar(characters) {
     const container = document.getElementById("chat-lobby-tag-list");
-    const moreBtn = document.getElementById("chat-lobby-tag-more");
     if (!container) return;
     const tags = aggregateTags(characters);
     if (tags.length === 0) {
       container.innerHTML = "";
-      if (moreBtn) moreBtn.style.display = "none";
       return;
     }
-    const expanded = store.tagBarExpanded;
     const selectedTag = store.selectedTag;
-    const visibleTags = expanded ? tags : tags.slice(0, MAX_VISIBLE_TAGS);
-    const hasMore = tags.length > MAX_VISIBLE_TAGS;
-    container.innerHTML = visibleTags.map(({ tag, count }) => {
+    container.innerHTML = tags.map(({ tag, count }) => {
       const isActive = selectedTag === tag;
       return `<span class="lobby-tag-item ${isActive ? "active" : ""}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="lobby-tag-count">(${count})</span></span>`;
     }).join("");
-    if (moreBtn) {
-      if (hasMore) {
-        moreBtn.style.display = "inline";
-        moreBtn.textContent = expanded ? "\uC811\uAE30" : `...\uB354\uBCF4\uAE30 (+${tags.length - MAX_VISIBLE_TAGS})`;
-      } else {
-        moreBtn.style.display = "none";
-      }
-    }
-    bindTagEvents(container, moreBtn);
+    bindTagEvents(container);
   }
-  function bindTagEvents(container, moreBtn) {
+  function bindTagEvents(container) {
     container.querySelectorAll(".lobby-tag-item").forEach((item) => {
       createTouchClickHandler(item, () => {
         const tag = item.dataset.tag;
@@ -1622,15 +1609,8 @@ ${message}` : message;
         renderCharacterGrid(store.searchTerm);
       }, { debugName: `tag-${item.dataset.tag}` });
     });
-    if (moreBtn) {
-      createTouchClickHandler(moreBtn, () => {
-        store.setTagBarExpanded(!store.tagBarExpanded);
-        const characters = api.getCharacters();
-        renderTagBar(characters);
-      }, { debugName: "tag-more" });
-    }
   }
-  var handleSearch, MAX_VISIBLE_TAGS;
+  var handleSearch;
   var init_characterGrid = __esm({
     "src/ui/characterGrid.js"() {
       init_sillyTavern();
@@ -1644,7 +1624,6 @@ ${message}` : message;
       handleSearch = debounce((searchTerm) => {
         renderCharacterGrid(searchTerm);
       }, CONFIG.ui.debounceWait);
-      MAX_VISIBLE_TAGS = 5;
     }
   });
 

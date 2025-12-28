@@ -353,9 +353,6 @@ export function handleSortChange(sortOption) {
 // 태그 관련 함수
 // ============================================
 
-/** 태그바에 표시할 최대 태그 수 (접힌 상태) */
-const MAX_VISIBLE_TAGS = 5;
-
 /**
  * 캐릭터의 태그 가져오기 (SillyTavern 원본에서)
  * @param {Object} char - 캐릭터 객체
@@ -411,47 +408,32 @@ function aggregateTags(characters) {
  */
 function renderTagBar(characters) {
     const container = document.getElementById('chat-lobby-tag-list');
-    const moreBtn = document.getElementById('chat-lobby-tag-more');
     if (!container) return;
     
     const tags = aggregateTags(characters);
     
     if (tags.length === 0) {
         container.innerHTML = '';
-        if (moreBtn) moreBtn.style.display = 'none';
         return;
     }
     
-    const expanded = store.tagBarExpanded;
     const selectedTag = store.selectedTag;
-    const visibleTags = expanded ? tags : tags.slice(0, MAX_VISIBLE_TAGS);
-    const hasMore = tags.length > MAX_VISIBLE_TAGS;
     
-    container.innerHTML = visibleTags.map(({ tag, count }) => {
+    // 횡스크롤이니까 제한 없이 다 보여주기
+    container.innerHTML = tags.map(({ tag, count }) => {
         const isActive = selectedTag === tag;
         return `<span class="lobby-tag-item ${isActive ? 'active' : ''}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="lobby-tag-count">(${count})</span></span>`;
     }).join('');
     
-    // 더보기 버튼
-    if (moreBtn) {
-        if (hasMore) {
-            moreBtn.style.display = 'inline';
-            moreBtn.textContent = expanded ? '접기' : `...더보기 (+${tags.length - MAX_VISIBLE_TAGS})`;
-        } else {
-            moreBtn.style.display = 'none';
-        }
-    }
-    
     // 이벤트 바인딩
-    bindTagEvents(container, moreBtn);
+    bindTagEvents(container);
 }
 
 /**
  * 태그 이벤트 바인딩
  * @param {HTMLElement} container - 태그 목록 컨테이너
- * @param {HTMLElement|null} moreBtn - 더보기 버튼
  */
-function bindTagEvents(container, moreBtn) {
+function bindTagEvents(container) {
     // 태그 클릭
     container.querySelectorAll('.lobby-tag-item').forEach(item => {
         createTouchClickHandler(item, () => {
@@ -468,14 +450,4 @@ function bindTagEvents(container, moreBtn) {
             renderCharacterGrid(store.searchTerm);
         }, { debugName: `tag-${item.dataset.tag}` });
     });
-    
-    // 더보기 클릭
-    if (moreBtn) {
-        createTouchClickHandler(moreBtn, () => {
-            store.setTagBarExpanded(!store.tagBarExpanded);
-            // 태그바만 리렌더 (캐릭터 리스트는 그대로)
-            const characters = api.getCharacters();
-            renderTagBar(characters);
-        }, { debugName: 'tag-more' });
-    }
 }
