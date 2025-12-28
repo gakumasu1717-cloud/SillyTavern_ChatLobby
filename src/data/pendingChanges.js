@@ -88,6 +88,7 @@ export async function flushFavoriteChanges() {
             
             if (response.ok) {
                 pendingFavorites.delete(avatar);
+                console.log(`[PendingChanges] Saved ${avatar} = ${state}`);
             } else {
                 console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status);
                 allSuccess = false;
@@ -100,10 +101,36 @@ export async function flushFavoriteChanges() {
     
     // 모든 변경 후 SillyTavern characters 배열 갱신
     if (changes.length > 0) {
-        const context = api.getContext();
-        if (typeof context?.getCharacters === 'function') {
-            await context.getCharacters();
+        try {
+            // 방법 1: SillyTavern의 getCharacters 함수 직접 호출
+            const stGetCharacters = window.SillyTavern?.getContext?.()?.getCharacters 
+                                 || window.getCharacters;
+            
+            if (typeof stGetCharacters === 'function') {
+                console.log('[PendingChanges] Calling SillyTavern getCharacters()...');
+                await stGetCharacters();
+            } else {
+                // 방법 2: API 직접 호출
+                console.log('[PendingChanges] Calling /api/characters/all directly...');
+                const response = await fetch('/api/characters/all', {
+                    method: 'POST',
+                    headers: api.getRequestHeaders(),
+                    body: JSON.stringify({})
+                });
+                
+                if (response.ok) {
+                    const newCharacters = await response.json();
+                    // SillyTavern의 characters 배열 직접 갱신
+                    const context = api.getContext();
+                    if (context?.characters) {
+                        context.characters.splice(0, context.characters.length, ...newCharacters);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[PendingChanges] Failed to refresh characters:', error);
         }
+        
         cache.invalidate('characters');
     }
     
