@@ -6,6 +6,7 @@ import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
+import { queueFavoriteChange } from '../data/pendingChanges.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
@@ -242,17 +243,15 @@ function bindCharacterEvents(container) {
         const charAvatar = card.dataset.charAvatar;
         const favBtn = card.querySelector('.char-fav-btn');
         
-        // 즐겨찾기 버튼 이벤트 - SillyTavern의 #favorite_button 클릭으로 연동
+        // 즐겨찾기 버튼 이벤트 - 로컬만 변경 (배치 처리)
         if (favBtn) {
             createTouchClickHandler(favBtn, async (e) => {
                 e.stopPropagation();
-                
                 
                 // 해당 캐릭터의 인덱스 찾기
                 const context = api.getContext();
                 const characters = context?.characters || [];
                 const charIndex = characters.findIndex(c => c.avatar === charAvatar);
-                
                 
                 if (charIndex === -1) {
                     console.error('[CharacterGrid] Character not found:', charAvatar);
@@ -260,29 +259,20 @@ function bindCharacterEvents(container) {
                     return;
                 }
                 
-                // SillyTavern 원본 데이터에서 현재 상태 확인 (UI dataset 대신)
+                // 현재 상태 확인
                 const char = characters[charIndex];
                 const currentFav = isFavoriteChar(char);
                 const newFavState = !currentFav;
                 
+                // 로컬만 변경 (대기열에 추가)
+                queueFavoriteChange(charAvatar, newFavState);
                 
-                try {
-                    // API로 직접 즐겨찾기 토글 (캐릭터 선택 없이)
-                    const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
-                    
-                    if (success) {
-                        showToast(newFavState ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.', 'success');
-                        
-                        // 그리드 다시 렌더링 (정렬 반영)
-                        await renderCharacterGrid();
-                    } else {
-                        console.error('[CharacterGrid] API call failed');
-                        showToast('즐겨찾기 변경에 실패했습니다.', 'error');
-                    }
-                } catch (error) {
-                    console.error('[CharacterGrid] Favorite toggle error:', error);
-                    showToast('즐겨찾기 변경에 실패했습니다.', 'error');
-                }
+                // UI 즉시 업데이트
+                favBtn.textContent = newFavState ? '⭐' : '☆';
+                card.dataset.isFav = newFavState.toString();
+                card.classList.toggle('is-char-fav', newFavState);
+                
+                showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
             }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
         }
         

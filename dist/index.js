@@ -1285,6 +1285,79 @@ ${message}` : message;
     }
   });
 
+  // src/data/pendingChanges.js
+  function queueFavoriteChange(avatar, newState) {
+    pendingFavorites.set(avatar, newState);
+    const context = api.getContext();
+    const char = context?.characters?.find((c) => c.avatar === avatar);
+    if (char) {
+      char.fav = newState;
+      if (char.data) {
+        char.data.fav = newState;
+      }
+      if (char.data?.extensions) {
+        char.data.extensions.fav = newState;
+      }
+    }
+  }
+  function hasPendingChanges() {
+    return pendingFavorites.size > 0;
+  }
+  async function flushFavoriteChanges() {
+    if (pendingFavorites.size === 0) {
+      return true;
+    }
+    console.log(`[PendingChanges] Flushing ${pendingFavorites.size} favorite changes...`);
+    const changes = [...pendingFavorites.entries()];
+    let allSuccess = true;
+    for (const [avatar, state] of changes) {
+      try {
+        const context = api.getContext();
+        const char = context?.characters?.find((c) => c.avatar === avatar);
+        if (!char) {
+          console.warn(`[PendingChanges] Character not found: ${avatar}`);
+          continue;
+        }
+        const response = await fetch("/api/characters/edit-attribute", {
+          method: "POST",
+          headers: api.getRequestHeaders(),
+          body: JSON.stringify({
+            avatar_url: avatar,
+            ch_name: char.name,
+            field: "fav",
+            value: state
+          })
+        });
+        if (response.ok) {
+          pendingFavorites.delete(avatar);
+        } else {
+          console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status);
+          allSuccess = false;
+        }
+      } catch (error) {
+        console.error(`[PendingChanges] Error saving ${avatar}:`, error);
+        allSuccess = false;
+      }
+    }
+    if (changes.length > 0) {
+      const context = api.getContext();
+      if (typeof context?.getCharacters === "function") {
+        await context.getCharacters();
+      }
+      cache.invalidate("characters");
+    }
+    console.log(`[PendingChanges] Flush complete. Remaining: ${pendingFavorites.size}`);
+    return allSuccess;
+  }
+  var pendingFavorites;
+  var init_pendingChanges = __esm({
+    "src/data/pendingChanges.js"() {
+      init_sillyTavern();
+      init_cache();
+      pendingFavorites = /* @__PURE__ */ new Map();
+    }
+  });
+
   // src/utils/eventHelpers.js
   function debounce(func, wait = CONFIG.ui.debounceWait) {
     let timeout;
@@ -1514,19 +1587,11 @@ ${message}` : message;
           const char = characters[charIndex];
           const currentFav = isFavoriteChar(char);
           const newFavState = !currentFav;
-          try {
-            const success = await api.toggleCharacterFavorite(charAvatar, newFavState);
-            if (success) {
-              showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
-              await renderCharacterGrid();
-            } else {
-              console.error("[CharacterGrid] API call failed");
-              showToast("\uC990\uACA8\uCC3E\uAE30 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
-            }
-          } catch (error) {
-            console.error("[CharacterGrid] Favorite toggle error:", error);
-            showToast("\uC990\uACA8\uCC3E\uAE30 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
-          }
+          queueFavoriteChange(charAvatar, newFavState);
+          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          card.dataset.isFav = newFavState.toString();
+          card.classList.toggle("is-char-fav", newFavState);
+          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
       createTouchClickHandler(card, () => {
@@ -1622,6 +1687,7 @@ ${message}` : message;
       init_cache();
       init_storage();
       init_store();
+      init_pendingChanges();
       init_textUtils();
       init_eventHelpers();
       init_notifications();
@@ -1637,6 +1703,7 @@ ${message}` : message;
   init_cache();
   init_storage();
   init_store();
+  init_pendingChanges();
   init_sillyTavern();
 
   // src/ui/templates.js
@@ -2435,6 +2502,7 @@ ${message}` : message;
   init_cache();
   init_storage();
   init_store();
+  init_pendingChanges();
   init_notifications();
   init_config();
 
@@ -2467,6 +2535,7 @@ ${message}` : message;
   init_eventHelpers();
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
+    await flushFavoriteChanges();
     if (!charAvatar || !fileName) {
       console.error("[ChatHandlers] Missing chat data");
       showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
@@ -3462,7 +3531,10 @@ ${message}` : message;
         }
       }
     }
-    function closeLobby() {
+    async function closeLobby() {
+      if (hasPendingChanges()) {
+        await flushFavoriteChanges();
+      }
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
       if (container) container.style.display = "none";
@@ -3480,6 +3552,7 @@ ${message}` : message;
     }
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
+      await flushFavoriteChanges();
       cache.invalidateAll();
       const context = api.getContext();
       if (typeof context?.getCharacters === "function") {
@@ -3521,13 +3594,13 @@ ${message}` : message;
         return;
       }
     }
-    function handleAction(action, el, e) {
+    async function handleAction(action, el, e) {
       switch (action) {
         case "open-lobby":
           openLobby();
           break;
         case "close-lobby":
-          closeLobby();
+          await closeLobby();
           break;
         case "open-stats":
           openStatsView();
