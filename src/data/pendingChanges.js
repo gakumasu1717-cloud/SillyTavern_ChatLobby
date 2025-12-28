@@ -74,15 +74,18 @@ export async function flushFavoriteChanges() {
                 continue;
             }
             
-            // API 호출
-            const response = await fetch('/api/characters/edit-attribute', {
+            // merge-attributes API 사용 (extensions.fav 포함)
+            const response = await fetch('/api/characters/merge-attributes', {
                 method: 'POST',
                 headers: api.getRequestHeaders(),
                 body: JSON.stringify({
-                    avatar_url: avatar,
-                    ch_name: char.name,
-                    field: 'fav',
-                    value: state
+                    avatar: avatar,
+                    fav: state,
+                    data: {
+                        extensions: {
+                            fav: state
+                        }
+                    }
                 })
             });
             
@@ -90,7 +93,8 @@ export async function flushFavoriteChanges() {
                 pendingFavorites.delete(avatar);
                 console.log(`[PendingChanges] Saved ${avatar} = ${state}`);
             } else {
-                console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status);
+                const errorText = await response.text();
+                console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status, errorText);
                 allSuccess = false;
             }
         } catch (error) {

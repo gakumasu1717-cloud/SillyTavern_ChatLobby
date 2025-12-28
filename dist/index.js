@@ -1318,21 +1318,25 @@ ${message}` : message;
           console.warn(`[PendingChanges] Character not found: ${avatar}`);
           continue;
         }
-        const response = await fetch("/api/characters/edit-attribute", {
+        const response = await fetch("/api/characters/merge-attributes", {
           method: "POST",
           headers: api.getRequestHeaders(),
           body: JSON.stringify({
-            avatar_url: avatar,
-            ch_name: char.name,
-            field: "fav",
-            value: state
+            avatar,
+            fav: state,
+            data: {
+              extensions: {
+                fav: state
+              }
+            }
           })
         });
         if (response.ok) {
           pendingFavorites.delete(avatar);
           console.log(`[PendingChanges] Saved ${avatar} = ${state}`);
         } else {
-          console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status);
+          const errorText = await response.text();
+          console.error(`[PendingChanges] Failed to save ${avatar}:`, response.status, errorText);
           allSuccess = false;
         }
       } catch (error) {
