@@ -136,18 +136,23 @@ async function fetchRankings(characters) {
         const batchResults = await Promise.all(
             batch.map(async (char) => {
                 try {
-                    // 캐시 확인
-                    let chatCount = cache.get('chatCounts', char.avatar);
-                    if (typeof chatCount !== 'number') {
-                        chatCount = await api.getChatCount(char.avatar);
+                    // 채팅 목록 가져오기 (캐시 또는 API)
+                    let chats = cache.get('chats', char.avatar);
+                    if (!chats || !Array.isArray(chats)) {
+                        chats = await api.fetchChatsForCharacter(char.avatar);
                     }
                     
-                    // 채팅 목록에서 메시지 수 추정 (최근 채팅 기준)
-                    const chats = cache.get('chats', char.avatar);
+                    const chatCount = Array.isArray(chats) ? chats.length : 0;
+                    
+                    // 메시지 수 합산 (chat_metadata.message_count 또는 message_count)
                     let messageCount = 0;
-                    if (chats && Array.isArray(chats)) {
+                    if (Array.isArray(chats)) {
                         messageCount = chats.reduce((sum, chat) => {
-                            return sum + (chat.chat_metadata?.message_count || chat.message_count || 0);
+                            const count = chat.chat_metadata?.message_count 
+                                || chat.message_count 
+                                || chat.mes_count 
+                                || 0;
+                            return sum + count;
                         }, 0);
                     }
                     
@@ -171,8 +176,13 @@ async function fetchRankings(characters) {
         results.push(...batchResults);
     }
     
-    // 채팅 수 기준 정렬
-    return results.sort((a, b) => b.chatCount - a.chatCount);
+    // 메시지 수 기준 정렬 (같으면 채팅 파일 수로)
+    return results.sort((a, b) => {
+        if (b.messageCount !== a.messageCount) {
+            return b.messageCount - a.messageCount;
+        }
+        return b.chatCount - a.chatCount;
+    });
 }
 
 /**
@@ -210,7 +220,7 @@ function renderStatsHTML(rankings, totalStats) {
                 <img class="rank-avatar" src="${avatarUrl}" alt="${escapeHtml(r.name)}" onerror="this.src='/img/ai4.png'">
                 <div class="rank-info">
                     <div class="rank-name">${escapeHtml(r.name)}</div>
-                    <div class="rank-stats">채팅 ${r.chatCount}개${r.messageCount > 0 ? ` | 메시지 ${r.messageCount.toLocaleString()}개` : ''}</div>
+                    <div class="rank-stats">채팅 ${r.chatCount}개 | 메시지 ${r.messageCount.toLocaleString()}개</div>
                 </div>
             </div>
         `;

@@ -889,18 +889,31 @@
 }
 
 /* ============================================ */
-/* 폴더 및 분류 기능 스타일                      */
+/* 필터 섹션 (태그 + 폴더/정렬)                  */
 /* ============================================ */
 
-/* 폴더 필터 바 */
-#chat-lobby-folder-bar {
+/* 통합 필터 섹션 */
+#chat-lobby-filters {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
+    background: transparent;
+    gap: 8px;
+}
+
+/* 태그 영역 */
+#chat-lobby-filters #chat-lobby-char-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* 필터+툴 행 */
+#chat-lobby-filters .filters-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 15px;
-    border: none;
-    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
-    background: transparent;
     gap: 10px;
 }
 
@@ -938,9 +951,36 @@
     max-width: 100px;
 }
 
-.folder-actions {
+/* 리스트 툴 (편집/확장) */
+.list-tools {
     display: flex;
     gap: 5px;
+    flex-shrink: 0;
+}
+
+.list-tools button {
+    background: transparent;
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    color: var(--SmartThemeBodyColor, #ccc);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: all 0.2s;
+    min-width: 40px;
+    min-height: 36px;
+    touch-action: manipulation;
+}
+
+.list-tools button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--SmartThemeQuoteColor, #6a9fb5);
+}
+
+.list-tools button.active {
+    background: var(--SmartThemeQuoteColor, #6a9fb5);
+    border-color: var(--SmartThemeQuoteColor, #6a9fb5);
+    color: #fff;
 }
 
 .folder-actions button {
@@ -1525,34 +1565,10 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     user-select: none;
 }
 
-/* 태그+버튼 통합 바 */
-#chat-lobby-char-tags-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-}
-
-#chat-lobby-char-tags-bar #chat-lobby-char-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    flex: 1;
-}
-
-#chat-lobby-char-tags-bar .folder-actions {
-    display: flex;
-    gap: 5px;
-    flex-shrink: 0;
-}
-
 /* 모바일 캐릭터 태그 */
 @media (max-width: 768px) {
-    #chat-lobby-char-tags-bar {
-        padding: 6px 10px;
+    #chat-lobby-filters {
+        padding: 8px 12px;
     }
     
     .lobby-char-tag {

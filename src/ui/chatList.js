@@ -553,18 +553,20 @@ function getCharacterTags(charAvatar) {
  * @param {string} charAvatar - 캐릭터 아바타 파일명
  */
 function renderCharacterTags(charAvatar) {
-    const tagsBar = document.getElementById('chat-lobby-char-tags-bar');
+    const filtersSection = document.getElementById('chat-lobby-filters');
     const container = document.getElementById('chat-lobby-char-tags');
-    if (!container || !tagsBar) return;
+    if (!container || !filtersSection) return;
     
     const tags = getCharacterTags(charAvatar);
     
-    // 태그바는 항상 표시 (버튼들이 있으므로)
-    tagsBar.style.display = 'flex';
+    // 필터 섹션 표시
+    filtersSection.style.display = 'block';
     
     if (tags.length === 0) {
+        container.style.display = 'none';
         container.innerHTML = '';
     } else {
+        container.style.display = 'flex';
         container.innerHTML = tags.map(tag => 
             `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
         ).join('');
@@ -588,8 +590,8 @@ function updateChatCount(count) {
  * @param {boolean} visible
  */
 function showFolderBar(visible) {
-    const bar = document.getElementById('chat-lobby-folder-bar');
-    if (bar) bar.style.display = visible ? 'flex' : 'none';
+    const filtersSection = document.getElementById('chat-lobby-filters');
+    if (filtersSection) filtersSection.style.display = visible ? 'block' : 'none';
 }
 
 /**

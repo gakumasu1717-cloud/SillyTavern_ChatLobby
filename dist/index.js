@@ -1708,26 +1708,27 @@ ${message}` : message;
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
                     </div>
-                    <div id="chat-lobby-char-tags-bar" style="display:none;">
+                    <!-- \uD544\uD130 \uC139\uC158: \uD0DC\uADF8 + \uD3F4\uB354\uD544\uD130 + \uD234 -->
+                    <section id="chat-lobby-filters" style="display:none;">
                         <div id="chat-lobby-char-tags"></div>
-                        <div class="folder-actions">
-                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
-                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                        <div class="filters-row">
+                            <div class="folder-filter">
+                                <select id="chat-lobby-folder-filter">
+                                    <option value="all">\u{1F4C1} \uC804\uCCB4</option>
+                                    <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
+                                </select>
+                                <select id="chat-lobby-chat-sort">
+                                    <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
+                                    <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
+                                    <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
+                                </select>
+                            </div>
+                            <div class="list-tools">
+                                <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
+                                <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                            </div>
                         </div>
-                    </div>
-                    <div id="chat-lobby-folder-bar" style="display:none;">
-                        <div class="folder-filter">
-                            <select id="chat-lobby-folder-filter">
-                                <option value="all">\u{1F4C1} \uC804\uCCB4</option>
-                                <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
-                            </select>
-                            <select id="chat-lobby-chat-sort">
-                                <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
-                                <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
-                                <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
-                            </select>
-                        </div>
-                    </div>
+                    </section>
                     <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
@@ -2320,14 +2321,16 @@ ${message}` : message;
     }).filter(Boolean);
   }
   function renderCharacterTags(charAvatar) {
-    const tagsBar = document.getElementById("chat-lobby-char-tags-bar");
+    const filtersSection = document.getElementById("chat-lobby-filters");
     const container = document.getElementById("chat-lobby-char-tags");
-    if (!container || !tagsBar) return;
+    if (!container || !filtersSection) return;
     const tags = getCharacterTags2(charAvatar);
-    tagsBar.style.display = "flex";
+    filtersSection.style.display = "block";
     if (tags.length === 0) {
+      container.style.display = "none";
       container.innerHTML = "";
     } else {
+      container.style.display = "flex";
       container.innerHTML = tags.map(
         (tag) => `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
       ).join("");
@@ -2340,8 +2343,8 @@ ${message}` : message;
     if (newChatBtn) newChatBtn.dataset.hasChats = count > 0 ? "true" : "false";
   }
   function showFolderBar(visible) {
-    const bar = document.getElementById("chat-lobby-folder-bar");
-    if (bar) bar.style.display = visible ? "flex" : "none";
+    const filtersSection = document.getElementById("chat-lobby-filters");
+    if (filtersSection) filtersSection.style.display = visible ? "block" : "none";
   }
   function syncDropdowns(filterValue, sortValue) {
     const filterSelect = document.getElementById("chat-lobby-folder-filter");
@@ -2965,15 +2968,16 @@ ${message}` : message;
       const batchResults = await Promise.all(
         batch.map(async (char) => {
           try {
-            let chatCount = cache.get("chatCounts", char.avatar);
-            if (typeof chatCount !== "number") {
-              chatCount = await api.getChatCount(char.avatar);
+            let chats = cache.get("chats", char.avatar);
+            if (!chats || !Array.isArray(chats)) {
+              chats = await api.fetchChatsForCharacter(char.avatar);
             }
-            const chats = cache.get("chats", char.avatar);
+            const chatCount = Array.isArray(chats) ? chats.length : 0;
             let messageCount = 0;
-            if (chats && Array.isArray(chats)) {
+            if (Array.isArray(chats)) {
               messageCount = chats.reduce((sum, chat) => {
-                return sum + (chat.chat_metadata?.message_count || chat.message_count || 0);
+                const count = chat.chat_metadata?.message_count || chat.message_count || chat.mes_count || 0;
+                return sum + count;
               }, 0);
             }
             return {
@@ -2995,7 +2999,12 @@ ${message}` : message;
       );
       results.push(...batchResults);
     }
-    return results.sort((a, b) => b.chatCount - a.chatCount);
+    return results.sort((a, b) => {
+      if (b.messageCount !== a.messageCount) {
+        return b.messageCount - a.messageCount;
+      }
+      return b.chatCount - a.chatCount;
+    });
   }
   function calculateTotalStats(rankings, totalCharacters) {
     const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
@@ -3018,7 +3027,7 @@ ${message}` : message;
                 <img class="rank-avatar" src="${avatarUrl}" alt="${escapeHtml(r.name)}" onerror="this.src='/img/ai4.png'">
                 <div class="rank-info">
                     <div class="rank-name">${escapeHtml(r.name)}</div>
-                    <div class="rank-stats">\uCC44\uD305 ${r.chatCount}\uAC1C${r.messageCount > 0 ? ` | \uBA54\uC2DC\uC9C0 ${r.messageCount.toLocaleString()}\uAC1C` : ""}</div>
+                    <div class="rank-stats">\uCC44\uD305 ${r.chatCount}\uAC1C | \uBA54\uC2DC\uC9C0 ${r.messageCount.toLocaleString()}\uAC1C</div>
                 </div>
             </div>
         `;

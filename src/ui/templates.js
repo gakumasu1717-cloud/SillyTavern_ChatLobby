@@ -56,26 +56,27 @@ export function createLobbyHTML() {
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="캐릭터 삭제" style="display:none;">🗑️</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ 새 채팅</button>
                     </div>
-                    <div id="chat-lobby-char-tags-bar" style="display:none;">
+                    <!-- 필터 섹션: 태그 + 폴더필터 + 툴 -->
+                    <section id="chat-lobby-filters" style="display:none;">
                         <div id="chat-lobby-char-tags"></div>
-                        <div class="folder-actions">
-                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
-                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
+                        <div class="filters-row">
+                            <div class="folder-filter">
+                                <select id="chat-lobby-folder-filter">
+                                    <option value="all">📁 전체</option>
+                                    <option value="favorites">⭐ 즐겨찾기</option>
+                                </select>
+                                <select id="chat-lobby-chat-sort">
+                                    <option value="recent">🕐 최신순</option>
+                                    <option value="name">🔤 이름순</option>
+                                    <option value="messages">💬 메시지수</option>
+                                </select>
+                            </div>
+                            <div class="list-tools">
+                                <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
+                                <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
+                            </div>
                         </div>
-                    </div>
-                    <div id="chat-lobby-folder-bar" style="display:none;">
-                        <div class="folder-filter">
-                            <select id="chat-lobby-folder-filter">
-                                <option value="all">📁 전체</option>
-                                <option value="favorites">⭐ 즐겨찾기</option>
-                            </select>
-                            <select id="chat-lobby-chat-sort">
-                                <option value="recent">🕐 최신순</option>
-                                <option value="name">🔤 이름순</option>
-                                <option value="messages">💬 메시지수</option>
-                            </select>
-                        </div>
-                    </div>
+                    </section>
                     <!-- 배치 모드 툴바 -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0개 선택</span>
