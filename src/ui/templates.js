@@ -13,6 +13,7 @@ export function createLobbyHTML() {
             <div id="chat-lobby-header">
                 <h2>Chat Lobby</h2>
                 <div class="header-actions">
+                    <button id="chat-lobby-stats" data-action="open-stats" title="통계">📊</button>
                     <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
                     <button id="chat-lobby-import-char" data-action="import-char" title="캐릭터 임포트">📥</button>
                     <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
@@ -55,7 +56,13 @@ export function createLobbyHTML() {
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="캐릭터 삭제" style="display:none;">🗑️</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ 새 채팅</button>
                     </div>
-                    <div id="chat-lobby-char-tags" style="display:none;"></div>
+                    <div id="chat-lobby-char-tags-bar" style="display:none;">
+                        <div id="chat-lobby-char-tags"></div>
+                        <div class="folder-actions">
+                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
+                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
+                        </div>
+                    </div>
                     <div id="chat-lobby-folder-bar" style="display:none;">
                         <div class="folder-filter">
                             <select id="chat-lobby-folder-filter">
@@ -67,10 +74,6 @@ export function createLobbyHTML() {
                                 <option value="name">🔤 이름순</option>
                                 <option value="messages">💬 메시지수</option>
                             </select>
-                        </div>
-                        <div class="folder-actions">
-                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="다중 선택">☑️</button>
-                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="폴더 관리">📁</button>
                         </div>
                     </div>
                     <!-- 배치 모드 툴바 -->

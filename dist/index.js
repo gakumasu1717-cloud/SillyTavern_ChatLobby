@@ -1665,6 +1665,7 @@ ${message}` : message;
             <div id="chat-lobby-header">
                 <h2>Chat Lobby</h2>
                 <div class="header-actions">
+                    <button id="chat-lobby-stats" data-action="open-stats" title="\uD1B5\uACC4">\u{1F4CA}</button>
                     <button id="chat-lobby-refresh" data-action="refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
                     <button id="chat-lobby-import-char" data-action="import-char" title="\uCE90\uB9AD\uD130 \uC784\uD3EC\uD2B8">\u{1F4E5}</button>
                     <button id="chat-lobby-add-persona" data-action="add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
@@ -1707,7 +1708,13 @@ ${message}` : message;
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
                     </div>
-                    <div id="chat-lobby-char-tags" style="display:none;"></div>
+                    <div id="chat-lobby-char-tags-bar" style="display:none;">
+                        <div id="chat-lobby-char-tags"></div>
+                        <div class="folder-actions">
+                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
+                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+                        </div>
+                    </div>
                     <div id="chat-lobby-folder-bar" style="display:none;">
                         <div class="folder-filter">
                             <select id="chat-lobby-folder-filter">
@@ -1719,10 +1726,6 @@ ${message}` : message;
                                 <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
                                 <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
                             </select>
-                        </div>
-                        <div class="folder-actions">
-                            <button id="chat-lobby-batch-mode" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD">\u2611\uFE0F</button>
-                            <button id="chat-lobby-folder-manage" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
                         </div>
                     </div>
                     <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
@@ -2317,18 +2320,18 @@ ${message}` : message;
     }).filter(Boolean);
   }
   function renderCharacterTags(charAvatar) {
+    const tagsBar = document.getElementById("chat-lobby-char-tags-bar");
     const container = document.getElementById("chat-lobby-char-tags");
-    if (!container) return;
+    if (!container || !tagsBar) return;
     const tags = getCharacterTags2(charAvatar);
+    tagsBar.style.display = "flex";
     if (tags.length === 0) {
-      container.style.display = "none";
       container.innerHTML = "";
-      return;
+    } else {
+      container.innerHTML = tags.map(
+        (tag) => `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
+      ).join("");
     }
-    container.style.display = "flex";
-    container.innerHTML = tags.map(
-      (tag) => `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
-    ).join("");
   }
   function updateChatCount(count) {
     const el = document.getElementById("chat-panel-count");
@@ -2878,6 +2881,188 @@ ${message}` : message;
 
   // src/index.js
   init_notifications();
+
+  // src/ui/statsView.js
+  init_sillyTavern();
+  init_cache();
+  init_textUtils();
+  init_notifications();
+  var MAX_RANKING = 20;
+  var isStatsOpen = false;
+  async function openStatsView() {
+    if (isStatsOpen) return;
+    isStatsOpen = true;
+    const container = document.getElementById("chat-lobby-main");
+    if (!container) return;
+    const leftPanel = document.getElementById("chat-lobby-left");
+    const chatsPanel = document.getElementById("chat-lobby-chats");
+    if (leftPanel) leftPanel.style.display = "none";
+    if (chatsPanel) chatsPanel.style.display = "none";
+    const statsView = document.createElement("div");
+    statsView.id = "chat-lobby-stats-view";
+    statsView.className = "stats-view";
+    statsView.innerHTML = `
+        <div class="stats-header">
+            <button class="stats-back" data-action="close-stats">\u2190</button>
+            <h3>\u{1F4CA} \uD1B5\uACC4</h3>
+        </div>
+        <div class="stats-content">
+            <div class="stats-loading">
+                <div class="stats-spinner"></div>
+                <div>\uD1B5\uACC4 \uBD88\uB7EC\uC624\uB294 \uC911...</div>
+            </div>
+        </div>
+    `;
+    container.appendChild(statsView);
+    statsView.querySelector(".stats-back").addEventListener("click", closeStatsView);
+    await loadStats(statsView.querySelector(".stats-content"));
+  }
+  function closeStatsView() {
+    if (!isStatsOpen) return;
+    isStatsOpen = false;
+    const statsView = document.getElementById("chat-lobby-stats-view");
+    if (statsView) statsView.remove();
+    const leftPanel = document.getElementById("chat-lobby-left");
+    const chatsPanel = document.getElementById("chat-lobby-chats");
+    if (leftPanel) leftPanel.style.display = "";
+    if (chatsPanel) chatsPanel.style.display = "";
+  }
+  function isStatsViewOpen() {
+    return isStatsOpen;
+  }
+  async function loadStats(contentEl) {
+    try {
+      const characters = api.getCharacters();
+      if (!characters || characters.length === 0) {
+        contentEl.innerHTML = `
+                <div class="stats-empty">
+                    <i>\u{1F4CA}</i>
+                    <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                </div>
+            `;
+        return;
+      }
+      const topCharacters = characters.slice(0, MAX_RANKING);
+      const rankings = await fetchRankings(topCharacters);
+      const totalStats = calculateTotalStats(rankings, characters.length);
+      contentEl.innerHTML = renderStatsHTML(rankings, totalStats);
+      animateCards(contentEl);
+    } catch (error) {
+      console.error("[StatsView] Failed to load stats:", error);
+      contentEl.innerHTML = `
+            <div class="stats-empty">
+                <i>\u26A0\uFE0F</i>
+                <div>\uD1B5\uACC4 \uB85C\uB529 \uC2E4\uD328</div>
+            </div>
+        `;
+    }
+  }
+  async function fetchRankings(characters) {
+    const BATCH_SIZE = 5;
+    const results = [];
+    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+      const batch = characters.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (char) => {
+          try {
+            let chatCount = cache.get("chatCounts", char.avatar);
+            if (typeof chatCount !== "number") {
+              chatCount = await api.getChatCount(char.avatar);
+            }
+            const chats = cache.get("chats", char.avatar);
+            let messageCount = 0;
+            if (chats && Array.isArray(chats)) {
+              messageCount = chats.reduce((sum, chat) => {
+                return sum + (chat.chat_metadata?.message_count || chat.message_count || 0);
+              }, 0);
+            }
+            return {
+              name: char.name,
+              avatar: char.avatar,
+              chatCount,
+              messageCount
+            };
+          } catch (e) {
+            console.warn("[StatsView] Failed to get stats for:", char.name);
+            return {
+              name: char.name,
+              avatar: char.avatar,
+              chatCount: 0,
+              messageCount: 0
+            };
+          }
+        })
+      );
+      results.push(...batchResults);
+    }
+    return results.sort((a, b) => b.chatCount - a.chatCount);
+  }
+  function calculateTotalStats(rankings, totalCharacters) {
+    const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
+    const totalMessages = rankings.reduce((sum, r) => sum + r.messageCount, 0);
+    return {
+      characters: totalCharacters,
+      chats: totalChats,
+      messages: totalMessages
+    };
+  }
+  function renderStatsHTML(rankings, totalStats) {
+    const medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
+    const rankingHTML = rankings.map((r, i) => {
+      const medal = i < 3 ? medals[i] : `${i + 1}\uC704`;
+      const isTop3 = i < 3;
+      const avatarUrl = r.avatar ? `/characters/${encodeURIComponent(r.avatar)}` : "/img/ai4.png";
+      return `
+            <div class="stats-rank-item ${isTop3 ? "top-3" : ""}" data-rank="${i + 1}">
+                <span class="rank-medal">${medal}</span>
+                <img class="rank-avatar" src="${avatarUrl}" alt="${escapeHtml(r.name)}" onerror="this.src='/img/ai4.png'">
+                <div class="rank-info">
+                    <div class="rank-name">${escapeHtml(r.name)}</div>
+                    <div class="rank-stats">\uCC44\uD305 ${r.chatCount}\uAC1C${r.messageCount > 0 ? ` | \uBA54\uC2DC\uC9C0 ${r.messageCount.toLocaleString()}\uAC1C` : ""}</div>
+                </div>
+            </div>
+        `;
+    }).join("");
+    return `
+        <div class="stats-section">
+            <h4>\u{1F3C6} \uCC44\uD305 \uB7AD\uD0B9 (\uC0C1\uC704 ${MAX_RANKING}\uAC1C)</h4>
+            <div class="stats-ranking">
+                ${rankingHTML}
+            </div>
+        </div>
+        <div class="stats-section stats-total">
+            <h4>\u{1F4C8} \uC804\uCCB4 \uD1B5\uACC4</h4>
+            <div class="stats-grid">
+                <div class="stats-item">
+                    <div class="stats-value">${totalStats.characters}</div>
+                    <div class="stats-label">\uCD1D \uCE90\uB9AD\uD130</div>
+                </div>
+                <div class="stats-item">
+                    <div class="stats-value">${totalStats.chats}</div>
+                    <div class="stats-label">\uCD1D \uCC44\uD305</div>
+                </div>
+                <div class="stats-item">
+                    <div class="stats-value">${totalStats.messages.toLocaleString()}</div>
+                    <div class="stats-label">\uCD1D \uBA54\uC2DC\uC9C0</div>
+                </div>
+            </div>
+        </div>
+    `;
+  }
+  function animateCards(container) {
+    const items = container.querySelectorAll(".stats-rank-item");
+    items.forEach((item, i) => {
+      item.style.opacity = "0";
+      item.style.transform = "translateY(20px)";
+      setTimeout(() => {
+        item.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+        item.style.opacity = "1";
+        item.style.transform = "translateY(0)";
+      }, i * 50);
+    });
+  }
+
+  // src/index.js
   init_eventHelpers();
 
   // src/utils/intervalManager.js
@@ -3147,6 +3332,12 @@ ${message}` : message;
         case "close-lobby":
           closeLobby();
           break;
+        case "open-stats":
+          openStatsView();
+          break;
+        case "close-stats":
+          closeStatsView();
+          break;
         case "refresh":
           handleRefresh();
           break;
@@ -3187,6 +3378,10 @@ ${message}` : message;
     }
     function handleKeydown(e) {
       if (e.key === "Escape") {
+        if (isStatsViewOpen()) {
+          closeStatsView();
+          return;
+        }
         const folderModal = document.getElementById("chat-lobby-folder-modal");
         if (folderModal?.style.display === "flex") {
           closeFolderModal();

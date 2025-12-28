@@ -14,6 +14,7 @@ import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange a
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast } from './ui/notifications.js';
+import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
 import { debounce, isMobile } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 import { intervalManager } from './utils/intervalManager.js';
@@ -418,6 +419,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             case 'close-lobby':
                 closeLobby();
                 break;
+            case 'open-stats':
+                openStatsView();
+                break;
+            case 'close-stats':
+                closeStatsView();
+                break;
             case 'refresh':
                 handleRefresh();
                 break;
@@ -464,6 +471,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      */
     function handleKeydown(e) {
         if (e.key === 'Escape') {
+            // 통계 화면 열려있으면 먼저 닫기
+            if (isStatsViewOpen()) {
+                closeStatsView();
+                return;
+            }
+            
             const folderModal = document.getElementById('chat-lobby-folder-modal');
             if (folderModal?.style.display === 'flex') {
                 closeFolderModal();
