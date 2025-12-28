@@ -333,6 +333,13 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
         cache.invalidateAll();
+        
+        // SillyTavern의 캐릭터 목록 강제 갱신
+        const context = api.getContext();
+        if (typeof context?.getCharacters === 'function') {
+            await context.getCharacters();
+        }
+        
         await renderPersonaBar();
         await renderCharacterGrid();
     };

@@ -3482,6 +3482,10 @@ ${message}` : message;
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
       cache.invalidateAll();
+      const context = api.getContext();
+      if (typeof context?.getCharacters === "function") {
+        await context.getCharacters();
+      }
       await renderPersonaBar();
       await renderCharacterGrid();
     };
