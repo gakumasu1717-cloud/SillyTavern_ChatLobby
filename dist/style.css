@@ -1045,8 +1045,15 @@
 }
 
 .chat-folder-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 12px;
     background: rgba(var(--lobby-accent), 0.2) !important;
-    color: var(--lobby-accent) !important;
+    color: rgb(var(--lobby-accent)) !important;
+    font-size: 0.75em;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 /* 체크박스 */

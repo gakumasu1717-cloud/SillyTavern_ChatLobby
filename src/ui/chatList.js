@@ -645,10 +645,7 @@ function syncDropdowns(filterValue, sortValue) {
  */
 export function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
-    const character = store.currentCharacter;
-    if (character) {
-        renderChatList(character);
-    }
+    refreshCurrentChatList();
 }
 
 /**
@@ -657,9 +654,23 @@ export function handleFilterChange(filterValue) {
  */
 export function handleSortChange(sortValue) {
     storage.setSortOption(sortValue);
+    refreshCurrentChatList();
+}
+
+/**
+ * 현재 채팅 목록 새로고침 (정렬/필터 변경 시)
+ */
+export function refreshCurrentChatList() {
     const character = store.currentCharacter;
-    if (character) {
-        renderChatList(character);
+    if (!character) return;
+    
+    const chatsList = document.getElementById('chat-lobby-chats-list');
+    if (!chatsList) return;
+    
+    // 캐시된 데이터로 바로 다시 렌더링
+    const cachedChats = cache.get('chats', character.avatar);
+    if (cachedChats && cachedChats.length > 0) {
+        renderChats(chatsList, cachedChats, character.avatar);
     }
 }
 

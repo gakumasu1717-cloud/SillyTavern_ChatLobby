@@ -2125,16 +2125,20 @@ ${message}` : message;
   }
   function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
-    const character = store.currentCharacter;
-    if (character) {
-      renderChatList(character);
-    }
+    refreshCurrentChatList();
   }
   function handleSortChange(sortValue) {
     storage.setSortOption(sortValue);
+    refreshCurrentChatList();
+  }
+  function refreshCurrentChatList() {
     const character = store.currentCharacter;
-    if (character) {
-      renderChatList(character);
+    if (!character) return;
+    const chatsList = document.getElementById("chat-lobby-chats-list");
+    if (!chatsList) return;
+    const cachedChats = cache.get("chats", character.avatar);
+    if (cachedChats && cachedChats.length > 0) {
+      renderChats(chatsList, cachedChats, character.avatar);
     }
   }
   function toggleBatchMode() {
