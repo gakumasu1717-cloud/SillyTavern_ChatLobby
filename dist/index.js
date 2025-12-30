@@ -1403,7 +1403,8 @@ ${message}` : message;
     }
     /**
      * 모든 캐릭터의 마지막 채팅 시간 초기화
-     * 로비 열 때 또는 새로고침 시 호출
+     * API 호출 없이 context의 date_last_chat만 사용 (성능 최적화)
+     * 실제 메시지 전송 시에만 updateNow로 갱신됨
      * @returns {Promise<void>} 초기화 완료 시 resolve
      */
     async initializeAll(characters, batchSize = 10) {
@@ -1412,32 +1413,31 @@ ${message}` : message;
         return;
       }
       this.initializing = true;
-      console.log("[LastChatCache] Initializing for", characters.length, "characters");
+      console.log("[LastChatCache] Initializing for", characters.length, "characters (no API calls)");
       try {
-        const sorted = [...characters].sort(
-          (a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0)
-        );
-        const priority = sorted.slice(0, 30);
-        for (let i = 0; i < priority.length; i += batchSize) {
-          const batch = priority.slice(i, i + batchSize);
-          await Promise.all(
-            batch.map((char) => this.refreshForCharacter(char.avatar))
-          );
-        }
         this.initialized = true;
-        console.log("[LastChatCache] Initialized with", this.lastChatTimes.size, "entries");
+        console.log("[LastChatCache] Initialized (using date_last_chat fallback)");
       } finally {
         this.initializing = false;
       }
     }
     /**
      * 캐릭터 정렬용 마지막 채팅 시간 가져오기
-     * 캐시에 있으면 캐시값, 없으면 context의 date_last_chat 사용
+     * 1. 수동 업데이트된 캐시값 (메시지 전송 시 갱신된 값)
+     * 2. context의 date_last_chat (SillyTavern이 관리, 파일 mtime 기준)
+     * 3. 0 (채팅 없음)
      */
     getForSort(char) {
       const cached = this.get(char.avatar);
       if (cached > 0) return cached;
-      return char.date_last_chat || char.last_mes || 0;
+      return char.date_last_chat || 0;
+    }
+    /**
+     * 채팅 열기만으로는 캐시를 갱신하지 않음
+     * 메시지 전송 시에만 updateNow 사용
+     */
+    markViewed(charAvatar) {
+      console.log("[LastChatCache] markViewed (no update):", charAvatar);
     }
     /**
      * 캐시 클리어
@@ -1970,9 +1970,13 @@ ${message}` : message;
       console.error("[ChatList] Invalid character data:", character);
       return;
     }
-    store.setCurrentCharacter(character);
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
+    if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains("visible")) {
+      console.log("[ChatList] Same character panel already open, skipping render");
+      return;
+    }
+    store.setCurrentCharacter(character);
     if (!chatsPanel || !chatsList) {
       console.error("[ChatList] Chat panel elements not found");
       return;
@@ -2422,7 +2426,8 @@ ${message}` : message;
     const name = char.name || "Unknown";
     const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
-    const messageCount = char.chat_size || char.mes_count || char.message_count || 0;
+    const cachedChatCount = cache.get("chatCounts", char.avatar);
+    const chatCount = cachedChatCount ?? 0;
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
@@ -2439,8 +2444,8 @@ ${message}` : message;
             <span class="char-name-text">${escapeHtml(name)}</span>
             <div class="char-hover-info">
                 <div class="info-row">
-                    <span class="info-icon">\u{1F4DD}</span>
-                    <span class="info-value">${messageCount.toLocaleString()}\uAC1C \uBA54\uC2DC\uC9C0</span>
+                    <span class="info-icon">\uFFFD</span>
+                    <span class="info-value">${chatCount > 0 ? chatCount + "\uAC1C \uCC44\uD305" : "\uCC44\uD305 \uC5C6\uC74C"}</span>
                 </div>
             </div>
         </div>

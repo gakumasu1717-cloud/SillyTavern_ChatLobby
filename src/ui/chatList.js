@@ -170,10 +170,16 @@ export async function renderChatList(character) {
         return;
     }
     
-    store.setCurrentCharacter(character);
-    
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
+    
+    // 이미 같은 캐릭터의 채팅 패널이 열려있으면 렌더 스킵
+    if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains('visible')) {
+        console.log('[ChatList] Same character panel already open, skipping render');
+        return;
+    }
+    
+    store.setCurrentCharacter(character);
     
     if (!chatsPanel || !chatsList) {
         console.error('[ChatList] Chat panel elements not found');
