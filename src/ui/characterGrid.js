@@ -165,7 +165,9 @@ function renderCharacterCard(char, index) {
     
     // 채팅 수 (캐시에서 가져오기, 없으면 API 응답 필드 사용)
     const cachedChatCount = cache.get('chatCounts', char.avatar);
-    const chatCountText = cachedChatCount !== undefined 
+    // null/undefined가 아닌 숫자인지 확인
+    const hasCount = typeof cachedChatCount === 'number';
+    const chatCountText = hasCount 
         ? (cachedChatCount > 0 ? `${cachedChatCount}개 채팅` : '채팅 없음')
         : '로딩 중...';
     
@@ -207,13 +209,16 @@ async function loadChatCountsAsync(characters) {
         const batch = characters.slice(i, i + BATCH_SIZE);
         
         await Promise.all(batch.map(async (char) => {
-            // 이미 캐시에 있으면 스킵
-            if (cache.get('chatCounts', char.avatar) !== undefined) return;
+            // 이미 캐시에 숫자가 있으면 스킵
+            const existingCount = cache.get('chatCounts', char.avatar);
+            if (typeof existingCount === 'number') return;
             
             try {
                 const chats = await api.fetchChatsForCharacter(char.avatar);
-                const count = Array.isArray(chats) ? chats.length : 0;
+                // API 응답이 배열인지 확인 (객체일 수도 있음)
+                const count = Array.isArray(chats) ? chats.length : (typeof chats === 'object' && chats ? Object.keys(chats).length : 0);
                 cache.set('chatCounts', count, char.avatar);
+                console.log(`[CharacterGrid] Chat count for ${char.name}: ${count}`);
                 
                 // DOM 업데이트
                 const card = document.querySelector(`.lobby-char-card[data-char-avatar="${char.avatar}"]`);

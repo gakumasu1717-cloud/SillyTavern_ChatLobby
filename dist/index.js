@@ -1190,10 +1190,18 @@ ${message}` : message;
           }
           const data = await response.json();
           if (data?.error === true) return [];
-          const result = data || [];
+          let result;
+          if (Array.isArray(data)) {
+            result = data;
+          } else if (data && typeof data === "object") {
+            result = Object.values(data);
+          } else {
+            result = [];
+          }
           cache.set("chats", result, characterAvatar);
-          const count = Array.isArray(result) ? result.length : 0;
+          const count = result.length;
           cache.set("chatCounts", count, characterAvatar);
+          console.log(`[API] Fetched ${count} chats for ${characterAvatar}`);
           return result;
         } catch (error) {
           console.error("[API] Failed to load chats:", error);
@@ -2282,7 +2290,8 @@ ${message}` : message;
     const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
     const cachedChatCount = cache.get("chatCounts", char.avatar);
-    const chatCountText = cachedChatCount !== void 0 ? cachedChatCount > 0 ? `${cachedChatCount}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C" : "\uB85C\uB529 \uC911...";
+    const hasCount = typeof cachedChatCount === "number";
+    const chatCountText = hasCount ? cachedChatCount > 0 ? `${cachedChatCount}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C" : "\uB85C\uB529 \uC911...";
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
@@ -2312,11 +2321,13 @@ ${message}` : message;
     for (let i = 0; i < characters.length; i += BATCH_SIZE) {
       const batch = characters.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (char) => {
-        if (cache.get("chatCounts", char.avatar) !== void 0) return;
+        const existingCount = cache.get("chatCounts", char.avatar);
+        if (typeof existingCount === "number") return;
         try {
           const chats = await api.fetchChatsForCharacter(char.avatar);
-          const count = Array.isArray(chats) ? chats.length : 0;
+          const count = Array.isArray(chats) ? chats.length : typeof chats === "object" && chats ? Object.keys(chats).length : 0;
           cache.set("chatCounts", count, char.avatar);
+          console.log(`[CharacterGrid] Chat count for ${char.name}: ${count}`);
           const card = document.querySelector(`.lobby-char-card[data-char-avatar="${char.avatar}"]`);
           if (card) {
             const valueEl = card.querySelector(".chat-count-value");

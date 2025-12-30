@@ -329,13 +329,25 @@ class SillyTavernAPI {
                 const data = await response.json();
                 if (data?.error === true) return [];
                 
-                const result = data || [];
+                // API 응답이 객체(숫자 키) 또는 배열일 수 있음
+                let result;
+                if (Array.isArray(data)) {
+                    result = data;
+                } else if (data && typeof data === 'object') {
+                    // 객체인 경우 배열로 변환 (SillyTavern 형식)
+                    result = Object.values(data);
+                } else {
+                    result = [];
+                }
+                
                 // 캐시 저장 (키 형식 통일: chats, characterAvatar)
                 cache.set('chats', result, characterAvatar);
                 
                 // 채팅 수도 같이 캐시 (추가 API 호출 방지)
-                const count = Array.isArray(result) ? result.length : 0;
+                const count = result.length;
                 cache.set('chatCounts', count, characterAvatar);
+                
+                console.log(`[API] Fetched ${count} chats for ${characterAvatar}`);
                 
                 return result;
             } catch (error) {
