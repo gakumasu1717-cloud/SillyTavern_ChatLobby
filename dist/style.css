@@ -28,14 +28,14 @@
     --star-glow: rgba(255, 215, 0, 0.6);
 }
 
-/* ☀️ 라이트 모드 */
+/* ☀️ 라이트 모드 - 모노톤 */
 #chat-lobby-container.light-mode {
     --lobby-bg: #F5F5F5;
     --lobby-bg-light: #FFFFFF;
     --lobby-bg-card: #E8E8E8;
     --lobby-bg-hover: #D0D0D0;
-    --lobby-accent: #E50914;
-    --lobby-accent-hover: #B8070F;
+    --lobby-accent: #333333;
+    --lobby-accent-hover: #1A1A1A;
     
     /* Text Colors */
     --text-primary: #1A1A1A;
@@ -60,7 +60,7 @@
     /* Card Sizes */
     --card-width: 200px;
     --card-height: 300px;
-    --card-gap: 10px;
+    --card-gap: 12px;
     --card-hover-scale: 1.3;
     
     /* Transitions */
@@ -618,7 +618,7 @@
     right: 0;
     padding: 80px 12px 12px;
     background: linear-gradient(transparent, rgba(0,0,0,0.95) 70%);
-    color: var(--text-primary);
+    color: #FFFFFF;
     font-size: 15px;
     font-weight: var(--font-weight-semibold);
     opacity: 0;
@@ -649,7 +649,7 @@
     align-items: center;
     gap: 6px;
     font-size: 11px;
-    color: var(--text-muted);
+    color: rgba(255, 255, 255, 0.7);
     font-weight: var(--font-weight-normal);
 }
 
@@ -659,7 +659,7 @@
 }
 
 .char-hover-info .info-value {
-    color: var(--text-secondary);
+    color: #FFFFFF;
 }
 
 /* 즐겨찾기 버튼 */
@@ -1907,6 +1907,11 @@
         transform: none;
         padding: 30px 8px 8px;
         font-size: 12px;
+    }
+    
+    /* 모바일에서 상세정보 숨김 - 이름만 표시 */
+    .lobby-char-card .char-hover-info {
+        display: none;
     }
     
     .char-fav-btn {
