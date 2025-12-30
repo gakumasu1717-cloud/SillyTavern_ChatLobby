@@ -1,0 +1,24 @@
+{
+  "name": "sillytavern-chatlobby",
+  "version": "2.0.0",
+  "description": "캐릭터 기반 채팅방 선택 UI를 제공하는 SillyTavern 확장 프로그램입니다.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser",
+    "build:watch": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser --watch",
+    "build:min": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser --minify"
+  },
+  "keywords": [
+    "sillytavern",
+    "extension",
+    "chat",
+    "lobby"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3"
+  }
+}
