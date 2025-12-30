@@ -54,21 +54,33 @@ export function parseDateFromFilename(filename) {
 
 /**
  * 채팅 객체에서 타임스탬프 추출 (정렬용)
+ * 우선순위: last_mes > file_date > 파일명 파싱
  * @param {Object} chat - 채팅 객체
- * @param {string} [chat.file_name] - 파일명
- * @param {string} [chat.fileName] - 파일명 (대체)
- * @param {number|string} [chat.last_mes] - 마지막 메시지 시간
- * @returns {number} 타임스탬프
+ * @returns {number} 타임스탬프 (없으면 0 - 맨 아래로)
  */
 export function getTimestamp(chat) {
-    const fileName = chat.file_name || chat.fileName || '';
-    let ts = parseDateFromFilename(fileName);
-    
-    if (!ts && chat.last_mes) {
-        ts = typeof chat.last_mes === 'number' 
+    // 1. last_mes 우선 (마지막 메시지 시간)
+    if (chat.last_mes) {
+        const ts = typeof chat.last_mes === 'number' 
             ? chat.last_mes 
             : new Date(chat.last_mes).getTime();
+        if (ts > 0 && !isNaN(ts)) return ts;
     }
     
-    return ts || 0;
+    // 2. file_date 또는 date 필드
+    if (chat.file_date || chat.date) {
+        const dateVal = chat.file_date || chat.date;
+        const ts = typeof dateVal === 'number'
+            ? dateVal
+            : new Date(dateVal).getTime();
+        if (ts > 0 && !isNaN(ts)) return ts;
+    }
+    
+    // 3. 파일명에서 날짜 파싱 (fallback)
+    const fileName = chat.file_name || chat.fileName || '';
+    const ts = parseDateFromFilename(fileName);
+    if (ts > 0) return ts;
+    
+    // 4. 없으면 0 반환 (맨 아래로 정렬됨)
+    return 0;
 }

@@ -1863,12 +1863,19 @@ ${message}` : message;
     return 0;
   }
   function getTimestamp(chat) {
-    const fileName = chat.file_name || chat.fileName || "";
-    let ts = parseDateFromFilename(fileName);
-    if (!ts && chat.last_mes) {
-      ts = typeof chat.last_mes === "number" ? chat.last_mes : new Date(chat.last_mes).getTime();
+    if (chat.last_mes) {
+      const ts2 = typeof chat.last_mes === "number" ? chat.last_mes : new Date(chat.last_mes).getTime();
+      if (ts2 > 0 && !isNaN(ts2)) return ts2;
     }
-    return ts || 0;
+    if (chat.file_date || chat.date) {
+      const dateVal = chat.file_date || chat.date;
+      const ts2 = typeof dateVal === "number" ? dateVal : new Date(dateVal).getTime();
+      if (ts2 > 0 && !isNaN(ts2)) return ts2;
+    }
+    const fileName = chat.file_name || chat.fileName || "";
+    const ts = parseDateFromFilename(fileName);
+    if (ts > 0) return ts;
+    return 0;
   }
 
   // src/ui/chatList.js
@@ -2415,7 +2422,7 @@ ${message}` : message;
     const name = char.name || "Unknown";
     const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
-    const messageCount = char.chat_size || 0;
+    const messageCount = char.chat_size || char.mes_count || char.message_count || 0;
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 

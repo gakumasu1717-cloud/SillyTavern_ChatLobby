@@ -161,8 +161,8 @@ function renderCharacterCard(char, index) {
     
     const isFav = isFavoriteChar(char);
     
-    // 메시지 수는 char.chat_size에서 가져옴 (SillyTavern 제공)
-    const messageCount = char.chat_size || 0;
+    // 메시지 수 (SillyTavern에서 제공하는 다양한 필드 시도)
+    const messageCount = char.chat_size || char.mes_count || char.message_count || 0;
     
     // 즐겨찾기 버튼
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
