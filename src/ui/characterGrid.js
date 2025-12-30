@@ -147,7 +147,7 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
 }
 
 /**
- * 캐릭터 카드 HTML 생성 - 넷플릭스 스타일
+ * 캐릭터 카드 HTML 생성 - 넷플릭스 스타일 + 호버 정보
  * @param {Object} char - 캐릭터 객체
  * @param {number} index - 원본 인덱스
  * @returns {string}
@@ -158,6 +158,15 @@ function renderCharacterCard(char, index) {
     const safeAvatar = escapeHtml(char.avatar || '');
     
     const isFav = isFavoriteChar(char);
+    
+    // 캐시에서 채팅 수 가져오기 (없으면 0)
+    const chatCount = cache.get('chatCounts', char.avatar) || 0;
+    
+    // 캐시에서 메시지 수 가져오기 (없으면 계산)
+    let messageCount = cache.get('messageCounts', char.avatar);
+    if (typeof messageCount !== 'number') {
+        messageCount = char.chat_size || 0;
+    }
     
     // 즐겨찾기 버튼
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
@@ -173,7 +182,19 @@ function renderCharacterCard(char, index) {
              alt="${escapeHtml(name)}" 
              loading="lazy"
              onerror="this.src='/img/ai4.png'">
-        <div class="lobby-char-name">${escapeHtml(name)}</div>
+        <div class="lobby-char-name">
+            <span class="char-name-text">${escapeHtml(name)}</span>
+            <div class="char-hover-info">
+                <div class="info-row">
+                    <span class="info-icon">💬</span>
+                    <span class="info-value">${chatCount}개 채팅</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-icon">📝</span>
+                    <span class="info-value">${messageCount.toLocaleString()}개 메시지</span>
+                </div>
+            </div>
+        </div>
     </div>
     `;
 }

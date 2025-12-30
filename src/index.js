@@ -386,9 +386,47 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         // 드롭다운 change 이벤트도 직접 바인딩
         bindDropdownEvents();
         
+        // PC에서 캐릭터 그리드 스크롤 시 검색창/태그바 숨김
+        setupScrollHideEffect();
+        
         // 순환참조 방지용 이벤트 리스너
         window.addEventListener('chatlobby:refresh-grid', () => {
             renderCharacterGrid(store.searchTerm);
+        });
+    }
+    
+    /**
+     * PC에서 스크롤 시 검색창/태그바 숨김 효과
+     */
+    function setupScrollHideEffect() {
+        const charactersGrid = document.getElementById('chat-lobby-characters');
+        if (!charactersGrid) return;
+        
+        let lastScrollTop = 0;
+        let scrollThreshold = 50; // 스크롤 감도
+        
+        charactersGrid.addEventListener('scroll', () => {
+            // 모바일에서는 비활성화
+            if (isMobile() || window.innerWidth <= 850) return;
+            
+            const searchBar = document.getElementById('chat-lobby-search');
+            const tagBar = document.getElementById('chat-lobby-tag-bar');
+            
+            if (!searchBar || !tagBar) return;
+            
+            const currentScrollTop = charactersGrid.scrollTop;
+            
+            if (currentScrollTop > scrollThreshold && currentScrollTop > lastScrollTop) {
+                // 아래로 스크롤 - 숨김
+                searchBar.classList.add('hidden-on-scroll');
+                tagBar.classList.add('hidden-on-scroll');
+            } else if (currentScrollTop < lastScrollTop || currentScrollTop <= scrollThreshold) {
+                // 위로 스크롤 또는 상단 - 표시
+                searchBar.classList.remove('hidden-on-scroll');
+                tagBar.classList.remove('hidden-on-scroll');
+            }
+            
+            lastScrollTop = currentScrollTop;
         });
     }
     
