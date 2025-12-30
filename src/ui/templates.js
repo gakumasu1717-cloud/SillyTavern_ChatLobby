@@ -1,22 +1,28 @@
 // ============================================
-// HTML 템플릿 - Netflix Style Redesign
+// HTML 템플릿 - Netflix Style with Dark/Light Mode
 // ============================================
 
 import { storage } from '../data/storage.js';
 
 // 메인 로비 HTML - 넷플릭스 스타일
 export function createLobbyHTML() {
+    // 저장된 테마/접힘 상태 불러오기
+    const savedTheme = localStorage.getItem('chatlobby-theme') || 'dark';
+    const isCollapsed = localStorage.getItem('chatlobby-collapsed') === 'true';
+    const themeClass = savedTheme === 'light' ? 'light-mode' : 'dark-mode';
+    const collapsedClass = isCollapsed ? 'collapsed' : '';
+    
     return `
     <div id="chat-lobby-fab" data-action="open-lobby" title="Chat Lobby 열기">💬</div>
     <div id="chat-lobby-overlay" style="display: none;">
-        <div id="chat-lobby-container" class="netflix-theme">
+        <div id="chat-lobby-container" class="${themeClass}">
             <!-- 헤더 - 넷플릭스 스타일 -->
             <header id="chat-lobby-header">
                 <h2>Chat Lobby</h2>
                 <div class="header-actions">
+                    <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="테마 전환">${savedTheme === 'light' ? '🌙' : '☀️'}</button>
                     <button id="chat-lobby-stats" data-action="open-stats" title="Wrapped 통계">📊 Wrapped</button>
                     <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
-                    <button id="chat-lobby-import-char" data-action="import-char" title="캐릭터 임포트">📥</button>
                     <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
                     <button id="chat-lobby-close" data-action="close-lobby">✕</button>
                 </div>
@@ -25,7 +31,7 @@ export function createLobbyHTML() {
             <!-- 메인 콘텐츠 -->
             <main id="chat-lobby-main">
                 <!-- 왼쪽 패널: 페르소나 + 캐릭터 -->
-                <section id="chat-lobby-left">
+                <section id="chat-lobby-left" class="${collapsedClass}">
                     <!-- 페르소나 바 -->
                     <div id="chat-lobby-persona-bar">
                         <div id="chat-lobby-persona-list">
@@ -47,6 +53,11 @@ export function createLobbyHTML() {
                     <nav id="chat-lobby-tag-bar">
                         <div id="chat-lobby-tag-list"></div>
                     </nav>
+                    
+                    <!-- 접기/펼치기 버튼 -->
+                    <button id="chat-lobby-collapse-btn" data-action="toggle-collapse" title="상단 영역 접기/펼치기">
+                        ${isCollapsed ? '▼' : '▲'}
+                    </button>
                     
                     <!-- 캐릭터 그리드 -->
                     <div id="chat-lobby-characters">

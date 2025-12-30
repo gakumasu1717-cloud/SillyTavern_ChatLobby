@@ -6,6 +6,7 @@ import { CONFIG } from './config.js';
 import { cache } from './data/cache.js';
 import { storage } from './data/storage.js';
 import { store } from './data/store.js';
+import { lastChatCache } from './data/lastChatCache.js';
 import { api } from './api/sillyTavern.js';
 import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
@@ -112,6 +113,23 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 cache.invalidate('characters');
                 cache.invalidate('chats');
                 // 리렌더 제거 - 삭제는 deleteChat에서 element.remove()로 처리
+            },
+            // 메시지 전송 시 해당 캐릭터의 마지막 채팅 시간 갱신
+            onMessageSent: () => {
+                const context = api.getContext();
+                const currentChar = context?.characters?.[context?.characterId];
+                if (currentChar?.avatar) {
+                    lastChatCache.updateNow(currentChar.avatar);
+                    console.log('[ChatLobby] Message sent, updated lastChatCache for:', currentChar.name);
+                }
+            },
+            // 메시지 수신 시에도 갱신
+            onMessageReceived: () => {
+                const context = api.getContext();
+                const currentChar = context?.characters?.[context?.characterId];
+                if (currentChar?.avatar) {
+                    lastChatCache.updateNow(currentChar.avatar);
+                }
             }
         };
         
@@ -127,6 +145,20 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         }
         
         eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+        
+        // 메시지 이벤트 등록 (마지막 채팅 시간 실시간 갱신)
+        if (eventTypes.MESSAGE_SENT) {
+            eventSource.on(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
+        }
+        if (eventTypes.MESSAGE_RECEIVED) {
+            eventSource.on(eventTypes.MESSAGE_RECEIVED, eventHandlers.onMessageReceived);
+        }
+        if (eventTypes.USER_MESSAGE_RENDERED) {
+            eventSource.on(eventTypes.USER_MESSAGE_RENDERED, eventHandlers.onMessageSent);
+        }
+        if (eventTypes.CHARACTER_MESSAGE_RENDERED) {
+            eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, eventHandlers.onMessageReceived);
+        }
         
         eventsRegistered = true;
     }
@@ -148,6 +180,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             eventSource.off?.(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
             eventSource.off?.(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
             eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+            
+            // 메시지 이벤트 정리
+            eventSource.off?.(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
+            eventSource.off?.(eventTypes.MESSAGE_RECEIVED, eventHandlers.onMessageReceived);
+            eventSource.off?.(eventTypes.USER_MESSAGE_RENDERED, eventHandlers.onMessageSent);
+            eventSource.off?.(eventTypes.CHARACTER_MESSAGE_RENDERED, eventHandlers.onMessageReceived);
             
             eventsRegistered = false;
             eventHandlers = null;
@@ -275,9 +313,24 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             // 채팅 패널 닫기 (이전 캐릭터 선택 상태 클리어)
             closeChatPanel();
             
-            // 렌더링 (context에서 직접 가져오므로 항상 최신)
+            // 마지막 채팅 시간 캐시 초기화 후 렌더링 (한 번만)
+            const characters = api.getCharacters();
+            
+            // 페르소나 바는 즉시 렌더링
             renderPersonaBar();
-            renderCharacterGrid();
+            
+            // 마지막 채팅 캐시 초기화 후 캐릭터 그리드 렌더링
+            if (characters.length > 0 && !lastChatCache.initialized) {
+                // 캐시 초기화 완료 후 렌더링 (한 번만)
+                await lastChatCache.initializeAll(characters);
+                renderCharacterGrid();
+            } else {
+                // 이미 초기화됨 → 바로 렌더링
+                renderCharacterGrid();
+            }
+            
+            // 페르소나 바 휠 스크롤 설정
+            setupPersonaWheelScroll();
             
             // 폴더 드롭다운 업데이트
             updateFolderDropdowns();
@@ -343,11 +396,18 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
         cache.invalidateAll();
+        lastChatCache.clear();  // 마지막 채팅 캐시도 클리어
         
         // SillyTavern의 캐릭터 목록 강제 갱신
         const context = api.getContext();
         if (typeof context?.getCharacters === 'function') {
             await context.getCharacters();
+        }
+        
+        // 마지막 채팅 시간 캐시 재초기화
+        const characters = api.getCharacters();
+        if (characters.length > 0) {
+            await lastChatCache.initializeAll(characters);
         }
         
         await renderPersonaBar();
@@ -386,9 +446,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         // 드롭다운 change 이벤트도 직접 바인딩
         bindDropdownEvents();
         
-        // PC에서 캐릭터 그리드 스크롤 시 검색창/태그바 숨김
-        setupScrollHideEffect();
-        
         // 순환참조 방지용 이벤트 리스너
         window.addEventListener('chatlobby:refresh-grid', () => {
             renderCharacterGrid(store.searchTerm);
@@ -396,38 +453,60 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     }
     
     /**
-     * PC에서 스크롤 시 검색창/태그바 숨김 효과
+     * 페르소나 바 마우스 휠 가로 스크롤 설정
      */
-    function setupScrollHideEffect() {
-        const charactersGrid = document.getElementById('chat-lobby-characters');
-        if (!charactersGrid) return;
+    function setupPersonaWheelScroll() {
+        const personaList = document.getElementById('chat-lobby-persona-list');
+        if (!personaList) return;
         
-        let lastScrollTop = 0;
-        let scrollThreshold = 50; // 스크롤 감도
+        // 이미 바인딩되어 있으면 스킵
+        if (personaList.dataset.wheelBound) return;
+        personaList.dataset.wheelBound = 'true';
         
-        charactersGrid.addEventListener('scroll', () => {
-            // 모바일에서는 비활성화
-            if (isMobile() || window.innerWidth <= 850) return;
-            
-            const searchBar = document.getElementById('chat-lobby-search');
-            const tagBar = document.getElementById('chat-lobby-tag-bar');
-            
-            if (!searchBar || !tagBar) return;
-            
-            const currentScrollTop = charactersGrid.scrollTop;
-            
-            if (currentScrollTop > scrollThreshold && currentScrollTop > lastScrollTop) {
-                // 아래로 스크롤 - 숨김
-                searchBar.classList.add('hidden-on-scroll');
-                tagBar.classList.add('hidden-on-scroll');
-            } else if (currentScrollTop < lastScrollTop || currentScrollTop <= scrollThreshold) {
-                // 위로 스크롤 또는 상단 - 표시
-                searchBar.classList.remove('hidden-on-scroll');
-                tagBar.classList.remove('hidden-on-scroll');
+        personaList.addEventListener('wheel', (e) => {
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                personaList.scrollLeft += e.deltaY;
             }
-            
-            lastScrollTop = currentScrollTop;
-        });
+        }, { passive: false });
+    }
+    
+    /**
+     * 상단 영역 접기/펼치기 토글
+     */
+    function toggleCollapse() {
+        const leftPanel = document.getElementById('chat-lobby-left');
+        const collapseBtn = document.getElementById('chat-lobby-collapse-btn');
+        if (!leftPanel || !collapseBtn) return;
+        
+        const isCollapsed = leftPanel.classList.toggle('collapsed');
+        collapseBtn.textContent = isCollapsed ? '▼' : '▲';
+        
+        // localStorage에 저장
+        localStorage.setItem('chatlobby-collapsed', isCollapsed.toString());
+    }
+    
+    /**
+     * 테마 토글 (다크/라이트)
+     */
+    function toggleTheme() {
+        const container = document.getElementById('chat-lobby-container');
+        const themeBtn = document.getElementById('chat-lobby-theme-toggle');
+        if (!container || !themeBtn) return;
+        
+        const isCurrentlyDark = container.classList.contains('dark-mode');
+        
+        if (isCurrentlyDark) {
+            container.classList.remove('dark-mode');
+            container.classList.add('light-mode');
+            themeBtn.textContent = '🌙';
+            localStorage.setItem('chatlobby-theme', 'light');
+        } else {
+            container.classList.remove('light-mode');
+            container.classList.add('dark-mode');
+            themeBtn.textContent = '☀️';
+            localStorage.setItem('chatlobby-theme', 'dark');
+        }
     }
     
     /**
@@ -494,9 +573,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             case 'delete-char':
                 deleteCharacter();
                 break;
-            case 'import-char':
-                handleImportCharacter();
-                break;
             case 'add-persona':
                 handleAddPersona();
                 break;
@@ -521,6 +597,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 break;
             case 'go-to-character':
                 handleGoToCharacter();
+                break;
+            case 'toggle-collapse':
+                toggleCollapse();
+                break;
+            case 'toggle-theme':
+                toggleTheme();
                 break;
         }
     }

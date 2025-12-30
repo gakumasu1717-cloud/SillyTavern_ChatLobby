@@ -1,27 +1,55 @@
 /* ============================================
-   🎬 Chat Lobby - Dynamic Theme
-   SillyTavern 테마 호환 + Pretendard 폰트
+   🎬 Chat Lobby - Netflix Style with Dark/Light Mode
+   Pretendard 폰트 + 다크/라이트 테마 지원
    ============================================ */
 
 /* Pretendard 폰트 */
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
-/* 🎨 SillyTavern 테마 호환 CSS 변수 */
+/* 🎨 다크 모드 (기본) - 넷플릭스 스타일 */
+:root,
+#chat-lobby-container.dark-mode {
+    /* Netflix Colors */
+    --lobby-bg: #141414;
+    --lobby-bg-light: #181818;
+    --lobby-bg-card: #2f2f2f;
+    --lobby-bg-hover: #404040;
+    --lobby-accent: #E50914;
+    --lobby-accent-hover: #f40612;
+    
+    /* Text Colors */
+    --text-primary: #FFFFFF;
+    --text-secondary: #E5E5E5;
+    --text-muted: #A3A3A3;
+    --text-dim: #808080;
+    
+    /* Favorite Star */
+    --star-color: #FFD700;
+    --star-glow: rgba(255, 215, 0, 0.6);
+}
+
+/* ☀️ 라이트 모드 */
+#chat-lobby-container.light-mode {
+    --lobby-bg: #F5F5F5;
+    --lobby-bg-light: #FFFFFF;
+    --lobby-bg-card: #E8E8E8;
+    --lobby-bg-hover: #D0D0D0;
+    --lobby-accent: #E50914;
+    --lobby-accent-hover: #B8070F;
+    
+    /* Text Colors */
+    --text-primary: #1A1A1A;
+    --text-secondary: #333333;
+    --text-muted: #666666;
+    --text-dim: #999999;
+    
+    /* Favorite Star */
+    --star-color: #FFB800;
+    --star-glow: rgba(255, 184, 0, 0.6);
+}
+
+/* 공통 변수 */
 :root {
-    /* SillyTavern 테마에서 가져오는 색상 (fallback 포함) */
-    --lobby-bg: var(--SmartThemeBlurTintColor, var(--SmartThemeBodyColor, #141414));
-    --lobby-bg-light: var(--SmartThemeChatTintColor, #181818);
-    --lobby-bg-card: var(--SmartThemeBlurTintColor, #2f2f2f);
-    --lobby-bg-hover: var(--SmartThemeBorderColor, #404040);
-    --lobby-accent: var(--SmartThemeQuoteColor, #E50914);
-    --lobby-accent-hover: var(--SmartThemeQuoteColor, #f40612);
-    
-    /* Text Colors - SillyTavern 호환 */
-    --text-primary: var(--SmartThemeBodyColor, #FFFFFF);
-    --text-secondary: var(--SmartThemeEmColor, #E5E5E5);
-    --text-muted: var(--SmartThemeChatTintColor, #A3A3A3);
-    --text-dim: var(--SmartThemeBorderColor, #808080);
-    
     /* Spacing */
     --space-xs: 4px;
     --space-sm: 8px;
@@ -39,10 +67,6 @@
     --transition-fast: 0.2s ease;
     --transition-normal: 0.3s ease;
     --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    
-    /* Favorite Star Color */
-    --star-color: var(--SmartThemeQuoteColor, #FFD700);
-    --star-glow: var(--SmartThemeQuoteColor, rgba(255, 215, 0, 0.6));
     
     /* Z-Index */
     --z-header: 100;
@@ -314,7 +338,7 @@
 }
 
 /* ============================================
-   검색 + 정렬 - PC 스크롤 시 숨김 지원
+   검색 + 정렬 (접기 가능)
    ============================================ */
 #chat-lobby-search {
     display: flex;
@@ -323,17 +347,6 @@
     padding: 8px 40px;
     background: transparent;
     transition: all var(--transition-normal);
-    max-height: 60px;
-    overflow: hidden;
-}
-
-/* PC에서 스크롤 시 검색창 숨김 */
-#chat-lobby-search.hidden-on-scroll {
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    opacity: 0;
-    pointer-events: none;
 }
 
 #chat-lobby-search input {
@@ -373,7 +386,7 @@
 }
 
 /* ============================================
-   태그 바 - PC 스크롤 시 숨김 지원
+   태그 바 (접기 가능)
    ============================================ */
 #chat-lobby-tag-bar {
     display: flex;
@@ -383,16 +396,6 @@
     overflow-x: auto;
     scrollbar-width: none;
     transition: all var(--transition-normal);
-    max-height: 50px;
-}
-
-/* PC에서 스크롤 시 태그바 숨김 */
-#chat-lobby-tag-bar.hidden-on-scroll {
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    opacity: 0;
-    pointer-events: none;
 }
 
 #chat-lobby-tag-bar::-webkit-scrollbar {
@@ -408,13 +411,13 @@
 .lobby-tag-item {
     display: inline-flex;
     align-items: center;
-    height: 28px;
+    height: 30px;
     padding: 0 14px;
-    border-radius: var(--radius-full);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid transparent;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
@@ -422,7 +425,8 @@
 }
 
 .lobby-tag-item:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
     color: var(--text-primary);
 }
 
@@ -436,6 +440,91 @@
     margin-left: 6px;
     opacity: 0.7;
     font-size: 11px;
+}
+
+/* ============================================
+   상단 영역 접기/펼치기 기능
+   ============================================ */
+#chat-lobby-collapse-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px;
+    min-width: 60px;
+}
+
+#chat-lobby-collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 접힌 상태의 상단 영역 */
+#chat-lobby-left.collapsed #chat-lobby-persona-bar,
+#chat-lobby-left.collapsed #chat-lobby-search,
+#chat-lobby-left.collapsed #chat-lobby-tag-bar {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+#chat-lobby-left.collapsed #chat-lobby-collapse-btn {
+    transform: rotate(180deg);
+}
+
+/* 테마 토글 버튼 */
+#chat-lobby-theme-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+#chat-lobby-theme-toggle:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 라이트 모드용 추가 스타일 */
+#chat-lobby-container.light-mode #chat-lobby-fab,
+#chat-lobby-container.light-mode #chat-lobby-collapse-btn:hover,
+#chat-lobby-container.light-mode .header-actions button:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode #chat-lobby-search input {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .lobby-tag-item {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .lobby-tag-item:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode .lobby-tag-item.active {
+    background: var(--lobby-accent);
+    color: #fff;
 }
 
 /* ============================================

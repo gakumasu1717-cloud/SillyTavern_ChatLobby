@@ -6,9 +6,11 @@ import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
+import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
+import { closeChatPanel } from './chatList.js';
 import { CONFIG } from '../config.js';
 
 // 렌더링 중복 방지
@@ -275,9 +277,9 @@ async function sortCharacters(characters, sortOption) {
             return (a.name || '').localeCompare(b.name || '', 'ko');
         }
         
-        // 기본: 최근 채팅순
-        const aDate = a.date_last_chat || a.last_mes || 0;
-        const bDate = b.date_last_chat || b.last_mes || 0;
+        // 기본: 최근 채팅순 (lastChatCache 우선 사용)
+        const aDate = lastChatCache.getForSort(a);
+        const bDate = lastChatCache.getForSort(b);
         return bDate - aDate;
     });
     
@@ -290,7 +292,8 @@ async function sortCharacters(characters, sortOption) {
  */
 function bindCharacterEvents(container) {
     container.querySelectorAll('.lobby-char-card').forEach((card, index) => {
-        const charName = card.querySelector('.lobby-char-name')?.textContent || 'Unknown';
+        const charNameEl = card.querySelector('.char-name-text');
+        const charName = charNameEl?.textContent || card.querySelector('.lobby-char-name')?.textContent || 'Unknown';
         const charAvatar = card.dataset.charAvatar;
         const favBtn = card.querySelector('.char-fav-btn');
         
@@ -316,6 +319,14 @@ function bindCharacterEvents(container) {
         // 캐릭터 카드 클릭 (선택)
         createTouchClickHandler(card, () => {
             // 즐겨찾기 버튼 클릭은 무시 (위에서 처리됨)
+            
+            // 같은 캐릭터를 다시 클릭하면 채팅 패널 닫기
+            if (store.currentCharacter?.avatar === charAvatar) {
+                card.classList.remove('selected');
+                store.setCurrentCharacter(null);
+                closeChatPanel();
+                return;
+            }
             
             // 기존 선택 해제
             container.querySelectorAll('.lobby-char-card.selected').forEach(el => {
