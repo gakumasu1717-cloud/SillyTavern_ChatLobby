@@ -161,14 +161,8 @@ function renderCharacterCard(char, index) {
     
     const isFav = isFavoriteChar(char);
     
-    // 캐시에서 채팅 수 가져오기 (없으면 0)
-    const chatCount = cache.get('chatCounts', char.avatar) || 0;
-    
-    // 캐시에서 메시지 수 가져오기 (없으면 계산)
-    let messageCount = cache.get('messageCounts', char.avatar);
-    if (typeof messageCount !== 'number') {
-        messageCount = char.chat_size || 0;
-    }
+    // 메시지 수는 char.chat_size에서 가져옴 (SillyTavern 제공)
+    const messageCount = char.chat_size || 0;
     
     // 즐겨찾기 버튼
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
@@ -187,10 +181,6 @@ function renderCharacterCard(char, index) {
         <div class="lobby-char-name">
             <span class="char-name-text">${escapeHtml(name)}</span>
             <div class="char-hover-info">
-                <div class="info-row">
-                    <span class="info-icon">💬</span>
-                    <span class="info-value">${chatCount}개 채팅</span>
-                </div>
                 <div class="info-row">
                     <span class="info-icon">📝</span>
                     <span class="info-value">${messageCount.toLocaleString()}개 메시지</span>

@@ -2415,11 +2415,7 @@ ${message}` : message;
     const name = char.name || "Unknown";
     const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
-    const chatCount = cache.get("chatCounts", char.avatar) || 0;
-    let messageCount = cache.get("messageCounts", char.avatar);
-    if (typeof messageCount !== "number") {
-      messageCount = char.chat_size || 0;
-    }
+    const messageCount = char.chat_size || 0;
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
@@ -2435,10 +2431,6 @@ ${message}` : message;
         <div class="lobby-char-name">
             <span class="char-name-text">${escapeHtml(name)}</span>
             <div class="char-hover-info">
-                <div class="info-row">
-                    <span class="info-icon">\u{1F4AC}</span>
-                    <span class="info-value">${chatCount}\uAC1C \uCC44\uD305</span>
-                </div>
                 <div class="info-row">
                     <span class="info-icon">\u{1F4DD}</span>
                     <span class="info-value">${messageCount.toLocaleString()}\uAC1C \uBA54\uC2DC\uC9C0</span>
@@ -3709,13 +3701,6 @@ ${message}` : message;
               );
               if (charCard) {
                 charCard.classList.add("selected");
-                const characterData = {
-                  index: currentContext.characterId,
-                  avatar: currentChar.avatar,
-                  name: currentChar.name,
-                  avatarSrc: `/characters/${encodeURIComponent(currentChar.avatar)}`
-                };
-                renderChatList(characterData);
               }
             }, 200);
           }

@@ -333,26 +333,19 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             // 폴더 드롭다운 업데이트
             updateFolderDropdowns();
             
-            // 현재 채팅 중인 캐릭터 자동 선택
+            // 현재 채팅 중인 캐릭터 자동 선택 (UI만 표시, 채팅목록은 렌더X)
             const currentContext = api.getContext();
             if (currentContext?.characterId !== undefined && currentContext.characterId >= 0) {
                 const currentChar = currentContext.characters?.[currentContext.characterId];
                 if (currentChar) {
-                    // 렌더링 완료 후 선택
+                    // 렌더링 완료 후 선택 표시만
                     setTimeout(() => {
                         const charCard = document.querySelector(
                             `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
                         );
                         if (charCard) {
                             charCard.classList.add('selected');
-                            // 채팅 목록도 로드
-                            const characterData = {
-                                index: currentContext.characterId,
-                                avatar: currentChar.avatar,
-                                name: currentChar.name,
-                                avatarSrc: `/characters/${encodeURIComponent(currentChar.avatar)}`
-                            };
-                            renderChatList(characterData);
+                            // 채팅 목록 렌더 제거 - 사용자가 직접 클릭할 때만 표시
                         }
                     }, 200);
                 }
