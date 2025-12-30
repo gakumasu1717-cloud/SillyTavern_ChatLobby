@@ -1301,48 +1301,214 @@ ${message}` : message;
   };
   var api = new SillyTavernAPI();
 
+  // src/data/lastChatCache.js
+  var LastChatCache = class {
+    constructor() {
+      this.lastChatTimes = /* @__PURE__ */ new Map();
+      this.initialized = false;
+      this.initializing = false;
+    }
+    /**
+     * 특정 캐릭터의 마지막 채팅 시간 가져오기
+     */
+    get(charAvatar) {
+      return this.lastChatTimes.get(charAvatar) || 0;
+    }
+    /**
+     * 특정 캐릭터의 마지막 채팅 시간 설정
+     */
+    set(charAvatar, timestamp) {
+      if (timestamp > 0) {
+        this.lastChatTimes.set(charAvatar, timestamp);
+      }
+    }
+    /**
+     * 현재 시간으로 마지막 채팅 시간 업데이트 (메시지 전송 시)
+     */
+    updateNow(charAvatar) {
+      if (!charAvatar) return;
+      this.lastChatTimes.set(charAvatar, Date.now());
+      console.log("[LastChatCache] Updated to now:", charAvatar);
+    }
+    /**
+     * 채팅 목록에서 마지막 채팅 시간 추출
+     */
+    extractLastTime(chats) {
+      if (!Array.isArray(chats) || chats.length === 0) return 0;
+      let maxTime = 0;
+      for (const chat of chats) {
+        const chatTime = this.getChatTimestamp(chat);
+        if (chatTime > maxTime) {
+          maxTime = chatTime;
+        }
+      }
+      return maxTime;
+    }
+    /**
+     * 개별 채팅에서 타임스탬프 추출
+     */
+    getChatTimestamp(chat) {
+      if (chat.last_mes) {
+        return typeof chat.last_mes === "number" ? chat.last_mes : new Date(chat.last_mes).getTime();
+      }
+      if (chat.file_name) {
+        const timestamp = this.parseFileNameDate(chat.file_name);
+        if (timestamp) return timestamp;
+      }
+      if (chat.date) {
+        return typeof chat.date === "number" ? chat.date : new Date(chat.date).getTime();
+      }
+      return 0;
+    }
+    /**
+     * 파일명에서 날짜 파싱
+     * 형식: "2024-12-30@15h30m45s.jsonl" 또는 "캐릭터명 - 2024-12-30@15h30m45s.jsonl"
+     */
+    parseFileNameDate(fileName) {
+      const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
+      if (!match) return null;
+      const [, year, month, day, hour, min, sec] = match;
+      return new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hour),
+        parseInt(min),
+        parseInt(sec)
+      ).getTime();
+    }
+    /**
+     * 캐릭터의 채팅 목록을 가져와서 마지막 시간 갱신
+     */
+    async refreshForCharacter(charAvatar, chats = null) {
+      try {
+        if (!chats) {
+          chats = cache.get("chats", charAvatar);
+          if (!chats) {
+            chats = await api.fetchChatsForCharacter(charAvatar);
+          }
+        }
+        const lastTime = this.extractLastTime(chats);
+        if (lastTime > 0) {
+          this.set(charAvatar, lastTime);
+        }
+        return lastTime;
+      } catch (e) {
+        console.error("[LastChatCache] Failed to refresh:", charAvatar, e);
+        return 0;
+      }
+    }
+    /**
+     * 모든 캐릭터의 마지막 채팅 시간 초기화
+     * 로비 열 때 또는 새로고침 시 호출
+     * @returns {Promise<void>} 초기화 완료 시 resolve
+     */
+    async initializeAll(characters, batchSize = 10) {
+      if (this.initializing) {
+        console.log("[LastChatCache] Already initializing, skip");
+        return;
+      }
+      this.initializing = true;
+      console.log("[LastChatCache] Initializing for", characters.length, "characters");
+      try {
+        const sorted = [...characters].sort(
+          (a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0)
+        );
+        const priority = sorted.slice(0, 30);
+        for (let i = 0; i < priority.length; i += batchSize) {
+          const batch = priority.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map((char) => this.refreshForCharacter(char.avatar))
+          );
+        }
+        this.initialized = true;
+        console.log("[LastChatCache] Initialized with", this.lastChatTimes.size, "entries");
+      } finally {
+        this.initializing = false;
+      }
+    }
+    /**
+     * 캐릭터 정렬용 마지막 채팅 시간 가져오기
+     * 캐시에 있으면 캐시값, 없으면 context의 date_last_chat 사용
+     */
+    getForSort(char) {
+      const cached = this.get(char.avatar);
+      if (cached > 0) return cached;
+      return char.date_last_chat || char.last_mes || 0;
+    }
+    /**
+     * 캐시 클리어
+     */
+    clear() {
+      this.lastChatTimes.clear();
+      this.initialized = false;
+      this.initializing = false;
+    }
+  };
+  var lastChatCache = new LastChatCache();
+
   // src/ui/templates.js
   function createLobbyHTML() {
+    const savedTheme = localStorage.getItem("chatlobby-theme") || "dark";
+    const isCollapsed = localStorage.getItem("chatlobby-collapsed") === "true";
+    const themeClass = savedTheme === "light" ? "light-mode" : "dark-mode";
+    const collapsedClass = isCollapsed ? "collapsed" : "";
     return `
     <div id="chat-lobby-fab" data-action="open-lobby" title="Chat Lobby \uC5F4\uAE30">\u{1F4AC}</div>
     <div id="chat-lobby-overlay" style="display: none;">
-        <div id="chat-lobby-container">
-            <div id="chat-lobby-header">
+        <div id="chat-lobby-container" class="${themeClass}">
+            <!-- \uD5E4\uB354 - \uB137\uD50C\uB9AD\uC2A4 \uC2A4\uD0C0\uC77C -->
+            <header id="chat-lobby-header">
                 <h2>Chat Lobby</h2>
                 <div class="header-actions">
-                    <button id="chat-lobby-stats" data-action="open-stats" title="\uD1B5\uACC4">\u{1F4CA}</button>
+                    <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="\uD14C\uB9C8 \uC804\uD658">${savedTheme === "light" ? "\u{1F319}" : "\u2600\uFE0F"}</button>
+                    <button id="chat-lobby-stats" data-action="open-stats" title="Wrapped \uD1B5\uACC4">\u{1F4CA} Wrapped</button>
                     <button id="chat-lobby-refresh" data-action="refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
-                    <button id="chat-lobby-import-char" data-action="import-char" title="\uCE90\uB9AD\uD130 \uC784\uD3EC\uD2B8">\u{1F4E5}</button>
                     <button id="chat-lobby-add-persona" data-action="add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
                     <button id="chat-lobby-close" data-action="close-lobby">\u2715</button>
                 </div>
-            </div>
-            <div id="chat-lobby-main">
+            </header>
+            
+            <!-- \uBA54\uC778 \uCF58\uD150\uCE20 -->
+            <main id="chat-lobby-main">
                 <!-- \uC67C\uCABD \uD328\uB110: \uD398\uB974\uC18C\uB098 + \uCE90\uB9AD\uD130 -->
-                <div id="chat-lobby-left">
+                <section id="chat-lobby-left" class="${collapsedClass}">
+                    <!-- \uD398\uB974\uC18C\uB098 \uBC14 -->
                     <div id="chat-lobby-persona-bar">
                         <div id="chat-lobby-persona-list">
                             <div class="lobby-loading">\uB85C\uB529 \uC911...</div>
                         </div>
                     </div>
+                    
+                    <!-- \uAC80\uC0C9 + \uC815\uB82C -->
                     <div id="chat-lobby-search">
-                        <input type="text" id="chat-lobby-search-input" placeholder="\uCE90\uB9AD\uD130 \uAC80\uC0C9...">
+                        <input type="text" id="chat-lobby-search-input" placeholder="\u{1F50D} \uCE90\uB9AD\uD130 \uAC80\uC0C9...">
                         <select id="chat-lobby-char-sort" title="\uCE90\uB9AD\uD130 \uC815\uB82C">
                             <option value="recent">\u{1F552} \uCD5C\uADFC \uCC44\uD305\uC21C</option>
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
                             <option value="chats">\u{1F4AC} \uCC44\uD305 \uC218</option>
                         </select>
                     </div>
-                    <div id="chat-lobby-tag-bar">
+                    
+                    <!-- \uD0DC\uADF8 \uBC14 -->
+                    <nav id="chat-lobby-tag-bar">
                         <div id="chat-lobby-tag-list"></div>
-                    </div>
+                    </nav>
+                    
+                    <!-- \uC811\uAE30/\uD3BC\uCE58\uAE30 \uBC84\uD2BC -->
+                    <button id="chat-lobby-collapse-btn" data-action="toggle-collapse" title="\uC0C1\uB2E8 \uC601\uC5ED \uC811\uAE30/\uD3BC\uCE58\uAE30">
+                        ${isCollapsed ? "\u25BC" : "\u25B2"}
+                    </button>
+                    
+                    <!-- \uCE90\uB9AD\uD130 \uADF8\uB9AC\uB4DC -->
                     <div id="chat-lobby-characters">
                         <div class="lobby-loading">\uCE90\uB9AD\uD130 \uB85C\uB529 \uC911...</div>
                     </div>
-                </div>
-                <!-- \uC624\uB978\uCABD \uD328\uB110: \uCC44\uD305 \uBAA9\uB85D -->
-                <div id="chat-lobby-chats">
-                    <div id="chat-lobby-chats-header">
+                </section>
+                
+                <!-- \uC624\uB978\uCABD \uD328\uB110: \uCC44\uD305 \uBAA9\uB85D (\uC2AC\uB77C\uC774\uB4DC \uC778) -->
+                <aside id="chat-lobby-chats">
+                    <header id="chat-lobby-chats-header">
                         <button id="chat-lobby-chats-back" data-action="close-chat-panel" title="\uB4A4\uB85C">\u2190</button>
                         <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="\uCE90\uB9AD\uD130 \uC124\uC815" style="display:none;">
                         <div class="char-info">
@@ -1351,8 +1517,9 @@ ${message}` : message;
                         </div>
                         <button id="chat-lobby-delete-char" data-action="delete-char" title="\uCE90\uB9AD\uD130 \uC0AD\uC81C" style="display:none;">\u{1F5D1}\uFE0F</button>
                         <button id="chat-lobby-new-chat" data-action="new-chat" style="display:none;">+ \uC0C8 \uCC44\uD305</button>
-                    </div>
-                    <!-- \uD544\uD130 \uC139\uC158: \uD0DC\uADF8 + \uD544\uD130/\uD234 -->
+                    </header>
+                    
+                    <!-- \uD544\uD130 \uC139\uC158 -->
                     <section id="chat-lobby-filters" style="display:none;">
                         <div id="chat-lobby-char-tags"></div>
                         <div class="filters-row">
@@ -1373,22 +1540,26 @@ ${message}` : message;
                             </div>
                         </div>
                     </section>
+                    
                     <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
                     <div id="chat-lobby-batch-toolbar" style="display:none;">
                         <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
                         <span id="batch-help-text">\u{1F4C1} \uD074\uB9AD\uC73C\uB85C \uC774\uB3D9</span>
                         <button id="batch-cancel-btn" data-action="batch-cancel" title="\uBC30\uCE58 \uBAA8\uB4DC \uC885\uB8CC">\u2715</button>
                     </div>
+                    
+                    <!-- \uCC44\uD305 \uBAA9\uB85D -->
                     <div id="chat-lobby-chats-list">
                         <div class="lobby-empty-state">
                             <i>\u{1F4AC}</i>
                             <div>\uCE90\uB9AD\uD130\uB97C \uC120\uD0DD\uD558\uC138\uC694</div>
                         </div>
                     </div>
-                </div>
-            </div>
+                </aside>
+            </main>
         </div>
     </div>
+    
     <!-- \uD3F4\uB354 \uAD00\uB9AC \uBAA8\uB2EC -->
     <div id="chat-lobby-folder-modal" style="display:none;">
         <div class="folder-modal-content">
@@ -1667,255 +1838,6 @@ ${message}` : message;
   // src/ui/characterGrid.js
   init_textUtils();
   init_notifications();
-  init_config();
-  var isRendering = false;
-  var pendingRender = null;
-  function setCharacterSelectHandler(handler) {
-    store.setCharacterSelectHandler(handler);
-  }
-  async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
-    console.log("[RENDER] renderCharacterGrid called", { searchTerm, sortOverride, stack: new Error().stack?.split("\n").slice(1, 4).join(" <- ") });
-    if (isRendering) {
-      console.log("[RENDER] renderCharacterGrid BLOCKED (already rendering)");
-      pendingRender = { searchTerm, sortOverride };
-      return;
-    }
-    isRendering = true;
-    try {
-      const container = document.getElementById("chat-lobby-characters");
-      if (!container) return;
-      store.setSearchTerm(searchTerm);
-      const characters = api.getCharacters();
-      if (characters.length === 0) {
-        container.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>\u{1F465}</i>
-                    <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uC0C8\uB85C\uACE0\uCE68</button>
-                </div>
-            `;
-        return;
-      }
-      await renderCharacterList(container, characters, searchTerm, sortOverride);
-    } finally {
-      isRendering = false;
-      if (pendingRender) {
-        const { searchTerm: s, sortOverride: o } = pendingRender;
-        pendingRender = null;
-        renderCharacterGrid(s, o);
-      }
-    }
-  }
-  async function renderCharacterList(container, characters, searchTerm, sortOverride) {
-    let filtered = [...characters];
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (char) => (char.name || "").toLowerCase().includes(term)
-      );
-    }
-    const selectedTag = store.selectedTag;
-    if (selectedTag) {
-      filtered = filtered.filter((char) => {
-        const charTags = getCharacterTags(char);
-        return charTags.includes(selectedTag);
-      });
-    }
-    renderTagBar(characters);
-    const sortOption = sortOverride || storage.getCharSortOption();
-    filtered = await sortCharacters(filtered, sortOption);
-    const sortSelect = document.getElementById("chat-lobby-char-sort");
-    if (sortSelect && sortSelect.value !== sortOption) {
-      sortSelect.value = sortOption;
-    }
-    if (filtered.length === 0) {
-      container.innerHTML = `
-            <div class="lobby-empty-state">
-                <i>\u{1F50D}</i>
-                <div>\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-            </div>
-        `;
-      return;
-    }
-    const originalCharacters = api.getCharacters();
-    const indexMap = new Map(originalCharacters.map((c, i) => [c, i]));
-    container.innerHTML = filtered.map((char) => {
-      return renderCharacterCard(char, indexMap.get(char));
-    }).join("");
-    bindCharacterEvents(container);
-  }
-  function renderCharacterCard(char, index) {
-    const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
-    const name = char.name || "Unknown";
-    const safeAvatar = escapeHtml(char.avatar || "");
-    const isFav = isFavoriteChar(char);
-    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
-    return `
-    <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
-         data-char-index="${index}" 
-         data-char-avatar="${safeAvatar}" 
-         data-is-fav="${isFav}">
-        ${favBtn}
-        <img class="lobby-char-avatar" src="${avatarUrl}" alt="${escapeHtml(name)}" onerror="this.src='/img/ai4.png'">
-        <div class="lobby-char-name">${escapeHtml(name)}</div>
-    </div>
-    `;
-  }
-  function isFavoriteChar(char) {
-    return storage.isCharacterFavorite(char.avatar);
-  }
-  async function sortCharacters(characters, sortOption) {
-    if (sortOption === "chats") {
-      const BATCH_SIZE = 5;
-      const results = [];
-      for (let i = 0; i < characters.length; i += BATCH_SIZE) {
-        const batch = characters.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.all(
-          batch.map(async (char) => {
-            let count = cache.get("chatCounts", char.avatar);
-            if (typeof count !== "number") {
-              try {
-                count = await api.getChatCount(char.avatar);
-              } catch (e) {
-                console.error("[CharacterGrid] Failed to get chat count for:", char.name, e);
-                count = 0;
-              }
-            }
-            return { char, count };
-          })
-        );
-        results.push(...batchResults);
-      }
-      results.sort((a, b) => {
-        if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
-          return isFavoriteChar(a.char) ? -1 : 1;
-        }
-        if (b.count !== a.count) {
-          return b.count - a.count;
-        }
-        return (a.char.name || "").localeCompare(b.char.name || "", "ko");
-      });
-      return results.map((item) => item.char);
-    }
-    const sorted = [...characters];
-    sorted.sort((a, b) => {
-      if (isFavoriteChar(a) !== isFavoriteChar(b)) {
-        return isFavoriteChar(a) ? -1 : 1;
-      }
-      if (sortOption === "name") {
-        return (a.name || "").localeCompare(b.name || "", "ko");
-      }
-      const aDate = a.date_last_chat || a.last_mes || 0;
-      const bDate = b.date_last_chat || b.last_mes || 0;
-      return bDate - aDate;
-    });
-    return sorted;
-  }
-  function bindCharacterEvents(container) {
-    container.querySelectorAll(".lobby-char-card").forEach((card, index) => {
-      const charName = card.querySelector(".lobby-char-name")?.textContent || "Unknown";
-      const charAvatar = card.dataset.charAvatar;
-      const favBtn = card.querySelector(".char-fav-btn");
-      if (favBtn) {
-        createTouchClickHandler(favBtn, (e) => {
-          e.stopPropagation();
-          const newFavState = storage.toggleCharacterFavorite(charAvatar);
-          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
-          card.dataset.isFav = newFavState.toString();
-          card.classList.toggle("is-char-fav", newFavState);
-          console.log(`[CharacterGrid] Favorite toggled: ${charAvatar} = ${newFavState}`);
-          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
-        }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
-      }
-      createTouchClickHandler(card, () => {
-        container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
-          el.classList.remove("selected");
-        });
-        card.classList.add("selected");
-        const characterData = {
-          index: card.dataset.charIndex,
-          avatar: card.dataset.charAvatar,
-          name: charName,
-          avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
-        };
-        const handler = store.onCharacterSelect;
-        if (handler && typeof handler === "function") {
-          try {
-            handler(characterData);
-          } catch (error) {
-            console.error("[CharacterGrid] Handler error:", error);
-          }
-        } else {
-          console.error("[CharacterGrid] onCharacterSelect handler not available!", {
-            handler,
-            handlerType: typeof handler
-          });
-        }
-      }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
-    });
-  }
-  var handleSearch = debounce((searchTerm) => {
-    renderCharacterGrid(searchTerm);
-  }, CONFIG.ui.debounceWait);
-  function handleSortChange(sortOption) {
-    storage.setCharSortOption(sortOption);
-    const searchTerm = store.searchTerm;
-    renderCharacterGrid(searchTerm, sortOption);
-  }
-  function getCharacterTags(char) {
-    const context = api.getContext();
-    if (context?.tagMap && context?.tags && char.avatar) {
-      const charTags = context.tagMap[char.avatar] || [];
-      return charTags.map((tagId) => {
-        const tag = context.tags.find((t) => t.id === tagId);
-        return tag?.name || "";
-      }).filter(Boolean);
-    }
-    if (Array.isArray(char.tags)) {
-      return char.tags;
-    }
-    return [];
-  }
-  function aggregateTags(characters) {
-    const tagCounts = {};
-    characters.forEach((char) => {
-      const tags = getCharacterTags(char);
-      tags.forEach((tag) => {
-        if (tag) {
-          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-        }
-      });
-    });
-    return Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, count }));
-  }
-  function renderTagBar(characters) {
-    const container = document.getElementById("chat-lobby-tag-list");
-    if (!container) return;
-    const tags = aggregateTags(characters);
-    if (tags.length === 0) {
-      container.innerHTML = "";
-      return;
-    }
-    const selectedTag = store.selectedTag;
-    container.innerHTML = tags.map(({ tag, count }) => {
-      const isActive = selectedTag === tag;
-      return `<span class="lobby-tag-item ${isActive ? "active" : ""}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="lobby-tag-count">(${count})</span></span>`;
-    }).join("");
-    bindTagEvents(container);
-  }
-  function bindTagEvents(container) {
-    container.querySelectorAll(".lobby-tag-item").forEach((item) => {
-      createTouchClickHandler(item, () => {
-        const tag = item.dataset.tag;
-        if (store.selectedTag === tag) {
-          store.setSelectedTag(null);
-        } else {
-          store.setSelectedTag(tag);
-        }
-        renderCharacterGrid(store.searchTerm);
-      }, { debugName: `tag-${item.dataset.tag}` });
-    });
-  }
 
   // src/ui/chatList.js
   init_textUtils();
@@ -2279,7 +2201,7 @@ ${message}` : message;
     document.getElementById("chat-panel-count").textContent = "\uCC44\uD305 \uB85C\uB529 \uC911...";
     renderCharacterTags(character.avatar);
   }
-  function getCharacterTags2(charAvatar) {
+  function getCharacterTags(charAvatar) {
     const context = api.getContext();
     if (!context?.tagMap || !context?.tags || !charAvatar) {
       return [];
@@ -2294,7 +2216,7 @@ ${message}` : message;
     const filtersSection = document.getElementById("chat-lobby-filters");
     const container = document.getElementById("chat-lobby-char-tags");
     if (!container || !filtersSection) return;
-    const tags = getCharacterTags2(charAvatar);
+    const tags = getCharacterTags(charAvatar);
     filtersSection.style.display = "block";
     if (tags.length === 0) {
       container.style.display = "none";
@@ -2331,7 +2253,7 @@ ${message}` : message;
       renderChatList(character);
     }
   }
-  function handleSortChange2(sortValue) {
+  function handleSortChange(sortValue) {
     storage.setSortOption(sortValue);
     const character = store.currentCharacter;
     if (character) {
@@ -2404,6 +2326,294 @@ ${message}` : message;
     const chatsPanel = document.getElementById("chat-lobby-chats");
     if (chatsPanel) chatsPanel.classList.remove("visible");
     store.setCurrentCharacter(null);
+  }
+
+  // src/ui/characterGrid.js
+  init_config();
+  var isRendering = false;
+  var pendingRender = null;
+  function setCharacterSelectHandler(handler) {
+    store.setCharacterSelectHandler(handler);
+  }
+  async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
+    console.log("[RENDER] renderCharacterGrid called", { searchTerm, sortOverride, stack: new Error().stack?.split("\n").slice(1, 4).join(" <- ") });
+    if (isRendering) {
+      console.log("[RENDER] renderCharacterGrid BLOCKED (already rendering)");
+      pendingRender = { searchTerm, sortOverride };
+      return;
+    }
+    isRendering = true;
+    try {
+      const container = document.getElementById("chat-lobby-characters");
+      if (!container) return;
+      store.setSearchTerm(searchTerm);
+      const characters = api.getCharacters();
+      if (characters.length === 0) {
+        container.innerHTML = `
+                <div class="lobby-empty-state">
+                    <i>\u{1F465}</i>
+                    <div>\uCE90\uB9AD\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+                    <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uC0C8\uB85C\uACE0\uCE68</button>
+                </div>
+            `;
+        return;
+      }
+      await renderCharacterList(container, characters, searchTerm, sortOverride);
+    } finally {
+      isRendering = false;
+      if (pendingRender) {
+        const { searchTerm: s, sortOverride: o } = pendingRender;
+        pendingRender = null;
+        renderCharacterGrid(s, o);
+      }
+    }
+  }
+  async function renderCharacterList(container, characters, searchTerm, sortOverride) {
+    let filtered = [...characters];
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (char) => (char.name || "").toLowerCase().includes(term)
+      );
+    }
+    const selectedTag = store.selectedTag;
+    if (selectedTag) {
+      filtered = filtered.filter((char) => {
+        const charTags = getCharacterTags2(char);
+        return charTags.includes(selectedTag);
+      });
+    }
+    renderTagBar(characters);
+    const sortOption = sortOverride || storage.getCharSortOption();
+    filtered = await sortCharacters(filtered, sortOption);
+    const sortSelect = document.getElementById("chat-lobby-char-sort");
+    if (sortSelect && sortSelect.value !== sortOption) {
+      sortSelect.value = sortOption;
+    }
+    if (filtered.length === 0) {
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F50D}</i>
+                <div>\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+            </div>
+        `;
+      return;
+    }
+    const originalCharacters = api.getCharacters();
+    const indexMap = new Map(originalCharacters.map((c, i) => [c, i]));
+    container.innerHTML = filtered.map((char) => {
+      return renderCharacterCard(char, indexMap.get(char));
+    }).join("");
+    bindCharacterEvents(container);
+  }
+  function renderCharacterCard(char, index) {
+    const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
+    const name = char.name || "Unknown";
+    const safeAvatar = escapeHtml(char.avatar || "");
+    const isFav = isFavoriteChar(char);
+    const chatCount = cache.get("chatCounts", char.avatar) || 0;
+    let messageCount = cache.get("messageCounts", char.avatar);
+    if (typeof messageCount !== "number") {
+      messageCount = char.chat_size || 0;
+    }
+    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
+    return `
+    <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
+         data-char-index="${index}" 
+         data-char-avatar="${safeAvatar}" 
+         data-is-fav="${isFav}">
+        ${favBtn}
+        <img class="lobby-char-avatar" 
+             src="${avatarUrl}" 
+             alt="${escapeHtml(name)}" 
+             loading="lazy"
+             onerror="this.src='/img/ai4.png'">
+        <div class="lobby-char-name">
+            <span class="char-name-text">${escapeHtml(name)}</span>
+            <div class="char-hover-info">
+                <div class="info-row">
+                    <span class="info-icon">\u{1F4AC}</span>
+                    <span class="info-value">${chatCount}\uAC1C \uCC44\uD305</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-icon">\u{1F4DD}</span>
+                    <span class="info-value">${messageCount.toLocaleString()}\uAC1C \uBA54\uC2DC\uC9C0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+  }
+  function isFavoriteChar(char) {
+    return storage.isCharacterFavorite(char.avatar);
+  }
+  async function sortCharacters(characters, sortOption) {
+    if (sortOption === "chats") {
+      const BATCH_SIZE = 5;
+      const results = [];
+      for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+        const batch = characters.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (char) => {
+            let count = cache.get("chatCounts", char.avatar);
+            if (typeof count !== "number") {
+              try {
+                count = await api.getChatCount(char.avatar);
+              } catch (e) {
+                console.error("[CharacterGrid] Failed to get chat count for:", char.name, e);
+                count = 0;
+              }
+            }
+            return { char, count };
+          })
+        );
+        results.push(...batchResults);
+      }
+      results.sort((a, b) => {
+        if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
+          return isFavoriteChar(a.char) ? -1 : 1;
+        }
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return (a.char.name || "").localeCompare(b.char.name || "", "ko");
+      });
+      return results.map((item) => item.char);
+    }
+    const sorted = [...characters];
+    sorted.sort((a, b) => {
+      if (isFavoriteChar(a) !== isFavoriteChar(b)) {
+        return isFavoriteChar(a) ? -1 : 1;
+      }
+      if (sortOption === "name") {
+        return (a.name || "").localeCompare(b.name || "", "ko");
+      }
+      const aDate = lastChatCache.getForSort(a);
+      const bDate = lastChatCache.getForSort(b);
+      return bDate - aDate;
+    });
+    return sorted;
+  }
+  function bindCharacterEvents(container) {
+    container.querySelectorAll(".lobby-char-card").forEach((card, index) => {
+      const charNameEl = card.querySelector(".char-name-text");
+      const charName = charNameEl?.textContent || card.querySelector(".lobby-char-name")?.textContent || "Unknown";
+      const charAvatar = card.dataset.charAvatar;
+      const favBtn = card.querySelector(".char-fav-btn");
+      if (favBtn) {
+        createTouchClickHandler(favBtn, (e) => {
+          e.stopPropagation();
+          const newFavState = storage.toggleCharacterFavorite(charAvatar);
+          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          card.dataset.isFav = newFavState.toString();
+          card.classList.toggle("is-char-fav", newFavState);
+          console.log(`[CharacterGrid] Favorite toggled: ${charAvatar} = ${newFavState}`);
+          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
+        }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
+      }
+      createTouchClickHandler(card, () => {
+        const chatsPanel = document.getElementById("chat-lobby-chats");
+        const isPanelVisible = chatsPanel?.classList.contains("visible");
+        const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
+        console.log("[CharacterGrid] Card clicked:", {
+          charAvatar,
+          currentAvatar: store.currentCharacter?.avatar,
+          isPanelVisible,
+          isSameCharacter
+        });
+        if (isPanelVisible && isSameCharacter) {
+          console.log("[CharacterGrid] Closing panel - same character re-clicked");
+          card.classList.remove("selected");
+          closeChatPanel();
+          return;
+        }
+        container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
+          el.classList.remove("selected");
+        });
+        card.classList.add("selected");
+        const characterData = {
+          index: card.dataset.charIndex,
+          avatar: card.dataset.charAvatar,
+          name: charName,
+          avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
+        };
+        const handler = store.onCharacterSelect;
+        if (handler && typeof handler === "function") {
+          try {
+            handler(characterData);
+          } catch (error) {
+            console.error("[CharacterGrid] Handler error:", error);
+          }
+        } else {
+          console.error("[CharacterGrid] onCharacterSelect handler not available!", {
+            handler,
+            handlerType: typeof handler
+          });
+        }
+      }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
+    });
+  }
+  var handleSearch = debounce((searchTerm) => {
+    renderCharacterGrid(searchTerm);
+  }, CONFIG.ui.debounceWait);
+  function handleSortChange2(sortOption) {
+    storage.setCharSortOption(sortOption);
+    const searchTerm = store.searchTerm;
+    renderCharacterGrid(searchTerm, sortOption);
+  }
+  function getCharacterTags2(char) {
+    const context = api.getContext();
+    if (context?.tagMap && context?.tags && char.avatar) {
+      const charTags = context.tagMap[char.avatar] || [];
+      return charTags.map((tagId) => {
+        const tag = context.tags.find((t) => t.id === tagId);
+        return tag?.name || "";
+      }).filter(Boolean);
+    }
+    if (Array.isArray(char.tags)) {
+      return char.tags;
+    }
+    return [];
+  }
+  function aggregateTags(characters) {
+    const tagCounts = {};
+    characters.forEach((char) => {
+      const tags = getCharacterTags2(char);
+      tags.forEach((tag) => {
+        if (tag) {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      });
+    });
+    return Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, count }));
+  }
+  function renderTagBar(characters) {
+    const container = document.getElementById("chat-lobby-tag-list");
+    if (!container) return;
+    const tags = aggregateTags(characters);
+    if (tags.length === 0) {
+      container.innerHTML = "";
+      return;
+    }
+    const selectedTag = store.selectedTag;
+    container.innerHTML = tags.map(({ tag, count }) => {
+      const isActive = selectedTag === tag;
+      return `<span class="lobby-tag-item ${isActive ? "active" : ""}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="lobby-tag-count">(${count})</span></span>`;
+    }).join("");
+    bindTagEvents(container);
+  }
+  function bindTagEvents(container) {
+    container.querySelectorAll(".lobby-tag-item").forEach((item) => {
+      createTouchClickHandler(item, () => {
+        const tag = item.dataset.tag;
+        if (store.selectedTag === tag) {
+          store.setSelectedTag(null);
+        } else {
+          store.setSelectedTag(tag);
+        }
+        renderCharacterGrid(store.searchTerm);
+      }, { debugName: `tag-${item.dataset.tag}` });
+    });
   }
 
   // src/handlers/chatHandlers.js
@@ -2856,6 +3066,7 @@ ${message}` : message;
   var currentStep = 0;
   var rankingsData = [];
   var totalStatsData = {};
+  var funFactsData = {};
   var userGuessChar = null;
   var userGuessMessages = 0;
   async function openStatsView() {
@@ -2911,6 +3122,7 @@ ${message}` : message;
       }
       rankingsData = await fetchRankings(characters);
       totalStatsData = calculateTotalStats(rankingsData, characters.length);
+      funFactsData = calculateFunFacts(rankingsData);
     } catch (error) {
       console.error("[Wrapped] Failed to load:", error);
       showError("\uB370\uC774\uD130 \uB85C\uB529 \uC2E4\uD328");
@@ -2951,6 +3163,18 @@ ${message}` : message;
     const totalMessages = rankings.reduce((sum, r) => sum + r.messageCount, 0);
     return { characters: totalCharacters, chats: totalChats, messages: totalMessages };
   }
+  function calculateFunFacts(rankings) {
+    const topChar = rankings[0];
+    const avgMessagesPerChar = rankings.length > 0 ? Math.round(rankings.reduce((sum, r) => sum + r.messageCount, 0) / rankings.length) : 0;
+    const mostChats = [...rankings].sort((a, b) => b.chatCount - a.chatCount)[0];
+    const avgMessagesPerChat = totalStatsData.chats > 0 ? Math.round(totalStatsData.messages / totalStatsData.chats) : 0;
+    return {
+      avgMessagesPerChar,
+      mostChatsChar: mostChats,
+      avgMessagesPerChat,
+      topCharPercentage: totalStatsData.messages > 0 ? Math.round((topChar?.messageCount || 0) / totalStatsData.messages * 100) : 0
+    };
+  }
   function showStep(step) {
     currentStep = step;
     const container = document.querySelector(".wrapped-container");
@@ -2981,8 +3205,8 @@ ${message}` : message;
   function showIntro(container) {
     container.innerHTML = `
         <div class="wrapped-step intro-step">
-            <div class="wrapped-emoji">\u{1F38A}</div>
-            <h2>Chat Lobby Wrapped</h2>
+            <div class="wrapped-emoji">\u{1F3AC}</div>
+            <h2>Your Chat Wrapped</h2>
             <p class="wrapped-subtitle">\uC774\uB54C\uAE4C\uC9C0 \uB2F9\uC2E0\uC740 \uB204\uAD6C\uC640<br>\uAC00\uC7A5 \uB9CE\uC774 \uB300\uD654\uD588\uC744\uAE4C\uC694?</p>
             <button class="wrapped-btn primary" data-action="next">\uC2DC\uC791\uD558\uAE30</button>
             <button class="wrapped-btn secondary" data-action="skip">\uAC74\uB108\uB6F0\uAE30</button>
@@ -3125,19 +3349,39 @@ ${message}` : message;
         `;
     }).join("");
     const encouragement = getEncouragement(top?.name);
+    const funFactsHTML = funFactsData.topCharPercentage > 0 ? `
+        <div class="stats-section stats-fun-facts">
+            <h4>\u2728 Fun Facts</h4>
+            <div class="fun-facts-grid">
+                <div class="fun-fact-item">
+                    <span class="fun-fact-value">${funFactsData.topCharPercentage}%</span>
+                    <span class="fun-fact-label">\uC804\uCCB4 \uB300\uD654 \uC911 ${escapeHtml(top?.name || "")} \uBE44\uC728</span>
+                </div>
+                <div class="fun-fact-item">
+                    <span class="fun-fact-value">${funFactsData.avgMessagesPerChat}</span>
+                    <span class="fun-fact-label">\uCC44\uD305\uB2F9 \uD3C9\uADE0 \uBA54\uC2DC\uC9C0</span>
+                </div>
+                <div class="fun-fact-item">
+                    <span class="fun-fact-value">${funFactsData.avgMessagesPerChar}</span>
+                    <span class="fun-fact-label">\uCE90\uB9AD\uD130\uB2F9 \uD3C9\uADE0 \uBA54\uC2DC\uC9C0</span>
+                </div>
+            </div>
+        </div>
+    ` : "";
     container.innerHTML = `
         <div class="wrapped-step final-step">
             <div class="final-header">
                 <button class="wrapped-back" data-action="close">\u2190</button>
-                <h2>\u{1F4CA} \uB2F9\uC2E0\uC758 \uCC44\uD305 \uAE30\uB85D</h2>
+                <h2>\u{1F4CA} Your Chat Wrapped</h2>
             </div>
             <div class="final-content">
                 <div class="stats-section">
-                    <h4>\u{1F3C6} \uCC44\uD305 \uB7AD\uD0B9 (\uC0C1\uC704 10\uAC1C)</h4>
+                    <h4>\u{1F3C6} Top 10 \uCE90\uB9AD\uD130</h4>
                     <div class="stats-ranking slide-in">
                         ${rankingHTML}
                     </div>
                 </div>
+                ${funFactsHTML}
                 <div class="stats-section stats-total">
                     <div class="stats-grid">
                         <div class="stats-item">
@@ -3315,6 +3559,23 @@ ${message}` : message;
         onChatChanged: () => {
           cache.invalidate("characters");
           cache.invalidate("chats");
+        },
+        // 메시지 전송 시 해당 캐릭터의 마지막 채팅 시간 갱신
+        onMessageSent: () => {
+          const context2 = api.getContext();
+          const currentChar = context2?.characters?.[context2?.characterId];
+          if (currentChar?.avatar) {
+            lastChatCache.updateNow(currentChar.avatar);
+            console.log("[ChatLobby] Message sent, updated lastChatCache for:", currentChar.name);
+          }
+        },
+        // 메시지 수신 시에도 갱신
+        onMessageReceived: () => {
+          const context2 = api.getContext();
+          const currentChar = context2?.characters?.[context2?.characterId];
+          if (currentChar?.avatar) {
+            lastChatCache.updateNow(currentChar.avatar);
+          }
         }
       };
       eventSource.on(eventTypes.CHARACTER_DELETED, eventHandlers.onCharacterDeleted);
@@ -3325,6 +3586,18 @@ ${message}` : message;
         eventSource.on(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
       }
       eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+      if (eventTypes.MESSAGE_SENT) {
+        eventSource.on(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
+      }
+      if (eventTypes.MESSAGE_RECEIVED) {
+        eventSource.on(eventTypes.MESSAGE_RECEIVED, eventHandlers.onMessageReceived);
+      }
+      if (eventTypes.USER_MESSAGE_RENDERED) {
+        eventSource.on(eventTypes.USER_MESSAGE_RENDERED, eventHandlers.onMessageSent);
+      }
+      if (eventTypes.CHARACTER_MESSAGE_RENDERED) {
+        eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, eventHandlers.onMessageReceived);
+      }
       eventsRegistered = true;
     }
     function cleanupSillyTavernEvents() {
@@ -3337,6 +3610,10 @@ ${message}` : message;
         eventSource.off?.(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
         eventSource.off?.(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
         eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+        eventSource.off?.(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
+        eventSource.off?.(eventTypes.MESSAGE_RECEIVED, eventHandlers.onMessageReceived);
+        eventSource.off?.(eventTypes.USER_MESSAGE_RENDERED, eventHandlers.onMessageSent);
+        eventSource.off?.(eventTypes.CHARACTER_MESSAGE_RENDERED, eventHandlers.onMessageReceived);
         eventsRegistered = false;
         eventHandlers = null;
       } catch (e) {
@@ -3408,8 +3685,15 @@ ${message}` : message;
           toggleBatchMode();
         }
         closeChatPanel();
-        renderPersonaBar();
-        renderCharacterGrid();
+        const characters = api.getCharacters();
+        if (characters.length > 0 && !lastChatCache.initialized) {
+          await lastChatCache.initializeAll(characters);
+        }
+        await Promise.all([
+          renderPersonaBar(),
+          renderCharacterGrid()
+        ]);
+        setupPersonaWheelScroll();
         updateFolderDropdowns();
         const currentContext = api.getContext();
         if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
@@ -3453,9 +3737,14 @@ ${message}` : message;
     window.ChatLobby = window.ChatLobby || {};
     window.ChatLobby.refresh = async function() {
       cache.invalidateAll();
+      lastChatCache.clear();
       const context = api.getContext();
       if (typeof context?.getCharacters === "function") {
         await context.getCharacters();
+      }
+      const characters = api.getCharacters();
+      if (characters.length > 0) {
+        await lastChatCache.initializeAll(characters);
       }
       await renderPersonaBar();
       await renderCharacterGrid();
@@ -3475,6 +3764,43 @@ ${message}` : message;
       window.addEventListener("chatlobby:refresh-grid", () => {
         renderCharacterGrid(store.searchTerm);
       });
+    }
+    function setupPersonaWheelScroll() {
+      const personaList = document.getElementById("chat-lobby-persona-list");
+      if (!personaList) return;
+      if (personaList.dataset.wheelBound) return;
+      personaList.dataset.wheelBound = "true";
+      personaList.addEventListener("wheel", (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          personaList.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    }
+    function toggleCollapse() {
+      const leftPanel = document.getElementById("chat-lobby-left");
+      const collapseBtn = document.getElementById("chat-lobby-collapse-btn");
+      if (!leftPanel || !collapseBtn) return;
+      const isCollapsed = leftPanel.classList.toggle("collapsed");
+      collapseBtn.textContent = isCollapsed ? "\u25BC" : "\u25B2";
+      localStorage.setItem("chatlobby-collapsed", isCollapsed.toString());
+    }
+    function toggleTheme() {
+      const container = document.getElementById("chat-lobby-container");
+      const themeBtn = document.getElementById("chat-lobby-theme-toggle");
+      if (!container || !themeBtn) return;
+      const isCurrentlyDark = container.classList.contains("dark-mode");
+      if (isCurrentlyDark) {
+        container.classList.remove("dark-mode");
+        container.classList.add("light-mode");
+        themeBtn.textContent = "\u{1F319}";
+        localStorage.setItem("chatlobby-theme", "light");
+      } else {
+        container.classList.remove("light-mode");
+        container.classList.add("dark-mode");
+        themeBtn.textContent = "\u2600\uFE0F";
+        localStorage.setItem("chatlobby-theme", "dark");
+      }
     }
     function handleBodyClick(e) {
       const target = e.target;
@@ -3519,9 +3845,6 @@ ${message}` : message;
         case "delete-char":
           deleteCharacter();
           break;
-        case "import-char":
-          handleImportCharacter();
-          break;
         case "add-persona":
           handleAddPersona();
           break;
@@ -3546,6 +3869,12 @@ ${message}` : message;
         case "go-to-character":
           handleGoToCharacter();
           break;
+        case "toggle-collapse":
+          toggleCollapse();
+          break;
+        case "toggle-theme":
+          toggleTheme();
+          break;
       }
     }
     function handleKeydown(e) {
@@ -3567,13 +3896,13 @@ ${message}` : message;
     }
     function bindDropdownEvents() {
       document.getElementById("chat-lobby-char-sort")?.addEventListener("change", (e) => {
-        handleSortChange(e.target.value);
+        handleSortChange2(e.target.value);
       });
       document.getElementById("chat-lobby-folder-filter")?.addEventListener("change", (e) => {
         handleFilterChange(e.target.value);
       });
       document.getElementById("chat-lobby-chat-sort")?.addEventListener("change", (e) => {
-        handleSortChange2(e.target.value);
+        handleSortChange(e.target.value);
       });
       document.getElementById("chat-lobby-chats-list")?.addEventListener("change", (e) => {
         if (e.target.classList.contains("chat-select-cb")) {

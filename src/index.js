@@ -313,21 +313,19 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             // 채팅 패널 닫기 (이전 캐릭터 선택 상태 클리어)
             closeChatPanel();
             
-            // 마지막 채팅 시간 캐시 초기화 후 렌더링 (한 번만)
+            // 마지막 채팅 시간 캐시 초기화 후 렌더링 (한 번에 같이)
             const characters = api.getCharacters();
             
-            // 페르소나 바는 즉시 렌더링
-            renderPersonaBar();
-            
-            // 마지막 채팅 캐시 초기화 후 캐릭터 그리드 렌더링
+            // 캐시 초기화가 필요하면 먼저 완료
             if (characters.length > 0 && !lastChatCache.initialized) {
-                // 캐시 초기화 완료 후 렌더링 (한 번만)
                 await lastChatCache.initializeAll(characters);
-                renderCharacterGrid();
-            } else {
-                // 이미 초기화됨 → 바로 렌더링
-                renderCharacterGrid();
             }
+            
+            // 페르소나 바와 캐릭터 그리드를 동시에 렌더링 (한 번에 같이)
+            await Promise.all([
+                renderPersonaBar(),
+                renderCharacterGrid()
+            ]);
             
             // 페르소나 바 휠 스크롤 설정
             setupPersonaWheelScroll();

@@ -320,10 +320,21 @@ function bindCharacterEvents(container) {
         createTouchClickHandler(card, () => {
             // 즐겨찾기 버튼 클릭은 무시 (위에서 처리됨)
             
-            // 같은 캐릭터를 다시 클릭하면 채팅 패널 닫기
-            if (store.currentCharacter?.avatar === charAvatar) {
+            // 채팅 패널이 열려있고 같은 캐릭터면 닫기
+            const chatsPanel = document.getElementById('chat-lobby-chats');
+            const isPanelVisible = chatsPanel?.classList.contains('visible');
+            const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
+            
+            console.log('[CharacterGrid] Card clicked:', { 
+                charAvatar, 
+                currentAvatar: store.currentCharacter?.avatar, 
+                isPanelVisible, 
+                isSameCharacter 
+            });
+            
+            if (isPanelVisible && isSameCharacter) {
+                console.log('[CharacterGrid] Closing panel - same character re-clicked');
                 card.classList.remove('selected');
-                store.setCurrentCharacter(null);
                 closeChatPanel();
                 return;
             }

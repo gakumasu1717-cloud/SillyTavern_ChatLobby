@@ -166,7 +166,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 40px;
+    padding: 10px 30px;
     background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
     position: absolute;
     top: 0;
@@ -190,7 +190,7 @@
 
 .header-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px;
     align-items: center;
 }
 
@@ -198,9 +198,9 @@
     background: rgba(255, 255, 255, 0.1);
     border: none;
     color: var(--text-primary);
-    font-size: 1em;
+    font-size: 0.85em;
     cursor: pointer;
-    padding: 10px 16px;
+    padding: 6px 10px;
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
 }
@@ -210,8 +210,8 @@
 }
 
 #chat-lobby-close {
-    font-size: 1.5em !important;
-    padding: 8px 14px !important;
+    font-size: 1.2em !important;
+    padding: 6px 10px !important;
     background: transparent !important;
 }
 
@@ -226,7 +226,7 @@
     display: flex;
     flex: 1;
     overflow: hidden;
-    padding-top: 60px;
+    padding-top: 50px;
 }
 
 #chat-lobby-left {
@@ -243,38 +243,47 @@
 #chat-lobby-persona-bar {
     display: flex;
     align-items: center;
-    padding: 8px 40px;
+    padding: 4px 30px;
     background: transparent;
-    gap: 16px;
+    gap: 12px;
     flex-shrink: 0;
 }
 
 #chat-lobby-persona-list {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     overflow-x: auto;
     flex: 1;
-    padding: 6px 0;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    padding: 4px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--lobby-bg-hover) transparent;
 }
 
 #chat-lobby-persona-list::-webkit-scrollbar {
-    display: none;
+    height: 6px;
+}
+
+#chat-lobby-persona-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chat-lobby-persona-list::-webkit-scrollbar-thumb {
+    background: var(--lobby-bg-hover);
+    border-radius: 3px;
 }
 
 .persona-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 8px;
+    padding: 5px;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all var(--transition-fast);
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     flex-shrink: 0;
-    gap: 8px;
-    min-width: 80px;
+    gap: 5px;
+    min-width: 60px;
     position: relative;
 }
 
@@ -287,11 +296,11 @@
 }
 
 .persona-avatar {
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
     border-radius: var(--radius-md);
     object-fit: cover;
-    background: var(--netflix-bg-card);
+    background: var(--lobby-bg-card);
     transition: all var(--transition-fast);
 }
 
@@ -300,9 +309,9 @@
 }
 
 .persona-name {
-    font-size: 0.75em;
+    font-size: 0.7em;
     color: var(--text-muted);
-    max-width: 80px;
+    max-width: 60px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -343,20 +352,20 @@
 #chat-lobby-search {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 40px;
+    gap: 10px;
+    padding: 6px 30px;
     background: transparent;
     transition: all var(--transition-normal);
 }
 
 #chat-lobby-search input {
     flex: 1;
-    padding: 10px 18px;
+    padding: 8px 14px;
     border: 1px solid var(--lobby-bg-hover);
     border-radius: var(--radius-md);
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     transition: all var(--transition-fast);
 }
 
@@ -371,13 +380,13 @@
 }
 
 #chat-lobby-search select {
-    padding: 10px 14px;
+    padding: 8px 12px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid var(--lobby-bg-hover);
     color: var(--text-primary);
     border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 #chat-lobby-search select option {
@@ -391,8 +400,8 @@
 #chat-lobby-tag-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 40px;
+    gap: 6px;
+    padding: 4px 30px;
     overflow-x: auto;
     scrollbar-width: none;
     transition: all var(--transition-normal);
@@ -411,13 +420,13 @@
 .lobby-tag-item {
     display: inline-flex;
     align-items: center;
-    height: 30px;
-    padding: 0 14px;
-    border-radius: 20px;
+    height: 26px;
+    padding: 0 12px;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
@@ -446,25 +455,25 @@
    상단 영역 접기/펼치기 기능
    ============================================ */
 #chat-lobby-collapse-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--text-muted);
-    font-size: 16px;
+    font-size: 12px;
     cursor: pointer;
-    padding: 6px 12px;
+    padding: 4px 0;
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 8px;
-    min-width: 60px;
+    margin: 4px 30px 6px;
+    width: calc(100% - 60px);
 }
 
 #chat-lobby-collapse-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
     color: var(--text-primary);
-    border-color: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* 접힌 상태의 상단 영역 */
@@ -532,7 +541,7 @@
    ============================================ */
 #chat-lobby-characters {
     flex: 1;
-    padding: 15px 40px;
+    padding: 10px 30px;
     overflow-y: auto;
     display: flex;
     flex-wrap: wrap;
@@ -593,7 +602,7 @@
     padding: 80px 12px 12px;
     background: linear-gradient(transparent, rgba(0,0,0,0.95) 70%);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: var(--font-weight-semibold);
     opacity: 0;
     transform: translateY(10px);
@@ -1215,7 +1224,20 @@
 /* ============================================
    🎊 Wrapped 통계 화면 - PC 레이아웃 개선
    ============================================ */
+#chat-lobby-stats-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+}
+
 .wrapped-view {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     background: linear-gradient(135deg, 
         var(--lobby-bg) 0%, 
         rgba(20, 10, 10, 0.95) 50%,
