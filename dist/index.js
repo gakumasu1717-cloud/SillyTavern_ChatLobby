@@ -3309,7 +3309,7 @@ ${message}` : message;
     container.querySelectorAll(".quiz-option").forEach((opt) => {
       opt.addEventListener("click", () => {
         userGuessChar = opt.dataset.name;
-        showStep(3);
+        showStep(5);
       });
     });
   }
