@@ -455,28 +455,35 @@
    상단 영역 접기/펼치기 기능
    ============================================ */
 #chat-lobby-collapse-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 10px;
     cursor: pointer;
-    padding: 4px 0;
-    border-radius: var(--radius-md);
+    padding: 3px 20px;
+    border-radius: 12px;
     transition: all var(--transition-fast);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 4px 30px 6px;
-    width: calc(100% - 60px);
+    margin: 2px auto 4px;
+    width: auto;
 }
 
 #chat-lobby-collapse-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.2);
     color: var(--text-primary);
-    border-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* 접힌 상태의 상단 영역 */
+/* 접힌 상태의 상단 영역 - 스무스한 슬라이드 */
+#chat-lobby-persona-bar,
+#chat-lobby-search,
+#chat-lobby-tag-bar {
+    max-height: 200px;
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+}
+
 #chat-lobby-left.collapsed #chat-lobby-persona-bar,
 #chat-lobby-left.collapsed #chat-lobby-search,
 #chat-lobby-left.collapsed #chat-lobby-tag-bar {
@@ -487,10 +494,6 @@
     opacity: 0;
     overflow: hidden;
     pointer-events: none;
-}
-
-#chat-lobby-left.collapsed #chat-lobby-collapse-btn {
-    transform: rotate(180deg);
 }
 
 /* 테마 토글 버튼 */
@@ -1298,9 +1301,11 @@
 }
 
 .wrapped-emoji {
-    font-size: 5em;
-    margin-bottom: 20px;
+    font-size: 4em;
+    margin-bottom: 30px;
+    margin-top: -20px;
     animation: pulse 2s ease infinite;
+    line-height: 1;
 }
 
 @keyframes pulse {

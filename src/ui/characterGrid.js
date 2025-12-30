@@ -137,12 +137,12 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         return;
     }
     
-    // 원본 인덱스 보존 (context.characters 기준) - Map으로 O(1) 룩업
+    // 원본 인덱스 보존 (context.characters 기준) - avatar로 O(1) 룩업
     const originalCharacters = api.getCharacters();
-    const indexMap = new Map(originalCharacters.map((c, i) => [c, i]));
+    const indexMap = new Map(originalCharacters.map((c, i) => [c.avatar, i]));
     
     container.innerHTML = filtered.map(char => {
-        return renderCharacterCard(char, indexMap.get(char));
+        return renderCharacterCard(char, indexMap.get(char.avatar));
     }).join('');
     
     bindCharacterEvents(container);
