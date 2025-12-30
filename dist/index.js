@@ -3060,9 +3060,6 @@ ${message}` : message;
       rankingsData = await fetchRankings(characters);
       totalStatsData = calculateTotalStats(rankingsData, characters.length);
       funFactsData = calculateFunFacts(rankingsData);
-      console.log("[Wrapped] Rankings:", rankingsData.slice(0, 3));
-      console.log("[Wrapped] FunFacts:", funFactsData);
-      console.log("[Wrapped] OldestDate:", funFactsData.oldestDate);
     } catch (error) {
       console.error("[Wrapped] Failed to load:", error);
       showError("\uB370\uC774\uD130 \uB85C\uB529 \uC2E4\uD328");
@@ -3087,11 +3084,9 @@ ${message}` : message;
               messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
               chats.forEach((chat) => {
                 const fileName = chat.file_name || "";
-                console.log("[Wrapped] Parsing file:", fileName);
                 const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                 if (dateMatch) {
                   const chatDate = new Date(dateMatch[1]);
-                  console.log("[Wrapped] Found date:", chatDate);
                   if (!firstChatDate || chatDate < firstChatDate) {
                     firstChatDate = chatDate;
                   }

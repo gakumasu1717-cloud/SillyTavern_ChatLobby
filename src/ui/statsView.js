@@ -120,10 +120,6 @@ async function loadWrappedData() {
         totalStatsData = calculateTotalStats(rankingsData, characters.length);
         funFactsData = calculateFunFacts(rankingsData);
         
-        console.log('[Wrapped] Rankings:', rankingsData.slice(0, 3));
-        console.log('[Wrapped] FunFacts:', funFactsData);
-        console.log('[Wrapped] OldestDate:', funFactsData.oldestDate);
-        
     } catch (error) {
         console.error('[Wrapped] Failed to load:', error);
         showError('데이터 로딩 실패');
@@ -154,11 +150,9 @@ async function fetchRankings(characters) {
                         // 첫 대화 날짜 파싱 (가장 오래된 채팅)
                         chats.forEach(chat => {
                             const fileName = chat.file_name || '';
-                            console.log('[Wrapped] Parsing file:', fileName);
                             const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                             if (dateMatch) {
                                 const chatDate = new Date(dateMatch[1]);
-                                console.log('[Wrapped] Found date:', chatDate);
                                 if (!firstChatDate || chatDate < firstChatDate) {
                                     firstChatDate = chatDate;
                                 }
