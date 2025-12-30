@@ -1201,7 +1201,11 @@ ${message}` : message;
           cache.set("chats", result, characterAvatar);
           const count = result.length;
           cache.set("chatCounts", count, characterAvatar);
-          console.log(`[API] Fetched ${count} chats for ${characterAvatar}`);
+          const messageCount = result.reduce((sum, chat) => {
+            return sum + (chat.chat_items || 0);
+          }, 0);
+          cache.set("messageCounts", messageCount, characterAvatar);
+          console.log(`[API] Fetched ${count} chats, ${messageCount} messages for ${characterAvatar}`);
           return result;
         } catch (error) {
           console.error("[API] Failed to load chats:", error);

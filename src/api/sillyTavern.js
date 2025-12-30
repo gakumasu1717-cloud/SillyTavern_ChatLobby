@@ -343,11 +343,17 @@ class SillyTavernAPI {
                 // 캐시 저장 (키 형식 통일: chats, characterAvatar)
                 cache.set('chats', result, characterAvatar);
                 
-                // 채팅 수도 같이 캐시 (추가 API 호출 방지)
+                // 채팅 수 캐시
                 const count = result.length;
                 cache.set('chatCounts', count, characterAvatar);
                 
-                console.log(`[API] Fetched ${count} chats for ${characterAvatar}`);
+                // 메시지 수 합계 (chat_items 합산)
+                const messageCount = result.reduce((sum, chat) => {
+                    return sum + (chat.chat_items || 0);
+                }, 0);
+                cache.set('messageCounts', messageCount, characterAvatar);
+                
+                console.log(`[API] Fetched ${count} chats, ${messageCount} messages for ${characterAvatar}`);
                 
                 return result;
             } catch (error) {
