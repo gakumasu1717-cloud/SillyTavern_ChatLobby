@@ -3002,16 +3002,16 @@ ${message}` : message;
   var funFactsData = {};
   var userGuessChar = null;
   var userGuessMessages = 0;
-  var userGuessMonth = null;
-  var userGuessYear = null;
+  var userGuessFirstDate = null;
+  var userGuessCharDate = null;
   async function openStatsView() {
     if (isStatsOpen) return;
     isStatsOpen = true;
     currentStep = 0;
     userGuessChar = null;
     userGuessMessages = 0;
-    userGuessMonth = null;
-    userGuessYear = null;
+    userGuessFirstDate = null;
+    userGuessCharDate = null;
     const container = document.getElementById("chat-lobby-main");
     if (!container) return;
     const leftPanel = document.getElementById("chat-lobby-left");
@@ -3060,6 +3060,9 @@ ${message}` : message;
       rankingsData = await fetchRankings(characters);
       totalStatsData = calculateTotalStats(rankingsData, characters.length);
       funFactsData = calculateFunFacts(rankingsData);
+      console.log("[Wrapped] Rankings:", rankingsData.slice(0, 3));
+      console.log("[Wrapped] FunFacts:", funFactsData);
+      console.log("[Wrapped] OldestDate:", funFactsData.oldestDate);
     } catch (error) {
       console.error("[Wrapped] Failed to load:", error);
       showError("\uB370\uC774\uD130 \uB85C\uB529 \uC2E4\uD328");
@@ -3084,9 +3087,11 @@ ${message}` : message;
               messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
               chats.forEach((chat) => {
                 const fileName = chat.file_name || "";
+                console.log("[Wrapped] Parsing file:", fileName);
                 const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                 if (dateMatch) {
                   const chatDate = new Date(dateMatch[1]);
+                  console.log("[Wrapped] Found date:", chatDate);
                   if (!firstChatDate || chatDate < firstChatDate) {
                     firstChatDate = chatDate;
                   }
@@ -3151,26 +3156,41 @@ ${message}` : message;
         showIntro(container);
         break;
       case 2:
+        showFirstDateQuiz(container);
+        break;
+      // 전체 첫 대화일 퀴즈
+      case 3:
+        showFirstDateResult(container);
+        break;
+      // 전체 첫 대화일 결과
+      case 4:
         showQuiz(container);
         break;
-      case 3:
+      // 캐릭터 퀴즈
+      case 5:
         showQuizResult(container);
         break;
-      case 4:
+      // 캐릭터 결과
+      case 6:
         showMessageQuiz(container);
         break;
-      case 5:
+      // 메시지 수 퀴즈
+      case 7:
         showMessageResult(container);
         break;
-      case 6:
-        showDateQuiz(container);
-        break;
-      case 7:
-        showDateResult(container);
-        break;
+      // 메시지 수 결과
       case 8:
+        showCharDateQuiz(container);
+        break;
+      // 1위 캐릭터 첫 대화일 퀴즈
+      case 9:
+        showCharDateResult(container);
+        break;
+      // 1위 캐릭터 첫 대화일 결과
+      case 10:
         showFinalStats(container);
         break;
+      // 최종 결과
       default:
         closeStatsView();
     }
@@ -3186,11 +3206,85 @@ ${message}` : message;
         </div>
     `;
     container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(2));
-    container.querySelector('[data-action="skip"]').addEventListener("click", () => showStep(8));
+    container.querySelector('[data-action="skip"]').addEventListener("click", () => showStep(10));
+  }
+  function showFirstDateQuiz(container) {
+    if (!funFactsData.oldestDate) {
+      showStep(4);
+      return;
+    }
+    const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const years = [];
+    for (let y = currentYear; y >= currentYear - 5; y--) {
+      years.push(y);
+    }
+    container.innerHTML = `
+        <div class="wrapped-step date-quiz-step">
+            <div class="wrapped-emoji">\u{1F4C5}</div>
+            <h2>\uCC98\uC74C\uC73C\uB85C SillyTavern\uC744<br>\uC0AC\uC6A9\uD55C \uB0A0\uC9DC, \uAE30\uC5B5\uD558\uC2DC\uB098\uC694?</h2>
+            <p class="wrapped-subtitle">\uAC00\uC7A5 \uC624\uB798\uB41C \uCC44\uD305\uC758 \uC2DC\uC791\uC77C\uC744 \uB9DE\uCDB0\uBCF4\uC138\uC694!</p>
+            <div class="date-select-wrap">
+                <select id="first-year-guess" class="date-select">
+                    <option value="">\uB144\uB3C4</option>
+                    ${years.map((y) => `<option value="${y}">${y}\uB144</option>`).join("")}
+                </select>
+                <select id="first-month-guess" class="date-select">
+                    <option value="">\uC6D4</option>
+                    ${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}\uC6D4</option>`).join("")}
+                </select>
+                <select id="first-day-guess" class="date-select">
+                    <option value="">\uC77C</option>
+                    ${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}\uC77C</option>`).join("")}
+                </select>
+            </div>
+            <button class="wrapped-btn primary" data-action="submit">\uD655\uC778\uD558\uAE30</button>
+        </div>
+    `;
+    const btn = container.querySelector('[data-action="submit"]');
+    btn.addEventListener("click", () => {
+      const y = parseInt(container.querySelector("#first-year-guess").value) || null;
+      const m = parseInt(container.querySelector("#first-month-guess").value) || null;
+      const d = parseInt(container.querySelector("#first-day-guess").value) || null;
+      userGuessFirstDate = y && m && d ? new Date(y, m - 1, d) : null;
+      showStep(3);
+    });
+  }
+  function showFirstDateResult(container) {
+    const actualDate = funFactsData.oldestDate;
+    const dateStr = actualDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+    let emoji, title;
+    if (userGuessFirstDate) {
+      const diffDays = Math.abs(Math.ceil((actualDate - userGuessFirstDate) / (1e3 * 60 * 60 * 24)));
+      if (diffDays <= 7) {
+        emoji = "\u{1F3AF}";
+        title = "\uB300\uB2E8\uD574\uC694! \uAC70\uC758 \uC815\uD655\uD574\uC694!";
+      } else if (diffDays <= 30) {
+        emoji = "\u{1F44D}";
+        title = "\uAF64 \uAC00\uAE4C\uC6CC\uC694!";
+      } else {
+        emoji = "\u{1F605}";
+        title = "\uC544\uC26C\uC6CC\uC694!";
+      }
+    } else {
+      emoji = "\u{1F4C5}";
+      title = "\uC815\uB2F5\uC740...";
+    }
+    container.innerHTML = `
+        <div class="wrapped-step date-result-step">
+            <div class="wrapped-emoji">${emoji}</div>
+            <h2>${title}</h2>
+            <p class="wrapped-subtitle">\uB2F9\uC2E0\uC758 SillyTavern \uC5EC\uC815\uC774 \uC2DC\uC791\uB41C \uB0A0</p>
+            <div class="date-reveal">
+                <span class="date-value">${dateStr}</span>
+            </div>
+            <button class="wrapped-btn primary" data-action="next">\uB2E4\uC74C</button>
+        </div>
+    `;
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(4));
   }
   function showQuiz(container) {
     if (rankingsData.length < 3) {
-      showStep(8);
+      showStep(10);
       return;
     }
     const top3 = rankingsData.slice(0, 3);
@@ -3238,7 +3332,7 @@ ${message}` : message;
             <button class="wrapped-btn primary" data-action="next">\uB2E4\uC74C</button>
         </div>
     `;
-    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(4));
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(6));
   }
   function showMessageQuiz(container) {
     const top = rankingsData[0];
@@ -3256,12 +3350,12 @@ ${message}` : message;
     const btn = container.querySelector('[data-action="submit"]');
     btn.addEventListener("click", () => {
       userGuessMessages = parseInt(input.value) || 0;
-      showStep(5);
+      showStep(7);
     });
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         userGuessMessages = parseInt(input.value) || 0;
-        showStep(5);
+        showStep(7);
       }
     });
   }
@@ -3302,112 +3396,108 @@ ${message}` : message;
             <button class="wrapped-btn primary" data-action="next">\uB2E4\uC74C</button>
         </div>
     `;
-    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(6));
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(8));
   }
-  function showDateQuiz(container) {
+  function showCharDateQuiz(container) {
     const top = rankingsData[0];
-    if (!funFactsData.oldestDate) {
-      showStep(8);
+    const topCharDate = funFactsData.top3WithDates?.find((c) => c.name === top?.name)?.firstChatDate;
+    if (!topCharDate) {
+      showStep(10);
       return;
     }
     const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
     const years = [];
-    for (let y = currentYear; y >= currentYear - 3; y--) {
+    for (let y = currentYear; y >= currentYear - 5; y--) {
       years.push(y);
     }
-    const months = [
-      "1\uC6D4",
-      "2\uC6D4",
-      "3\uC6D4",
-      "4\uC6D4",
-      "5\uC6D4",
-      "6\uC6D4",
-      "7\uC6D4",
-      "8\uC6D4",
-      "9\uC6D4",
-      "10\uC6D4",
-      "11\uC6D4",
-      "12\uC6D4"
-    ];
     container.innerHTML = `
         <div class="wrapped-step date-quiz-step">
-            <div class="wrapped-emoji">\u{1F4C5}</div>
-            <h2>\uADF8\uB7FC... \uC5B8\uC81C \uCC44\uD305\uC744<br>\uC2DC\uC791\uD558\uC168\uB294\uC9C0 \uAE30\uC5B5\uD558\uC138\uC694?</h2>
-            <p class="wrapped-subtitle">\uCCA8 \uB300\uD654\uB97C \uC2DC\uC791\uD55C \uC2DC\uAE30\uB97C \uB9DE\uCDB0\uBCF4\uC138\uC694!</p>
+            <div class="wrapped-emoji">\u{1F495}</div>
+            <h2>${escapeHtml(top.name)}\uC640\uC758 \uCCAB \uB300\uD654,<br>\uC5B8\uC81C \uC2DC\uC791\uD588\uB294\uC9C0 \uAE30\uC5B5\uD558\uC138\uC694?</h2>
+            <p class="wrapped-subtitle">\uCCAB \uCC44\uD305 \uC2DC\uC791\uC77C\uC744 \uB9DE\uCDB0\uBCF4\uC138\uC694!</p>
             <div class="date-select-wrap">
-                <select id="year-guess" class="date-select">
+                <select id="char-year-guess" class="date-select">
                     <option value="">\uB144\uB3C4</option>
                     ${years.map((y) => `<option value="${y}">${y}\uB144</option>`).join("")}
                 </select>
-                <select id="month-guess" class="date-select">
+                <select id="char-month-guess" class="date-select">
                     <option value="">\uC6D4</option>
-                    ${months.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("")}
+                    ${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}\uC6D4</option>`).join("")}
+                </select>
+                <select id="char-day-guess" class="date-select">
+                    <option value="">\uC77C</option>
+                    ${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}\uC77C</option>`).join("")}
                 </select>
             </div>
             <button class="wrapped-btn primary" data-action="submit">\uD655\uC778\uD558\uAE30</button>
         </div>
     `;
-    const yearSelect = container.querySelector("#year-guess");
-    const monthSelect = container.querySelector("#month-guess");
     const btn = container.querySelector('[data-action="submit"]');
     btn.addEventListener("click", () => {
-      userGuessYear = parseInt(yearSelect.value) || null;
-      userGuessMonth = parseInt(monthSelect.value) || null;
-      showStep(7);
+      const y = parseInt(container.querySelector("#char-year-guess").value) || null;
+      const m = parseInt(container.querySelector("#char-month-guess").value) || null;
+      const d = parseInt(container.querySelector("#char-day-guess").value) || null;
+      userGuessCharDate = y && m && d ? new Date(y, m - 1, d) : null;
+      showStep(9);
     });
   }
-  function showDateResult(container) {
-    const actualDate = funFactsData.oldestDate;
+  function showCharDateResult(container) {
     const top = rankingsData[0];
-    const actualYear = actualDate.getFullYear();
-    const actualMonth = actualDate.getMonth() + 1;
-    const isCorrectYear = userGuessYear === actualYear;
-    const isCorrectMonth = userGuessMonth === actualMonth;
-    const isExact = isCorrectYear && isCorrectMonth;
-    const isClose = isCorrectYear && Math.abs(userGuessMonth - actualMonth) <= 1;
+    const topCharDate = funFactsData.top3WithDates?.find((c) => c.name === top?.name)?.firstChatDate;
+    if (!topCharDate) {
+      showStep(10);
+      return;
+    }
+    let emoji, title;
+    if (userGuessCharDate) {
+      const diffDays = Math.abs(Math.ceil((topCharDate - userGuessCharDate) / (1e3 * 60 * 60 * 24)));
+      if (diffDays <= 7) {
+        emoji = "\u{1F3AF}";
+        title = "\uB300\uB2E8\uD574\uC694! \uAC70\uC758 \uC815\uD655\uD574\uC694!";
+      } else if (diffDays <= 30) {
+        emoji = "\u{1F44D}";
+        title = "\uAF64 \uAC00\uAE4C\uC6CC\uC694!";
+      } else {
+        emoji = "\u{1F605}";
+        title = "\uC544\uC26C\uC6CC\uC694!";
+      }
+    } else {
+      emoji = "\u{1F495}";
+      title = "\uC815\uB2F5\uC740...";
+    }
+    const dateStr = topCharDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
     const today = /* @__PURE__ */ new Date();
-    const daysDiff = Math.ceil((today - actualDate) / (1e3 * 60 * 60 * 24));
+    const daysDiff = Math.ceil((today - topCharDate) / (1e3 * 60 * 60 * 24));
     const monthsDiff = Math.floor(daysDiff / 30);
     let periodComment = "";
     if (monthsDiff >= 12) {
-      periodComment = `\uBCA8\uC368 ${Math.floor(monthsDiff / 12)}\uB144\uC774 \uB118\uC5C8\uB124\uC694! \uC624\uB798\uB41C \uC778\uC5F0\uC774\uC5D0\uC694 \u2728`;
+      periodComment = `\uBC8C\uC368 ${Math.floor(monthsDiff / 12)}\uB144\uC774 \uB118\uC5C8\uB124\uC694! \uC624\uB798\uB41C \uC778\uC5F0\uC774\uC5D0\uC694 \u2728`;
     } else if (monthsDiff >= 6) {
       periodComment = "\uBC18\uB144 \uB118\uAC8C \uD568\uAED8\uD588\uB124\uC694! \uAF64 \uCE5C\uD574\uC84C\uACA0\uC5B4\uC694 \u{1F49C}";
     } else if (monthsDiff >= 2) {
-      periodComment = "\uB9CC\uB09C \uC9C0 \uAF14 \uC9C0\uB0AC\uB124\uC694! \uC544\uC9C1 \uC0C8\uB85C\uC6B4 \uC774\uC57C\uAE30\uAC00 \uB9CE\uACA0\uC5B4\uC694 \u{1F497}";
+      periodComment = "\uB9CC\uB09C \uC9C0 \uAF64 \uC9C0\uB0AC\uB124\uC694! \uC544\uC9C1 \uC0C8\uB85C\uC6B4 \uC774\uC57C\uAE30\uAC00 \uB9CE\uACA0\uC5B4\uC694 \u{1F497}";
     } else {
       periodComment = "\uC544\uC9C1 \uC0C8\uB85C\uC6B4 \uC778\uC5F0\uC774\uB124\uC694! \uC55E\uC73C\uB85C\uAC00 \uAE30\uB300\uB3FC\uC694 \u{1F31F}";
     }
-    let emoji, title;
-    if (isExact) {
-      emoji = "\u{1F3AF}";
-      title = "\uC644\uBCBD\uD574\uC694!";
-    } else if (isClose) {
-      emoji = "\u{1F44D}";
-      title = "\uAC70\uC758 \uB9DE\uCD94\uC168\uC5B4\uC694!";
-    } else {
-      emoji = "\u{1F605}";
-      title = "\uC544\uC26C\uC6CC\uC694!";
-    }
-    const dateStr = actualDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+    const charDailyAvg = daysDiff > 0 ? (top.messageCount / daysDiff).toFixed(1) : top.messageCount;
     container.innerHTML = `
         <div class="wrapped-step date-result-step">
             <div class="wrapped-emoji">${emoji}</div>
             <h2>${title}</h2>
-            <p class="wrapped-subtitle">${escapeHtml(top?.name || "")}\uACFC\uC758 \uC2DC\uC791\uC740</p>
+            <p class="wrapped-subtitle">${escapeHtml(top.name)}\uC640\uC758 \uC2DC\uC791\uC740</p>
             <div class="date-reveal">
                 <span class="date-value">${dateStr}</span>
             </div>
             <p class="period-comment">${periodComment}</p>
             <div class="daily-stats">
-                <p>\uADF8\uB807\uAC8C \uBCF4\uBA74... \uD558\uB8E8\uC5D0</p>
-                <span class="daily-value">${funFactsData.avgChatsPerDay}</span>
-                <p>\uCC57\uC744 \uD55C \uC148\uC774\uB124\uC694!</p>
+                <p>${escapeHtml(top.name)}\uC640\uB294 \uD558\uB8E8 \uD3C9\uADE0</p>
+                <span class="daily-value">${charDailyAvg}\uAC1C</span>
+                <p>\uC758 \uBA54\uC2DC\uC9C0\uB97C \uB098\uB234\uC5B4\uC694!</p>
             </div>
             <button class="wrapped-btn primary" data-action="next">\uACB0\uACFC \uBCF4\uAE30</button>
         </div>
     `;
-    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(8));
+    container.querySelector('[data-action="next"]').addEventListener("click", () => showStep(10));
   }
   function showFinalStats(container) {
     const medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
@@ -3428,33 +3518,56 @@ ${message}` : message;
     }).join("");
     const encouragement = getEncouragement(top?.name);
     const oldestDateStr = funFactsData.oldestDate ? funFactsData.oldestDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "\uC54C \uC218 \uC5C6\uC74C";
-    const top3DatesHTML = funFactsData.top3WithDates?.filter((c) => c.firstChatDate).map((c) => {
-      const dateStr = c.firstChatDate.toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" });
-      return `<div class="first-chat-item"><span class="char-name">${escapeHtml(c.name)}</span><span class="chat-date">${dateStr}</span></div>`;
-    }).join("") || "";
-    const funFactsHTML = funFactsData.topCharPercentage > 0 ? `
+    const topCharData = funFactsData.top3WithDates?.find((c) => c.name === top?.name);
+    const topCharDateStr = topCharData?.firstChatDate ? topCharData.firstChatDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "\uC54C \uC218 \uC5C6\uC74C";
+    let topCharDailyAvg = 0;
+    if (topCharData?.firstChatDate) {
+      const daysDiff = Math.ceil((/* @__PURE__ */ new Date() - topCharData.firstChatDate) / (1e3 * 60 * 60 * 24));
+      topCharDailyAvg = daysDiff > 0 ? (top.messageCount / daysDiff).toFixed(1) : top.messageCount;
+    }
+    const totalChars = rankingsData.length;
+    const totalMessages = rankingsData.reduce((sum, r) => sum + r.messageCount, 0);
+    const avgMessagesPerChar = totalChars > 0 ? Math.round(totalMessages / totalChars) : 0;
+    const funFactsHTML = `
         <div class="stats-section stats-fun-facts">
             <h4>\u2728 Fun Facts</h4>
             <div class="fun-facts-grid">
                 <div class="fun-fact-item">
-                    <span class="fun-fact-value">${funFactsData.topCharPercentage}%</span>
-                    <span class="fun-fact-label">\uC804\uCCB4 \uB300\uD654 \uC911 ${escapeHtml(top?.name || "")} \uBE44\uC728</span>
+                    <span class="fun-fact-value">${oldestDateStr}</span>
+                    <span class="fun-fact-label">\u{1F4C5} \uCCAB \uB300\uD654 \uC2DC\uC791\uC77C</span>
                 </div>
                 <div class="fun-fact-item">
                     <span class="fun-fact-value">${funFactsData.avgMessagesPerChat}</span>
-                    <span class="fun-fact-label">\uCC44\uD305\uB2F9 \uD3C9\uADE0 \uBA54\uC2DC\uC9C0</span>
+                    <span class="fun-fact-label">\u{1F4AC} \uCC44\uD305\uB2F9 \uD3C9\uADE0 \uBA54\uC2DC\uC9C0</span>
                 </div>
                 <div class="fun-fact-item">
-                    <span class="fun-fact-value">${funFactsData.avgChatsPerDay}</span>
-                    <span class="fun-fact-label">\uD558\uB8E8 \uD3C9\uADE0 \uCC44\uD305</span>
+                    <span class="fun-fact-value">${avgMessagesPerChar.toLocaleString()}\uAC1C</span>
+                    <span class="fun-fact-label">\u{1F464} \uCE90\uB9AD\uD130\uB2F9 \uD3C9\uADE0 \uBA54\uC2DC\uC9C0</span>
                 </div>
             </div>
-            ${funFactsData.oldestDate ? `
-            <div class="first-chat-section">
-                <div class="first-chat-header">\u{1F4C5} \uCCAB \uB300\uD654 \uC2DC\uC791\uC77C: <strong>${oldestDateStr}</strong></div>
-                ${top3DatesHTML ? `<div class="top3-first-chats"><div class="top3-title">\u{1F3C6} \uC0C1\uC704 \uCE90\uB9AD\uD130 \uCCAB \uB300\uD654</div>${top3DatesHTML}</div>` : ""}
+        </div>
+    `;
+    const topCharAvatarUrl = top?.avatar ? `/characters/${encodeURIComponent(top.avatar)}` : "/img/ai4.png";
+    const topCharHTML = top ? `
+        <div class="stats-section stats-top-char">
+            <h4>\u{1F3C6} ${escapeHtml(top.name)}\uC640\uC758 \uD1B5\uACC4</h4>
+            <div class="top-char-card">
+                <img class="top-char-avatar" src="${topCharAvatarUrl}" alt="${escapeHtml(top.name)}" onerror="this.src='/img/ai4.png'">
+                <div class="top-char-stats">
+                    <div class="top-char-stat-item">
+                        <span class="stat-label">\uCCAB \uB300\uD654\uC77C</span>
+                        <span class="stat-value">${topCharDateStr}</span>
+                    </div>
+                    <div class="top-char-stat-item">
+                        <span class="stat-label">\uC804\uCCB4 \uB300\uD654 \uBE44\uC728</span>
+                        <span class="stat-value">${funFactsData.topCharPercentage}%</span>
+                    </div>
+                    <div class="top-char-stat-item">
+                        <span class="stat-label">\uD558\uB8E8 \uD3C9\uADE0 \uBA54\uC2DC\uC9C0</span>
+                        <span class="stat-value">${topCharDailyAvg}\uAC1C</span>
+                    </div>
+                </div>
             </div>
-            ` : ""}
         </div>
     ` : "";
     container.innerHTML = `
@@ -3471,6 +3584,7 @@ ${message}` : message;
                     </div>
                 </div>
                 ${funFactsHTML}
+                ${topCharHTML}
                 <div class="stats-section stats-total">
                     <div class="stats-grid">
                         <div class="stats-item">

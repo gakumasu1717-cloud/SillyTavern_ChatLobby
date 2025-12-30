@@ -1871,6 +1871,79 @@
     color: var(--text-muted);
 }
 
+/* 1위 캐릭터 통계 섹션 */
+.stats-top-char {
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 15px;
+}
+
+.stats-top-char h4 {
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    color: var(--text-primary);
+}
+
+.top-char-card {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.top-char-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    border: 2px solid var(--lobby-accent);
+    flex-shrink: 0;
+}
+
+.top-char-stats {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.top-char-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-sm);
+}
+
+.top-char-stat-item .stat-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.top-char-stat-item .stat-value {
+    font-size: 0.95em;
+    font-weight: var(--font-weight-semibold);
+    color: var(--lobby-accent);
+}
+
+@media (max-width: 768px) {
+    .top-char-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .top-char-avatar {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .top-char-stats {
+        width: 100%;
+    }
+}
+
 @media (max-width: 768px) {
     .fun-facts-grid {
         grid-template-columns: 1fr;

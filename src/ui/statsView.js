@@ -25,8 +25,8 @@ let funFactsData = {};
 /** 유저 선택/입력 */
 let userGuessChar = null;
 let userGuessMessages = 0;
-let userGuessMonth = null;
-let userGuessYear = null;
+let userGuessFirstDate = null;  // 전체 첫 대화일 예상
+let userGuessCharDate = null;   // 1위 캐릭터 첫 대화일 예상
 
 // ============================================
 // 메인 함수
@@ -41,8 +41,8 @@ export async function openStatsView() {
     currentStep = 0;
     userGuessChar = null;
     userGuessMessages = 0;
-    userGuessMonth = null;
-    userGuessYear = null;
+    userGuessFirstDate = null;
+    userGuessCharDate = null;
     
     const container = document.getElementById('chat-lobby-main');
     if (!container) return;
@@ -120,6 +120,10 @@ async function loadWrappedData() {
         totalStatsData = calculateTotalStats(rankingsData, characters.length);
         funFactsData = calculateFunFacts(rankingsData);
         
+        console.log('[Wrapped] Rankings:', rankingsData.slice(0, 3));
+        console.log('[Wrapped] FunFacts:', funFactsData);
+        console.log('[Wrapped] OldestDate:', funFactsData.oldestDate);
+        
     } catch (error) {
         console.error('[Wrapped] Failed to load:', error);
         showError('데이터 로딩 실패');
@@ -150,9 +154,11 @@ async function fetchRankings(characters) {
                         // 첫 대화 날짜 파싱 (가장 오래된 채팅)
                         chats.forEach(chat => {
                             const fileName = chat.file_name || '';
+                            console.log('[Wrapped] Parsing file:', fileName);
                             const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                             if (dateMatch) {
                                 const chatDate = new Date(dateMatch[1]);
+                                console.log('[Wrapped] Found date:', chatDate);
                                 if (!firstChatDate || chatDate < firstChatDate) {
                                     firstChatDate = chatDate;
                                 }
@@ -241,13 +247,15 @@ function showStep(step) {
     
     switch (step) {
         case 1: showIntro(container); break;
-        case 2: showQuiz(container); break;
-        case 3: showQuizResult(container); break;
-        case 4: showMessageQuiz(container); break;
-        case 5: showMessageResult(container); break;
-        case 6: showDateQuiz(container); break;
-        case 7: showDateResult(container); break;
-        case 8: showFinalStats(container); break;
+        case 2: showFirstDateQuiz(container); break;      // 전체 첫 대화일 퀴즈
+        case 3: showFirstDateResult(container); break;    // 전체 첫 대화일 결과
+        case 4: showQuiz(container); break;               // 캐릭터 퀴즈
+        case 5: showQuizResult(container); break;         // 캐릭터 결과
+        case 6: showMessageQuiz(container); break;        // 메시지 수 퀴즈
+        case 7: showMessageResult(container); break;      // 메시지 수 결과
+        case 8: showCharDateQuiz(container); break;       // 1위 캐릭터 첫 대화일 퀴즈
+        case 9: showCharDateResult(container); break;     // 1위 캐릭터 첫 대화일 결과
+        case 10: showFinalStats(container); break;        // 최종 결과
         default: closeStatsView();
     }
 }
@@ -265,13 +273,98 @@ function showIntro(container) {
     `;
     
     container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(2));
-    container.querySelector('[data-action="skip"]').addEventListener('click', () => showStep(8));
+    container.querySelector('[data-action="skip"]').addEventListener('click', () => showStep(10));
 }
 
-// Step 2: 캐릭터 맞추기 퀴즈
+// Step 2: 전체 첫 대화 시작일 퀴즈 (실리태번 설치일)
+function showFirstDateQuiz(container) {
+    if (!funFactsData.oldestDate) {
+        showStep(4);
+        return;
+    }
+    
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = currentYear; y >= currentYear - 5; y--) {
+        years.push(y);
+    }
+    
+    container.innerHTML = `
+        <div class="wrapped-step date-quiz-step">
+            <div class="wrapped-emoji">📅</div>
+            <h2>처음으로 SillyTavern을<br>사용한 날짜, 기억하시나요?</h2>
+            <p class="wrapped-subtitle">가장 오래된 채팅의 시작일을 맞춰보세요!</p>
+            <div class="date-select-wrap">
+                <select id="first-year-guess" class="date-select">
+                    <option value="">년도</option>
+                    ${years.map(y => `<option value="${y}">${y}년</option>`).join('')}
+                </select>
+                <select id="first-month-guess" class="date-select">
+                    <option value="">월</option>
+                    ${Array.from({length: 12}, (_, i) => `<option value="${i + 1}">${i + 1}월</option>`).join('')}
+                </select>
+                <select id="first-day-guess" class="date-select">
+                    <option value="">일</option>
+                    ${Array.from({length: 31}, (_, i) => `<option value="${i + 1}">${i + 1}일</option>`).join('')}
+                </select>
+            </div>
+            <button class="wrapped-btn primary" data-action="submit">확인하기</button>
+        </div>
+    `;
+    
+    const btn = container.querySelector('[data-action="submit"]');
+    btn.addEventListener('click', () => {
+        const y = parseInt(container.querySelector('#first-year-guess').value) || null;
+        const m = parseInt(container.querySelector('#first-month-guess').value) || null;
+        const d = parseInt(container.querySelector('#first-day-guess').value) || null;
+        userGuessFirstDate = (y && m && d) ? new Date(y, m - 1, d) : null;
+        showStep(3);
+    });
+}
+
+// Step 3: 전체 첫 대화 시작일 결과
+function showFirstDateResult(container) {
+    const actualDate = funFactsData.oldestDate;
+    const dateStr = actualDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    // 정답 판정
+    let emoji, title;
+    if (userGuessFirstDate) {
+        const diffDays = Math.abs(Math.ceil((actualDate - userGuessFirstDate) / (1000 * 60 * 60 * 24)));
+        if (diffDays <= 7) {
+            emoji = '🎯';
+            title = '대단해요! 거의 정확해요!';
+        } else if (diffDays <= 30) {
+            emoji = '👍';
+            title = '꽤 가까워요!';
+        } else {
+            emoji = '😅';
+            title = '아쉬워요!';
+        }
+    } else {
+        emoji = '📅';
+        title = '정답은...';
+    }
+    
+    container.innerHTML = `
+        <div class="wrapped-step date-result-step">
+            <div class="wrapped-emoji">${emoji}</div>
+            <h2>${title}</h2>
+            <p class="wrapped-subtitle">당신의 SillyTavern 여정이 시작된 날</p>
+            <div class="date-reveal">
+                <span class="date-value">${dateStr}</span>
+            </div>
+            <button class="wrapped-btn primary" data-action="next">다음</button>
+        </div>
+    `;
+    
+    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(4));
+}
+
+// Step 4: 캐릭터 맞추기 퀴즈
 function showQuiz(container) {
     if (rankingsData.length < 3) {
-        showStep(8); // 캐릭터 부족하면 바로 결과
+        showStep(10); // 캐릭터 부족하면 바로 결과
         return;
     }
     
@@ -305,7 +398,7 @@ function showQuiz(container) {
     });
 }
 
-// Step 3: 퀴즈 결과
+// Step 5: 퀴즈 결과
 function showQuizResult(container) {
     const correct = rankingsData[0];
     const isCorrect = userGuessChar === correct.name;
@@ -329,10 +422,10 @@ function showQuizResult(container) {
         </div>
     `;
     
-    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(4));
+    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(6));
 }
 
-// Step 4: 메시지 개수 맞추기
+// Step 6: 메시지 개수 맞추기
 function showMessageQuiz(container) {
     const top = rankingsData[0];
     
@@ -352,18 +445,18 @@ function showMessageQuiz(container) {
     
     btn.addEventListener('click', () => {
         userGuessMessages = parseInt(input.value) || 0;
-        showStep(5);
+        showStep(7);
     });
     
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             userGuessMessages = parseInt(input.value) || 0;
-            showStep(5);
+            showStep(7);
         }
     });
 }
 
-// Step 5: 메시지 결과
+// Step 7: 메시지 결과
 function showMessageResult(container) {
     const top = rankingsData[0];
     const actual = top.messageCount;
@@ -405,127 +498,132 @@ function showMessageResult(container) {
         </div>
     `;
     
-    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(6));
+    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(8));
 }
 
-// Step 6: 첨 대화 날짜 퀴즈
-function showDateQuiz(container) {
+// Step 8: 1위 캐릭터와의 첫 대화 날짜 퀴즈
+function showCharDateQuiz(container) {
     const top = rankingsData[0];
     
-    // 첨 대화 날짜가 없으면 건너뛰기
-    if (!funFactsData.oldestDate) {
-        showStep(8);
+    // 1위 캐릭터 첫 대화 날짜 찾기
+    const topCharDate = funFactsData.top3WithDates?.find(c => c.name === top?.name)?.firstChatDate;
+    if (!topCharDate) {
+        showStep(10);
         return;
     }
     
     const currentYear = new Date().getFullYear();
     const years = [];
-    for (let y = currentYear; y >= currentYear - 3; y--) {
+    for (let y = currentYear; y >= currentYear - 5; y--) {
         years.push(y);
     }
     
-    const months = [
-        '1월', '2월', '3월', '4월', '5월', '6월',
-        '7월', '8월', '9월', '10월', '11월', '12월'
-    ];
-    
     container.innerHTML = `
         <div class="wrapped-step date-quiz-step">
-            <div class="wrapped-emoji">📅</div>
-            <h2>그럼... 언제 채팅을<br>시작하셨는지 기억하세요?</h2>
-            <p class="wrapped-subtitle">첨 대화를 시작한 시기를 맞춰보세요!</p>
+            <div class="wrapped-emoji">💕</div>
+            <h2>${escapeHtml(top.name)}와의 첫 대화,<br>언제 시작했는지 기억하세요?</h2>
+            <p class="wrapped-subtitle">첫 채팅 시작일을 맞춰보세요!</p>
             <div class="date-select-wrap">
-                <select id="year-guess" class="date-select">
+                <select id="char-year-guess" class="date-select">
                     <option value="">년도</option>
                     ${years.map(y => `<option value="${y}">${y}년</option>`).join('')}
                 </select>
-                <select id="month-guess" class="date-select">
+                <select id="char-month-guess" class="date-select">
                     <option value="">월</option>
-                    ${months.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('')}
+                    ${Array.from({length: 12}, (_, i) => `<option value="${i + 1}">${i + 1}월</option>`).join('')}
+                </select>
+                <select id="char-day-guess" class="date-select">
+                    <option value="">일</option>
+                    ${Array.from({length: 31}, (_, i) => `<option value="${i + 1}">${i + 1}일</option>`).join('')}
                 </select>
             </div>
             <button class="wrapped-btn primary" data-action="submit">확인하기</button>
         </div>
     `;
     
-    const yearSelect = container.querySelector('#year-guess');
-    const monthSelect = container.querySelector('#month-guess');
     const btn = container.querySelector('[data-action="submit"]');
-    
     btn.addEventListener('click', () => {
-        userGuessYear = parseInt(yearSelect.value) || null;
-        userGuessMonth = parseInt(monthSelect.value) || null;
-        showStep(7);
+        const y = parseInt(container.querySelector('#char-year-guess').value) || null;
+        const m = parseInt(container.querySelector('#char-month-guess').value) || null;
+        const d = parseInt(container.querySelector('#char-day-guess').value) || null;
+        userGuessCharDate = (y && m && d) ? new Date(y, m - 1, d) : null;
+        showStep(9);
     });
 }
 
-// Step 7: 첨 대화 날짜 결과 + 하루 평균
-function showDateResult(container) {
-    const actualDate = funFactsData.oldestDate;
+// Step 9: 1위 캐릭터 첫 대화 날짜 결과 + 일일 평균
+function showCharDateResult(container) {
     const top = rankingsData[0];
+    const topCharDate = funFactsData.top3WithDates?.find(c => c.name === top?.name)?.firstChatDate;
     
-    const actualYear = actualDate.getFullYear();
-    const actualMonth = actualDate.getMonth() + 1;
+    if (!topCharDate) {
+        showStep(10);
+        return;
+    }
     
     // 정답 판정
-    const isCorrectYear = userGuessYear === actualYear;
-    const isCorrectMonth = userGuessMonth === actualMonth;
-    const isExact = isCorrectYear && isCorrectMonth;
-    const isClose = isCorrectYear && Math.abs(userGuessMonth - actualMonth) <= 1;
+    let emoji, title;
+    if (userGuessCharDate) {
+        const diffDays = Math.abs(Math.ceil((topCharDate - userGuessCharDate) / (1000 * 60 * 60 * 24)));
+        if (diffDays <= 7) {
+            emoji = '🎯';
+            title = '대단해요! 거의 정확해요!';
+        } else if (diffDays <= 30) {
+            emoji = '👍';
+            title = '꽤 가까워요!';
+        } else {
+            emoji = '😅';
+            title = '아쉬워요!';
+        }
+    } else {
+        emoji = '💕';
+        title = '정답은...';
+    }
+    
+    const dateStr = topCharDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
     
     // 기간 계산
     const today = new Date();
-    const daysDiff = Math.ceil((today - actualDate) / (1000 * 60 * 60 * 24));
+    const daysDiff = Math.ceil((today - topCharDate) / (1000 * 60 * 60 * 24));
     const monthsDiff = Math.floor(daysDiff / 30);
     
     // 기간에 따른 멘트
     let periodComment = '';
     if (monthsDiff >= 12) {
-        periodComment = `벨써 ${Math.floor(monthsDiff / 12)}년이 넘었네요! 오래된 인연이에요 ✨`;
+        periodComment = `벌써 ${Math.floor(monthsDiff / 12)}년이 넘었네요! 오래된 인연이에요 ✨`;
     } else if (monthsDiff >= 6) {
         periodComment = '반년 넘게 함께했네요! 꽤 친해졌겠어요 💜';
     } else if (monthsDiff >= 2) {
-        periodComment = '만난 지 꼔 지났네요! 아직 새로운 이야기가 많겠어요 💗';
+        periodComment = '만난 지 꽤 지났네요! 아직 새로운 이야기가 많겠어요 💗';
     } else {
         periodComment = '아직 새로운 인연이네요! 앞으로가 기대돼요 🌟';
     }
     
-    let emoji, title;
-    if (isExact) {
-        emoji = '🎯';
-        title = '완벽해요!';
-    } else if (isClose) {
-        emoji = '👍';
-        title = '거의 맞추셨어요!';
-    } else {
-        emoji = '😅';
-        title = '아쉬워요!';
-    }
-    
-    const dateStr = actualDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+    // 1위 캐릭터 일일 평균 메시지
+    const charDailyAvg = daysDiff > 0 ? (top.messageCount / daysDiff).toFixed(1) : top.messageCount;
     
     container.innerHTML = `
         <div class="wrapped-step date-result-step">
             <div class="wrapped-emoji">${emoji}</div>
             <h2>${title}</h2>
-            <p class="wrapped-subtitle">${escapeHtml(top?.name || '')}과의 시작은</p>
+            <p class="wrapped-subtitle">${escapeHtml(top.name)}와의 시작은</p>
             <div class="date-reveal">
                 <span class="date-value">${dateStr}</span>
             </div>
             <p class="period-comment">${periodComment}</p>
             <div class="daily-stats">
-                <p>그렇게 보면... 하루에</p>
-                <span class="daily-value">${funFactsData.avgChatsPerDay}</span>
-                <p>챗을 한 셈이네요!</p>
+                <p>${escapeHtml(top.name)}와는 하루 평균</p>
+                <span class="daily-value">${charDailyAvg}개</span>
+                <p>의 메시지를 나눴어요!</p>
             </div>
             <button class="wrapped-btn primary" data-action="next">결과 보기</button>
         </div>
     `;
     
-    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(8));
+    container.querySelector('[data-action="next"]').addEventListener('click', () => showStep(10));
 }
 
-// Step 8: 최종 통계 - 넷플릭스 스타일 강화
+// Step 10: 최종 통계 - 넷플릭스 스타일 강화
 function showFinalStats(container) {
     const medals = ['🥇', '🥈', '🥉'];
     const top = rankingsData[0];
@@ -547,40 +645,71 @@ function showFinalStats(container) {
     
     const encouragement = getEncouragement(top?.name);
     
-    // Fun Facts 섹션 추가
+    // Fun Facts 섹션 - 전체 통계
     const oldestDateStr = funFactsData.oldestDate 
         ? funFactsData.oldestDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
         : '알 수 없음';
     
-    // 상위 캐릭터 첫 대화 날짜 HTML
-    const top3DatesHTML = funFactsData.top3WithDates?.filter(c => c.firstChatDate).map(c => {
-        const dateStr = c.firstChatDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
-        return `<div class="first-chat-item"><span class="char-name">${escapeHtml(c.name)}</span><span class="chat-date">${dateStr}</span></div>`;
-    }).join('') || '';
+    // 1위 캐릭터 첫 대화 날짜
+    const topCharData = funFactsData.top3WithDates?.find(c => c.name === top?.name);
+    const topCharDateStr = topCharData?.firstChatDate 
+        ? topCharData.firstChatDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+        : '알 수 없음';
     
-    const funFactsHTML = funFactsData.topCharPercentage > 0 ? `
+    // 1위 캐릭터 일일 평균 메시지
+    let topCharDailyAvg = 0;
+    if (topCharData?.firstChatDate) {
+        const daysDiff = Math.ceil((new Date() - topCharData.firstChatDate) / (1000 * 60 * 60 * 24));
+        topCharDailyAvg = daysDiff > 0 ? (top.messageCount / daysDiff).toFixed(1) : top.messageCount;
+    }
+    
+    // 캐릭터당 평균 메시지 계산
+    const totalChars = rankingsData.length;
+    const totalMessages = rankingsData.reduce((sum, r) => sum + r.messageCount, 0);
+    const avgMessagesPerChar = totalChars > 0 ? Math.round(totalMessages / totalChars) : 0;
+    
+    const funFactsHTML = `
         <div class="stats-section stats-fun-facts">
             <h4>✨ Fun Facts</h4>
             <div class="fun-facts-grid">
                 <div class="fun-fact-item">
-                    <span class="fun-fact-value">${funFactsData.topCharPercentage}%</span>
-                    <span class="fun-fact-label">전체 대화 중 ${escapeHtml(top?.name || '')} 비율</span>
+                    <span class="fun-fact-value">${oldestDateStr}</span>
+                    <span class="fun-fact-label">📅 첫 대화 시작일</span>
                 </div>
                 <div class="fun-fact-item">
                     <span class="fun-fact-value">${funFactsData.avgMessagesPerChat}</span>
-                    <span class="fun-fact-label">채팅당 평균 메시지</span>
+                    <span class="fun-fact-label">💬 채팅당 평균 메시지</span>
                 </div>
                 <div class="fun-fact-item">
-                    <span class="fun-fact-value">${funFactsData.avgChatsPerDay}</span>
-                    <span class="fun-fact-label">하루 평균 채팅</span>
+                    <span class="fun-fact-value">${avgMessagesPerChar.toLocaleString()}개</span>
+                    <span class="fun-fact-label">👤 캐릭터당 평균 메시지</span>
                 </div>
             </div>
-            ${funFactsData.oldestDate ? `
-            <div class="first-chat-section">
-                <div class="first-chat-header">📅 첫 대화 시작일: <strong>${oldestDateStr}</strong></div>
-                ${top3DatesHTML ? `<div class="top3-first-chats"><div class="top3-title">🏆 상위 캐릭터 첫 대화</div>${top3DatesHTML}</div>` : ''}
+        </div>
+    `;
+    
+    // 1위 캐릭터 섹션
+    const topCharAvatarUrl = top?.avatar ? `/characters/${encodeURIComponent(top.avatar)}` : '/img/ai4.png';
+    const topCharHTML = top ? `
+        <div class="stats-section stats-top-char">
+            <h4>🏆 ${escapeHtml(top.name)}와의 통계</h4>
+            <div class="top-char-card">
+                <img class="top-char-avatar" src="${topCharAvatarUrl}" alt="${escapeHtml(top.name)}" onerror="this.src='/img/ai4.png'">
+                <div class="top-char-stats">
+                    <div class="top-char-stat-item">
+                        <span class="stat-label">첫 대화일</span>
+                        <span class="stat-value">${topCharDateStr}</span>
+                    </div>
+                    <div class="top-char-stat-item">
+                        <span class="stat-label">전체 대화 비율</span>
+                        <span class="stat-value">${funFactsData.topCharPercentage}%</span>
+                    </div>
+                    <div class="top-char-stat-item">
+                        <span class="stat-label">하루 평균 메시지</span>
+                        <span class="stat-value">${topCharDailyAvg}개</span>
+                    </div>
+                </div>
             </div>
-            ` : ''}
         </div>
     ` : '';
     
@@ -598,6 +727,7 @@ function showFinalStats(container) {
                     </div>
                 </div>
                 ${funFactsHTML}
+                ${topCharHTML}
                 <div class="stats-section stats-total">
                     <div class="stats-grid">
                         <div class="stats-item">
