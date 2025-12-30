@@ -2420,6 +2420,7 @@ ${message}` : message;
       return renderCharacterCard(char, indexMap.get(char.avatar));
     }).join("");
     bindCharacterEvents(container);
+    loadChatCountsAsync(filtered);
   }
   function renderCharacterCard(char, index) {
     const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
@@ -2427,7 +2428,7 @@ ${message}` : message;
     const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
     const cachedChatCount = cache.get("chatCounts", char.avatar);
-    const chatCount = cachedChatCount ?? 0;
+    const chatCountText = cachedChatCount !== void 0 ? cachedChatCount > 0 ? `${cachedChatCount}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C" : "\uB85C\uB529 \uC911...";
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
@@ -2444,13 +2445,36 @@ ${message}` : message;
             <span class="char-name-text">${escapeHtml(name)}</span>
             <div class="char-hover-info">
                 <div class="info-row">
-                    <span class="info-icon">\uFFFD</span>
-                    <span class="info-value">${chatCount > 0 ? chatCount + "\uAC1C \uCC44\uD305" : "\uCC44\uD305 \uC5C6\uC74C"}</span>
+                    <span class="info-icon">\u{1F4AC}</span>
+                    <span class="info-value chat-count-value">${chatCountText}</span>
                 </div>
             </div>
         </div>
     </div>
     `;
+  }
+  async function loadChatCountsAsync(characters) {
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+      const batch = characters.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (char) => {
+        if (cache.get("chatCounts", char.avatar) !== void 0) return;
+        try {
+          const chats = await api.fetchChatsForCharacter(char.avatar);
+          const count = Array.isArray(chats) ? chats.length : 0;
+          cache.set("chatCounts", count, char.avatar);
+          const card = document.querySelector(`.lobby-char-card[data-char-avatar="${char.avatar}"]`);
+          if (card) {
+            const valueEl = card.querySelector(".chat-count-value");
+            if (valueEl) {
+              valueEl.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
+            }
+          }
+        } catch (e) {
+          console.error("[CharacterGrid] Failed to load chat count:", char.name, e);
+        }
+      }));
+    }
   }
   function isFavoriteChar(char) {
     return storage.isCharacterFavorite(char.avatar);

@@ -60,7 +60,7 @@
     /* Card Sizes */
     --card-width: 200px;
     --card-height: 300px;
-    --card-gap: 12px;
+    --card-gap: 9px;
     --card-hover-scale: 1.3;
     
     /* Transitions */
@@ -297,8 +297,8 @@
 }
 
 .persona-avatar {
-    width: 55px;
-    height: 55px;
+    width: 58px;
+    height: 58px;
     border-radius: var(--radius-md);
     object-fit: cover;
     background: var(--lobby-bg-card);
@@ -310,9 +310,9 @@
 }
 
 .persona-name {
-    font-size: 0.7em;
+    font-size: 0.74em;
     color: var(--text-muted);
-    max-width: 60px;
+    max-width: 63px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -421,13 +421,13 @@
 .lobby-tag-item {
     display: inline-flex;
     align-items: center;
-    height: 26px;
-    padding: 0 12px;
-    border-radius: 16px;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 14px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: 10px;
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
@@ -447,9 +447,9 @@
 }
 
 .lobby-tag-count {
-    margin-left: 6px;
+    margin-left: 5px;
     opacity: 0.7;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 /* ============================================

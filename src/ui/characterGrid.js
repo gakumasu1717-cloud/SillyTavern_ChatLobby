@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // 캐릭터 그리드 UI
 // ============================================
 
@@ -146,6 +146,9 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     }).join('');
     
     bindCharacterEvents(container);
+    
+    // 백그라운드에서 채팅 수 로딩 후 UI 업데이트
+    loadChatCountsAsync(filtered);
 }
 
 /**
@@ -163,7 +166,9 @@ function renderCharacterCard(char, index) {
     
     // 채팅 수 (캐시에서 가져오기, 없으면 API 응답 필드 사용)
     const cachedChatCount = cache.get('chatCounts', char.avatar);
-    const chatCount = cachedChatCount ?? 0;
+    const chatCountText = cachedChatCount !== undefined 
+        ? (cachedChatCount > 0 ? `${cachedChatCount}개 채팅` : '채팅 없음')
+        : '로딩 중...';
     
     // 즐겨찾기 버튼
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
@@ -183,13 +188,47 @@ function renderCharacterCard(char, index) {
             <span class="char-name-text">${escapeHtml(name)}</span>
             <div class="char-hover-info">
                 <div class="info-row">
-                    <span class="info-icon">�</span>
-                    <span class="info-value">${chatCount > 0 ? chatCount + '개 채팅' : '채팅 없음'}</span>
+                    <span class="info-icon">💬</span>
+                    <span class="info-value chat-count-value">${chatCountText}</span>
                 </div>
             </div>
         </div>
     </div>
     `;
+}
+
+/**
+ * 백그라운드에서 채팅 수 로딩 후 UI 업데이트
+ * @param {Array} characters - 캐릭터 배열
+ */
+async function loadChatCountsAsync(characters) {
+    const BATCH_SIZE = 5;
+    
+    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+        const batch = characters.slice(i, i + BATCH_SIZE);
+        
+        await Promise.all(batch.map(async (char) => {
+            // 이미 캐시에 있으면 스킵
+            if (cache.get('chatCounts', char.avatar) !== undefined) return;
+            
+            try {
+                const chats = await api.fetchChatsForCharacter(char.avatar);
+                const count = Array.isArray(chats) ? chats.length : 0;
+                cache.set('chatCounts', count, char.avatar);
+                
+                // DOM 업데이트
+                const card = document.querySelector(`.lobby-char-card[data-char-avatar="${char.avatar}"]`);
+                if (card) {
+                    const valueEl = card.querySelector('.chat-count-value');
+                    if (valueEl) {
+                        valueEl.textContent = count > 0 ? `${count}개 채팅` : '채팅 없음';
+                    }
+                }
+            } catch (e) {
+                console.error('[CharacterGrid] Failed to load chat count:', char.name, e);
+            }
+        }));
+    }
 }
 
 /**
