@@ -923,6 +923,7 @@
     height: 100%;
     font-size: 15px;
     line-height: 1;
+    transform: translateY(-1px);
 }
 
 .filters-row button:hover {
