@@ -17,11 +17,6 @@
     --lobby-accent: #E50914;
     --lobby-accent-hover: #f40612;
     
-    /* Legacy Netflix 변수 (호환용) */
-    --netflix-bg: #141414;
-    --netflix-bg-hover: #404040;
-    --netflix-bg-card: #2f2f2f;
-    
     /* Text Colors */
     --text-primary: #FFFFFF;
     --text-secondary: #E5E5E5;
@@ -41,11 +36,6 @@
     --lobby-bg-hover: #D0D0D0;
     --lobby-accent: #333333;
     --lobby-accent-hover: #1A1A1A;
-    
-    /* Legacy Netflix 변수 (호환용) */
-    --netflix-bg: #F5F5F5;
-    --netflix-bg-hover: #D0D0D0;
-    --netflix-bg-card: #E8E8E8;
     
     /* Text Colors */
     --text-primary: #1A1A1A;
@@ -452,7 +442,7 @@
 
 .lobby-tag-item.active {
     background: var(--text-primary);
-    color: var(--netflix-bg);
+    color: var(--lobby-bg);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -589,7 +579,7 @@
 }
 
 #chat-lobby-characters::-webkit-scrollbar-thumb {
-    background: var(--netflix-bg-hover);
+    background: var(--lobby-bg-hover);
     border-radius: 4px;
 }
 
@@ -1009,7 +999,7 @@
 }
 
 #chat-lobby-chats-list::-webkit-scrollbar-thumb {
-    background: var(--netflix-bg-hover);
+    background: var(--lobby-bg-hover);
     border-radius: 3px;
 }
 
@@ -1120,7 +1110,7 @@
     width: 20px;
     height: 20px;
     cursor: pointer;
-    accent-color: var(--netflix-red);
+    accent-color: var(--lobby-accent);
 }
 
 /* ============================================
@@ -1720,7 +1710,7 @@
 .stats-section h4 {
     margin: 0 0 16px 0;
     font-size: 1.1em;
-    color: var(--netflix-red);
+    color: var(--lobby-accent);
 }
 
 .stats-ranking {
@@ -1734,7 +1724,7 @@
     align-items: center;
     gap: 14px;
     padding: 14px 18px;
-    background: var(--netflix-bg-card);
+    background: var(--lobby-bg-card);
     border-radius: var(--radius-md);
     border: 1px solid transparent;
     transition: all var(--transition-fast);

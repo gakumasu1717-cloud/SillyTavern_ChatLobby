@@ -1450,6 +1450,19 @@ ${message}` : message;
     </div>
     `;
   }
+  function getFoldersOptionsHTML(selectedValue = "all") {
+    const data = storage.load();
+    const sorted = [...data.folders].sort((a, b) => a.order - b.order);
+    let html = '<option value="all">\u{1F4C1} \uC804\uCCB4</option>';
+    html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
+    sorted.forEach((f) => {
+      if (f.id !== "favorites") {
+        const selected = f.id === selectedValue ? "selected" : "";
+        html += `<option value="${f.id}" ${selected}>${f.name}</option>`;
+      }
+    });
+    return html;
+  }
   function getBatchFoldersHTML() {
     const data = storage.load();
     const sorted = [...data.folders].sort((a, b) => a.order - b.order);
@@ -2155,8 +2168,10 @@ ${message}` : message;
     const chatsList = document.getElementById("chat-lobby-chats-list");
     if (!chatsList) return;
     const cachedChats = cache.get("chats", character.avatar);
-    if (cachedChats && cachedChats.length > 0) {
+    if (cachedChats) {
       renderChats(chatsList, cachedChats, character.avatar);
+    } else {
+      renderChatList(character);
     }
   }
   function toggleBatchMode() {
@@ -2206,11 +2221,12 @@ ${message}` : message;
     storage.moveChatsBatch(keys, targetFolder);
     toggleBatchMode();
     showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
-    const character = store.currentCharacter;
-    if (character) {
-      cache.invalidate("chats", character.avatar);
-      await renderChatList(character);
+    const filterSelect = document.getElementById("chat-lobby-folder-filter");
+    if (filterSelect) {
+      const currentValue = filterSelect.value;
+      filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
     }
+    refreshCurrentChatList();
   }
   function isBatchMode() {
     return store.batchModeActive;

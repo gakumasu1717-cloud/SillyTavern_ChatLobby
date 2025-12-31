@@ -11,6 +11,7 @@ import { formatDate, getTimestamp } from '../utils/dateUtils.js';
 import { createTouchClickHandler, isMobile } from '../utils/eventHelpers.js';
 import { showToast, showAlert } from './notifications.js';
 import { CONFIG } from '../config.js';
+import { getFoldersOptionsHTML } from './templates.js';
 
 // ============================================
 // 툴팁 관련 변수
@@ -684,8 +685,12 @@ export function refreshCurrentChatList() {
     
     // 캐시된 데이터로 바로 다시 렌더링
     const cachedChats = cache.get('chats', character.avatar);
-    if (cachedChats && cachedChats.length > 0) {
+    if (cachedChats) {
+        // 캐시가 있으면 즉시 렌더링 (빈 배열도 렌더링)
         renderChats(chatsList, cachedChats, character.avatar);
+    } else {
+        // 캐시가 없으면 전체 재렌더
+        renderChatList(character);
     }
 }
 
@@ -765,12 +770,15 @@ export async function executeBatchMove(targetFolder) {
     toggleBatchMode();
     showToast(`${keys.length}개 채팅이 이동되었습니다.`, 'success');
     
-    // 캐시 무효화 후 즉시 리렌더
-    const character = store.currentCharacter;
-    if (character) {
-        cache.invalidate('chats', character.avatar);
-        await renderChatList(character);
+    // 폴더 필터 드롭다운 업데이트 (캐릭터 캐시는 유지)
+    const filterSelect = document.getElementById('chat-lobby-folder-filter');
+    if (filterSelect) {
+        const currentValue = filterSelect.value;
+        filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
     }
+    
+    // 채팅 목록만 재렌더 (캐시된 채팅 데이터로 필터/정렬만 다시 적용)
+    refreshCurrentChatList();
     
 }
 
