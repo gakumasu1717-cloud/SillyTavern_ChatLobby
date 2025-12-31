@@ -2268,6 +2268,7 @@ ${message}` : message;
       return;
     }
     isRendering = true;
+    store.setLobbyLocked(true);
     try {
       const container = document.getElementById("chat-lobby-characters");
       if (!container) return;
@@ -2286,6 +2287,7 @@ ${message}` : message;
       await renderCharacterList(container, characters, searchTerm, sortOverride);
     } finally {
       isRendering = false;
+      store.setLobbyLocked(false);
       if (pendingRender) {
         const { searchTerm: s, sortOverride: o } = pendingRender;
         pendingRender = null;
