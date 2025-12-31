@@ -2926,7 +2926,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
         min-width: 70px;
     }
     
-    /* 셀이 작을 때 이름/상세정보 숨김 - container query 대용 */
+    /* 모바일 기본: 이름/상세정보 숨김 */
     .cal-card-info {
         display: none;
     }
@@ -2934,6 +2934,26 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     .cal-card-gradient {
         display: none;
     }
+    
+    /* 확대 시 (zoomed-in): 정보 표시 */
+    .calendar-grid.zoomed-in .cal-card-info,
+    .calendar-grid.zoomed-in .cal-card-gradient {
+        display: block;
+    }
+    
+    .calendar-grid.zoomed-in .cal-card-name {
+        font-size: 1.1em;
+    }
+    
+    .calendar-grid.zoomed-in .cal-card-count {
+        font-size: 0.9em;
+    }
+}
+
+/* 축소 시 (zoomed-out): 날짜만 */
+.calendar-grid.zoomed-out .cal-card-info,
+.calendar-grid.zoomed-out .cal-card-gradient {
+    display: none !important;
 }
 
 /* PC에서 카드 더 크게 */

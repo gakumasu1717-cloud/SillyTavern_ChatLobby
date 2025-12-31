@@ -15,12 +15,25 @@ let isCalculating = false;
 let touchStartX = 0;
 let touchEndX = 0;
 
+// 핀치줌 관련
+let originalViewport = null;
+let currentScale = 1;
+let lastDistance = 0;
+let lastTap = 0;
+
 /**
  * 캘린더 뷰 열기
  */
 export async function openCalendarView() {
     if (isCalculating) return;
     isCalculating = true;
+    
+    // 핀치줌 허용을 위해 viewport 수정
+    const viewport = document.querySelector('meta[name="viewport"]');
+    originalViewport = viewport?.content || null;
+    if (viewport) {
+        viewport.content = 'width=device-width, initial-scale=1, minimum-scale=0.3, maximum-scale=3, user-scalable=yes';
+    }
     
     try {
         if (!calendarOverlay) {
@@ -72,10 +85,15 @@ export async function openCalendarView() {
             calendarOverlay.querySelector('#debug-modal-close').addEventListener('click', hideDebugModal);
             calendarOverlay.querySelector('#debug-clear-all').addEventListener('click', handleClearAll);
             
-            // 모바일 스와이프 (월 이동)
+            // 모바일 스와이프 (월 이동) + 핀치줌
             const main = calendarOverlay.querySelector('#calendar-main');
             main.addEventListener('touchstart', handleTouchStart, { passive: true });
             main.addEventListener('touchend', handleTouchEnd, { passive: true });
+            
+            // 핀치줌 이벤트
+            main.addEventListener('touchstart', handlePinchStart, { passive: true });
+            main.addEventListener('touchmove', handlePinchMove, { passive: false });
+            main.addEventListener('touchend', handleDoubleTap, { passive: true });
         }
         
         // 첫 접근 체크 (스냅샷 0개)
@@ -120,6 +138,23 @@ export async function openCalendarView() {
  * 캘린더 뷰 닫기
  */
 export function closeCalendarView() {
+    // viewport 복원
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport && originalViewport) {
+        viewport.content = originalViewport;
+    }
+    
+    // 스케일 리셋
+    currentScale = 1;
+    if (calendarOverlay) {
+        const fullscreen = calendarOverlay.querySelector('.calendar-fullscreen');
+        if (fullscreen) fullscreen.style.transform = '';
+        const grid = calendarOverlay.querySelector('.calendar-grid');
+        if (grid) {
+            grid.classList.remove('zoomed-in', 'zoomed-out');
+        }
+    }
+    
     if (calendarOverlay) {
         calendarOverlay.style.display = 'none';
         
@@ -165,6 +200,66 @@ function handleSwipe() {
             navigateMonth(-1);
         }
     }
+}
+
+/**
+ * 핀치줌 핸들러
+ */
+function getDistance(touch1, touch2) {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function handlePinchStart(e) {
+    if (e.touches.length === 2) {
+        lastDistance = getDistance(e.touches[0], e.touches[1]);
+    }
+}
+
+function handlePinchMove(e) {
+    if (e.touches.length !== 2) return;
+    
+    e.preventDefault();
+    
+    const distance = getDistance(e.touches[0], e.touches[1]);
+    const delta = distance / lastDistance;
+    
+    currentScale = Math.min(Math.max(currentScale * delta, 0.5), 2.5);
+    lastDistance = distance;
+    
+    const fullscreen = calendarOverlay.querySelector('.calendar-fullscreen');
+    fullscreen.style.transform = `scale(${currentScale})`;
+    fullscreen.style.transformOrigin = 'top left';
+    
+    updateDetailVisibility();
+}
+
+function updateDetailVisibility() {
+    const grid = calendarOverlay.querySelector('.calendar-grid');
+    if (!grid) return;
+    
+    if (currentScale >= 1.3) {
+        grid.classList.add('zoomed-in');
+        grid.classList.remove('zoomed-out');
+    } else if (currentScale <= 0.8) {
+        grid.classList.add('zoomed-out');
+        grid.classList.remove('zoomed-in');
+    } else {
+        grid.classList.remove('zoomed-in', 'zoomed-out');
+    }
+}
+
+function handleDoubleTap(e) {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+        // 더블탭 → 리셋
+        currentScale = 1;
+        const fullscreen = calendarOverlay.querySelector('.calendar-fullscreen');
+        if (fullscreen) fullscreen.style.transform = '';
+        updateDetailVisibility();
+    }
+    lastTap = now;
 }
 
 /**

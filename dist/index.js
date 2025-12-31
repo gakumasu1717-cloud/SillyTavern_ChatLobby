@@ -3838,9 +3838,18 @@ ${message}` : message;
   var isCalculating = false;
   var touchStartX = 0;
   var touchEndX = 0;
+  var originalViewport = null;
+  var currentScale = 1;
+  var lastDistance = 0;
+  var lastTap = 0;
   async function openCalendarView() {
     if (isCalculating) return;
     isCalculating = true;
+    const viewport = document.querySelector('meta[name="viewport"]');
+    originalViewport = viewport?.content || null;
+    if (viewport) {
+      viewport.content = "width=device-width, initial-scale=1, minimum-scale=0.3, maximum-scale=3, user-scalable=yes";
+    }
     try {
       if (!calendarOverlay) {
         calendarOverlay = document.createElement("div");
@@ -3889,6 +3898,9 @@ ${message}` : message;
         const main = calendarOverlay.querySelector("#calendar-main");
         main.addEventListener("touchstart", handleTouchStart, { passive: true });
         main.addEventListener("touchend", handleTouchEnd, { passive: true });
+        main.addEventListener("touchstart", handlePinchStart, { passive: true });
+        main.addEventListener("touchmove", handlePinchMove, { passive: false });
+        main.addEventListener("touchend", handleDoubleTap, { passive: true });
       }
       const existingSnapshots = loadSnapshots();
       const isFirstAccess = Object.keys(existingSnapshots).length === 0;
@@ -3916,6 +3928,19 @@ ${message}` : message;
     }
   }
   function closeCalendarView() {
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport && originalViewport) {
+      viewport.content = originalViewport;
+    }
+    currentScale = 1;
+    if (calendarOverlay) {
+      const fullscreen = calendarOverlay.querySelector(".calendar-fullscreen");
+      if (fullscreen) fullscreen.style.transform = "";
+      const grid = calendarOverlay.querySelector(".calendar-grid");
+      if (grid) {
+        grid.classList.remove("zoomed-in", "zoomed-out");
+      }
+    }
     if (calendarOverlay) {
       calendarOverlay.style.display = "none";
       const lobbyContainer = document.getElementById("chat-lobby-container");
@@ -3945,6 +3970,51 @@ ${message}` : message;
         navigateMonth(-1);
       }
     }
+  }
+  function getDistance(touch1, touch2) {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function handlePinchStart(e) {
+    if (e.touches.length === 2) {
+      lastDistance = getDistance(e.touches[0], e.touches[1]);
+    }
+  }
+  function handlePinchMove(e) {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    const distance = getDistance(e.touches[0], e.touches[1]);
+    const delta = distance / lastDistance;
+    currentScale = Math.min(Math.max(currentScale * delta, 0.5), 2.5);
+    lastDistance = distance;
+    const fullscreen = calendarOverlay.querySelector(".calendar-fullscreen");
+    fullscreen.style.transform = `scale(${currentScale})`;
+    fullscreen.style.transformOrigin = "top left";
+    updateDetailVisibility();
+  }
+  function updateDetailVisibility() {
+    const grid = calendarOverlay.querySelector(".calendar-grid");
+    if (!grid) return;
+    if (currentScale >= 1.3) {
+      grid.classList.add("zoomed-in");
+      grid.classList.remove("zoomed-out");
+    } else if (currentScale <= 0.8) {
+      grid.classList.add("zoomed-out");
+      grid.classList.remove("zoomed-in");
+    } else {
+      grid.classList.remove("zoomed-in", "zoomed-out");
+    }
+  }
+  function handleDoubleTap(e) {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      currentScale = 1;
+      const fullscreen = calendarOverlay.querySelector(".calendar-fullscreen");
+      if (fullscreen) fullscreen.style.transform = "";
+      updateDetailVisibility();
+    }
+    lastTap = now;
   }
   async function saveBaselineSnapshot() {
     const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
