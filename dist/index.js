@@ -1491,7 +1491,7 @@ ${message}` : message;
     let lastHandleTime = 0;
     const wrappedHandler = (e, source) => {
       const now = Date.now();
-      if (now - lastHandleTime < 100) {
+      if (now - lastHandleTime < 300) {
         return;
       }
       if (isScrolling) {
@@ -2451,44 +2451,51 @@ ${message}` : message;
           showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
-      createTouchClickHandler(card, () => {
-        const chatsPanel = document.getElementById("chat-lobby-chats");
-        const isPanelVisible = chatsPanel?.classList.contains("visible");
-        const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
-        console.log("[CharacterGrid] Card clicked:", {
-          charAvatar,
-          currentAvatar: store.currentCharacter?.avatar,
-          isPanelVisible,
-          isSameCharacter
-        });
-        if (isPanelVisible && isSameCharacter) {
-          console.log("[CharacterGrid] Closing panel - same character re-clicked");
-          card.classList.remove("selected");
-          closeChatPanel();
+      let isProcessing = false;
+      createTouchClickHandler(card, async () => {
+        if (isProcessing) {
+          console.log("[CharacterGrid] Card click ignored - already processing");
           return;
         }
-        container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
-          el.classList.remove("selected");
-        });
-        card.classList.add("selected");
-        const characterData = {
-          index: card.dataset.charIndex,
-          avatar: card.dataset.charAvatar,
-          name: charName,
-          avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
-        };
-        const handler = store.onCharacterSelect;
-        if (handler && typeof handler === "function") {
-          try {
-            handler(characterData);
-          } catch (error) {
-            console.error("[CharacterGrid] Handler error:", error);
-          }
-        } else {
-          console.error("[CharacterGrid] onCharacterSelect handler not available!", {
-            handler,
-            handlerType: typeof handler
+        isProcessing = true;
+        try {
+          const chatsPanel = document.getElementById("chat-lobby-chats");
+          const isPanelVisible = chatsPanel?.classList.contains("visible");
+          const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
+          console.log("[CharacterGrid] Card clicked:", {
+            charAvatar,
+            currentAvatar: store.currentCharacter?.avatar,
+            isPanelVisible,
+            isSameCharacter
           });
+          if (isPanelVisible && isSameCharacter) {
+            console.log("[CharacterGrid] Closing panel - same character re-clicked");
+            card.classList.remove("selected");
+            closeChatPanel();
+            return;
+          }
+          container.querySelectorAll(".lobby-char-card.selected").forEach((el) => {
+            el.classList.remove("selected");
+          });
+          card.classList.add("selected");
+          const characterData = {
+            index: card.dataset.charIndex,
+            avatar: card.dataset.charAvatar,
+            name: charName,
+            avatarSrc: card.querySelector(".lobby-char-avatar")?.src || ""
+          };
+          const handler = store.onCharacterSelect;
+          if (handler && typeof handler === "function") {
+            await handler(characterData);
+          } else {
+            console.error("[CharacterGrid] onCharacterSelect handler not available!");
+          }
+        } catch (error) {
+          console.error("[CharacterGrid] Handler error:", error);
+        } finally {
+          setTimeout(() => {
+            isProcessing = false;
+          }, 300);
         }
       }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
     });

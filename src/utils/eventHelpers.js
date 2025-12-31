@@ -66,8 +66,8 @@ export function createTouchClickHandler(element, handler, options = {}) {
     const wrappedHandler = (e, source) => {
         const now = Date.now();
         
-        // 중복 실행 방지 (100ms 내 중복 무시)
-        if (now - lastHandleTime < 100) {
+        // 중복 실행 방지 (300ms 내 중복 무시 - 빠른 클릭 방지)
+        if (now - lastHandleTime < 300) {
             return;
         }
         

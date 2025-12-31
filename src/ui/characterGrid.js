@@ -388,59 +388,66 @@ function bindCharacterEvents(container) {
             }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
         }
         
-        // 캐릭터 카드 클릭 (선택)
-        createTouchClickHandler(card, () => {
-            // 즐겨찾기 버튼 클릭은 무시 (위에서 처리됨)
-            
-            // 채팅 패널이 열려있고 같은 캐릭터면 닫기
-            const chatsPanel = document.getElementById('chat-lobby-chats');
-            const isPanelVisible = chatsPanel?.classList.contains('visible');
-            const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
-            
-            console.log('[CharacterGrid] Card clicked:', { 
-                charAvatar, 
-                currentAvatar: store.currentCharacter?.avatar, 
-                isPanelVisible, 
-                isSameCharacter 
-            });
-            
-            if (isPanelVisible && isSameCharacter) {
-                console.log('[CharacterGrid] Closing panel - same character re-clicked');
-                card.classList.remove('selected');
-                closeChatPanel();
+        // 캐릭터 카드 클릭 (선택) - 중복 클릭 방지
+        let isProcessing = false;
+        createTouchClickHandler(card, async () => {
+            // 이미 처리 중이면 무시
+            if (isProcessing) {
+                console.log('[CharacterGrid] Card click ignored - already processing');
                 return;
             }
+            isProcessing = true;
             
-            // 기존 선택 해제
-            container.querySelectorAll('.lobby-char-card.selected').forEach(el => {
-                el.classList.remove('selected');
-            });
-            
-            // 새로 선택
-            card.classList.add('selected');
-            
-            // 캐릭터 정보 구성
-            const characterData = {
-                index: card.dataset.charIndex,
-                avatar: card.dataset.charAvatar,
-                name: charName,
-                avatarSrc: card.querySelector('.lobby-char-avatar')?.src || ''
-            };
-            
-            
-            // 콜백 호출
-            const handler = store.onCharacterSelect;
-            if (handler && typeof handler === 'function') {
-                try {
-                    handler(characterData);
-                } catch (error) {
-                    console.error('[CharacterGrid] Handler error:', error);
-                }
-            } else {
-                console.error('[CharacterGrid] onCharacterSelect handler not available!', {
-                    handler: handler,
-                    handlerType: typeof handler
+            try {
+                // 채팅 패널이 열려있고 같은 캐릭터면 닫기
+                const chatsPanel = document.getElementById('chat-lobby-chats');
+                const isPanelVisible = chatsPanel?.classList.contains('visible');
+                const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
+                
+                console.log('[CharacterGrid] Card clicked:', { 
+                    charAvatar, 
+                    currentAvatar: store.currentCharacter?.avatar, 
+                    isPanelVisible, 
+                    isSameCharacter 
                 });
+                
+                if (isPanelVisible && isSameCharacter) {
+                    console.log('[CharacterGrid] Closing panel - same character re-clicked');
+                    card.classList.remove('selected');
+                    closeChatPanel();
+                    return;
+                }
+                
+                // 기존 선택 해제
+                container.querySelectorAll('.lobby-char-card.selected').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                
+                // 새로 선택
+                card.classList.add('selected');
+                
+                // 캐릭터 정보 구성
+                const characterData = {
+                    index: card.dataset.charIndex,
+                    avatar: card.dataset.charAvatar,
+                    name: charName,
+                    avatarSrc: card.querySelector('.lobby-char-avatar')?.src || ''
+                };
+                
+                // 콜백 호출
+                const handler = store.onCharacterSelect;
+                if (handler && typeof handler === 'function') {
+                    await handler(characterData);
+                } else {
+                    console.error('[CharacterGrid] onCharacterSelect handler not available!');
+                }
+            } catch (error) {
+                console.error('[CharacterGrid] Handler error:', error);
+            } finally {
+                // 처리 완료 후 플래그 해제 (약간의 딜레이로 빠른 재클릭 방지)
+                setTimeout(() => {
+                    isProcessing = false;
+                }, 300);
             }
         }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
     });
