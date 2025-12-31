@@ -387,6 +387,9 @@
     border-radius: var(--radius-md);
     cursor: pointer;
     font-size: 12px;
+    margin-bottom: 0;
+    width: 80px;
+    height: 33.5px;
 }
 
 #chat-lobby-search select option {

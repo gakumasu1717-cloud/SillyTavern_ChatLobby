@@ -249,9 +249,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * 캐시는 이벤트로 동기화함 (onChatChanged)
      */
     async function openLobby() {
+        console.log('[DEBUG] openLobby called, isLobbyOpen:', store.isLobbyOpen);
+        
         // 이미 열려있고 채팅 패널이 표시 중이면 무시
         const chatsPanel = document.getElementById('chat-lobby-chats');
         if (store.isLobbyOpen && chatsPanel?.classList.contains('visible')) {
+            console.log('[DEBUG] openLobby: already open with visible chat panel, skipping');
             return;
         }
         

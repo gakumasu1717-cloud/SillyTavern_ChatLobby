@@ -20,6 +20,8 @@ import { CONFIG } from '../config.js';
  * @returns {Promise<void>}
  */
 export async function renderPersonaBar() {
+    console.log('[DEBUG] renderPersonaBar called from:', new Error().stack?.split('\n')[2]?.trim());
+    
     const container = document.getElementById('chat-lobby-persona-list');
     if (!container) return;
     

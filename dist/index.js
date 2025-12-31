@@ -1591,6 +1591,7 @@ ${message}` : message;
   init_notifications();
   init_config();
   async function renderPersonaBar() {
+    console.log("[DEBUG] renderPersonaBar called from:", new Error().stack?.split("\n")[2]?.trim());
     const container = document.getElementById("chat-lobby-persona-list");
     if (!container) return;
     const cachedPersonas = cache.get("personas");
@@ -2251,7 +2252,9 @@ ${message}` : message;
     store.setCharacterSelectHandler(handler);
   }
   async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
+    console.log("[DEBUG] renderCharacterGrid called from:", new Error().stack?.split("\n")[2]?.trim());
     if (isRendering) {
+      console.log("[DEBUG] renderCharacterGrid: already rendering, queuing");
       pendingRender = { searchTerm, sortOverride };
       return;
     }
@@ -3869,8 +3872,10 @@ ${message}` : message;
       }, CONFIG.timing.preloadDelay);
     }
     async function openLobby() {
+      console.log("[DEBUG] openLobby called, isLobbyOpen:", store.isLobbyOpen);
       const chatsPanel = document.getElementById("chat-lobby-chats");
       if (store.isLobbyOpen && chatsPanel?.classList.contains("visible")) {
+        console.log("[DEBUG] openLobby: already open with visible chat panel, skipping");
         return;
       }
       const overlay = document.getElementById("chat-lobby-overlay");
