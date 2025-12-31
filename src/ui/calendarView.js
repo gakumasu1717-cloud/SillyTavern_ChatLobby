@@ -13,6 +13,10 @@ let selectedDateInfo = null;
 let isCalculating = false;
 let hoverTimeout = null;
 
+// 스와이프 관련
+let touchStartX = 0;
+let touchEndX = 0;
+
 /**
  * 캘린더 뷰 열기
  */
@@ -29,18 +33,17 @@ export async function openCalendarView() {
                     <div class="calendar-header">
                         <button class="calendar-close-btn" id="calendar-close">←</button>
                         <div class="calendar-title-area">
-                            <span class="calendar-year">${THIS_YEAR}</span>
-                            <span class="calendar-month" id="calendar-title"></span>
+                            <button class="cal-nav-btn" id="calendar-prev">‹</button>
+                            <div class="calendar-title-text">
+                                <span class="calendar-year">${THIS_YEAR}.</span>
+                                <span class="calendar-month" id="calendar-title"></span>
+                            </div>
+                            <button class="cal-nav-btn" id="calendar-next">›</button>
                         </div>
                         <button class="calendar-debug-btn" id="calendar-debug">DATA</button>
                     </div>
                     
                     <div class="calendar-main">
-                        <div class="calendar-nav">
-                            <button class="cal-nav-btn" id="calendar-prev">‹</button>
-                            <button class="cal-nav-btn" id="calendar-next">›</button>
-                        </div>
-                        
                         <div class="calendar-grid-wrapper">
                             <div class="calendar-weekdays">
                                 <span class="sun">S</span>
@@ -103,6 +106,11 @@ export async function openCalendarView() {
             // 호버 이벤트 (debounce 적용)
             grid.addEventListener('mouseover', handleMouseOver);
             grid.addEventListener('mouseout', handleMouseOut);
+            
+            // 모바일 스와이프
+            const wrapper = calendarOverlay.querySelector('.calendar-grid-wrapper');
+            wrapper.addEventListener('touchstart', handleTouchStart, { passive: true });
+            wrapper.addEventListener('touchend', handleTouchEnd, { passive: true });
         }
         
         calendarOverlay.style.display = 'flex';
@@ -140,18 +148,57 @@ function navigateMonth(delta) {
 }
 
 /**
- * 오늘 스냅샷 저장
+ * 터치 스와이프 핸들러
+ */
+function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+}
+
+function handleTouchEnd(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+}
+
+function handleSwipe() {
+    const diff = touchStartX - touchEndX;
+    const threshold = 50; // 최소 스와이프 거리
+    
+    if (Math.abs(diff) > threshold) {
+        if (diff > 0) {
+            // 왼쪽 스와이프 -> 다음 달
+            navigateMonth(1);
+        } else {
+            // 오른쪽 스와이프 -> 이전 달
+            navigateMonth(-1);
+        }
+    }
+}
+
+/**
+ * 오늘 스냅샷 저장 - 가장 증가한 캐릭터 찾기
  */
 async function saveTodaySnapshot() {
     try {
         const today = getLocalDateString();
+        const yesterday = getLocalDateString(new Date(Date.now() - 86400000));
+        
+        console.log('[Calendar] saveTodaySnapshot | today:', today, '| yesterday:', yesterday);
+        
+        // 어제 스냅샷
+        const yesterdaySnapshot = getSnapshot(yesterday);
+        const yesterdayByChar = yesterdaySnapshot?.byChar || {};
+        
+        console.log('[Calendar] yesterdaySnapshot exists:', !!yesterdaySnapshot);
         
         let characters = cache.get('characters');
         if (!characters) {
             characters = await api.fetchCharacters();
         }
         
-        if (!characters || !Array.isArray(characters)) return;
+        if (!characters || !Array.isArray(characters)) {
+            console.warn('[Calendar] No characters found');
+            return;
+        }
         
         const BATCH_SIZE = 5;
         const rankings = [];
@@ -180,9 +227,36 @@ async function saveTodaySnapshot() {
         
         rankings.sort((a, b) => b.messageCount - a.messageCount);
         const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
-        const topChar = rankings[0]?.avatar || '';
         
-        saveSnapshot(today, totalChats, topChar);
+        // 캐릭터별 채팅수 객체 생성
+        const byChar = {};
+        rankings.forEach(r => {
+            byChar[r.avatar] = r.chatCount;
+        });
+        
+        // 가장 증가한 캐릭터 찾기
+        let topChar = '';
+        let maxIncrease = -Infinity;
+        
+        for (const r of rankings) {
+            const prev = yesterdayByChar[r.avatar] || 0;
+            const increase = r.chatCount - prev;
+            if (increase > maxIncrease) {
+                maxIncrease = increase;
+                topChar = r.avatar;
+            }
+        }
+        
+        // 어제 데이터 없으면 (첫 접속) 메시지 1위로
+        if (!yesterdaySnapshot) {
+            topChar = rankings[0]?.avatar || '';
+            console.log('[Calendar] First time - using message count leader:', topChar);
+        } else {
+            console.log('[Calendar] Most increased char:', topChar, '| increase:', maxIncrease);
+        }
+        
+        saveSnapshot(today, totalChats, topChar, byChar);
+        
     } catch (e) {
         console.error('[Calendar] Failed to save snapshot:', e);
     }
@@ -198,8 +272,7 @@ function renderCalendar() {
     const prevBtn = calendarOverlay.querySelector('#calendar-prev');
     const nextBtn = calendarOverlay.querySelector('#calendar-next');
     
-    const monthNames = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-    title.textContent = monthNames[currentMonth];
+    title.textContent = currentMonth + 1;
     
     prevBtn.disabled = (currentMonth === 0);
     nextBtn.disabled = (currentMonth === 11);
@@ -231,8 +304,8 @@ function renderCalendar() {
         
         html += `
             <div class="calendar-day ${isToday ? 'today' : ''} ${hasData ? 'has-data' : ''}" data-date="${date}">
-                ${avatarHtml}
                 <span class="day-number">${day}</span>
+                ${avatarHtml}
             </div>
         `;
     }
@@ -345,15 +418,30 @@ function hideBotCard() {
 }
 
 /**
- * 디버그 모달
+ * 디버그 모달 - 데이터 출처 표시
  */
 function showDebugModal() {
     const modal = calendarOverlay.querySelector('#calendar-debug-modal');
     const content = calendarOverlay.querySelector('#debug-modal-content');
     
-    const snapshots = loadSnapshots();
-    content.textContent = JSON.stringify(snapshots, null, 2);
+    const snapshots = loadSnapshots(true); // 강제 새로고침
+    const today = getLocalDateString();
+    const yesterday = getLocalDateString(new Date(Date.now() - 86400000));
     
+    const debugInfo = {
+        _meta: {
+            source: 'localStorage',
+            key: 'chatLobby_calendar',
+            today,
+            yesterday,
+            totalSnapshots: Object.keys(snapshots).length,
+            hasToday: !!snapshots[today],
+            hasYesterday: !!snapshots[yesterday]
+        },
+        snapshots
+    };
+    
+    content.textContent = JSON.stringify(debugInfo, null, 2);
     modal.style.display = 'flex';
 }
 

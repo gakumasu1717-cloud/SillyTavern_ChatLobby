@@ -20,10 +20,11 @@ export function getLocalDateString(date = new Date()) {
 /**
  * 전체 스냅샷 객체 로드 (캐싱)
  * @param {boolean} forceRefresh - 캐시 무시하고 새로 로드
- * @returns {Object} - { 'YYYY-MM-DD': { total, topChar } }
+ * @returns {Object} - { 'YYYY-MM-DD': { total, topChar, byChar } }
  */
 export function loadSnapshots(forceRefresh = false) {
     if (_snapshotsCache && !forceRefresh) {
+        console.log('[Calendar] loadSnapshots: from CACHE');
         return _snapshotsCache;
     }
     try {
@@ -31,11 +32,13 @@ export function loadSnapshots(forceRefresh = false) {
         if (data) {
             const parsed = JSON.parse(data);
             _snapshotsCache = parsed.snapshots || {};
+            console.log('[Calendar] loadSnapshots: from localStorage, keys:', Object.keys(_snapshotsCache).length);
             return _snapshotsCache;
         }
     } catch (e) {
         console.error('[Calendar] Failed to load snapshots:', e);
     }
+    console.log('[Calendar] loadSnapshots: EMPTY (no data)');
     _snapshotsCache = {};
     return _snapshotsCache;
 }
@@ -43,7 +46,7 @@ export function loadSnapshots(forceRefresh = false) {
 /**
  * 특정 날짜 스냅샷 반환
  * @param {string} date - YYYY-MM-DD 형식
- * @returns {{ total: number, topChar: string }|null}
+ * @returns {{ total: number, topChar: string, byChar?: Object }|null}
  */
 export function getSnapshot(date) {
     const snapshots = loadSnapshots();
@@ -51,25 +54,63 @@ export function getSnapshot(date) {
 }
 
 /**
+ * 오래된 스냅샷 정리 (6개월 이전 삭제)
+ */
+function cleanOldSnapshots() {
+    console.log('[Calendar] Cleaning old snapshots (6 months+)');
+    const snapshots = loadSnapshots(true);
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const cutoff = getLocalDateString(sixMonthsAgo);
+    
+    let deleted = 0;
+    for (const date of Object.keys(snapshots)) {
+        if (date < cutoff) {
+            delete snapshots[date];
+            deleted++;
+        }
+    }
+    
+    console.log('[Calendar] Deleted', deleted, 'old snapshots');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+}
+
+/**
  * 해당 날짜 스냅샷 저장 (덮어쓰기)
  * @param {string} date - YYYY-MM-DD 형식
  * @param {number} total - 전체 채팅 수
  * @param {string} topChar - 1위 캐릭터 아바타
+ * @param {Object} byChar - 캐릭터별 채팅수 { avatar: count }
  */
-export function saveSnapshot(date, total, topChar) {
+export function saveSnapshot(date, total, topChar, byChar = {}) {
     // 올해 1월 1일 이전 데이터는 저장 안 함
     const jan1 = `${THIS_YEAR}-01-01`;
     if (date < jan1) return;
     
+    // 캐시 무효화
+    _snapshotsCache = null;
+    
     try {
-        // 캐시 무효화
-        _snapshotsCache = null;
-        
         const snapshots = loadSnapshots(true);
-        snapshots[date] = { total, topChar };
+        snapshots[date] = { total, topChar, byChar };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+        console.log('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', topChar);
     } catch (e) {
-        console.error('[Calendar] Failed to save snapshot:', e);
+        // 용량 초과 시 오래된 데이터 정리
+        if (e.name === 'QuotaExceededError') {
+            console.warn('[Calendar] QuotaExceededError - cleaning old data');
+            cleanOldSnapshots();
+            // 재시도
+            try {
+                const snapshots = loadSnapshots(true);
+                snapshots[date] = { total, topChar, byChar };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+            } catch (e2) {
+                console.error('[Calendar] Still failed after cleanup:', e2);
+            }
+        } else {
+            console.error('[Calendar] Failed to save snapshot:', e);
+        }
     }
 }
 

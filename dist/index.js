@@ -1511,7 +1511,7 @@ ${message}` : message;
       scrollThreshold = 10,
       debugName = "unknown"
     } = options;
-    let touchStartX = 0;
+    let touchStartX2 = 0;
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
@@ -1536,11 +1536,11 @@ ${message}` : message;
     element.addEventListener("touchstart", (e) => {
       touchHandled = false;
       isScrolling = false;
-      touchStartX = e.touches[0].clientX;
+      touchStartX2 = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
     }, { passive: true });
     element.addEventListener("touchmove", (e) => {
-      const deltaX = Math.abs(e.touches[0].clientX - touchStartX);
+      const deltaX = Math.abs(e.touches[0].clientX - touchStartX2);
       const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
       if (deltaX > scrollThreshold || deltaY > scrollThreshold) {
         isScrolling = true;
@@ -3755,6 +3755,7 @@ ${message}` : message;
   }
   function loadSnapshots(forceRefresh = false) {
     if (_snapshotsCache && !forceRefresh) {
+      console.log("[Calendar] loadSnapshots: from CACHE");
       return _snapshotsCache;
     }
     try {
@@ -3762,11 +3763,13 @@ ${message}` : message;
       if (data) {
         const parsed = JSON.parse(data);
         _snapshotsCache = parsed.snapshots || {};
+        console.log("[Calendar] loadSnapshots: from localStorage, keys:", Object.keys(_snapshotsCache).length);
         return _snapshotsCache;
       }
     } catch (e) {
       console.error("[Calendar] Failed to load snapshots:", e);
     }
+    console.log("[Calendar] loadSnapshots: EMPTY (no data)");
     _snapshotsCache = {};
     return _snapshotsCache;
   }
@@ -3774,16 +3777,45 @@ ${message}` : message;
     const snapshots = loadSnapshots();
     return snapshots[date] || null;
   }
-  function saveSnapshot(date, total, topChar) {
+  function cleanOldSnapshots() {
+    console.log("[Calendar] Cleaning old snapshots (6 months+)");
+    const snapshots = loadSnapshots(true);
+    const sixMonthsAgo = /* @__PURE__ */ new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const cutoff = getLocalDateString(sixMonthsAgo);
+    let deleted = 0;
+    for (const date of Object.keys(snapshots)) {
+      if (date < cutoff) {
+        delete snapshots[date];
+        deleted++;
+      }
+    }
+    console.log("[Calendar] Deleted", deleted, "old snapshots");
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+  }
+  function saveSnapshot(date, total, topChar, byChar = {}) {
     const jan1 = `${THIS_YEAR}-01-01`;
     if (date < jan1) return;
+    _snapshotsCache = null;
     try {
-      _snapshotsCache = null;
       const snapshots = loadSnapshots(true);
-      snapshots[date] = { total, topChar };
+      snapshots[date] = { total, topChar, byChar };
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar);
     } catch (e) {
-      console.error("[Calendar] Failed to save snapshot:", e);
+      if (e.name === "QuotaExceededError") {
+        console.warn("[Calendar] QuotaExceededError - cleaning old data");
+        cleanOldSnapshots();
+        try {
+          const snapshots = loadSnapshots(true);
+          snapshots[date] = { total, topChar, byChar };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+        } catch (e2) {
+          console.error("[Calendar] Still failed after cleanup:", e2);
+        }
+      } else {
+        console.error("[Calendar] Failed to save snapshot:", e);
+      }
     }
   }
   function getIncrease(date) {
@@ -3813,6 +3845,8 @@ ${message}` : message;
   var selectedDateInfo = null;
   var isCalculating = false;
   var hoverTimeout = null;
+  var touchStartX = 0;
+  var touchEndX = 0;
   async function openCalendarView() {
     if (isCalculating) return;
     isCalculating = true;
@@ -3825,18 +3859,17 @@ ${message}` : message;
                     <div class="calendar-header">
                         <button class="calendar-close-btn" id="calendar-close">\u2190</button>
                         <div class="calendar-title-area">
-                            <span class="calendar-year">${THIS_YEAR2}</span>
-                            <span class="calendar-month" id="calendar-title"></span>
+                            <button class="cal-nav-btn" id="calendar-prev">\u2039</button>
+                            <div class="calendar-title-text">
+                                <span class="calendar-year">${THIS_YEAR2}.</span>
+                                <span class="calendar-month" id="calendar-title"></span>
+                            </div>
+                            <button class="cal-nav-btn" id="calendar-next">\u203A</button>
                         </div>
                         <button class="calendar-debug-btn" id="calendar-debug">DATA</button>
                     </div>
                     
                     <div class="calendar-main">
-                        <div class="calendar-nav">
-                            <button class="cal-nav-btn" id="calendar-prev">\u2039</button>
-                            <button class="cal-nav-btn" id="calendar-next">\u203A</button>
-                        </div>
-                        
                         <div class="calendar-grid-wrapper">
                             <div class="calendar-weekdays">
                                 <span class="sun">S</span>
@@ -3891,6 +3924,9 @@ ${message}` : message;
         grid.addEventListener("click", handleDateClick);
         grid.addEventListener("mouseover", handleMouseOver);
         grid.addEventListener("mouseout", handleMouseOut);
+        const wrapper = calendarOverlay.querySelector(".calendar-grid-wrapper");
+        wrapper.addEventListener("touchstart", handleTouchStart, { passive: true });
+        wrapper.addEventListener("touchend", handleTouchEnd, { passive: true });
       }
       calendarOverlay.style.display = "flex";
       selectedDateInfo = null;
@@ -3915,14 +3951,40 @@ ${message}` : message;
     hideBotCard();
     renderCalendar();
   }
+  function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+  }
+  function handleTouchEnd(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+  }
+  function handleSwipe() {
+    const diff = touchStartX - touchEndX;
+    const threshold = 50;
+    if (Math.abs(diff) > threshold) {
+      if (diff > 0) {
+        navigateMonth(1);
+      } else {
+        navigateMonth(-1);
+      }
+    }
+  }
   async function saveTodaySnapshot() {
     try {
       const today = getLocalDateString();
+      const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
+      console.log("[Calendar] saveTodaySnapshot | today:", today, "| yesterday:", yesterday);
+      const yesterdaySnapshot = getSnapshot(yesterday);
+      const yesterdayByChar = yesterdaySnapshot?.byChar || {};
+      console.log("[Calendar] yesterdaySnapshot exists:", !!yesterdaySnapshot);
       let characters = cache.get("characters");
       if (!characters) {
         characters = await api.fetchCharacters();
       }
-      if (!characters || !Array.isArray(characters)) return;
+      if (!characters || !Array.isArray(characters)) {
+        console.warn("[Calendar] No characters found");
+        return;
+      }
       const BATCH_SIZE = 5;
       const rankings = [];
       for (let i = 0; i < characters.length; i += BATCH_SIZE) {
@@ -3946,8 +4008,27 @@ ${message}` : message;
       }
       rankings.sort((a, b) => b.messageCount - a.messageCount);
       const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
-      const topChar = rankings[0]?.avatar || "";
-      saveSnapshot(today, totalChats, topChar);
+      const byChar = {};
+      rankings.forEach((r) => {
+        byChar[r.avatar] = r.chatCount;
+      });
+      let topChar = "";
+      let maxIncrease = -Infinity;
+      for (const r of rankings) {
+        const prev = yesterdayByChar[r.avatar] || 0;
+        const increase = r.chatCount - prev;
+        if (increase > maxIncrease) {
+          maxIncrease = increase;
+          topChar = r.avatar;
+        }
+      }
+      if (!yesterdaySnapshot) {
+        topChar = rankings[0]?.avatar || "";
+        console.log("[Calendar] First time - using message count leader:", topChar);
+      } else {
+        console.log("[Calendar] Most increased char:", topChar, "| increase:", maxIncrease);
+      }
+      saveSnapshot(today, totalChats, topChar, byChar);
     } catch (e) {
       console.error("[Calendar] Failed to save snapshot:", e);
     }
@@ -3958,8 +4039,7 @@ ${message}` : message;
     const footer = calendarOverlay.querySelector("#calendar-footer");
     const prevBtn = calendarOverlay.querySelector("#calendar-prev");
     const nextBtn = calendarOverlay.querySelector("#calendar-next");
-    const monthNames = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
-    title.textContent = monthNames[currentMonth];
+    title.textContent = currentMonth + 1;
     prevBtn.disabled = currentMonth === 0;
     nextBtn.disabled = currentMonth === 11;
     const firstDay = new Date(THIS_YEAR2, currentMonth, 1).getDay();
@@ -3982,8 +4062,8 @@ ${message}` : message;
       }
       html += `
             <div class="calendar-day ${isToday ? "today" : ""} ${hasData ? "has-data" : ""}" data-date="${date}">
-                ${avatarHtml}
                 <span class="day-number">${day}</span>
+                ${avatarHtml}
             </div>
         `;
     }
@@ -4069,8 +4149,22 @@ ${message}` : message;
   function showDebugModal() {
     const modal = calendarOverlay.querySelector("#calendar-debug-modal");
     const content = calendarOverlay.querySelector("#debug-modal-content");
-    const snapshots = loadSnapshots();
-    content.textContent = JSON.stringify(snapshots, null, 2);
+    const snapshots = loadSnapshots(true);
+    const today = getLocalDateString();
+    const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
+    const debugInfo = {
+      _meta: {
+        source: "localStorage",
+        key: "chatLobby_calendar",
+        today,
+        yesterday,
+        totalSnapshots: Object.keys(snapshots).length,
+        hasToday: !!snapshots[today],
+        hasYesterday: !!snapshots[yesterday]
+      },
+      snapshots
+    };
+    content.textContent = JSON.stringify(debugInfo, null, 2);
     modal.style.display = "flex";
   }
   function hideDebugModal() {

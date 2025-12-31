@@ -2656,7 +2656,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: #000;
 }
 
-/* 헤더 - 연도.월 */
+/* 헤더 - 네비게이션 버튼 포함 */
 .calendar-header {
     display: flex;
     align-items: center;
@@ -2679,22 +2679,56 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     opacity: 0.7;
 }
 
+/* 타이틀 영역 (버튼 + 날짜) */
 .calendar-title-area {
     display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.calendar-title-text {
+    display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 2px;
+    min-width: 80px;
+    justify-content: center;
 }
 
 .calendar-year {
     color: rgba(255, 255, 255, 0.5);
-    font-size: 1.2em;
+    font-size: 1.3em;
     font-weight: 300;
 }
 
 .calendar-month {
     color: #fff;
-    font-size: 1.8em;
+    font-size: 1.6em;
     font-weight: 600;
+}
+
+/* 네비게이션 버튼 - 헤더 내 */
+.cal-nav-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: #fff;
+    font-size: 1.4em;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cal-nav-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.cal-nav-btn:disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
 }
 
 .calendar-debug-btn {
@@ -2724,46 +2758,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     position: relative;
 }
 
-/* 네비게이션 (좌우 화살표) */
-.calendar-nav {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
-    pointer-events: none;
-    z-index: 10;
-    transform: translateY(-50%);
-    padding: 0 4px;
-}
-
-.cal-nav-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: #fff;
-    font-size: 1.5em;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.2s;
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.cal-nav-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.cal-nav-btn:disabled {
-    opacity: 0.2;
-    cursor: not-allowed;
-}
-
-/* 그리드 래퍼 */
+/* 그리드 래퍼 - 스와이프 가능 */
 .calendar-grid-wrapper {
     flex: 1;
     display: flex;
@@ -2772,6 +2767,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 12px;
     overflow: hidden;
+    touch-action: pan-x;
 }
 
 /* 요일 헤더 */
@@ -2817,7 +2813,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     cursor: pointer;
     transition: background 0.15s;
     overflow: hidden;
-    min-height: 50px;
+    min-height: 62px; /* 25% larger */
 }
 
 .calendar-day:nth-child(7n) {
@@ -2846,13 +2842,16 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: rgba(255, 255, 255, 0.02);
 }
 
-/* 날짜 숫자 */
+/* 날짜 숫자 - 좌측 상단 배치 */
 .day-number {
-    font-size: 0.95em;
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.85em;
     font-weight: 400;
     color: #fff;
     z-index: 2;
-    position: relative;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* 썸네일 아바타 */
