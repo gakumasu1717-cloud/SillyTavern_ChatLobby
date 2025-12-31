@@ -2653,14 +2653,15 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .calendar-fullscreen {
-    width: 560px;
-    min-width: 560px;
+    width: 600px;
+    min-width: 600px;
     height: auto;
     min-height: 100%;
     display: flex;
     flex-direction: column;
     padding: 16px;
-    padding-left: 0;
+    padding-left: 20px;
+    padding-right: 20px;
     box-sizing: border-box;
     background: #000;
 }

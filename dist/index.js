@@ -3989,8 +3989,16 @@ ${message}` : message;
     if (now - lastTap < 300) {
       currentScale = 1;
       const fullscreen = calendarOverlay.querySelector(".calendar-fullscreen");
-      if (fullscreen) fullscreen.style.transform = "";
+      if (fullscreen) {
+        fullscreen.style.transform = "scale(1)";
+      }
       updateDetailVisibility();
+    } else {
+      const fullscreen = calendarOverlay.querySelector(".calendar-fullscreen");
+      if (fullscreen && currentScale !== 1) {
+        fullscreen.style.transform = `scale(${currentScale})`;
+        fullscreen.style.transformOrigin = "top left";
+      }
     }
     lastTap = now;
   }
