@@ -6,7 +6,7 @@
     "js": "dist/index.js",
     "css": "dist/style.css",
     "author": "User",
-    "version": "2.2.1",
+    "version": "3.0.0",
     "homePage": "",
     "auto_update": false
 }

@@ -15,7 +15,6 @@ let isCalculating = false;
 let originalViewport = null;
 let currentScale = 1;
 let lastDistance = 0;
-let lastTap = 0;
 
 /**
  * 캘린더 뷰 열기
@@ -216,24 +215,13 @@ function updateDetailVisibility() {
 }
 
 function handleDoubleTap(e) {
-    const now = Date.now();
-    if (now - lastTap < 300) {
-        // 더블탭 → 리셋
-        currentScale = 1;
-        const fullscreen = calendarOverlay.querySelector('.calendar-fullscreen');
-        if (fullscreen) {
-            fullscreen.style.transform = 'scale(1)';
-        }
-        updateDetailVisibility();
-    } else {
-        // 싱글탭/핀치 끝 → 현재 스케일 유지 (명시적 재적용)
-        const fullscreen = calendarOverlay.querySelector('.calendar-fullscreen');
-        if (fullscreen && currentScale !== 1) {
-            fullscreen.style.transform = `scale(${currentScale})`;
-            fullscreen.style.transformOrigin = 'top left';
-        }
+    // 더블탭 리셋 없음 - 오로지 핀치줌으로만 조절
+    // 터치 종료 시 현재 스케일 유지
+    const fullscreen = calendarOverlay.querySelector('.calendar-fullscreen');
+    if (fullscreen && currentScale !== 1) {
+        fullscreen.style.transform = `scale(${currentScale})`;
+        fullscreen.style.transformOrigin = 'top left';
     }
-    lastTap = now;
 }
 
 /**
