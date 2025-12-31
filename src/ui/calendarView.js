@@ -306,7 +306,9 @@ async function saveTodaySnapshot() {
                     let chats;
                     try {
                         chats = await api.fetchChatsForCharacter(char.avatar, true);
-                    } catch {
+                        console.log('[Calendar] API fetch:', char.avatar, '| chats:', chats?.length, '| items:', chats?.reduce((s,c) => s + (c.chat_items||0), 0));
+                    } catch (e) {
+                        console.error('[Calendar] API error:', char.avatar, e);
                         chats = [];
                     }
                     const chatCount = Array.isArray(chats) ? chats.length : 0;
