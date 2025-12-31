@@ -353,8 +353,6 @@ class SillyTavernAPI {
                 }, 0);
                 cache.set('messageCounts', messageCount, characterAvatar);
                 
-                console.log(`[API] Fetched ${count} chats, ${messageCount} messages for ${characterAvatar}`);
-                
                 return result;
             } catch (error) {
                 console.error('[API] Failed to load chats:', error);

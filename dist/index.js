@@ -1207,7 +1207,6 @@ ${message}` : message;
             return sum + (chat.chat_items || 0);
           }, 0);
           cache.set("messageCounts", messageCount, characterAvatar);
-          console.log(`[API] Fetched ${count} chats, ${messageCount} messages for ${characterAvatar}`);
           return result;
         } catch (error) {
           console.error("[API] Failed to load chats:", error);
@@ -2380,7 +2379,6 @@ ${message}` : message;
           }, 0);
           cache.set("chatCounts", count, char.avatar);
           cache.set("messageCounts", messageCount, char.avatar);
-          console.log(`[CharacterGrid] Chat count for ${char.name}: ${count}, Messages: ${messageCount}`);
           const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(char.avatar)}"]`);
           if (card) {
             const chatValueEl = card.querySelector(".chat-count-value");
@@ -2473,14 +2471,12 @@ ${message}` : message;
           favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
           card.dataset.isFav = newFavState.toString();
           card.classList.toggle("is-char-fav", newFavState);
-          console.log(`[CharacterGrid] Favorite toggled: ${charAvatar} = ${newFavState}`);
           showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
       let isProcessing = false;
       createTouchClickHandler(card, async () => {
         if (isProcessing) {
-          console.log("[CharacterGrid] Card click ignored - already processing");
           return;
         }
         isProcessing = true;
@@ -2488,14 +2484,7 @@ ${message}` : message;
           const chatsPanel = document.getElementById("chat-lobby-chats");
           const isPanelVisible = chatsPanel?.classList.contains("visible");
           const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
-          console.log("[CharacterGrid] Card clicked:", {
-            charAvatar,
-            currentAvatar: store.currentCharacter?.avatar,
-            isPanelVisible,
-            isSameCharacter
-          });
           if (isPanelVisible && isSameCharacter) {
-            console.log("[CharacterGrid] Closing panel - same character re-clicked");
             card.classList.remove("selected");
             closeChatPanel();
             return;

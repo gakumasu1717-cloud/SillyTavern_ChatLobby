@@ -239,7 +239,6 @@ async function loadChatCountsAsync(characters) {
                 
                 cache.set('chatCounts', count, char.avatar);
                 cache.set('messageCounts', messageCount, char.avatar);
-                console.log(`[CharacterGrid] Chat count for ${char.name}: ${count}, Messages: ${messageCount}`);
                 
                 // DOM 업데이트 (CSS.escape로 특수문자 처리)
                 const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(char.avatar)}"]`);
@@ -384,7 +383,6 @@ function bindCharacterEvents(container) {
                 card.dataset.isFav = newFavState.toString();
                 card.classList.toggle('is-char-fav', newFavState);
                 
-                console.log(`[CharacterGrid] Favorite toggled: ${charAvatar} = ${newFavState}`);
                 showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
                 
             }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
@@ -395,7 +393,6 @@ function bindCharacterEvents(container) {
         createTouchClickHandler(card, async () => {
             // 이미 처리 중이면 무시
             if (isProcessing) {
-                console.log('[CharacterGrid] Card click ignored - already processing');
                 return;
             }
             isProcessing = true;
@@ -406,15 +403,7 @@ function bindCharacterEvents(container) {
                 const isPanelVisible = chatsPanel?.classList.contains('visible');
                 const isSameCharacter = store.currentCharacter?.avatar === charAvatar;
                 
-                console.log('[CharacterGrid] Card clicked:', { 
-                    charAvatar, 
-                    currentAvatar: store.currentCharacter?.avatar, 
-                    isPanelVisible, 
-                    isSameCharacter 
-                });
-                
                 if (isPanelVisible && isSameCharacter) {
-                    console.log('[CharacterGrid] Closing panel - same character re-clicked');
                     card.classList.remove('selected');
                     closeChatPanel();
                     return;
