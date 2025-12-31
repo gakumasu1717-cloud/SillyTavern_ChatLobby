@@ -2869,54 +2869,29 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     z-index: 1;
 }
 
-/* 상세 뷰 - Fullscreen (모바일 생존 패턴) */
+/* 상세 뷰 - 반투명 오버레이 (클릭하면 닫힘) */
 .calendar-detail-view {
     position: fixed;
     inset: 0;
-    background: #000;
+    background: rgba(0, 0, 0, 0.85);
     z-index: 2147483647;
     display: none;
-    flex-direction: column;
-}
-
-.detail-header {
-    display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.detail-back {
-    background: none;
-    border: none;
-    color: #E50914;
-    font-size: 1em;
-    font-weight: 600;
+    justify-content: center;
     cursor: pointer;
-    padding: 8px 0;
-}
-
-.detail-date {
-    color: #fff;
-    font-size: 1.1em;
-    font-weight: 500;
 }
 
 .detail-content {
-    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    gap: 24px;
+    gap: 16px;
+    pointer-events: none;
 }
 
 .detail-avatar-wrap {
-    width: 200px;
-    height: 280px;
+    width: 180px;
+    height: 250px;
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
@@ -2933,17 +2908,16 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .detail-name {
-    font-size: 1.5em;
+    font-size: 1.4em;
     font-weight: 700;
     color: #fff;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .detail-stats {
-    font-size: 1.1em;
+    font-size: 1.2em;
     color: rgba(255, 255, 255, 0.7);
-    font-weight: 500;
-    margin-bottom: 4px;
+    font-weight: 600;
 }
 
 .detail-stats.positive {
@@ -2954,20 +2928,15 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     color: #E50914;
 }
 
-.detail-total {
-    font-size: 0.9em;
-    color: rgba(255, 255, 255, 0.5);
-}
-
 /* PC에서 상세뷰 더 크게 */
 @media (min-width: 769px) {
     .detail-avatar-wrap {
-        width: 280px;
-        height: 400px;
+        width: 240px;
+        height: 340px;
     }
     
     .detail-name {
-        font-size: 2em;
+        font-size: 1.8em;
     }
     
     .detail-stats {

@@ -3822,17 +3822,6 @@ ${message}` : message;
       }
     }
   }
-  function getIncrease(date) {
-    const snapshots = loadSnapshots();
-    const today = snapshots[date];
-    if (!today) return null;
-    const dateObj = /* @__PURE__ */ new Date(date + "T00:00:00");
-    dateObj.setDate(dateObj.getDate() - 1);
-    const prevDate = getLocalDateString(dateObj);
-    const prev = snapshots[prevDate];
-    if (!prev) return null;
-    return today.total - prev.total;
-  }
   function clearAllSnapshots() {
     try {
       _snapshotsCache = null;
@@ -3858,10 +3847,6 @@ ${message}` : message;
       view.className = "calendar-detail-view";
       view.style.display = "none";
       view.innerHTML = `
-            <div class="detail-header">
-                <button class="detail-back" id="detail-back">\u2190 Back</button>
-                <span class="detail-date" id="detail-date"></span>
-            </div>
             <div class="detail-content">
                 <div class="detail-avatar-wrap">
                     <img class="detail-avatar" id="detail-avatar" src="" alt="">
@@ -3869,12 +3854,11 @@ ${message}` : message;
                 <div class="detail-info">
                     <div class="detail-name" id="detail-name"></div>
                     <div class="detail-stats" id="detail-stats"></div>
-                    <div class="detail-total" id="detail-total"></div>
                 </div>
             </div>
         `;
       document.body.appendChild(view);
-      view.querySelector("#detail-back").addEventListener("click", hideDetailView);
+      view.addEventListener("click", hideDetailView);
     }
     return view;
   }
@@ -4177,16 +4161,11 @@ ${message}` : message;
     showDetailView(date, snapshot);
   }
   function showDetailView(date, snapshot) {
-    console.log("[Calendar] showDetailView called:", date);
     const view = ensureDetailView();
-    console.log("[Calendar] view element:", !!view, view?.id);
     const avatarEl = view.querySelector("#detail-avatar");
     const nameEl = view.querySelector("#detail-name");
     const statsEl = view.querySelector("#detail-stats");
-    const totalEl = view.querySelector("#detail-total");
-    const dateEl = view.querySelector("#detail-date");
     if (!snapshot.topChar) {
-      console.log("[Calendar] No topChar, returning");
       return;
     }
     const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
@@ -4196,7 +4175,6 @@ ${message}` : message;
     };
     const charName = snapshot.topChar.replace(/\.[^/.]+$/, "");
     nameEl.textContent = charName;
-    const totalIncrease = getIncrease(date);
     const [year, month, day] = date.split("-").map(Number);
     const dateObj = new Date(year, month - 1, day);
     dateObj.setDate(dateObj.getDate() - 1);
@@ -4205,37 +4183,20 @@ ${message}` : message;
     const charToday = snapshot.byChar?.[snapshot.topChar] || 0;
     const charYesterday = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
     const charIncrease = charToday - charYesterday;
-    const hasPrevData = !!prevSnapshot;
-    if (hasPrevData) {
-      let statsText = "";
+    if (prevSnapshot) {
       if (charIncrease === 0) {
-        statsText = "No change";
+        statsEl.textContent = "No change";
       } else if (charIncrease > 0) {
-        statsText = `+${charIncrease} chats`;
+        statsEl.textContent = `+${charIncrease}`;
       } else {
-        statsText = `${charIncrease} chats`;
+        statsEl.textContent = `${charIncrease}`;
       }
-      if (totalIncrease !== null && totalIncrease !== charIncrease) {
-        if (totalIncrease === 0) {
-          statsText += " (Total: No change)";
-        } else {
-          const totalSign = totalIncrease > 0 ? "+" : "";
-          statsText += ` (Total: ${totalSign}${totalIncrease})`;
-        }
-      }
-      statsEl.textContent = statsText;
       statsEl.className = charIncrease >= 0 ? "detail-stats positive" : "detail-stats negative";
     } else {
-      statsEl.textContent = `Today's top character`;
+      statsEl.textContent = `${snapshot.total} msgs`;
       statsEl.className = "detail-stats";
     }
-    totalEl.textContent = `Total: ${snapshot.total} messages`;
-    const displayDate = new Date(date);
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}, ${displayDate.getFullYear()}`;
-    console.log("[Calendar] Setting view display to flex");
     view.style.display = "flex";
-    console.log("[Calendar] view.style.display:", view.style.display);
   }
   function hideDetailView() {
     const view = document.getElementById("calendar-detail-view");

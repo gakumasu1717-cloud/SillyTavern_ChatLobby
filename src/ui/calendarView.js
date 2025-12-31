@@ -28,10 +28,6 @@ function ensureDetailView() {
         view.className = 'calendar-detail-view';
         view.style.display = 'none';
         view.innerHTML = `
-            <div class="detail-header">
-                <button class="detail-back" id="detail-back">← Back</button>
-                <span class="detail-date" id="detail-date"></span>
-            </div>
             <div class="detail-content">
                 <div class="detail-avatar-wrap">
                     <img class="detail-avatar" id="detail-avatar" src="" alt="">
@@ -39,14 +35,13 @@ function ensureDetailView() {
                 <div class="detail-info">
                     <div class="detail-name" id="detail-name"></div>
                     <div class="detail-stats" id="detail-stats"></div>
-                    <div class="detail-total" id="detail-total"></div>
                 </div>
             </div>
         `;
         document.body.appendChild(view);
         
-        // 뒤로가기 버튼
-        view.querySelector('#detail-back').addEventListener('click', hideDetailView);
+        // 화면 클릭하면 닫기
+        view.addEventListener('click', hideDetailView);
     }
     
     return view;
@@ -485,18 +480,13 @@ function handleDateClick(e) {
  * 상세뷰 표시 (fullscreen) - 모바일 생존 패턴
  */
 function showDetailView(date, snapshot) {
-    console.log('[Calendar] showDetailView called:', date);
     const view = ensureDetailView();
-    console.log('[Calendar] view element:', !!view, view?.id);
     
     const avatarEl = view.querySelector('#detail-avatar');
     const nameEl = view.querySelector('#detail-name');
     const statsEl = view.querySelector('#detail-stats');
-    const totalEl = view.querySelector('#detail-total');
-    const dateEl = view.querySelector('#detail-date');
     
     if (!snapshot.topChar) {
-        console.log('[Calendar] No topChar, returning');
         return;
     }
     
@@ -507,10 +497,7 @@ function showDetailView(date, snapshot) {
     const charName = snapshot.topChar.replace(/\.[^/.]+$/, '');
     nameEl.textContent = charName;
     
-    // 전체 증감량
-    const totalIncrease = getIncrease(date);
-    
-    // 해당 캐릭터 증감량 계산 (브라우저 호환 날짜 파싱)
+    // 해당 캐릭터 증감량 계산
     const [year, month, day] = date.split('-').map(Number);
     const dateObj = new Date(year, month - 1, day);
     dateObj.setDate(dateObj.getDate() - 1);
@@ -521,52 +508,24 @@ function showDetailView(date, snapshot) {
     const charYesterday = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
     const charIncrease = charToday - charYesterday;
     
-    // 어제 데이터 있는지 확인
-    const hasPrevData = !!prevSnapshot;
-    
-    if (hasPrevData) {
+    if (prevSnapshot) {
         // 어제 데이터 있음 → 증감량 표시
-        let statsText = '';
-        
-        // 캐릭터 증감량 (변화 0일 때 No change)
         if (charIncrease === 0) {
-            statsText = 'No change';
+            statsEl.textContent = 'No change';
         } else if (charIncrease > 0) {
-            statsText = `+${charIncrease} chats`;
+            statsEl.textContent = `+${charIncrease}`;
         } else {
-            statsText = `${charIncrease} chats`;
+            statsEl.textContent = `${charIncrease}`;
         }
-        
-        // 전체 증감량도 추가 (다르면)
-        if (totalIncrease !== null && totalIncrease !== charIncrease) {
-            if (totalIncrease === 0) {
-                statsText += ' (Total: No change)';
-            } else {
-                const totalSign = totalIncrease > 0 ? '+' : '';
-                statsText += ` (Total: ${totalSign}${totalIncrease})`;
-            }
-        }
-        
-        statsEl.textContent = statsText;
         statsEl.className = charIncrease >= 0 ? 'detail-stats positive' : 'detail-stats negative';
     } else {
-        // 첫날 (어제 데이터 없음) → 총합만 표시
-        statsEl.textContent = `Today's top character`;
+        // 첫날
+        statsEl.textContent = `${snapshot.total} msgs`;
         statsEl.className = 'detail-stats';
     }
     
-    // 전체 메시지 수
-    totalEl.textContent = `Total: ${snapshot.total} messages`;
-    
-    // 날짜 표시
-    const displayDate = new Date(date);
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}, ${displayDate.getFullYear()}`;
-    
     // fullscreen 표시
-    console.log('[Calendar] Setting view display to flex');
     view.style.display = 'flex';
-    console.log('[Calendar] view.style.display:', view.style.display);
 }
 
 function hideDetailView() {
