@@ -70,7 +70,6 @@
     
     /* Z-Index */
     --z-header: 100;
-    --z-card-hover: 200;
     --z-panel: 500;
     --z-modal: 60000;
     --z-wrapped: 70000;
@@ -571,11 +570,6 @@
     position: relative;
 }
 
-/* 카드 호버 시 상단 요소 위로 올라옴 */
-#chat-lobby-characters:has(.lobby-char-card:hover) {
-    z-index: 100;
-}
-
 #chat-lobby-characters::-webkit-scrollbar {
     width: 8px;
 }
@@ -598,16 +592,14 @@
     height: var(--card-height);
     flex-shrink: 0;
     border-radius: var(--radius-sm);
-    overflow: visible;
+    overflow: hidden;
     cursor: pointer;
-    transition: transform var(--transition-normal), z-index 0s 0.3s;
+    transition: box-shadow var(--transition-normal);
     background: var(--lobby-bg-light);
 }
 
 .lobby-char-card:hover {
-    transform: scale(var(--card-hover-scale));
-    z-index: var(--z-card-hover);
-    transition: transform var(--transition-normal), z-index 0s 0s;
+    box-shadow: 0 0 0 2px var(--lobby-accent);
 }
 
 .lobby-char-avatar {
@@ -846,6 +838,7 @@
     gap: 8px;
     overflow-x: auto;
     scrollbar-width: none;
+    margin-top: 8px;
 }
 
 #chat-lobby-char-tags::-webkit-scrollbar {
@@ -2112,10 +2105,6 @@
         height: var(--card-height);
     }
     
-    .lobby-char-card:hover {
-        transform: none;
-    }
-    
     .lobby-char-card .lobby-char-name {
         opacity: 1;
         transform: none;
@@ -2236,15 +2225,6 @@
     
     .persona-item.selected .persona-delete-btn {
         display: flex;
-    }
-    
-    .lobby-char-card:hover {
-        transform: none;
-    }
-    
-    .lobby-char-card:hover .lobby-char-name {
-        opacity: 1;
-        transform: none;
     }
     
     .lobby-chat-item:hover {
