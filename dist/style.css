@@ -757,27 +757,6 @@
     z-index: 10;
 }
 
-/* 랜덤 캐릭터 하이라이트 애니메이션 */
-.lobby-char-card.random-highlight {
-    animation: randomPulse 0.8s ease;
-    z-index: 20;
-}
-
-@keyframes randomPulse {
-    0% { 
-        transform: scale(1); 
-        box-shadow: 0 0 0 0 rgba(229, 9, 20, 0.7);
-    }
-    50% { 
-        transform: scale(1.15); 
-        box-shadow: 0 0 30px 10px rgba(229, 9, 20, 0.5);
-    }
-    100% { 
-        transform: scale(var(--card-hover-scale)); 
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-    }
-}
-
 .lobby-char-avatar {
     width: 100%;
     height: 100%;

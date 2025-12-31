@@ -774,22 +774,15 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             }
         }
         
-        // 스크롤 & 하이라이트 효과
+        // 스크롤 & 클릭
         if (targetCard) {
-            // 기존 하이라이트 제거
-            cards.forEach(c => c.classList.remove('random-highlight'));
-            
             // 스크롤
             targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            // 하이라이트 애니메이션
-            targetCard.classList.add('random-highlight');
             
             // 잠시 후 클릭 시뮬레이션
             setTimeout(() => {
                 targetCard.click();
-                targetCard.classList.remove('random-highlight');
-            }, 800);
+            }, 300);
         } else {
             // 카드가 보이지 않으면 직접 선택
             const onSelect = store.onCharacterSelect;
