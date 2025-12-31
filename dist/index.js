@@ -1859,16 +1859,13 @@ ${message}` : message;
     store.setChatHandlers(handlers);
   }
   async function renderChatList(character) {
-    console.log("[ChatList] renderChatList called with:", character?.name, character?.avatar);
     if (!character || !character.avatar) {
       console.error("[ChatList] Invalid character data:", character);
       return;
     }
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
-    console.log("[ChatList] Panel elements:", { chatsPanel: !!chatsPanel, chatsList: !!chatsList });
     if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains("visible")) {
-      console.log("[ChatList] Same character panel already open, skipping render");
       return;
     }
     store.setCurrentCharacter(character);
@@ -1876,22 +1873,17 @@ ${message}` : message;
       console.error("[ChatList] Chat panel elements not found");
       return;
     }
-    console.log("[ChatList] Showing panel and fetching chats...");
     chatsPanel.classList.add("visible");
     updateChatHeader(character);
     showFolderBar(true);
     const cachedChats = cache.get("chats", character.avatar);
-    console.log("[ChatList] Cache check:", { hasCached: !!cachedChats, length: cachedChats?.length, isValid: cache.isValid("chats", character.avatar) });
     if (cachedChats && cachedChats.length > 0 && cache.isValid("chats", character.avatar)) {
-      console.log("[ChatList] Using cached chats");
       renderChats(chatsList, cachedChats, character.avatar);
       return;
     }
-    console.log("[ChatList] Fetching from API...");
     chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
     try {
       const chats = await api.fetchChatsForCharacter(character.avatar);
-      console.log("[ChatList] API returned:", chats?.length, "chats");
       if (!chats || chats.length === 0) {
         updateChatCount(0);
         chatsList.innerHTML = `
@@ -1903,9 +1895,7 @@ ${message}` : message;
             `;
         return;
       }
-      console.log("[ChatList] Calling renderChats...");
       renderChats(chatsList, chats, character.avatar);
-      console.log("[ChatList] renderChats completed");
     } catch (error) {
       console.error("[ChatList] Failed to load chats:", error);
       showToast("\uCC44\uD305 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -1919,11 +1909,8 @@ ${message}` : message;
     }
   }
   function renderChats(container, rawChats, charAvatar) {
-    console.log("[renderChats] Starting with", rawChats?.length, "raw chats");
     let chatArray = normalizeChats(rawChats);
-    console.log("[renderChats] After normalize:", chatArray.length);
     chatArray = filterValidChats(chatArray);
-    console.log("[renderChats] After filterValid:", chatArray.length);
     const totalChatCount = chatArray.length;
     updateHasChats(totalChatCount);
     if (chatArray.length === 0) {
@@ -1938,10 +1925,8 @@ ${message}` : message;
       return;
     }
     const filterFolder = storage.getFilterFolder();
-    console.log("[renderChats] Filter folder:", filterFolder);
     if (filterFolder !== "all") {
       chatArray = filterByFolder(chatArray, charAvatar, filterFolder);
-      console.log("[renderChats] After folder filter:", chatArray.length);
     }
     const sortOption = storage.getSortOption();
     chatArray = sortChats(chatArray, charAvatar, sortOption);
@@ -3919,13 +3904,7 @@ ${message}` : message;
         } catch (error) {
           console.warn("[ChatLobby] Failed to refresh characters:", error);
         }
-        const data = storage.load();
-        if (data.filterFolder && data.filterFolder !== "all" && data.filterFolder !== "favorites" && data.filterFolder !== "uncategorized") {
-          const folderExists = data.folders?.some((f) => f.id === data.filterFolder);
-          if (!folderExists) {
-            storage.setFilterFolder("all");
-          }
-        }
+        storage.setFilterFolder("all");
         if (store.batchModeActive) {
           toggleBatchMode();
         }

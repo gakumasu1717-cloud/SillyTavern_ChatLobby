@@ -181,8 +181,6 @@ export function getCurrentCharacter() {
  * @returns {Promise<void>}
  */
 export async function renderChatList(character) {
-    console.log('[ChatList] renderChatList called with:', character?.name, character?.avatar);
-    
     if (!character || !character.avatar) {
         console.error('[ChatList] Invalid character data:', character);
         return;
@@ -191,11 +189,8 @@ export async function renderChatList(character) {
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
     
-    console.log('[ChatList] Panel elements:', { chatsPanel: !!chatsPanel, chatsList: !!chatsList });
-    
     // 이미 같은 캐릭터의 채팅 패널이 열려있으면 렌더 스킵
     if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains('visible')) {
-        console.log('[ChatList] Same character panel already open, skipping render');
         return;
     }
     
@@ -206,8 +201,6 @@ export async function renderChatList(character) {
         return;
     }
     
-    console.log('[ChatList] Showing panel and fetching chats...');
-    
     // UI 표시
     chatsPanel.classList.add('visible');
     updateChatHeader(character);
@@ -215,22 +208,18 @@ export async function renderChatList(character) {
     
     // 캐시된 데이터가 있고 유효하면 즉시 렌더링 (번첩임 방지)
     const cachedChats = cache.get('chats', character.avatar);
-    console.log('[ChatList] Cache check:', { hasCached: !!cachedChats, length: cachedChats?.length, isValid: cache.isValid('chats', character.avatar) });
     
     if (cachedChats && cachedChats.length > 0 && cache.isValid('chats', character.avatar)) {
-        console.log('[ChatList] Using cached chats');
         renderChats(chatsList, cachedChats, character.avatar);
         return; // 캐시 유효하면 API 호출 안 함
     }
     
     // 캐시 없으면 로딩 표시 후 API 호출
-    console.log('[ChatList] Fetching from API...');
     chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
     
     try {
         // 최신 데이터 가져오기
         const chats = await api.fetchChatsForCharacter(character.avatar);
-        console.log('[ChatList] API returned:', chats?.length, 'chats');
         
         if (!chats || chats.length === 0) {
             updateChatCount(0);
@@ -244,9 +233,7 @@ export async function renderChatList(character) {
             return;
         }
         
-        console.log('[ChatList] Calling renderChats...');
         renderChats(chatsList, chats, character.avatar);
-        console.log('[ChatList] renderChats completed');
     } catch (error) {
         console.error('[ChatList] Failed to load chats:', error);
         showToast('채팅 목록을 불러오지 못했습니다.', 'error');
@@ -267,15 +254,11 @@ export async function renderChatList(character) {
  * @param {string} charAvatar
  */
 function renderChats(container, rawChats, charAvatar) {
-    console.log('[renderChats] Starting with', rawChats?.length, 'raw chats');
-    
     // 배열로 변환
     let chatArray = normalizeChats(rawChats);
-    console.log('[renderChats] After normalize:', chatArray.length);
     
     // 유효한 채팅만 필터링
     chatArray = filterValidChats(chatArray);
-    console.log('[renderChats] After filterValid:', chatArray.length);
     
     // 💡 hasChats는 필터 전 전체 수로 설정 (새 채팅 버튼용)
     const totalChatCount = chatArray.length;
@@ -295,10 +278,8 @@ function renderChats(container, rawChats, charAvatar) {
     
     // 폴더 필터 적용
     const filterFolder = storage.getFilterFolder();
-    console.log('[renderChats] Filter folder:', filterFolder);
     if (filterFolder !== 'all') {
         chatArray = filterByFolder(chatArray, charAvatar, filterFolder);
-        console.log('[renderChats] After folder filter:', chatArray.length);
     }
     
     // 정렬 적용
