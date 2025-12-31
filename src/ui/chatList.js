@@ -267,17 +267,22 @@ export async function renderChatList(character) {
  * @param {string} charAvatar
  */
 function renderChats(container, rawChats, charAvatar) {
+    console.log('[renderChats] Starting with', rawChats?.length, 'raw chats');
+    
     // 배열로 변환
     let chatArray = normalizeChats(rawChats);
+    console.log('[renderChats] After normalize:', chatArray.length);
     
     // 유효한 채팅만 필터링
     chatArray = filterValidChats(chatArray);
+    console.log('[renderChats] After filterValid:', chatArray.length);
     
     // 💡 hasChats는 필터 전 전체 수로 설정 (새 채팅 버튼용)
     const totalChatCount = chatArray.length;
     updateHasChats(totalChatCount);
     
     if (chatArray.length === 0) {
+        console.log('[renderChats] No valid chats, showing empty state');
         updateChatCount(0);
         container.innerHTML = `
             <div class="lobby-empty-state">
@@ -290,8 +295,10 @@ function renderChats(container, rawChats, charAvatar) {
     
     // 폴더 필터 적용
     const filterFolder = storage.getFilterFolder();
+    console.log('[renderChats] Filter folder:', filterFolder);
     if (filterFolder !== 'all') {
         chatArray = filterByFolder(chatArray, charAvatar, filterFolder);
+        console.log('[renderChats] After folder filter:', chatArray.length);
     }
     
     // 정렬 적용

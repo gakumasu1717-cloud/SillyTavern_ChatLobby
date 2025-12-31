@@ -1919,11 +1919,15 @@ ${message}` : message;
     }
   }
   function renderChats(container, rawChats, charAvatar) {
+    console.log("[renderChats] Starting with", rawChats?.length, "raw chats");
     let chatArray = normalizeChats(rawChats);
+    console.log("[renderChats] After normalize:", chatArray.length);
     chatArray = filterValidChats(chatArray);
+    console.log("[renderChats] After filterValid:", chatArray.length);
     const totalChatCount = chatArray.length;
     updateHasChats(totalChatCount);
     if (chatArray.length === 0) {
+      console.log("[renderChats] No valid chats, showing empty state");
       updateChatCount(0);
       container.innerHTML = `
             <div class="lobby-empty-state">
@@ -1934,8 +1938,10 @@ ${message}` : message;
       return;
     }
     const filterFolder = storage.getFilterFolder();
+    console.log("[renderChats] Filter folder:", filterFolder);
     if (filterFolder !== "all") {
       chatArray = filterByFolder(chatArray, charAvatar, filterFolder);
+      console.log("[renderChats] After folder filter:", chatArray.length);
     }
     const sortOption = storage.getSortOption();
     chatArray = sortChats(chatArray, charAvatar, sortOption);
