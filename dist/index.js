@@ -4177,13 +4177,16 @@ ${message}` : message;
     showDetailView(date, snapshot);
   }
   function showDetailView(date, snapshot) {
+    console.log("[Calendar] showDetailView called:", date);
     const view = ensureDetailView();
+    console.log("[Calendar] view element:", !!view, view?.id);
     const avatarEl = view.querySelector("#detail-avatar");
     const nameEl = view.querySelector("#detail-name");
     const statsEl = view.querySelector("#detail-stats");
     const totalEl = view.querySelector("#detail-total");
     const dateEl = view.querySelector("#detail-date");
     if (!snapshot.topChar) {
+      console.log("[Calendar] No topChar, returning");
       return;
     }
     const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
@@ -4230,7 +4233,9 @@ ${message}` : message;
     const displayDate = new Date(date);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}, ${displayDate.getFullYear()}`;
+    console.log("[Calendar] Setting view display to flex");
     view.style.display = "flex";
+    console.log("[Calendar] view.style.display:", view.style.display);
   }
   function hideDetailView() {
     const view = document.getElementById("calendar-detail-view");

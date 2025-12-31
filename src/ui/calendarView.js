@@ -485,7 +485,10 @@ function handleDateClick(e) {
  * 상세뷰 표시 (fullscreen) - 모바일 생존 패턴
  */
 function showDetailView(date, snapshot) {
+    console.log('[Calendar] showDetailView called:', date);
     const view = ensureDetailView();
+    console.log('[Calendar] view element:', !!view, view?.id);
+    
     const avatarEl = view.querySelector('#detail-avatar');
     const nameEl = view.querySelector('#detail-name');
     const statsEl = view.querySelector('#detail-stats');
@@ -493,6 +496,7 @@ function showDetailView(date, snapshot) {
     const dateEl = view.querySelector('#detail-date');
     
     if (!snapshot.topChar) {
+        console.log('[Calendar] No topChar, returning');
         return;
     }
     
@@ -560,7 +564,9 @@ function showDetailView(date, snapshot) {
     dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}, ${displayDate.getFullYear()}`;
     
     // fullscreen 표시
+    console.log('[Calendar] Setting view display to flex');
     view.style.display = 'flex';
+    console.log('[Calendar] view.style.display:', view.style.display);
 }
 
 function hideDetailView() {
