@@ -888,11 +888,12 @@
     box-sizing: border-box;
     flex-shrink: 0;
     margin: 0;
-    vertical-align: top;
+    vertical-align: middle;
+    line-height: 1;
 }
 
 .filters-row select {
-    padding: 0 24px 0 8px;
+    padding: 5px 24px 5px 8px;
     background: rgba(255, 255, 255, 0.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 6px center;
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--text-primary);
@@ -901,9 +902,6 @@
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
-    line-height: 28px;
-    display: flex;
-    align-items: center;
 }
 
 #chat-lobby-chat-sort {
