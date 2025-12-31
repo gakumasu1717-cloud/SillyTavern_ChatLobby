@@ -892,7 +892,7 @@
     line-height: 1;
 }
 
-.filters-row select {
+#chat-lobby-container .filters-row select {
     padding: 7px;
     background: rgba(255, 255, 255, 0.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 6px center;
     border: 1px solid rgba(255, 255, 255, 0.15);
