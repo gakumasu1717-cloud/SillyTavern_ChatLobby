@@ -451,7 +451,7 @@ class SillyTavernAPI {
             }
         }
         
-        // 방법 2: getChat API 직접 호출
+        // 방법 2: getChat API 직접 호출 (fallback)
         try {
             // 파일명에서 확장자 제거
             const chatName = fileName.replace('.jsonl', '');
@@ -460,24 +460,21 @@ class SillyTavernAPI {
             if (window.SillyTavern?.getContext) {
                 const ctx = window.SillyTavern.getContext();
                 
-                // 채팅 파일명 설정
-                if (typeof window.characters_api_format !== 'undefined') {
-                    // 기존 채팅 로드 API
-                    const response = await fetch('/api/chats/get', {
-                        method: 'POST',
-                        headers: this.getRequestHeaders(),
-                        body: JSON.stringify({
-                            ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ''),
-                            file_name: fileName,
-                            avatar_url: characterAvatar
-                        })
-                    });
-                    
-                    if (response.ok) {
-                        // 페이지 새로고침으로 채팅 적용
-                        location.reload();
-                        return true;
-                    }
+                // 기존 채팅 로드 API 직접 호출
+                const response = await fetch('/api/chats/get', {
+                    method: 'POST',
+                    headers: this.getRequestHeaders(),
+                    body: JSON.stringify({
+                        ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ''),
+                        file_name: fileName,
+                        avatar_url: characterAvatar
+                    })
+                });
+                
+                if (response.ok) {
+                    // 페이지 새로고침으로 채팅 적용
+                    location.reload();
+                    return true;
                 }
             }
         } catch (e) {

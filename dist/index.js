@@ -1301,20 +1301,18 @@ ${message}` : message;
         const chatName = fileName.replace(".jsonl", "");
         if (window.SillyTavern?.getContext) {
           const ctx = window.SillyTavern.getContext();
-          if (typeof window.characters_api_format !== "undefined") {
-            const response = await fetch("/api/chats/get", {
-              method: "POST",
-              headers: this.getRequestHeaders(),
-              body: JSON.stringify({
-                ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ""),
-                file_name: fileName,
-                avatar_url: characterAvatar
-              })
-            });
-            if (response.ok) {
-              location.reload();
-              return true;
-            }
+          const response = await fetch("/api/chats/get", {
+            method: "POST",
+            headers: this.getRequestHeaders(),
+            body: JSON.stringify({
+              ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ""),
+              file_name: fileName,
+              avatar_url: characterAvatar
+            })
+          });
+          if (response.ok) {
+            location.reload();
+            return true;
           }
         }
       } catch (e) {
