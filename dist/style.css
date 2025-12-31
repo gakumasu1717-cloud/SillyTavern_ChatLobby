@@ -248,8 +248,6 @@
     background: transparent;
     gap: 12px;
     flex-shrink: 0;
-    position: relative;
-    z-index: 1;
 }
 
 #chat-lobby-persona-list {
@@ -359,8 +357,6 @@
     padding: 6px 30px;
     background: transparent;
     transition: all var(--transition-normal);
-    position: relative;
-    z-index: 1;
 }
 
 #chat-lobby-search input {
@@ -411,8 +407,6 @@
     overflow-x: auto;
     scrollbar-width: none;
     transition: all var(--transition-normal);
-    position: relative;
-    z-index: 1;
 }
 
 #chat-lobby-tag-bar::-webkit-scrollbar {
@@ -565,8 +559,9 @@
    ============================================ */
 #chat-lobby-characters {
     flex: 1;
-    padding: 10px 30px;
+    padding: 40px 30px;
     overflow-y: auto;
+    overflow-x: clip;
     display: flex;
     flex-wrap: wrap;
     gap: var(--card-gap);
@@ -574,7 +569,11 @@
     scrollbar-width: thin;
     scrollbar-color: var(--lobby-bg-hover) transparent;
     position: relative;
-    z-index: 10;
+}
+
+/* 카드 호버 시 상단 요소 위로 올라옴 */
+#chat-lobby-characters:has(.lobby-char-card:hover) {
+    z-index: 100;
 }
 
 #chat-lobby-characters::-webkit-scrollbar {
@@ -837,7 +836,7 @@
     flex-direction: column;
     padding: 10px 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    gap: 8px;
+    gap: 12px;
     background: var(--lobby-bg-light);
 }
 
