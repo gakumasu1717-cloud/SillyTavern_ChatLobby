@@ -2629,7 +2629,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 /* ============================================
-   캘린더 뷰 - Wrapped 스타일 풀스크린
+   캘린더 뷰 - Netflix Black & Red 테마
    ============================================ */
 #calendar-overlay {
     position: fixed;
@@ -2637,7 +2637,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%);
+    background: #141414;
     display: none;
     align-items: center;
     justify-content: center;
@@ -2684,6 +2684,26 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     color: #fff;
     font-size: 1.4em;
     font-weight: var(--font-weight-bold);
+    flex: 1;
+    letter-spacing: 0.5px;
+}
+
+.calendar-debug-btn {
+    background: rgba(229, 9, 20, 0.2);
+    border: 1px solid rgba(229, 9, 20, 0.5);
+    color: #E50914;
+    font-size: 0.75em;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.calendar-debug-btn:hover {
+    background: rgba(229, 9, 20, 0.4);
 }
 
 .calendar-main {
@@ -2702,7 +2722,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .cal-nav-btn {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     border: none;
     color: #fff;
     font-size: 0.95em;
@@ -2713,7 +2733,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .cal-nav-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(229, 9, 20, 0.3);
 }
 
 .cal-nav-btn:disabled {
@@ -2723,10 +2743,11 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 
 .cal-month-title {
     color: #fff;
-    font-size: 1.3em;
-    font-weight: var(--font-weight-semibold);
+    font-size: 1.4em;
+    font-weight: var(--font-weight-bold);
     min-width: 80px;
     text-align: center;
+    letter-spacing: 2px;
 }
 
 .calendar-weekdays {
@@ -2738,18 +2759,19 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .calendar-weekdays span {
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.75em;
-    font-weight: var(--font-weight-medium);
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.65em;
+    font-weight: var(--font-weight-semibold);
     padding: 8px 0;
+    letter-spacing: 1px;
 }
 
 .calendar-weekdays .sun {
-    color: #ff6b6b;
+    color: #E50914;
 }
 
 .calendar-weekdays .sat {
-    color: #74c0fc;
+    color: #5c7cfa;
 }
 
 .calendar-grid {
@@ -2766,7 +2788,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
     border-radius: var(--radius-md);
     padding: 4px;
     cursor: pointer;
@@ -2776,9 +2798,9 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .calendar-day:not(.empty):hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(229, 9, 20, 0.2);
     transform: scale(1.08);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 20px rgba(229, 9, 20, 0.2);
 }
 
 .calendar-day.empty {
@@ -2787,22 +2809,22 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .calendar-day.today {
-    background: rgba(229, 9, 20, 0.3);
-    border: 2px solid var(--lobby-accent);
+    background: rgba(229, 9, 20, 0.25);
+    border: 2px solid #E50914;
 }
 
 .calendar-day.has-data {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .day-number {
     font-size: 0.7em;
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-bold);
     color: #fff;
     position: absolute;
     top: 4px;
     left: 6px;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
     z-index: 2;
 }
 
@@ -2817,14 +2839,14 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .day-no-data {
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.2);
     font-size: 0.9em;
 }
 
-/* 봇카드 상세 정보 */
+/* 봇카드 상세 정보 - PC 크게 */
 .calendar-detail-card {
     position: fixed;
-    bottom: 100px;
+    bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
     display: none;
@@ -2834,13 +2856,13 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .detail-card-inner {
-    width: 180px;
-    height: 240px;
+    width: 220px;
+    height: 320px;
     border-radius: var(--radius-lg);
     overflow: hidden;
     position: relative;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    background: linear-gradient(135deg, #2a2a4a, #1a1a2e);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(229, 9, 20, 0.2);
+    background: #181818;
 }
 
 .detail-card-avatar {
@@ -2854,42 +2876,134 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 16px;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+    padding: 20px 16px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.95));
 }
 
 .detail-card-name {
-    font-size: 1.1em;
+    font-size: 1.2em;
     font-weight: var(--font-weight-bold);
     color: #fff;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .detail-card-stats {
-    font-size: 0.9em;
-    color: #4CAF50;
-    font-weight: var(--font-weight-medium);
+    font-size: 1em;
+    color: #E50914;
+    font-weight: var(--font-weight-semibold);
 }
 
 .detail-card-stats.negative {
-    color: #ff6b6b;
+    color: #999;
+}
+
+.detail-card-date {
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .calendar-footer {
     margin-top: 20px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.8em;
     flex-shrink: 0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
-/* 라이트 모드 캘린더 */
+/* PC에서 봇카드 더 크게 */
+@media (min-width: 769px) {
+    .detail-card-inner {
+        width: 280px;
+        height: 400px;
+    }
+    
+    .detail-card-name {
+        font-size: 1.4em;
+    }
+    
+    .detail-card-stats {
+        font-size: 1.1em;
+    }
+    
+    .detail-card-overlay {
+        padding: 24px 20px;
+    }
+}
+
+/* 디버그 모달 */
+.calendar-debug-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1a1a1a;
+    border: 1px solid rgba(229, 9, 20, 0.3);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 500px;
+    max-height: 70vh;
+    z-index: 82000;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.debug-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-modal-header h3 {
+    margin: 0;
+    color: #E50914;
+    font-size: 1em;
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.debug-modal-close {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+.debug-modal-close:hover {
+    color: #E50914;
+}
+
+.debug-modal-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px;
+    margin: 0;
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.8);
+    background: #0d0d0d;
+    font-family: 'Consolas', 'Monaco', monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 라이트 모드 캘린더 - 모노톤 */
 #chat-lobby-container.light-mode ~ #calendar-overlay,
 body.light-mode #calendar-overlay {
-    background: linear-gradient(180deg, #f0f0f5 0%, #e5e5ea 100%);
+    background: #f5f5f5;
 }
 
 #chat-lobby-container.light-mode ~ #calendar-overlay .calendar-header h2,
@@ -2901,14 +3015,54 @@ body.light-mode #calendar-overlay .cal-month-title {
     color: #1a1a1a;
 }
 
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-debug-btn,
+body.light-mode #calendar-overlay .calendar-debug-btn {
+    background: rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.3);
+    color: #333;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-nav-btn,
+body.light-mode #calendar-overlay .cal-nav-btn {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a1a1a;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-nav-btn:hover:not(:disabled),
+body.light-mode #calendar-overlay .cal-nav-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays span,
+body.light-mode #calendar-overlay .calendar-weekdays span {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays .sun,
+body.light-mode #calendar-overlay .calendar-weekdays .sun {
+    color: #333;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays .sat,
+body.light-mode #calendar-overlay .calendar-weekdays .sat {
+    color: #666;
+}
+
 #chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day,
 body.light-mode #calendar-overlay .calendar-day {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(0, 0, 0, 0.04);
 }
 
 #chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day:not(.empty):hover,
 body.light-mode #calendar-overlay .calendar-day:not(.empty):hover {
+    background: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day.today,
+body.light-mode #calendar-overlay .calendar-day.today {
     background: rgba(0, 0, 0, 0.1);
+    border-color: #333;
 }
 
 #chat-lobby-container.light-mode ~ #calendar-overlay .day-number,
@@ -2917,8 +3071,67 @@ body.light-mode #calendar-overlay .day-number {
     text-shadow: none;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-footer,
-body.light-mode #calendar-overlay .calendar-footer {
+#chat-lobby-container.light-mode ~ #calendar-overlay .day-no-data,
+body.light-mode #calendar-overlay .day-no-data {
+    color: rgba(0, 0, 0, 0.2);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .detail-card-inner,
+body.light-mode #calendar-overlay .detail-card-inner {
+    background: #fff;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .detail-card-overlay,
+body.light-mode #calendar-overlay .detail-card-overlay {
+    background: linear-gradient(transparent, rgba(255, 255, 255, 0.95));
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .detail-card-name,
+body.light-mode #calendar-overlay .detail-card-name {
+    color: #1a1a1a;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .detail-card-stats,
+body.light-mode #calendar-overlay .detail-card-stats {
+    color: #333;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .detail-card-date,
+body.light-mode #calendar-overlay .detail-card-date {
     color: rgba(0, 0, 0, 0.5);
 }
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-footer,
+body.light-mode #calendar-overlay .calendar-footer {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-debug-modal,
+body.light-mode #calendar-overlay .calendar-debug-modal {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-header,
+body.light-mode #calendar-overlay .debug-modal-header {
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-header h3,
+body.light-mode #calendar-overlay .debug-modal-header h3 {
+    color: #333;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-close,
+body.light-mode #calendar-overlay .debug-modal-close {
+    color: #333;
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-content,
+body.light-mode #calendar-overlay .debug-modal-content {
+    background: #f5f5f5;
+    color: #333;
+}
+
 

@@ -29,7 +29,8 @@ export async function openCalendarView() {
                 <div class="calendar-fullscreen">
                     <div class="calendar-header">
                         <button class="calendar-close-btn" id="calendar-close">←</button>
-                        <h2>📅 채팅 캘린더</h2>
+                        <h2>Chat Calendar</h2>
+                        <button class="calendar-debug-btn" id="calendar-debug">Debug</button>
                     </div>
                     
                     <div class="calendar-main">
@@ -40,30 +41,40 @@ export async function openCalendarView() {
                         </div>
                         
                         <div class="calendar-weekdays">
-                            <span class="sun">일</span>
-                            <span>월</span>
-                            <span>화</span>
-                            <span>수</span>
-                            <span>목</span>
-                            <span>금</span>
-                            <span class="sat">토</span>
+                            <span class="sun">SUN</span>
+                            <span>MON</span>
+                            <span>TUE</span>
+                            <span>WED</span>
+                            <span>THU</span>
+                            <span>FRI</span>
+                            <span class="sat">SAT</span>
                         </div>
                         
                         <div class="calendar-grid" id="calendar-grid"></div>
                     </div>
                     
-                    <!-- 선택된 날짜 봇카드 -->
+                    <!-- 선택된 날짜 봇카드 (PC용 크게) -->
                     <div class="calendar-detail-card" id="calendar-detail" style="display: none;">
                         <div class="detail-card-inner">
                             <img class="detail-card-avatar" id="detail-avatar" src="" alt="">
                             <div class="detail-card-overlay">
                                 <div class="detail-card-name" id="detail-name"></div>
                                 <div class="detail-card-stats" id="detail-stats"></div>
+                                <div class="detail-card-date" id="detail-date"></div>
                             </div>
                         </div>
                     </div>
                     
                     <div class="calendar-footer" id="calendar-footer"></div>
+                </div>
+                
+                <!-- 디버그 모달 -->
+                <div class="calendar-debug-modal" id="calendar-debug-modal" style="display: none;">
+                    <div class="debug-modal-header">
+                        <h3>Snapshot Data</h3>
+                        <button class="debug-modal-close" id="debug-modal-close">×</button>
+                    </div>
+                    <pre class="debug-modal-content" id="debug-modal-content"></pre>
                 </div>
             `;
             document.body.appendChild(calendarOverlay);
@@ -75,6 +86,10 @@ export async function openCalendarView() {
             calendarOverlay.addEventListener('click', (e) => {
                 if (e.target === calendarOverlay) closeCalendarView();
             });
+            
+            // 디버그 버튼 이벤트
+            calendarOverlay.querySelector('#calendar-debug').addEventListener('click', showDebugModal);
+            calendarOverlay.querySelector('#debug-modal-close').addEventListener('click', hideDebugModal);
             
             // 날짜 클릭/호버 이벤트 위임
             const grid = calendarOverlay.querySelector('#calendar-grid');
@@ -188,7 +203,8 @@ function renderCalendar() {
     const prevBtn = calendarOverlay.querySelector('#calendar-prev');
     const nextBtn = calendarOverlay.querySelector('#calendar-next');
     
-    title.textContent = `${currentMonth + 1}월`;
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    title.textContent = monthNames[currentMonth];
     
     // 이전/다음 버튼 비활성화
     prevBtn.disabled = (currentMonth === 0);
@@ -246,7 +262,7 @@ function renderCalendar() {
     
     // 푸터에 연도 표시
     const totalDays = Object.keys(snapshots).length;
-    footer.textContent = `${THIS_YEAR}년 • 기록된 날: ${totalDays}일`;
+    footer.textContent = `${THIS_YEAR} • ${totalDays} days recorded`;
 }
 
 /**
@@ -326,16 +342,42 @@ function showDateDetail(date) {
     const increase = getIncrease(date);
     if (increase !== null) {
         if (increase >= 0) {
-            statsEl.textContent = `+${increase}개 채팅`;
+            statsEl.textContent = `+${increase} chats`;
             statsEl.className = 'detail-card-stats';
         } else {
-            statsEl.textContent = `${increase}개 채팅`;
+            statsEl.textContent = `${increase} chats`;
             statsEl.className = 'detail-card-stats negative';
         }
     } else {
-        statsEl.textContent = `총 ${snapshot.total}개 채팅`;
+        statsEl.textContent = `${snapshot.total} chats`;
         statsEl.className = 'detail-card-stats';
     }
     
+    // 날짜 표시
+    const dateEl = calendarOverlay.querySelector('#detail-date');
+    const dateObj = new Date(date);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    dateEl.textContent = `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+    
     detail.style.display = 'flex';
+}
+
+/**
+ * 디버그 모달 표시
+ */
+function showDebugModal() {
+    const modal = calendarOverlay.querySelector('#calendar-debug-modal');
+    const content = calendarOverlay.querySelector('#debug-modal-content');
+    
+    const snapshots = loadSnapshots();
+    content.textContent = JSON.stringify(snapshots, null, 2);
+    
+    modal.style.display = 'flex';
+}
+
+/**
+ * 디버그 모달 숨김
+ */
+function hideDebugModal() {
+    calendarOverlay.querySelector('#calendar-debug-modal').style.display = 'none';
 }

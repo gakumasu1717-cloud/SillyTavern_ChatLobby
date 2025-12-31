@@ -3815,7 +3815,8 @@ ${message}` : message;
                 <div class="calendar-fullscreen">
                     <div class="calendar-header">
                         <button class="calendar-close-btn" id="calendar-close">\u2190</button>
-                        <h2>\u{1F4C5} \uCC44\uD305 \uCE98\uB9B0\uB354</h2>
+                        <h2>Chat Calendar</h2>
+                        <button class="calendar-debug-btn" id="calendar-debug">Debug</button>
                     </div>
                     
                     <div class="calendar-main">
@@ -3826,30 +3827,40 @@ ${message}` : message;
                         </div>
                         
                         <div class="calendar-weekdays">
-                            <span class="sun">\uC77C</span>
-                            <span>\uC6D4</span>
-                            <span>\uD654</span>
-                            <span>\uC218</span>
-                            <span>\uBAA9</span>
-                            <span>\uAE08</span>
-                            <span class="sat">\uD1A0</span>
+                            <span class="sun">SUN</span>
+                            <span>MON</span>
+                            <span>TUE</span>
+                            <span>WED</span>
+                            <span>THU</span>
+                            <span>FRI</span>
+                            <span class="sat">SAT</span>
                         </div>
                         
                         <div class="calendar-grid" id="calendar-grid"></div>
                     </div>
                     
-                    <!-- \uC120\uD0DD\uB41C \uB0A0\uC9DC \uBD07\uCE74\uB4DC -->
+                    <!-- \uC120\uD0DD\uB41C \uB0A0\uC9DC \uBD07\uCE74\uB4DC (PC\uC6A9 \uD06C\uAC8C) -->
                     <div class="calendar-detail-card" id="calendar-detail" style="display: none;">
                         <div class="detail-card-inner">
                             <img class="detail-card-avatar" id="detail-avatar" src="" alt="">
                             <div class="detail-card-overlay">
                                 <div class="detail-card-name" id="detail-name"></div>
                                 <div class="detail-card-stats" id="detail-stats"></div>
+                                <div class="detail-card-date" id="detail-date"></div>
                             </div>
                         </div>
                     </div>
                     
                     <div class="calendar-footer" id="calendar-footer"></div>
+                </div>
+                
+                <!-- \uB514\uBC84\uADF8 \uBAA8\uB2EC -->
+                <div class="calendar-debug-modal" id="calendar-debug-modal" style="display: none;">
+                    <div class="debug-modal-header">
+                        <h3>Snapshot Data</h3>
+                        <button class="debug-modal-close" id="debug-modal-close">\xD7</button>
+                    </div>
+                    <pre class="debug-modal-content" id="debug-modal-content"></pre>
                 </div>
             `;
         document.body.appendChild(calendarOverlay);
@@ -3859,6 +3870,8 @@ ${message}` : message;
         calendarOverlay.addEventListener("click", (e) => {
           if (e.target === calendarOverlay) closeCalendarView();
         });
+        calendarOverlay.querySelector("#calendar-debug").addEventListener("click", showDebugModal);
+        calendarOverlay.querySelector("#debug-modal-close").addEventListener("click", hideDebugModal);
         const grid = calendarOverlay.querySelector("#calendar-grid");
         grid.addEventListener("click", handleDateClick);
         bindHoverEvents(grid);
@@ -3932,7 +3945,8 @@ ${message}` : message;
     const detail = calendarOverlay.querySelector("#calendar-detail");
     const prevBtn = calendarOverlay.querySelector("#calendar-prev");
     const nextBtn = calendarOverlay.querySelector("#calendar-next");
-    title.textContent = `${currentMonth + 1}\uC6D4`;
+    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    title.textContent = monthNames[currentMonth];
     prevBtn.disabled = currentMonth === 0;
     nextBtn.disabled = currentMonth === 11;
     const firstDay = new Date(THIS_YEAR2, currentMonth, 1).getDay();
@@ -3969,7 +3983,7 @@ ${message}` : message;
       showDateDetail(selectedDateInfo);
     }
     const totalDays = Object.keys(snapshots).length;
-    footer.textContent = `${THIS_YEAR2}\uB144 \u2022 \uAE30\uB85D\uB41C \uB0A0: ${totalDays}\uC77C`;
+    footer.textContent = `${THIS_YEAR2} \u2022 ${totalDays} days recorded`;
   }
   function bindHoverEvents(grid) {
     grid.addEventListener("mouseenter", (e) => {
@@ -4026,17 +4040,31 @@ ${message}` : message;
     const increase = getIncrease(date);
     if (increase !== null) {
       if (increase >= 0) {
-        statsEl.textContent = `+${increase}\uAC1C \uCC44\uD305`;
+        statsEl.textContent = `+${increase} chats`;
         statsEl.className = "detail-card-stats";
       } else {
-        statsEl.textContent = `${increase}\uAC1C \uCC44\uD305`;
+        statsEl.textContent = `${increase} chats`;
         statsEl.className = "detail-card-stats negative";
       }
     } else {
-      statsEl.textContent = `\uCD1D ${snapshot.total}\uAC1C \uCC44\uD305`;
+      statsEl.textContent = `${snapshot.total} chats`;
       statsEl.className = "detail-card-stats";
     }
+    const dateEl = calendarOverlay.querySelector("#detail-date");
+    const dateObj = new Date(date);
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    dateEl.textContent = `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
     detail.style.display = "flex";
+  }
+  function showDebugModal() {
+    const modal = calendarOverlay.querySelector("#calendar-debug-modal");
+    const content = calendarOverlay.querySelector("#debug-modal-content");
+    const snapshots = loadSnapshots();
+    content.textContent = JSON.stringify(snapshots, null, 2);
+    modal.style.display = "flex";
+  }
+  function hideDebugModal() {
+    calendarOverlay.querySelector("#calendar-debug-modal").style.display = "none";
   }
 
   // src/utils/intervalManager.js
