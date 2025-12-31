@@ -185,6 +185,12 @@
     gap: 10px;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 #chat-lobby-header h2 {
     margin: 0;
     color: var(--lobby-accent);

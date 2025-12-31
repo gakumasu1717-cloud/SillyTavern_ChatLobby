@@ -1339,16 +1339,18 @@ ${message}` : message;
                     <button id="chat-lobby-menu-toggle" class="mobile-only" data-action="toggle-header-menu" title="\uBA54\uB274">\u2630</button>
                     <h2>Chat Lobby</h2>
                 </div>
-                <div class="header-actions">
-                    <button id="chat-lobby-random-char" data-action="random-char" title="\uB79C\uB364 \uCE90\uB9AD\uD130">\u{1F3B2}</button>
-                    <button id="chat-lobby-calendar-btn" data-action="open-calendar" title="\uCE98\uB9B0\uB354">\u{1F4C5}</button>
-                    <button id="chat-lobby-stats" data-action="open-stats" title="Wrapped \uD1B5\uACC4">\u{1F4CA}</button>
-                    <button id="chat-lobby-import-char" data-action="import-char" title="\uCE90\uB9AD\uD130 \uAC00\uC838\uC624\uAE30">\u{1F4E5}</button>
-                    <button id="chat-lobby-add-persona" data-action="add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
-                    <button id="chat-lobby-refresh" data-action="refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
-                    <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="\uD14C\uB9C8 \uC804\uD658">${savedTheme === "light" ? "\u{1F319}" : "\u2600\uFE0F"}</button>
+                <div class="header-right">
+                    <div class="header-actions">
+                        <button id="chat-lobby-random-char" data-action="random-char" title="\uB79C\uB364 \uCE90\uB9AD\uD130">\u{1F3B2}</button>
+                        <button id="chat-lobby-calendar-btn" data-action="open-calendar" title="\uCE98\uB9B0\uB354">\u{1F4C5}</button>
+                        <button id="chat-lobby-stats" data-action="open-stats" title="Wrapped \uD1B5\uACC4">\u{1F4CA}</button>
+                        <button id="chat-lobby-import-char" data-action="import-char" title="\uCE90\uB9AD\uD130 \uAC00\uC838\uC624\uAE30">\u{1F4E5}</button>
+                        <button id="chat-lobby-add-persona" data-action="add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
+                        <button id="chat-lobby-refresh" data-action="refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
+                        <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="\uD14C\uB9C8 \uC804\uD658">${savedTheme === "light" ? "\u{1F319}" : "\u2600\uFE0F"}</button>
+                    </div>
+                    <button id="chat-lobby-close" data-action="close-lobby" title="\uB2EB\uAE30">\u2715</button>
                 </div>
-                <button id="chat-lobby-close" data-action="close-lobby" title="\uB2EB\uAE30">\u2715</button>
             </header>
             
             <!-- \uBA54\uC778 \uCF58\uD150\uCE20 -->

@@ -22,16 +22,18 @@ export function createLobbyHTML() {
                     <button id="chat-lobby-menu-toggle" class="mobile-only" data-action="toggle-header-menu" title="메뉴">☰</button>
                     <h2>Chat Lobby</h2>
                 </div>
-                <div class="header-actions">
-                    <button id="chat-lobby-random-char" data-action="random-char" title="랜덤 캐릭터">🎲</button>
-                    <button id="chat-lobby-calendar-btn" data-action="open-calendar" title="캘린더">📅</button>
-                    <button id="chat-lobby-stats" data-action="open-stats" title="Wrapped 통계">📊</button>
-                    <button id="chat-lobby-import-char" data-action="import-char" title="캐릭터 가져오기">📥</button>
-                    <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
-                    <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
-                    <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="테마 전환">${savedTheme === 'light' ? '🌙' : '☀️'}</button>
+                <div class="header-right">
+                    <div class="header-actions">
+                        <button id="chat-lobby-random-char" data-action="random-char" title="랜덤 캐릭터">🎲</button>
+                        <button id="chat-lobby-calendar-btn" data-action="open-calendar" title="캘린더">📅</button>
+                        <button id="chat-lobby-stats" data-action="open-stats" title="Wrapped 통계">📊</button>
+                        <button id="chat-lobby-import-char" data-action="import-char" title="캐릭터 가져오기">📥</button>
+                        <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
+                        <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
+                        <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="테마 전환">${savedTheme === 'light' ? '🌙' : '☀️'}</button>
+                    </div>
+                    <button id="chat-lobby-close" data-action="close-lobby" title="닫기">✕</button>
                 </div>
-                <button id="chat-lobby-close" data-action="close-lobby" title="닫기">✕</button>
             </header>
             
             <!-- 메인 콘텐츠 -->
