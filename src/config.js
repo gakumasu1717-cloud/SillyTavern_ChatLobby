@@ -38,10 +38,11 @@ export const CONFIG = {
     
     // 캐시 설정
     cache: {
-        chatsDuration: 30000,      // 채팅 목록 캐시 30초
-        chatCountDuration: 60000,  // 채팅 수 캐시 1분
-        personasDuration: 60000,   // 페르소나 캐시 1분
-        charactersDuration: 30000, // 캐릭터 캐시 30초
+        chatsDuration: 30000,       // 채팅 목록 캐시 30초
+        chatCountDuration: 60000,   // 채팅 수 캐시 1분
+        messageCountsDuration: 60000, // 메시지 수 캐시 1분
+        personasDuration: 60000,    // 페르소나 캐시 1분
+        charactersDuration: 30000,  // 캐릭터 캐시 30초
     },
     
     // UI 설정

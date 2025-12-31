@@ -134,6 +134,23 @@ function bindTooltipEvents(container) {
 }
 
 // ============================================
+// Cleanup
+// ============================================
+
+/**
+ * 툴팁 정리 (메모리 누수 방지)
+ * 로비 닫힐 때 호출
+ */
+export function cleanupTooltip() {
+    hideTooltip();
+    if (tooltipElement && tooltipElement.parentNode) {
+        tooltipElement.parentNode.removeChild(tooltipElement);
+    }
+    tooltipElement = null;
+    currentTooltipTarget = null;
+}
+
+// ============================================
 // 초기화
 // ============================================
 

@@ -40,11 +40,8 @@ export function setCharacterSelectHandler(handler) {
  * @returns {Promise<void>}
  */
 export async function renderCharacterGrid(searchTerm = '', sortOverride = null) {
-    console.log('[RENDER] renderCharacterGrid called', { searchTerm, sortOverride, stack: new Error().stack?.split('\n').slice(1, 4).join(' <- ') });
-    
     // 렌더링 중복 방지
     if (isRendering) {
-        console.log('[RENDER] renderCharacterGrid BLOCKED (already rendering)');
         pendingRender = { searchTerm, sortOverride };
         return;
     }

@@ -10,7 +10,7 @@ import { api } from './api/sillyTavern.js';
 import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange } from './ui/characterGrid.js';
-import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel } from './ui/chatList.js';
+import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel, cleanupTooltip } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast } from './ui/notifications.js';
@@ -377,6 +377,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         cleanupSillyTavernEvents();
         cleanupEventDelegation();
         cleanupIntegration();
+        cleanupTooltip();
         intervalManager.clearAll();
         removeExistingUI();
     }
@@ -710,29 +711,41 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         importBtn.click();
         
         let attempts = 0;
+        let isChecking = false; // race condition 방지 플래그
+        let isCleared = false;  // interval 종료 상태
         const maxAttempts = 10; // 5초 (500ms * 10)
         
         const checkInterval = intervalManager.set(async () => {
-            attempts++;
+            // 이미 종료되었거나 이전 콜백이 실행 중이면 스킵
+            if (isCleared || isChecking) return;
+            isChecking = true;
             
-            const currentChars = api.getCharacters();
-            // 새로운 아바타가 있는지 확인 (더 정확함)
-            const newChar = currentChars.find(c => !beforeAvatars.has(c.avatar));
-            
-            if (newChar) {
-                intervalManager.clear(checkInterval);
-                cache.invalidate('characters');
-                if (isLobbyOpen()) {
-                    await renderCharacterGrid(store.searchTerm);
+            try {
+                attempts++;
+                
+                const currentChars = api.getCharacters();
+                // 새로운 아바타가 있는지 확인 (더 정확함)
+                const newChar = currentChars.find(c => !beforeAvatars.has(c.avatar));
+                
+                if (newChar) {
+                    isCleared = true;
+                    intervalManager.clear(checkInterval);
+                    cache.invalidate('characters');
+                    if (isLobbyOpen()) {
+                        await renderCharacterGrid(store.searchTerm);
+                    }
+                    showToast(`"${newChar.name}" 캐릭터가 추가되었습니다!`, 'success');
+                    return;
                 }
-                showToast(`"${newChar.name}" 캐릭터가 추가되었습니다!`, 'success');
-                return;
-            }
-            
-            // 타임아웃
-            if (attempts >= maxAttempts) {
-                intervalManager.clear(checkInterval);
-                // 사용자에게 알리지 않음 (취소했을 수도 있으니까)
+                
+                // 타임아웃
+                if (attempts >= maxAttempts) {
+                    isCleared = true;
+                    intervalManager.clear(checkInterval);
+                    // 사용자에게 알리지 않음 (취소했을 수도 있으니까)
+                }
+            } finally {
+                isChecking = false;
             }
         }, 500);
     }

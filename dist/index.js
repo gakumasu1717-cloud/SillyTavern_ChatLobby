@@ -49,6 +49,8 @@
           // 채팅 목록 캐시 30초
           chatCountDuration: 6e4,
           // 채팅 수 캐시 1분
+          messageCountsDuration: 6e4,
+          // 메시지 수 캐시 1분
           personasDuration: 6e4,
           // 페르소나 캐시 1분
           charactersDuration: 3e4
@@ -1575,7 +1577,6 @@ ${message}` : message;
   init_notifications();
   init_config();
   async function renderPersonaBar() {
-    console.log("[RENDER] renderPersonaBar called", { stack: new Error().stack?.split("\n").slice(1, 4).join(" <- ") });
     const container = document.getElementById("chat-lobby-persona-list");
     if (!container) return;
     const cachedPersonas = cache.get("personas");
@@ -1824,6 +1825,14 @@ ${message}` : message;
         }
       });
     });
+  }
+  function cleanupTooltip() {
+    hideTooltip();
+    if (tooltipElement && tooltipElement.parentNode) {
+      tooltipElement.parentNode.removeChild(tooltipElement);
+    }
+    tooltipElement = null;
+    currentTooltipTarget = null;
   }
   function setChatHandlers(handlers) {
     store.setChatHandlers(handlers);
@@ -2219,9 +2228,7 @@ ${message}` : message;
     store.setCharacterSelectHandler(handler);
   }
   async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
-    console.log("[RENDER] renderCharacterGrid called", { searchTerm, sortOverride, stack: new Error().stack?.split("\n").slice(1, 4).join(" <- ") });
     if (isRendering) {
-      console.log("[RENDER] renderCharacterGrid BLOCKED (already rendering)");
       pendingRender = { searchTerm, sortOverride };
       return;
     }
@@ -3916,6 +3923,7 @@ ${message}` : message;
       cleanupSillyTavernEvents();
       cleanupEventDelegation();
       cleanupIntegration();
+      cleanupTooltip();
       intervalManager.clearAll();
       removeExistingUI();
     }
@@ -4124,22 +4132,32 @@ ${message}` : message;
       );
       importBtn.click();
       let attempts = 0;
+      let isChecking = false;
+      let isCleared = false;
       const maxAttempts = 10;
       const checkInterval = intervalManager.set(async () => {
-        attempts++;
-        const currentChars = api.getCharacters();
-        const newChar = currentChars.find((c) => !beforeAvatars.has(c.avatar));
-        if (newChar) {
-          intervalManager.clear(checkInterval);
-          cache.invalidate("characters");
-          if (isLobbyOpen()) {
-            await renderCharacterGrid(store.searchTerm);
+        if (isCleared || isChecking) return;
+        isChecking = true;
+        try {
+          attempts++;
+          const currentChars = api.getCharacters();
+          const newChar = currentChars.find((c) => !beforeAvatars.has(c.avatar));
+          if (newChar) {
+            isCleared = true;
+            intervalManager.clear(checkInterval);
+            cache.invalidate("characters");
+            if (isLobbyOpen()) {
+              await renderCharacterGrid(store.searchTerm);
+            }
+            showToast(`"${newChar.name}" \uCE90\uB9AD\uD130\uAC00 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4!`, "success");
+            return;
           }
-          showToast(`"${newChar.name}" \uCE90\uB9AD\uD130\uAC00 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4!`, "success");
-          return;
-        }
-        if (attempts >= maxAttempts) {
-          intervalManager.clear(checkInterval);
+          if (attempts >= maxAttempts) {
+            isCleared = true;
+            intervalManager.clear(checkInterval);
+          }
+        } finally {
+          isChecking = false;
         }
       }, 500);
     }
