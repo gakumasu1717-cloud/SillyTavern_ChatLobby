@@ -11,38 +11,45 @@ const THIS_YEAR = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
 let selectedDateInfo = null;
 let isCalculating = false;
-let hoverTimeout = null;
 
 // 스와이프 관련
 let touchStartX = 0;
 let touchEndX = 0;
 
 /**
- * 봇카드 싱글톤 - 항상 존재 보장
+ * 상세뷰 싱글톤 (fullscreen) - 모바일 생존 패턴
  */
-function ensureBotCard() {
-    let card = document.getElementById('calendar-bot-card');
+function ensureDetailView() {
+    let view = document.getElementById('calendar-detail-view');
     
-    if (!card) {
-        card = document.createElement('div');
-        card.id = 'calendar-bot-card';
-        card.className = 'calendar-bot-card';
-        card.style.display = 'none';
-        card.innerHTML = `
-            <img class="bot-card-avatar" id="bot-card-avatar" src="" alt="">
-            <div class="bot-card-gradient"></div>
-            <div class="bot-card-info">
-                <div class="bot-card-name" id="bot-card-name"></div>
-                <div class="bot-card-stats" id="bot-card-stats"></div>
-                <div class="bot-card-date" id="bot-card-date"></div>
+    if (!view) {
+        view = document.createElement('div');
+        view.id = 'calendar-detail-view';
+        view.className = 'calendar-detail-view';
+        view.style.display = 'none';
+        view.innerHTML = `
+            <div class="detail-header">
+                <button class="detail-back" id="detail-back">← Back</button>
+                <span class="detail-date" id="detail-date"></span>
+            </div>
+            <div class="detail-content">
+                <div class="detail-avatar-wrap">
+                    <img class="detail-avatar" id="detail-avatar" src="" alt="">
+                </div>
+                <div class="detail-info">
+                    <div class="detail-name" id="detail-name"></div>
+                    <div class="detail-stats" id="detail-stats"></div>
+                    <div class="detail-total" id="detail-total"></div>
+                </div>
             </div>
         `;
-        // documentElement(html)에 append - body transform 영향 완전 차단
-        document.documentElement.appendChild(card);
-        console.log('[Calendar] Bot card created and appended to documentElement');
+        document.body.appendChild(view);
+        
+        // 뒤로가기 버튼
+        view.querySelector('#detail-back').addEventListener('click', hideDetailView);
     }
     
-    return card;
+    return view;
 }
 
 /**
@@ -106,9 +113,6 @@ export async function openCalendarView() {
             `;
             document.body.appendChild(calendarOverlay);
             
-            // 봇카드 싱글톤 보장 (이미 있으면 재사용)
-            ensureBotCard();
-            
             // 이벤트 바인딩
             calendarOverlay.querySelector('#calendar-close').addEventListener('click', closeCalendarView);
             calendarOverlay.querySelector('#calendar-prev').addEventListener('click', () => navigateMonth(-1));
@@ -134,7 +138,7 @@ export async function openCalendarView() {
         }
         
         selectedDateInfo = null;
-        hideBotCard();
+        hideDetailView();
         
         // 첫 접근 체크 (스냅샷 0개)
         const existingSnapshots = loadSnapshots();
@@ -181,7 +185,7 @@ export async function openCalendarView() {
 export function closeCalendarView() {
     if (calendarOverlay) {
         calendarOverlay.style.display = 'none';
-        hideBotCard();
+        hideDetailView();
         
         // 로비 컨테이너 복원
         const lobbyContainer = document.getElementById('chat-lobby-container');
@@ -198,7 +202,7 @@ function navigateMonth(delta) {
     
     currentMonth = newMonth;
     selectedDateInfo = null;
-    hideBotCard();
+    hideDetailView();
     renderCalendar();
 }
 
@@ -442,84 +446,53 @@ function renderCalendar() {
 }
 
 /**
- * 호버 이벤트 (debounce)
+ * 호버 이벤트 - PC 전용 (모바일은 클릭만)
  */
 function handleMouseOver(e) {
+    // 모바일은 hover 무시
+    if (window.innerWidth < 769) return;
+    
     const dayEl = e.target.closest('.calendar-day');
     if (!dayEl || dayEl.classList.contains('empty')) return;
     
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    
-    hoverTimeout = setTimeout(() => {
-        const date = dayEl.dataset.date;
-        const snapshot = getSnapshot(date);
-        if (snapshot && snapshot.topChar) {
-            showBotCard(date, snapshot);
-        }
-    }, 150);
+    // PC에서는 hover 시 하이라이트만
+    dayEl.classList.add('hover');
 }
 
 function handleMouseOut(e) {
     const dayEl = e.target.closest('.calendar-day');
     if (!dayEl) return;
     
-    if (hoverTimeout) {
-        clearTimeout(hoverTimeout);
-        hoverTimeout = null;
-    }
-    
-    if (!selectedDateInfo) {
-        hideBotCard();
-    }
+    dayEl.classList.remove('hover');
 }
 
 /**
- * 날짜 클릭
+ * 날짜 클릭 → 상세뷰 열기
  */
 function handleDateClick(e) {
     const dayEl = e.target.closest('.calendar-day');
-    console.log('[Calendar] handleDateClick:', dayEl?.dataset?.date);
-    
     if (!dayEl || dayEl.classList.contains('empty')) return;
     
     const date = dayEl.dataset.date;
     const snapshot = getSnapshot(date);
     
-    console.log('[Calendar] Click date:', date, '| snapshot:', !!snapshot, '| topChar:', snapshot?.topChar);
+    if (!snapshot) return;
     
-    if (!snapshot) {
-        selectedDateInfo = null;
-        hideBotCard();
-        return;
-    }
-    
-    if (selectedDateInfo === date) {
-        selectedDateInfo = null;
-        hideBotCard();
-        return;
-    }
-    
-    selectedDateInfo = date;
-    showBotCard(date, snapshot);
+    showDetailView(date, snapshot);
 }
 
 /**
- * 봇카드 표시 (넷플릭스 스타일) - 캐릭터별 증감량 포함
+ * 상세뷰 표시 (fullscreen) - 모바일 생존 패턴
  */
-function showBotCard(date, snapshot) {
-    console.log('[Calendar] showBotCard called:', date);
-    
-    // 싱글톤으로 봇카드 보장
-    const card = ensureBotCard();
-    const avatarEl = card.querySelector('#bot-card-avatar');
-    const nameEl = card.querySelector('#bot-card-name');
-    const statsEl = card.querySelector('#bot-card-stats');
-    const dateEl = card.querySelector('#bot-card-date');
-    
-    console.log('[Calendar] card element:', !!card);
+function showDetailView(date, snapshot) {
+    const view = ensureDetailView();
+    const avatarEl = view.querySelector('#detail-avatar');
+    const nameEl = view.querySelector('#detail-name');
+    const statsEl = view.querySelector('#detail-stats');
+    const totalEl = view.querySelector('#detail-total');
+    const dateEl = view.querySelector('#detail-date');
     
     if (!snapshot.topChar) {
-        hideBotCard();
         return;
     }
     
@@ -571,34 +544,29 @@ function showBotCard(date, snapshot) {
         }
         
         statsEl.textContent = statsText;
-        statsEl.className = charIncrease >= 0 ? 'bot-card-stats positive' : 'bot-card-stats negative';
+        statsEl.className = charIncrease >= 0 ? 'detail-stats positive' : 'detail-stats negative';
     } else {
         // 첫날 (어제 데이터 없음) → 총합만 표시
-        statsEl.textContent = `Total: ${snapshot.total} messages`;
-        statsEl.className = 'bot-card-stats';
+        statsEl.textContent = `Today's top character`;
+        statsEl.className = 'detail-stats';
     }
     
+    // 전체 메시지 수
+    totalEl.textContent = `Total: ${snapshot.total} messages`;
+    
+    // 날짜 표시
     const displayDate = new Date(date);
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
+    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}, ${displayDate.getFullYear()}`;
     
-    // ST 모바일 생존 패턴: bottom + vw + fixed (top 계산 금지)
-    Object.assign(card.style, {
-        display: 'flex',
-        position: 'fixed',
-        bottom: '80px',
-        left: '50vw',
-        transform: 'translateX(-50%)',
-        zIndex: '2147483647',
-        opacity: '1',
-        visibility: 'visible'
-    });
+    // fullscreen 표시
+    view.style.display = 'flex';
 }
 
-function hideBotCard() {
-    const card = document.getElementById('calendar-bot-card');
-    if (card) {
-        card.style.display = 'none';
+function hideDetailView() {
+    const view = document.getElementById('calendar-detail-view');
+    if (view) {
+        view.style.display = 'none';
     }
 }
 

@@ -3848,29 +3848,35 @@ ${message}` : message;
   var currentMonth = (/* @__PURE__ */ new Date()).getMonth();
   var selectedDateInfo = null;
   var isCalculating = false;
-  var hoverTimeout = null;
   var touchStartX = 0;
   var touchEndX = 0;
-  function ensureBotCard() {
-    let card = document.getElementById("calendar-bot-card");
-    if (!card) {
-      card = document.createElement("div");
-      card.id = "calendar-bot-card";
-      card.className = "calendar-bot-card";
-      card.style.display = "none";
-      card.innerHTML = `
-            <img class="bot-card-avatar" id="bot-card-avatar" src="" alt="">
-            <div class="bot-card-gradient"></div>
-            <div class="bot-card-info">
-                <div class="bot-card-name" id="bot-card-name"></div>
-                <div class="bot-card-stats" id="bot-card-stats"></div>
-                <div class="bot-card-date" id="bot-card-date"></div>
+  function ensureDetailView() {
+    let view = document.getElementById("calendar-detail-view");
+    if (!view) {
+      view = document.createElement("div");
+      view.id = "calendar-detail-view";
+      view.className = "calendar-detail-view";
+      view.style.display = "none";
+      view.innerHTML = `
+            <div class="detail-header">
+                <button class="detail-back" id="detail-back">\u2190 Back</button>
+                <span class="detail-date" id="detail-date"></span>
+            </div>
+            <div class="detail-content">
+                <div class="detail-avatar-wrap">
+                    <img class="detail-avatar" id="detail-avatar" src="" alt="">
+                </div>
+                <div class="detail-info">
+                    <div class="detail-name" id="detail-name"></div>
+                    <div class="detail-stats" id="detail-stats"></div>
+                    <div class="detail-total" id="detail-total"></div>
+                </div>
             </div>
         `;
-      document.documentElement.appendChild(card);
-      console.log("[Calendar] Bot card created and appended to documentElement");
+      document.body.appendChild(view);
+      view.querySelector("#detail-back").addEventListener("click", hideDetailView);
     }
-    return card;
+    return view;
   }
   async function openCalendarView() {
     if (isCalculating) return;
@@ -3928,7 +3934,6 @@ ${message}` : message;
                 </div>
             `;
         document.body.appendChild(calendarOverlay);
-        ensureBotCard();
         calendarOverlay.querySelector("#calendar-close").addEventListener("click", closeCalendarView);
         calendarOverlay.querySelector("#calendar-prev").addEventListener("click", () => navigateMonth(-1));
         calendarOverlay.querySelector("#calendar-next").addEventListener("click", () => navigateMonth(1));
@@ -3944,7 +3949,7 @@ ${message}` : message;
         wrapper.addEventListener("touchend", handleTouchEnd, { passive: true });
       }
       selectedDateInfo = null;
-      hideBotCard();
+      hideDetailView();
       const existingSnapshots = loadSnapshots();
       const isFirstAccess = Object.keys(existingSnapshots).length === 0;
       if (isFirstAccess) {
@@ -3974,7 +3979,7 @@ ${message}` : message;
   function closeCalendarView() {
     if (calendarOverlay) {
       calendarOverlay.style.display = "none";
-      hideBotCard();
+      hideDetailView();
       const lobbyContainer = document.getElementById("chat-lobby-container");
       if (lobbyContainer) lobbyContainer.style.display = "";
     }
@@ -3984,7 +3989,7 @@ ${message}` : message;
     if (newMonth < 0 || newMonth > 11) return;
     currentMonth = newMonth;
     selectedDateInfo = null;
-    hideBotCard();
+    hideDetailView();
     renderCalendar();
   }
   function handleTouchStart(e) {
@@ -4153,58 +4158,32 @@ ${message}` : message;
     footer.textContent = `${totalDays} days recorded`;
   }
   function handleMouseOver(e) {
+    if (window.innerWidth < 769) return;
     const dayEl = e.target.closest(".calendar-day");
     if (!dayEl || dayEl.classList.contains("empty")) return;
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    hoverTimeout = setTimeout(() => {
-      const date = dayEl.dataset.date;
-      const snapshot = getSnapshot(date);
-      if (snapshot && snapshot.topChar) {
-        showBotCard(date, snapshot);
-      }
-    }, 150);
+    dayEl.classList.add("hover");
   }
   function handleMouseOut(e) {
     const dayEl = e.target.closest(".calendar-day");
     if (!dayEl) return;
-    if (hoverTimeout) {
-      clearTimeout(hoverTimeout);
-      hoverTimeout = null;
-    }
-    if (!selectedDateInfo) {
-      hideBotCard();
-    }
+    dayEl.classList.remove("hover");
   }
   function handleDateClick(e) {
     const dayEl = e.target.closest(".calendar-day");
-    console.log("[Calendar] handleDateClick:", dayEl?.dataset?.date);
     if (!dayEl || dayEl.classList.contains("empty")) return;
     const date = dayEl.dataset.date;
     const snapshot = getSnapshot(date);
-    console.log("[Calendar] Click date:", date, "| snapshot:", !!snapshot, "| topChar:", snapshot?.topChar);
-    if (!snapshot) {
-      selectedDateInfo = null;
-      hideBotCard();
-      return;
-    }
-    if (selectedDateInfo === date) {
-      selectedDateInfo = null;
-      hideBotCard();
-      return;
-    }
-    selectedDateInfo = date;
-    showBotCard(date, snapshot);
+    if (!snapshot) return;
+    showDetailView(date, snapshot);
   }
-  function showBotCard(date, snapshot) {
-    console.log("[Calendar] showBotCard called:", date);
-    const card = ensureBotCard();
-    const avatarEl = card.querySelector("#bot-card-avatar");
-    const nameEl = card.querySelector("#bot-card-name");
-    const statsEl = card.querySelector("#bot-card-stats");
-    const dateEl = card.querySelector("#bot-card-date");
-    console.log("[Calendar] card element:", !!card);
+  function showDetailView(date, snapshot) {
+    const view = ensureDetailView();
+    const avatarEl = view.querySelector("#detail-avatar");
+    const nameEl = view.querySelector("#detail-name");
+    const statsEl = view.querySelector("#detail-stats");
+    const totalEl = view.querySelector("#detail-total");
+    const dateEl = view.querySelector("#detail-date");
     if (!snapshot.topChar) {
-      hideBotCard();
       return;
     }
     const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
@@ -4242,29 +4221,21 @@ ${message}` : message;
         }
       }
       statsEl.textContent = statsText;
-      statsEl.className = charIncrease >= 0 ? "bot-card-stats positive" : "bot-card-stats negative";
+      statsEl.className = charIncrease >= 0 ? "detail-stats positive" : "detail-stats negative";
     } else {
-      statsEl.textContent = `Total: ${snapshot.total} messages`;
-      statsEl.className = "bot-card-stats";
+      statsEl.textContent = `Today's top character`;
+      statsEl.className = "detail-stats";
     }
+    totalEl.textContent = `Total: ${snapshot.total} messages`;
     const displayDate = new Date(date);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
-    Object.assign(card.style, {
-      display: "flex",
-      position: "fixed",
-      bottom: "80px",
-      left: "50vw",
-      transform: "translateX(-50%)",
-      zIndex: "2147483647",
-      opacity: "1",
-      visibility: "visible"
-    });
+    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}, ${displayDate.getFullYear()}`;
+    view.style.display = "flex";
   }
-  function hideBotCard() {
-    const card = document.getElementById("calendar-bot-card");
-    if (card) {
-      card.style.display = "none";
+  function hideDetailView() {
+    const view = document.getElementById("calendar-detail-view");
+    if (view) {
+      view.style.display = "none";
     }
   }
   function showDebugModal() {
