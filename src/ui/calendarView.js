@@ -569,22 +569,18 @@ function showBotCard(date, snapshot) {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
     
-    // 모바일 ST: body에 transform이 있어 fixed가 깨짐
-    // → absolute + visualViewport 기준 좌표 계산
-    const viewportHeight = window.visualViewport 
-        ? window.visualViewport.height 
-        : window.innerHeight;
+    // ST body overflow:hidden + transform 이슈 대응
+    // → fixed + vw 단위 + transform 없이 calc로 중앙 정렬
     const isMobile = window.innerWidth < 769;
-    const cardHeight = isMobile ? 280 : 380; // CSS와 동기화
-    const bottomOffset = isMobile ? 80 : 100; // 하단 여백
-    const topPos = viewportHeight - cardHeight - bottomOffset;
+    const cardWidth = isMobile ? 200 : 260;
     
     Object.assign(card.style, {
         display: 'flex',
-        position: 'absolute',
-        top: `${Math.max(topPos, 50)}px`, // 최소 50px
-        left: '50%',
-        transform: 'translateX(-50%)',
+        position: 'fixed',
+        bottom: '80px',
+        left: `calc(50vw - ${cardWidth / 2}px)`,
+        top: 'auto',
+        transform: 'none',
         zIndex: '2147483647'
     });
 }

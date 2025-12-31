@@ -4243,18 +4243,15 @@ ${message}` : message;
     const displayDate = new Date(date);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
-    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     const isMobile2 = window.innerWidth < 769;
-    const cardHeight = isMobile2 ? 280 : 380;
-    const bottomOffset = isMobile2 ? 80 : 100;
-    const topPos = viewportHeight - cardHeight - bottomOffset;
+    const cardWidth = isMobile2 ? 200 : 260;
     Object.assign(card.style, {
       display: "flex",
-      position: "absolute",
-      top: `${Math.max(topPos, 50)}px`,
-      // 최소 50px
-      left: "50%",
-      transform: "translateX(-50%)",
+      position: "fixed",
+      bottom: "80px",
+      left: `calc(50vw - ${cardWidth / 2}px)`,
+      top: "auto",
+      transform: "none",
       zIndex: "2147483647"
     });
   }

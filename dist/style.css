@@ -2870,9 +2870,10 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 /* 봇카드 - 넷플릭스 스타일 */
-/* position/top/left는 JS에서 동적 계산 (모바일 transform 이슈 대응) */
+/* position/left는 JS에서 동적 계산 (ST body overflow:hidden 대응) */
 .calendar-bot-card {
-    position: absolute;
+    position: fixed;
+    bottom: 80px;
     width: 200px;
     height: 280px;
     border-radius: 8px;
