@@ -117,7 +117,13 @@ export async function openCalendarView() {
         selectedDateInfo = null;
         hideBotCard();
         
-        await saveTodaySnapshot();
+        // 스냅샷 저장 실패해도 UI는 열림
+        try {
+            await saveTodaySnapshot();
+        } catch (e) {
+            console.error('[Calendar] Failed to save today snapshot, but UI will open:', e);
+        }
+        
         renderCalendar();
     } finally {
         isCalculating = false;
@@ -234,15 +240,24 @@ async function saveTodaySnapshot() {
             byChar[r.avatar] = r.chatCount;
         });
         
-        // 가장 증가한 캐릭터 찾기
+        // 가장 증가한 캐릭터 찾기 (동률 시 메시지 수 많은 캐릭터 우선)
         let topChar = '';
         let maxIncrease = -Infinity;
+        let maxMsgCountOnTie = -1;
         
         for (const r of rankings) {
             const prev = yesterdayByChar[r.avatar] || 0;
             const increase = r.chatCount - prev;
+            
+            // 증가량 더 크면 교체
             if (increase > maxIncrease) {
                 maxIncrease = increase;
+                maxMsgCountOnTie = r.messageCount;
+                topChar = r.avatar;
+            } 
+            // 동률이면 메시지 수 많은 캐릭터 (더 활발한 캐릭터)
+            else if (increase === maxIncrease && r.messageCount > maxMsgCountOnTie) {
+                maxMsgCountOnTie = r.messageCount;
                 topChar = r.avatar;
             }
         }

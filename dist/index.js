@@ -3748,6 +3748,7 @@ ${message}` : message;
 
   // src/data/calendarStorage.js
   var STORAGE_KEY = "chatLobby_calendar";
+  var CURRENT_VERSION = 1;
   var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
   var _snapshotsCache = null;
   function getLocalDateString(date = /* @__PURE__ */ new Date()) {
@@ -3762,6 +3763,12 @@ ${message}` : message;
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
         const parsed = JSON.parse(data);
+        const version = parsed.version || 0;
+        if (version < CURRENT_VERSION) {
+          console.log("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
+          const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        }
         _snapshotsCache = parsed.snapshots || {};
         console.log("[Calendar] loadSnapshots: from localStorage, keys:", Object.keys(_snapshotsCache).length);
         return _snapshotsCache;
@@ -3791,7 +3798,7 @@ ${message}` : message;
       }
     }
     console.log("[Calendar] Deleted", deleted, "old snapshots");
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
   }
   function saveSnapshot(date, total, topChar, byChar = {}) {
     const jan1 = `${THIS_YEAR}-01-01`;
@@ -3800,7 +3807,7 @@ ${message}` : message;
     try {
       const snapshots = loadSnapshots(true);
       snapshots[date] = { total, topChar, byChar };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
       console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar);
     } catch (e) {
       if (e.name === "QuotaExceededError") {
@@ -3809,7 +3816,7 @@ ${message}` : message;
         try {
           const snapshots = loadSnapshots(true);
           snapshots[date] = { total, topChar, byChar };
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
         } catch (e2) {
           console.error("[Calendar] Still failed after cleanup:", e2);
         }
@@ -3931,7 +3938,11 @@ ${message}` : message;
       calendarOverlay.style.display = "flex";
       selectedDateInfo = null;
       hideBotCard();
-      await saveTodaySnapshot();
+      try {
+        await saveTodaySnapshot();
+      } catch (e) {
+        console.error("[Calendar] Failed to save today snapshot, but UI will open:", e);
+      }
       renderCalendar();
     } finally {
       isCalculating = false;
@@ -4014,11 +4025,16 @@ ${message}` : message;
       });
       let topChar = "";
       let maxIncrease = -Infinity;
+      let maxMsgCountOnTie = -1;
       for (const r of rankings) {
         const prev = yesterdayByChar[r.avatar] || 0;
         const increase = r.chatCount - prev;
         if (increase > maxIncrease) {
           maxIncrease = increase;
+          maxMsgCountOnTie = r.messageCount;
+          topChar = r.avatar;
+        } else if (increase === maxIncrease && r.messageCount > maxMsgCountOnTie) {
+          maxMsgCountOnTie = r.messageCount;
           topChar = r.avatar;
         }
       }

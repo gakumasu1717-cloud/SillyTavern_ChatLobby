@@ -3,6 +3,7 @@
 // ============================================
 
 const STORAGE_KEY = 'chatLobby_calendar';
+const CURRENT_VERSION = 1; // 구조 변경 시 마이그레이션용
 const THIS_YEAR = new Date().getFullYear();
 
 // 캐시
@@ -31,6 +32,16 @@ export function loadSnapshots(forceRefresh = false) {
         const data = localStorage.getItem(STORAGE_KEY);
         if (data) {
             const parsed = JSON.parse(data);
+            const version = parsed.version || 0;
+            
+            // 버전 마이그레이션 (필요시)
+            if (version < CURRENT_VERSION) {
+                console.log('[Calendar] Migrating data from version', version, 'to', CURRENT_VERSION);
+                // 현재는 v0 -> v1: 구조 동일, 버전 필드만 추가
+                const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+            }
+            
             _snapshotsCache = parsed.snapshots || {};
             console.log('[Calendar] loadSnapshots: from localStorage, keys:', Object.keys(_snapshotsCache).length);
             return _snapshotsCache;
@@ -72,7 +83,7 @@ function cleanOldSnapshots() {
     }
     
     console.log('[Calendar] Deleted', deleted, 'old snapshots');
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
 }
 
 /**
@@ -93,7 +104,7 @@ export function saveSnapshot(date, total, topChar, byChar = {}) {
     try {
         const snapshots = loadSnapshots(true);
         snapshots[date] = { total, topChar, byChar };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
         console.log('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', topChar);
     } catch (e) {
         // 용량 초과 시 오래된 데이터 정리
@@ -104,7 +115,7 @@ export function saveSnapshot(date, total, topChar, byChar = {}) {
             try {
                 const snapshots = loadSnapshots(true);
                 snapshots[date] = { total, topChar, byChar };
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
             } catch (e2) {
                 console.error('[Calendar] Still failed after cleanup:', e2);
             }
@@ -156,7 +167,7 @@ export function deleteSnapshot(date) {
         _snapshotsCache = null;
         const snapshots = loadSnapshots(true);
         delete snapshots[date];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
     } catch (e) {
         console.error('[Calendar] Failed to delete snapshot:', e);
     }
