@@ -211,11 +211,11 @@ async function saveBaselineSnapshot() {
     console.log('[Calendar] Saving baseline as:', yesterday);
     
     let characters = cache.get('characters');
-    if (!characters) {
-        characters = await api.fetchCharacters();
+    if (!characters || characters.length === 0) {
+        characters = api.getCharacters();
     }
     
-    if (!characters || !Array.isArray(characters)) {
+    if (!characters || !Array.isArray(characters) || characters.length === 0) {
         console.warn('[Calendar] No characters found for baseline');
         return;
     }
@@ -257,8 +257,8 @@ async function saveBaselineSnapshot() {
     // 메시지 1위 캐릭터
     const topChar = rankings[0]?.avatar || '';
     
-    // 어제 날짜로 저장 (베이스라인)
-    saveSnapshot(yesterday, totalChats, topChar, byChar);
+    // 어제 날짜로 저장 (베이스라인 - 작년도 허용)
+    saveSnapshot(yesterday, totalChats, topChar, byChar, true);
     console.log('[Calendar] Baseline saved:', yesterday, '| total:', totalChats);
 }
 
@@ -279,11 +279,11 @@ async function saveTodaySnapshot() {
         console.log('[Calendar] yesterdaySnapshot exists:', !!yesterdaySnapshot);
         
         let characters = cache.get('characters');
-        if (!characters) {
-            characters = await api.fetchCharacters();
+        if (!characters || characters.length === 0) {
+            characters = api.getCharacters();
         }
         
-        if (!characters || !Array.isArray(characters)) {
+        if (!characters || !Array.isArray(characters) || characters.length === 0) {
             console.warn('[Calendar] No characters found');
             return;
         }
@@ -496,8 +496,9 @@ function showBotCard(date, snapshot) {
     // 전체 증감량
     const totalIncrease = getIncrease(date);
     
-    // 해당 캐릭터 증감량 계산
-    const dateObj = new Date(date + 'T00:00:00');
+    // 해당 캐릭터 증감량 계산 (브라우저 호환 날짜 파싱)
+    const [year, month, day] = date.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
     dateObj.setDate(dateObj.getDate() - 1);
     const prevDateStr = getLocalDateString(dateObj);
     const prevSnapshot = getSnapshot(prevDateStr);
@@ -513,8 +514,10 @@ function showBotCard(date, snapshot) {
         // 어제 데이터 있음 → 증감량 표시
         let statsText = '';
         
-        // 캐릭터 증감량
-        if (charIncrease >= 0) {
+        // 캐릭터 증감량 (변화 0일 때 No change)
+        if (charIncrease === 0) {
+            statsText = 'No change';
+        } else if (charIncrease > 0) {
             statsText = `+${charIncrease} chats`;
         } else {
             statsText = `${charIncrease} chats`;
@@ -522,8 +525,12 @@ function showBotCard(date, snapshot) {
         
         // 전체 증감량도 추가 (다르면)
         if (totalIncrease !== null && totalIncrease !== charIncrease) {
-            const totalSign = totalIncrease >= 0 ? '+' : '';
-            statsText += ` (Total: ${totalSign}${totalIncrease})`;
+            if (totalIncrease === 0) {
+                statsText += ' (Total: No change)';
+            } else {
+                const totalSign = totalIncrease > 0 ? '+' : '';
+                statsText += ` (Total: ${totalSign}${totalIncrease})`;
+            }
         }
         
         statsEl.textContent = statsText;

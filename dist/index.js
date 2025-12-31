@@ -3800,9 +3800,9 @@ ${message}` : message;
     console.log("[Calendar] Deleted", deleted, "old snapshots");
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
   }
-  function saveSnapshot(date, total, topChar, byChar = {}) {
+  function saveSnapshot(date, total, topChar, byChar = {}, isBaseline = false) {
     const jan1 = `${THIS_YEAR}-01-01`;
-    if (date < jan1) return;
+    if (!isBaseline && date < jan1) return;
     _snapshotsCache = null;
     try {
       const snapshots = loadSnapshots(true);
@@ -3997,10 +3997,10 @@ ${message}` : message;
     const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
     console.log("[Calendar] Saving baseline as:", yesterday);
     let characters = cache.get("characters");
-    if (!characters) {
-      characters = await api.fetchCharacters();
+    if (!characters || characters.length === 0) {
+      characters = api.getCharacters();
     }
-    if (!characters || !Array.isArray(characters)) {
+    if (!characters || !Array.isArray(characters) || characters.length === 0) {
       console.warn("[Calendar] No characters found for baseline");
       return;
     }
@@ -4032,7 +4032,7 @@ ${message}` : message;
       byChar[r.avatar] = r.chatCount;
     });
     const topChar = rankings[0]?.avatar || "";
-    saveSnapshot(yesterday, totalChats, topChar, byChar);
+    saveSnapshot(yesterday, totalChats, topChar, byChar, true);
     console.log("[Calendar] Baseline saved:", yesterday, "| total:", totalChats);
   }
   async function saveTodaySnapshot() {
@@ -4044,10 +4044,10 @@ ${message}` : message;
       const yesterdayByChar = yesterdaySnapshot?.byChar || {};
       console.log("[Calendar] yesterdaySnapshot exists:", !!yesterdaySnapshot);
       let characters = cache.get("characters");
-      if (!characters) {
-        characters = await api.fetchCharacters();
+      if (!characters || characters.length === 0) {
+        characters = api.getCharacters();
       }
-      if (!characters || !Array.isArray(characters)) {
+      if (!characters || !Array.isArray(characters) || characters.length === 0) {
         console.warn("[Calendar] No characters found");
         return;
       }
@@ -4201,7 +4201,8 @@ ${message}` : message;
     const charName = snapshot.topChar.replace(/\.[^/.]+$/, "");
     nameEl.textContent = charName;
     const totalIncrease = getIncrease(date);
-    const dateObj = /* @__PURE__ */ new Date(date + "T00:00:00");
+    const [year, month, day] = date.split("-").map(Number);
+    const dateObj = new Date(year, month - 1, day);
     dateObj.setDate(dateObj.getDate() - 1);
     const prevDateStr = getLocalDateString(dateObj);
     const prevSnapshot = getSnapshot(prevDateStr);
@@ -4211,14 +4212,20 @@ ${message}` : message;
     const hasPrevData = !!prevSnapshot;
     if (hasPrevData) {
       let statsText = "";
-      if (charIncrease >= 0) {
+      if (charIncrease === 0) {
+        statsText = "No change";
+      } else if (charIncrease > 0) {
         statsText = `+${charIncrease} chats`;
       } else {
         statsText = `${charIncrease} chats`;
       }
       if (totalIncrease !== null && totalIncrease !== charIncrease) {
-        const totalSign = totalIncrease >= 0 ? "+" : "";
-        statsText += ` (Total: ${totalSign}${totalIncrease})`;
+        if (totalIncrease === 0) {
+          statsText += " (Total: No change)";
+        } else {
+          const totalSign = totalIncrease > 0 ? "+" : "";
+          statsText += ` (Total: ${totalSign}${totalIncrease})`;
+        }
       }
       statsEl.textContent = statsText;
       statsEl.className = charIncrease >= 0 ? "bot-card-stats positive" : "bot-card-stats negative";
