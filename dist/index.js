@@ -4016,7 +4016,7 @@ ${message}` : message;
         batch.map(async (char) => {
           let chats;
           try {
-            chats = await api.fetchChatsForCharacter(char.avatar);
+            chats = await api.fetchChatsForCharacter(char.avatar, true);
           } catch {
             chats = [];
           }
@@ -4061,7 +4061,7 @@ ${message}` : message;
           batch.map(async (char) => {
             let chats;
             try {
-              chats = await api.fetchChatsForCharacter(char.avatar);
+              chats = await api.fetchChatsForCharacter(char.avatar, true);
             } catch {
               chats = [];
             }

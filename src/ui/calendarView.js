@@ -235,10 +235,10 @@ async function saveBaselineSnapshot() {
         const batch = characters.slice(i, i + BATCH_SIZE);
         const batchResults = await Promise.all(
             batch.map(async (char) => {
-                // 캐릭터 스냅샷은 항상 fresh data 필요
+                // 캐릭터 스냅샷은 항상 fresh data 필요 (forceRefresh=true)
                 let chats;
                 try {
-                    chats = await api.fetchChatsForCharacter(char.avatar);
+                    chats = await api.fetchChatsForCharacter(char.avatar, true);
                 } catch {
                     chats = [];
                 }
@@ -302,10 +302,10 @@ async function saveTodaySnapshot() {
             const batch = characters.slice(i, i + BATCH_SIZE);
             const batchResults = await Promise.all(
                 batch.map(async (char) => {
-                    // 캐릭터 스냅샷은 항상 fresh data 필요 (캐시 무시)
+                    // 캐릭터 스냅샷은 항상 fresh data 필요 (forceRefresh=true)
                     let chats;
                     try {
-                        chats = await api.fetchChatsForCharacter(char.avatar);
+                        chats = await api.fetchChatsForCharacter(char.avatar, true);
                     } catch {
                         chats = [];
                     }

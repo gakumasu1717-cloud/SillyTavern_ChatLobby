@@ -2632,16 +2632,19 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
    캘린더 뷰 - iOS Modern Grid Style
    ============================================ */
 #calendar-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
     background: #000;
     display: none;
     align-items: flex-start;
     justify-content: center;
-    z-index: 80000;
+    z-index: 999999;
+    transform: none !important;
 }
 
 .calendar-fullscreen {
