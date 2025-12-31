@@ -2259,6 +2259,10 @@ ${message}` : message;
       pendingRender = { searchTerm, sortOverride };
       return;
     }
+    const chatsPanel = document.getElementById("chat-lobby-chats");
+    if (chatsPanel?.classList.contains("visible")) {
+      return;
+    }
     isRendering = true;
     try {
       const container = document.getElementById("chat-lobby-characters");
@@ -2322,6 +2326,13 @@ ${message}` : message;
       return renderCharacterCard(char, indexMap.get(char.avatar));
     }).join("");
     bindCharacterEvents(container);
+    const currentChar = store.currentCharacter;
+    if (currentChar?.avatar) {
+      const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add("selected");
+      }
+    }
     loadChatCountsAsync(filtered);
   }
   function renderCharacterCard(char, index) {

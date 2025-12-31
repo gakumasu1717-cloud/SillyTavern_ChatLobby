@@ -56,6 +56,12 @@ export async function renderCharacterGrid(searchTerm = '', sortOverride = null) 
         return;
     }
     
+    // 채팅 패널이 열려있으면 재렌더 스킵 (사용자 경험 보호)
+    const chatsPanel = document.getElementById('chat-lobby-chats');
+    if (chatsPanel?.classList.contains('visible')) {
+        return;
+    }
+    
     isRendering = true;
     
     try {
@@ -152,6 +158,15 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     }).join('');
     
     bindCharacterEvents(container);
+    
+    // 현재 선택된 캐릭터가 있으면 .selected 클래스 복원
+    const currentChar = store.currentCharacter;
+    if (currentChar?.avatar) {
+        const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+        }
+    }
     
     // 백그라운드에서 채팅 수 로딩 후 UI 업데이트
     loadChatCountsAsync(filtered);
