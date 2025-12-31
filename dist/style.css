@@ -2752,55 +2752,38 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     color: #fff;
 }
 
-/* 메인 영역 */
-.calendar-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    position: relative;
-}
-
-/* 메인 영역 - 핀치 줌 지원 */
+/* 메인 영역 - 스크롤 가능 */
 .calendar-main {
     flex: 1;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
     background: #000;
-    padding: 8px;
 }
 
-/* 날짜 그리드 - 봇카드 스타일 */
+/* 날짜 그리드 - 7열 흰 선 */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-left: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* 각 날짜 카드 */
+/* 각 날짜 셀 - 라운드 없음, 흰 선 */
 .cal-card {
     position: relative;
     aspect-ratio: 2 / 3;
-    background: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
+    background: #000;
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
     overflow: hidden;
-    cursor: pointer;
-    transition: transform 0.2s, border-color 0.2s;
-}
-
-.cal-card:hover {
-    transform: scale(1.03);
-    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .cal-card.today {
-    border-color: #E50914;
-    border-width: 2px;
+    background: rgba(229, 9, 20, 0.15);
 }
 
 .cal-card.has-data {
-    background: #111;
+    background: #000;
 }
 
 /* 카드 아바타 */
@@ -2813,55 +2796,60 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     object-fit: cover;
 }
 
-/* 카드 그라데이션 */
+/* 카드 그라데이션 - 하단 */
 .cal-card-gradient {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 70%;
-    background: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.9) 40%, transparent 100%);
+    height: 50%;
+    background: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.8) 50%, transparent 100%);
     z-index: 2;
 }
 
-/* 카드 정보 - 좌측 하단 */
+/* 날짜 - 좌측 상단 */
+.cal-card-day {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.75em;
+    color: #fff;
+    z-index: 5;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* 카드 정보 - 하단 (이름 위, 채팅수 아래) */
 .cal-card-info {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 6px;
+    padding: 8px;
     z-index: 3;
 }
 
-.cal-card-day {
-    font-size: 0.65em;
-    color: rgba(255, 255, 255, 0.5);
-    margin-bottom: 2px;
-}
-
 .cal-card-name {
-    font-size: 0.7em;
+    font-size: 0.85em;
     font-weight: 600;
     color: #fff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-bottom: 2px;
 }
 
 .cal-card-count {
-    font-size: 0.6em;
+    font-size: 0.7em;
     color: rgba(255, 255, 255, 0.6);
 }
 
-/* 빈 카드 (데이터 없음) */
+/* 빈 카드 - 좌측 상단에 날짜만 */
 .cal-card-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: rgba(255, 255, 255, 0.3);
-    font-size: 0.9em;
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.4);
 }
 
 /* PC에서 카드 더 크게 */

@@ -3835,7 +3835,6 @@ ${message}` : message;
   var calendarOverlay = null;
   var THIS_YEAR2 = (/* @__PURE__ */ new Date()).getFullYear();
   var currentMonth = (/* @__PURE__ */ new Date()).getMonth();
-  var selectedDateInfo = null;
   var isCalculating = false;
   var touchStartX = 0;
   var touchEndX = 0;
@@ -3893,12 +3892,9 @@ ${message}` : message;
         main.addEventListener("touchstart", handleTouchStart, { passive: true });
         main.addEventListener("touchend", handleTouchEnd, { passive: true });
       }
-      selectedDateInfo = null;
-      hideDetailView();
       const existingSnapshots = loadSnapshots();
       const isFirstAccess = Object.keys(existingSnapshots).length === 0;
       if (isFirstAccess) {
-        console.log("[Calendar] First access - initializing baseline data");
         try {
           await saveBaselineSnapshot();
         } catch (e) {
@@ -3924,7 +3920,6 @@ ${message}` : message;
   function closeCalendarView() {
     if (calendarOverlay) {
       calendarOverlay.style.display = "none";
-      hideDetailView();
       const lobbyContainer = document.getElementById("chat-lobby-container");
       if (lobbyContainer) lobbyContainer.style.display = "";
     }
@@ -3933,8 +3928,6 @@ ${message}` : message;
     const newMonth = currentMonth + delta;
     if (newMonth < 0 || newMonth > 11) return;
     currentMonth = newMonth;
-    selectedDateInfo = null;
-    hideDetailView();
     renderCalendar();
   }
   function handleTouchStart(e) {
@@ -3957,7 +3950,6 @@ ${message}` : message;
   }
   async function saveBaselineSnapshot() {
     const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
-    console.log("[Calendar] Saving baseline as:", yesterday);
     let characters = cache.get("characters");
     if (!characters || characters.length === 0) {
       characters = api.getCharacters();
@@ -3993,16 +3985,13 @@ ${message}` : message;
     });
     const topChar = rankings[0]?.avatar || "";
     saveSnapshot(yesterday, totalMessages, topChar, byChar, true);
-    console.log("[Calendar] Baseline saved:", yesterday, "| total:", totalMessages, "messages");
   }
   async function saveTodaySnapshot() {
     try {
       const today = getLocalDateString();
       const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
-      console.log("[Calendar] saveTodaySnapshot | today:", today, "| yesterday:", yesterday);
       const yesterdaySnapshot = getSnapshot(yesterday);
       const yesterdayByChar = yesterdaySnapshot?.byChar || {};
-      console.log("[Calendar] yesterdaySnapshot exists:", !!yesterdaySnapshot);
       let characters = cache.get("characters");
       if (!characters || characters.length === 0) {
         characters = api.getCharacters();
@@ -4020,7 +4009,6 @@ ${message}` : message;
             let chats;
             try {
               chats = await api.fetchChatsForCharacter(char.avatar, true);
-              console.log("[Calendar] API fetch:", char.avatar, "| chats:", chats?.length, "| items:", chats?.reduce((s, c) => s + (c.chat_items || 0), 0));
             } catch (e) {
               console.error("[Calendar] API error:", char.avatar, e);
               chats = [];
@@ -4055,9 +4043,6 @@ ${message}` : message;
       }
       if (!yesterdaySnapshot) {
         topChar = rankings[0]?.avatar || "";
-        console.log("[Calendar] First time - using message count leader:", topChar);
-      } else {
-        console.log("[Calendar] Most increased char:", topChar, "| increase:", maxIncrease, "messages");
       }
       saveSnapshot(today, totalMessages, topChar, byChar);
     } catch (e) {
@@ -4072,45 +4057,45 @@ ${message}` : message;
     title.textContent = currentMonth + 1;
     prevBtn.disabled = currentMonth === 0;
     nextBtn.disabled = currentMonth === 11;
+    const firstDay = new Date(THIS_YEAR2, currentMonth, 1).getDay();
     const daysInMonth = new Date(THIS_YEAR2, currentMonth + 1, 0).getDate();
     const snapshots = loadSnapshots();
     let html = "";
     const today = getLocalDateString();
+    for (let i = 0; i < firstDay; i++) {
+      html += '<div class="cal-card cal-card-blank"></div>';
+    }
     for (let day = 1; day <= daysInMonth; day++) {
       const date = `${THIS_YEAR2}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const snapshot = snapshots[date];
       const isToday = date === today;
       const hasData = !!snapshot;
-      let avatarHtml = "";
-      let infoHtml = "";
+      let contentHtml = "";
       if (hasData && snapshot.topChar) {
         const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
         const charName = snapshot.topChar.replace(/\.[^/.]+$/, "");
         const charMsgs = snapshot.byChar?.[snapshot.topChar] || 0;
-        avatarHtml = `<img class="cal-card-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0'">`;
-        infoHtml = `
+        contentHtml = `
+                <img class="cal-card-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0'">
+                <div class="cal-card-day">${day}</div>
                 <div class="cal-card-gradient"></div>
                 <div class="cal-card-info">
-                    <div class="cal-card-day">${day}</div>
                     <div class="cal-card-name">${charName}</div>
-                    <div class="cal-card-count">${charMsgs} / ${snapshot.total}</div>
+                    <div class="cal-card-count">${charMsgs}\uAC1C \uCC44\uD305</div>
                 </div>
             `;
       } else {
-        infoHtml = `<div class="cal-card-empty">${day}</div>`;
+        contentHtml = `<div class="cal-card-empty">${day}</div>`;
       }
       html += `
             <div class="cal-card ${isToday ? "today" : ""} ${hasData ? "has-data" : ""}" data-date="${date}">
-                ${avatarHtml}
-                ${infoHtml}
+                ${contentHtml}
             </div>
         `;
     }
     grid.innerHTML = html;
   }
   function handleDateClick(e) {
-  }
-  function hideDetailView() {
   }
   function showDebugModal() {
     const modal = calendarOverlay.querySelector("#calendar-debug-modal");

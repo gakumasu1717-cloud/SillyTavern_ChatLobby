@@ -1,15 +1,14 @@
 // ============================================
-// 캘린더 뷰 - iOS/Modern Grid Style
+// 캘린더 뷰 - Grid Style
 // ============================================
 
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
-import { loadSnapshots, getSnapshot, saveSnapshot, getIncrease, getLocalDateString, deleteSnapshot, clearAllSnapshots } from '../data/calendarStorage.js';
+import { loadSnapshots, getSnapshot, saveSnapshot, getLocalDateString, clearAllSnapshots } from '../data/calendarStorage.js';
 
 let calendarOverlay = null;
 const THIS_YEAR = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
-let selectedDateInfo = null;
 let isCalculating = false;
 
 // 스와이프 관련
@@ -83,16 +82,12 @@ export async function openCalendarView() {
             main.addEventListener('touchend', handleTouchEnd, { passive: true });
         }
         
-        selectedDateInfo = null;
-        hideDetailView();
-        
         // 첫 접근 체크 (스냅샷 0개)
         const existingSnapshots = loadSnapshots();
         const isFirstAccess = Object.keys(existingSnapshots).length === 0;
         
         if (isFirstAccess) {
             // 첫 접근: 현재 데이터를 "어제"로 저장하고 초기화 메시지
-            console.log('[Calendar] First access - initializing baseline data');
             
             try {
                 await saveBaselineSnapshot();
@@ -131,7 +126,6 @@ export async function openCalendarView() {
 export function closeCalendarView() {
     if (calendarOverlay) {
         calendarOverlay.style.display = 'none';
-        hideDetailView();
         
         // 로비 컨테이너 복원
         const lobbyContainer = document.getElementById('chat-lobby-container');
@@ -147,8 +141,6 @@ function navigateMonth(delta) {
     if (newMonth < 0 || newMonth > 11) return;
     
     currentMonth = newMonth;
-    selectedDateInfo = null;
-    hideDetailView();
     renderCalendar();
 }
 
@@ -185,8 +177,6 @@ function handleSwipe() {
  */
 async function saveBaselineSnapshot() {
     const yesterday = getLocalDateString(new Date(Date.now() - 86400000));
-    
-    console.log('[Calendar] Saving baseline as:', yesterday);
     
     let characters = cache.get('characters');
     if (!characters || characters.length === 0) {
@@ -236,7 +226,6 @@ async function saveBaselineSnapshot() {
     
     // 어제 날짜로 저장 (베이스라인 - 작년도 허용)
     saveSnapshot(yesterday, totalMessages, topChar, byChar, true);
-    console.log('[Calendar] Baseline saved:', yesterday, '| total:', totalMessages, 'messages');
 }
 
 /**
@@ -247,13 +236,9 @@ async function saveTodaySnapshot() {
         const today = getLocalDateString();
         const yesterday = getLocalDateString(new Date(Date.now() - 86400000));
         
-        console.log('[Calendar] saveTodaySnapshot | today:', today, '| yesterday:', yesterday);
-        
         // 어제 스냅샷
         const yesterdaySnapshot = getSnapshot(yesterday);
         const yesterdayByChar = yesterdaySnapshot?.byChar || {};
-        
-        console.log('[Calendar] yesterdaySnapshot exists:', !!yesterdaySnapshot);
         
         let characters = cache.get('characters');
         if (!characters || characters.length === 0) {
@@ -276,7 +261,6 @@ async function saveTodaySnapshot() {
                     let chats;
                     try {
                         chats = await api.fetchChatsForCharacter(char.avatar, true);
-                        console.log('[Calendar] API fetch:', char.avatar, '| chats:', chats?.length, '| items:', chats?.reduce((s,c) => s + (c.chat_items||0), 0));
                     } catch (e) {
                         console.error('[Calendar] API error:', char.avatar, e);
                         chats = [];
@@ -325,9 +309,6 @@ async function saveTodaySnapshot() {
         // 어제 데이터 없으면 (첫 접속) 메시지 1위로
         if (!yesterdaySnapshot) {
             topChar = rankings[0]?.avatar || '';
-            console.log('[Calendar] First time - using message count leader:', topChar);
-        } else {
-            console.log('[Calendar] Most increased char:', topChar, '| increase:', maxIncrease, 'messages');
         }
         
         saveSnapshot(today, totalMessages, topChar, byChar);
@@ -338,7 +319,7 @@ async function saveTodaySnapshot() {
 }
 
 /**
- * 캘린더 렌더링 - 봇카드 그리드 스타일
+ * 캘린더 렌더링 - 그리드 스타일
  */
 function renderCalendar() {
     const title = calendarOverlay.querySelector('#calendar-title');
@@ -351,11 +332,17 @@ function renderCalendar() {
     prevBtn.disabled = (currentMonth === 0);
     nextBtn.disabled = (currentMonth === 11);
     
+    const firstDay = new Date(THIS_YEAR, currentMonth, 1).getDay(); // 첫째날 요일 (0=일요일)
     const daysInMonth = new Date(THIS_YEAR, currentMonth + 1, 0).getDate();
     const snapshots = loadSnapshots();
     
     let html = '';
     const today = getLocalDateString();
+    
+    // 첫 주 앞 빈 셀 (요일 맞추기)
+    for (let i = 0; i < firstDay; i++) {
+        html += '<div class="cal-card cal-card-blank"></div>';
+    }
     
     for (let day = 1; day <= daysInMonth; day++) {
         const date = `${THIS_YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -363,33 +350,31 @@ function renderCalendar() {
         const isToday = date === today;
         const hasData = !!snapshot;
         
-        // 봇카드 스타일
-        let avatarHtml = '';
-        let infoHtml = '';
+        let contentHtml = '';
         
         if (hasData && snapshot.topChar) {
             const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
             const charName = snapshot.topChar.replace(/\.[^/.]+$/, '');
             const charMsgs = snapshot.byChar?.[snapshot.topChar] || 0;
             
-            avatarHtml = `<img class="cal-card-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0'">`;
-            infoHtml = `
+            // 이미지 스타일: 날짜 좌상단, 아바타 전체, 하단에 이름+채팅수
+            contentHtml = `
+                <img class="cal-card-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0'">
+                <div class="cal-card-day">${day}</div>
                 <div class="cal-card-gradient"></div>
                 <div class="cal-card-info">
-                    <div class="cal-card-day">${day}</div>
                     <div class="cal-card-name">${charName}</div>
-                    <div class="cal-card-count">${charMsgs} / ${snapshot.total}</div>
+                    <div class="cal-card-count">${charMsgs}개 채팅</div>
                 </div>
             `;
         } else {
-            // 데이터 없으면 날짜만
-            infoHtml = `<div class="cal-card-empty">${day}</div>`;
+            // 데이터 없으면 좌상단에 날짜만
+            contentHtml = `<div class="cal-card-empty">${day}</div>`;
         }
         
         html += `
             <div class="cal-card ${isToday ? 'today' : ''} ${hasData ? 'has-data' : ''}" data-date="${date}">
-                ${avatarHtml}
-                ${infoHtml}
+                ${contentHtml}
             </div>
         `;
     }
@@ -403,11 +388,6 @@ function renderCalendar() {
 function handleDateClick(e) {
     // 클릭 시 아무것도 안함 - 정보는 카드에 이미 표시됨
 }
-
-/**
- * hideDetailView - 더 이상 사용 안함 (호환성 유지용)
- */
-function hideDetailView() {}
 
 /**
  * 디버그 모달 - 데이터 출처 표시
