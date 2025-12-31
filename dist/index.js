@@ -2208,7 +2208,8 @@ ${message}` : message;
     showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
     const character = store.currentCharacter;
     if (character) {
-      renderChatList(character);
+      cache.invalidate("chats", character.avatar);
+      await renderChatList(character);
     }
   }
   function isBatchMode() {

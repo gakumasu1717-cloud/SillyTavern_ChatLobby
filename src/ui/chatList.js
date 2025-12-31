@@ -765,9 +765,11 @@ export async function executeBatchMove(targetFolder) {
     toggleBatchMode();
     showToast(`${keys.length}개 채팅이 이동되었습니다.`, 'success');
     
+    // 캐시 무효화 후 즉시 리렌더
     const character = store.currentCharacter;
     if (character) {
-        renderChatList(character);
+        cache.invalidate('chats', character.avatar);
+        await renderChatList(character);
     }
     
 }
