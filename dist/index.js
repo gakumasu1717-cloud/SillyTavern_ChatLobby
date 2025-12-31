@@ -2247,6 +2247,10 @@ ${message}` : message;
   init_config();
   var isRendering = false;
   var pendingRender = null;
+  var isSelectingCharacter = false;
+  function resetCharacterSelectLock() {
+    isSelectingCharacter = false;
+  }
   function setCharacterSelectHandler(handler) {
     store.setCharacterSelectHandler(handler);
   }
@@ -2474,12 +2478,11 @@ ${message}` : message;
           showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
       }
-      let isProcessing = false;
       createTouchClickHandler(card, async () => {
-        if (isProcessing) {
+        if (isSelectingCharacter || isRendering) {
           return;
         }
-        isProcessing = true;
+        isSelectingCharacter = true;
         try {
           const chatsPanel = document.getElementById("chat-lobby-chats");
           const isPanelVisible = chatsPanel?.classList.contains("visible");
@@ -2509,7 +2512,7 @@ ${message}` : message;
           console.error("[CharacterGrid] Handler error:", error);
         } finally {
           setTimeout(() => {
-            isProcessing = false;
+            isSelectingCharacter = false;
           }, 300);
         }
       }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
@@ -3894,6 +3897,7 @@ ${message}` : message;
         }
         store.reset();
         store.setLobbyOpen(true);
+        resetCharacterSelectLock();
         try {
           const context = api.getContext();
           if (typeof context?.getCharacters === "function") {

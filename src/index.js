@@ -9,7 +9,7 @@ import { store } from './data/store.js';
 import { api } from './api/sillyTavern.js';
 import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
-import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange } from './ui/characterGrid.js';
+import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange, resetCharacterSelectLock } from './ui/characterGrid.js';
 import { renderChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel, cleanupTooltip } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
@@ -288,6 +288,9 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지)
             store.reset();
             store.setLobbyOpen(true);
+            
+            // 캐릭터 선택 락 리셋
+            resetCharacterSelectLock();
             
             // SillyTavern 캐릭터 목록 최신화
             try {

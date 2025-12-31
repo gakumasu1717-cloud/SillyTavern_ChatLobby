@@ -16,6 +16,16 @@ import { CONFIG } from '../config.js';
 let isRendering = false;
 let pendingRender = null;
 
+// 캐릭터 선택 중복 방지 (전역)
+let isSelectingCharacter = false;
+
+/**
+ * 캐릭터 선택 플래그 리셋 (로비 열 때 호출)
+ */
+export function resetCharacterSelectLock() {
+    isSelectingCharacter = false;
+}
+
 // ============================================
 // 초기화
 // ============================================
@@ -388,14 +398,13 @@ function bindCharacterEvents(container) {
             }, { preventDefault: true, stopPropagation: true, debugName: `char-fav-${index}` });
         }
         
-        // 캐릭터 카드 클릭 (선택) - 중복 클릭 방지
-        let isProcessing = false;
+        // 캐릭터 카드 클릭 (선택) - 중복 클릭 방지 (전역 플래그)
         createTouchClickHandler(card, async () => {
-            // 이미 처리 중이면 무시
-            if (isProcessing) {
+            // 이미 처리 중이거나 렌더링 중이면 무시
+            if (isSelectingCharacter || isRendering) {
                 return;
             }
-            isProcessing = true;
+            isSelectingCharacter = true;
             
             try {
                 // 채팅 패널이 열려있고 같은 캐릭터면 닫기
@@ -437,7 +446,7 @@ function bindCharacterEvents(container) {
             } finally {
                 // 처리 완료 후 플래그 해제 (약간의 딜레이로 빠른 재클릭 방지)
                 setTimeout(() => {
-                    isProcessing = false;
+                    isSelectingCharacter = false;
                 }, 300);
             }
         }, { preventDefault: true, stopPropagation: true, debugName: `char-${index}-${charName}` });
