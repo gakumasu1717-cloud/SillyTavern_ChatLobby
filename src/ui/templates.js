@@ -29,8 +29,8 @@ export function createLobbyHTML() {
                     <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
                     <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
                     <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="테마 전환">${savedTheme === 'light' ? '🌙' : '☀️'}</button>
-                    <button id="chat-lobby-close" data-action="close-lobby" title="닫기">✕</button>
                 </div>
+                <button id="chat-lobby-close" data-action="close-lobby" title="닫기">✕</button>
             </header>
             
             <!-- 메인 콘텐츠 -->

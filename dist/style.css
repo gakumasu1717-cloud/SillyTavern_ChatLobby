@@ -219,14 +219,20 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* X 닫기 버튼 - header-actions 밖에 독립 배치 */
 #chat-lobby-close {
-    font-size: 1.2em !important;
-    padding: 6px 10px !important;
-    background: transparent !important;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
 }
 
 #chat-lobby-close:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
+    background: rgba(255, 255, 255, 0.1);
 }
 
 /* ============================================
@@ -2323,7 +2329,7 @@
     
 /* 메뉴 토글 - 햄버거 이모지 유지 */
     
-/* 모바일 헤더 액션 - X 제외하고 숨김 */
+/* 모바일 헤더 액션 - 드롭다운 서랍 */
     .header-actions {
         position: absolute;
         top: 100%;
@@ -2342,18 +2348,7 @@
         z-index: -1;
     }
     
-    /* X 버튼은 항상 보이게 - 헤더 오른쪽 고정 */
-    .header-actions #chat-lobby-close {
-        position: fixed;
-        top: 8px;
-        right: 15px;
-        z-index: 200;
-        opacity: 1;
-        pointer-events: auto;
-        transform: none;
-    }
-    
-    /* 메뉴 열림 상태 - X 제외한 버튼들 표시 */
+    /* 메뉴 열림 상태 - 버튼들 표시 */
     #chat-lobby-header.menu-open .header-actions {
         transform: translateY(0);
         opacity: 1;

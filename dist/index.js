@@ -1346,8 +1346,8 @@ ${message}` : message;
                     <button id="chat-lobby-add-persona" data-action="add-persona" title="\uD398\uB974\uC18C\uB098 \uCD94\uAC00">\u{1F464}</button>
                     <button id="chat-lobby-refresh" data-action="refresh" title="\uC0C8\uB85C\uACE0\uCE68">\u{1F504}</button>
                     <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="\uD14C\uB9C8 \uC804\uD658">${savedTheme === "light" ? "\u{1F319}" : "\u2600\uFE0F"}</button>
-                    <button id="chat-lobby-close" data-action="close-lobby" title="\uB2EB\uAE30">\u2715</button>
                 </div>
+                <button id="chat-lobby-close" data-action="close-lobby" title="\uB2EB\uAE30">\u2715</button>
             </header>
             
             <!-- \uBA54\uC778 \uCF58\uD150\uCE20 -->
