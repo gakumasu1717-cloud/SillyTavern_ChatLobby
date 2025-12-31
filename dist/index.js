@@ -3794,16 +3794,27 @@ ${message}` : message;
         return;
       }
       const { eventSource, eventTypes } = context;
-      const debouncedChatChanged = debounce(async () => {
-        if (store.isLobbyLocked) {
+      let chatChangedCooldownTimer = null;
+      const onChatChanged = () => {
+        if (!isLobbyOpen()) {
+          cache.invalidate("characters");
+          cache.invalidate("chats");
           return;
         }
-        cache.invalidate("characters");
-        cache.invalidate("chats");
-        if (isLobbyOpen()) {
-          await renderCharacterGrid(store.searchTerm);
+        if (!store.isLobbyLocked) {
+          store.setLobbyLocked(true);
         }
-      }, 100);
+        if (chatChangedCooldownTimer) {
+          clearTimeout(chatChangedCooldownTimer);
+        }
+        chatChangedCooldownTimer = setTimeout(async () => {
+          cache.invalidate("characters");
+          cache.invalidate("chats");
+          await renderCharacterGrid(store.searchTerm);
+          store.setLobbyLocked(false);
+          chatChangedCooldownTimer = null;
+        }, 500);
+      };
       eventHandlers = {
         onCharacterDeleted: () => {
           cache.invalidate("characters");
@@ -3820,7 +3831,7 @@ ${message}` : message;
             renderCharacterGrid(store.searchTerm);
           }
         },
-        onChatChanged: debouncedChatChanged,
+        onChatChanged,
         // 메시지 전송/수신 이벤트 (현재 미사용)
         onMessageSent: () => {
         },

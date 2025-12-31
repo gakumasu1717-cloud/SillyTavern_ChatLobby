@@ -93,21 +93,36 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         
         const { eventSource, eventTypes } = context;
         
-        // CHAT_CHANGED 핸들러 - 캐시 무효화 (락 중이면 스킵)
-        const debouncedChatChanged = debounce(async () => {
-            // 락 걸려있으면 스킵 (캐릭터 선택/채팅 로딩 중)
-            if (store.isLobbyLocked) {
+        // CHAT_CHANGED cooldown 패턴 (마지막 이벤트 후 500ms 대기)
+        let chatChangedCooldownTimer = null;
+        
+        const onChatChanged = () => {
+            // 로비 안 열려있으면 캐시만 무효화
+            if (!isLobbyOpen()) {
+                cache.invalidate('characters');
+                cache.invalidate('chats');
                 return;
             }
             
-            cache.invalidate('characters');
-            cache.invalidate('chats');
-            
-            // 로비 열려있으면 재렌더링
-            if (isLobbyOpen()) {
-                await renderCharacterGrid(store.searchTerm);
+            // 락 시작 (아직 안 걸려있으면)
+            if (!store.isLobbyLocked) {
+                store.setLobbyLocked(true);
             }
-        }, 100);  // 100ms debounce (빠른 연속 이벤트 병합)
+            
+            // 이전 타이머 취소
+            if (chatChangedCooldownTimer) {
+                clearTimeout(chatChangedCooldownTimer);
+            }
+            
+            // 마지막 CHAT_CHANGED 후 500ms 대기 → 렌더 + 락 해제
+            chatChangedCooldownTimer = setTimeout(async () => {
+                cache.invalidate('characters');
+                cache.invalidate('chats');
+                await renderCharacterGrid(store.searchTerm);
+                store.setLobbyLocked(false);
+                chatChangedCooldownTimer = null;
+            }, 500);
+        };
         
         // 핸들러 함수들을 별도로 정의 (off 호출 가능하도록)
         eventHandlers = {
@@ -126,7 +141,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                     renderCharacterGrid(store.searchTerm);
                 }
             },
-            onChatChanged: debouncedChatChanged,
+            onChatChanged: onChatChanged,
             // 메시지 전송/수신 이벤트 (현재 미사용)
             onMessageSent: () => {},
             onMessageReceived: () => {}
