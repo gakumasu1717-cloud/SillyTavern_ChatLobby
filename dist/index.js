@@ -3935,13 +3935,26 @@ ${message}` : message;
         wrapper.addEventListener("touchstart", handleTouchStart, { passive: true });
         wrapper.addEventListener("touchend", handleTouchEnd, { passive: true });
       }
-      calendarOverlay.style.display = "flex";
       selectedDateInfo = null;
       hideBotCard();
+      const existingSnapshots = loadSnapshots();
+      const isFirstAccess = Object.keys(existingSnapshots).length === 0;
+      if (isFirstAccess) {
+        console.log("[Calendar] First access - initializing baseline data");
+        try {
+          await saveBaselineSnapshot();
+        } catch (e) {
+          console.error("[Calendar] Failed to save baseline:", e);
+        }
+        alert("Calendar initialized! Come back tomorrow to see your stats.");
+        isCalculating = false;
+        return;
+      }
+      calendarOverlay.style.display = "flex";
       try {
         await saveTodaySnapshot();
       } catch (e) {
-        console.error("[Calendar] Failed to save today snapshot, but UI will open:", e);
+        console.error("[Calendar] Failed to save today snapshot:", e);
       }
       renderCalendar();
     } finally {
@@ -3979,6 +3992,48 @@ ${message}` : message;
         navigateMonth(-1);
       }
     }
+  }
+  async function saveBaselineSnapshot() {
+    const yesterday = getLocalDateString(new Date(Date.now() - 864e5));
+    console.log("[Calendar] Saving baseline as:", yesterday);
+    let characters = cache.get("characters");
+    if (!characters) {
+      characters = await api.fetchCharacters();
+    }
+    if (!characters || !Array.isArray(characters)) {
+      console.warn("[Calendar] No characters found for baseline");
+      return;
+    }
+    const BATCH_SIZE = 5;
+    const rankings = [];
+    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+      const batch = characters.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (char) => {
+          let chats = cache.get("chats", char.avatar);
+          if (!chats || !Array.isArray(chats)) {
+            try {
+              chats = await api.fetchChatsForCharacter(char.avatar);
+            } catch {
+              chats = [];
+            }
+          }
+          const chatCount = Array.isArray(chats) ? chats.length : 0;
+          const messageCount = Array.isArray(chats) ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) : 0;
+          return { avatar: char.avatar, chatCount, messageCount };
+        })
+      );
+      rankings.push(...batchResults);
+    }
+    rankings.sort((a, b) => b.messageCount - a.messageCount);
+    const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
+    const byChar = {};
+    rankings.forEach((r) => {
+      byChar[r.avatar] = r.chatCount;
+    });
+    const topChar = rankings[0]?.avatar || "";
+    saveSnapshot(yesterday, totalChats, topChar, byChar);
+    console.log("[Calendar] Baseline saved:", yesterday, "| total:", totalChats);
   }
   async function saveTodaySnapshot() {
     try {
@@ -4145,17 +4200,35 @@ ${message}` : message;
     };
     const charName = snapshot.topChar.replace(/\.[^/.]+$/, "");
     nameEl.textContent = charName;
-    const increase = getIncrease(date);
-    if (increase !== null) {
-      statsEl.textContent = increase >= 0 ? `+${increase} chats` : `${increase} chats`;
-      statsEl.className = increase >= 0 ? "bot-card-stats positive" : "bot-card-stats negative";
+    const totalIncrease = getIncrease(date);
+    const dateObj = /* @__PURE__ */ new Date(date + "T00:00:00");
+    dateObj.setDate(dateObj.getDate() - 1);
+    const prevDateStr = getLocalDateString(dateObj);
+    const prevSnapshot = getSnapshot(prevDateStr);
+    const charToday = snapshot.byChar?.[snapshot.topChar] || 0;
+    const charYesterday = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
+    const charIncrease = charToday - charYesterday;
+    const hasPrevData = !!prevSnapshot;
+    if (hasPrevData) {
+      let statsText = "";
+      if (charIncrease >= 0) {
+        statsText = `+${charIncrease} chats`;
+      } else {
+        statsText = `${charIncrease} chats`;
+      }
+      if (totalIncrease !== null && totalIncrease !== charIncrease) {
+        const totalSign = totalIncrease >= 0 ? "+" : "";
+        statsText += ` (Total: ${totalSign}${totalIncrease})`;
+      }
+      statsEl.textContent = statsText;
+      statsEl.className = charIncrease >= 0 ? "bot-card-stats positive" : "bot-card-stats negative";
     } else {
-      statsEl.textContent = `${snapshot.total} chats`;
+      statsEl.textContent = `Total: ${snapshot.total} chats`;
       statsEl.className = "bot-card-stats";
     }
-    const dateObj = new Date(date);
+    const displayDate = new Date(date);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    dateEl.textContent = `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
     card.style.display = "flex";
   }
   function hideBotCard() {

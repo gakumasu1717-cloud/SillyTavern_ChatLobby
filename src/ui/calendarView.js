@@ -113,15 +113,36 @@ export async function openCalendarView() {
             wrapper.addEventListener('touchend', handleTouchEnd, { passive: true });
         }
         
-        calendarOverlay.style.display = 'flex';
         selectedDateInfo = null;
         hideBotCard();
         
-        // 스냅샷 저장 실패해도 UI는 열림
+        // 첫 접근 체크 (스냅샷 0개)
+        const existingSnapshots = loadSnapshots();
+        const isFirstAccess = Object.keys(existingSnapshots).length === 0;
+        
+        if (isFirstAccess) {
+            // 첫 접근: 현재 데이터를 "어제"로 저장하고 초기화 메시지
+            console.log('[Calendar] First access - initializing baseline data');
+            
+            try {
+                await saveBaselineSnapshot();
+            } catch (e) {
+                console.error('[Calendar] Failed to save baseline:', e);
+            }
+            
+            // 초기화 완료 알림 (캘린더 안 열림)
+            alert('Calendar initialized! Come back tomorrow to see your stats.');
+            isCalculating = false;
+            return;
+        }
+        
+        // 이후 접근: 정상 동작
+        calendarOverlay.style.display = 'flex';
+        
         try {
             await saveTodaySnapshot();
         } catch (e) {
-            console.error('[Calendar] Failed to save today snapshot, but UI will open:', e);
+            console.error('[Calendar] Failed to save today snapshot:', e);
         }
         
         renderCalendar();
@@ -178,6 +199,67 @@ function handleSwipe() {
             navigateMonth(-1);
         }
     }
+}
+
+/**
+ * 첫 접근 시 베이스라인 스냅샷 저장 (어제 날짜로)
+ * 이후 증감량 계산의 기준점이 됨
+ */
+async function saveBaselineSnapshot() {
+    const yesterday = getLocalDateString(new Date(Date.now() - 86400000));
+    
+    console.log('[Calendar] Saving baseline as:', yesterday);
+    
+    let characters = cache.get('characters');
+    if (!characters) {
+        characters = await api.fetchCharacters();
+    }
+    
+    if (!characters || !Array.isArray(characters)) {
+        console.warn('[Calendar] No characters found for baseline');
+        return;
+    }
+    
+    const BATCH_SIZE = 5;
+    const rankings = [];
+    
+    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+        const batch = characters.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+            batch.map(async (char) => {
+                let chats = cache.get('chats', char.avatar);
+                if (!chats || !Array.isArray(chats)) {
+                    try {
+                        chats = await api.fetchChatsForCharacter(char.avatar);
+                    } catch {
+                        chats = [];
+                    }
+                }
+                const chatCount = Array.isArray(chats) ? chats.length : 0;
+                const messageCount = Array.isArray(chats) 
+                    ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) 
+                    : 0;
+                return { avatar: char.avatar, chatCount, messageCount };
+            })
+        );
+        rankings.push(...batchResults);
+    }
+    
+    rankings.sort((a, b) => b.messageCount - a.messageCount);
+    const totalChats = rankings.reduce((sum, r) => sum + r.chatCount, 0);
+    
+    // 캐릭터별 채팅수 객체 생성
+    const byChar = {};
+    rankings.forEach(r => {
+        byChar[r.avatar] = r.chatCount;
+    });
+    
+    // 메시지 1위 캐릭터
+    const topChar = rankings[0]?.avatar || '';
+    
+    // 어제 날짜로 저장 (베이스라인)
+    saveSnapshot(yesterday, totalChats, topChar, byChar);
+    console.log('[Calendar] Baseline saved:', yesterday, '| total:', totalChats);
 }
 
 /**
@@ -390,7 +472,7 @@ function handleDateClick(e) {
 }
 
 /**
- * 봇카드 표시 (넷플릭스 스타일)
+ * 봇카드 표시 (넷플릭스 스타일) - 캐릭터별 증감량 포함
  */
 function showBotCard(date, snapshot) {
     const card = calendarOverlay.querySelector('#calendar-bot-card');
@@ -411,18 +493,50 @@ function showBotCard(date, snapshot) {
     const charName = snapshot.topChar.replace(/\.[^/.]+$/, '');
     nameEl.textContent = charName;
     
-    const increase = getIncrease(date);
-    if (increase !== null) {
-        statsEl.textContent = increase >= 0 ? `+${increase} chats` : `${increase} chats`;
-        statsEl.className = increase >= 0 ? 'bot-card-stats positive' : 'bot-card-stats negative';
+    // 전체 증감량
+    const totalIncrease = getIncrease(date);
+    
+    // 해당 캐릭터 증감량 계산
+    const dateObj = new Date(date + 'T00:00:00');
+    dateObj.setDate(dateObj.getDate() - 1);
+    const prevDateStr = getLocalDateString(dateObj);
+    const prevSnapshot = getSnapshot(prevDateStr);
+    
+    const charToday = snapshot.byChar?.[snapshot.topChar] || 0;
+    const charYesterday = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
+    const charIncrease = charToday - charYesterday;
+    
+    // 어제 데이터 있는지 확인
+    const hasPrevData = !!prevSnapshot;
+    
+    if (hasPrevData) {
+        // 어제 데이터 있음 → 증감량 표시
+        let statsText = '';
+        
+        // 캐릭터 증감량
+        if (charIncrease >= 0) {
+            statsText = `+${charIncrease} chats`;
+        } else {
+            statsText = `${charIncrease} chats`;
+        }
+        
+        // 전체 증감량도 추가 (다르면)
+        if (totalIncrease !== null && totalIncrease !== charIncrease) {
+            const totalSign = totalIncrease >= 0 ? '+' : '';
+            statsText += ` (Total: ${totalSign}${totalIncrease})`;
+        }
+        
+        statsEl.textContent = statsText;
+        statsEl.className = charIncrease >= 0 ? 'bot-card-stats positive' : 'bot-card-stats negative';
     } else {
-        statsEl.textContent = `${snapshot.total} chats`;
+        // 첫날 (어제 데이터 없음) → 총합만 표시
+        statsEl.textContent = `Total: ${snapshot.total} chats`;
         statsEl.className = 'bot-card-stats';
     }
     
-    const dateObj = new Date(date);
+    const displayDate = new Date(date);
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    dateEl.textContent = `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+    dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
     
     card.style.display = 'flex';
 }
