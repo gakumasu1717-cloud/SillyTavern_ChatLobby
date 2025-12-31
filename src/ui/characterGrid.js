@@ -57,7 +57,7 @@ export async function renderCharacterGrid(searchTerm = '', sortOverride = null) 
     }
     
     isRendering = true;
-    store.setLobbyLocked(true);  // 렌더링 중 클릭 차단
+    // 락은 openLobby/캐릭터클릭에서 관리 (여기서 설정 안 함)
     
     try {
         const container = document.getElementById('chat-lobby-characters');
@@ -83,7 +83,7 @@ export async function renderCharacterGrid(searchTerm = '', sortOverride = null) 
         await renderCharacterList(container, characters, searchTerm, sortOverride);
     } finally {
         isRendering = false;
-        store.setLobbyLocked(false);  // 렌더링 완료 → 클릭 허용
+        // 락 해제는 openLobby/캐릭터클릭에서 관리
         
         // 대기 중인 렌더 있으면 실행
         if (pendingRender) {

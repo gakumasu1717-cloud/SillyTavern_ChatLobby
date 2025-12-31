@@ -272,9 +272,10 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             return;
         }
         
-        // 열기 시작 - 즉시 락
+        // 열기 시작 - 즉시 락 (CHAT_CHANGED settle까지 유지)
         isOpeningLobby = true;
         store.setLobbyOpen(true);  // 다른 호출 차단을 위해 즉시 설정
+        store.setLobbyLocked(true);  // 로비 열릴 때부터 락
         
         const overlay = document.getElementById('chat-lobby-overlay');
         const container = document.getElementById('chat-lobby-container');
@@ -357,6 +358,11 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         } finally {
             // 열기 완료 후 플래그 해제
             isOpeningLobby = false;
+            
+            // 안정화 시간 후 락 해제 (CHAT_CHANGED debounce settle 대기)
+            setTimeout(() => {
+                store.setLobbyLocked(false);
+            }, 500);
         }
     }
     

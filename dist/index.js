@@ -2268,7 +2268,6 @@ ${message}` : message;
       return;
     }
     isRendering = true;
-    store.setLobbyLocked(true);
     try {
       const container = document.getElementById("chat-lobby-characters");
       if (!container) return;
@@ -2287,7 +2286,6 @@ ${message}` : message;
       await renderCharacterList(container, characters, searchTerm, sortOverride);
     } finally {
       isRendering = false;
-      store.setLobbyLocked(false);
       if (pendingRender) {
         const { searchTerm: s, sortOverride: o } = pendingRender;
         pendingRender = null;
@@ -3909,6 +3907,7 @@ ${message}` : message;
       }
       isOpeningLobby = true;
       store.setLobbyOpen(true);
+      store.setLobbyLocked(true);
       const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
@@ -3961,6 +3960,9 @@ ${message}` : message;
         }
       } finally {
         isOpeningLobby = false;
+        setTimeout(() => {
+          store.setLobbyLocked(false);
+        }, 500);
       }
     }
     async function closeLobby() {
