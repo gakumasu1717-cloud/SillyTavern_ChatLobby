@@ -183,12 +183,14 @@ function renderCharacterCard(char, index) {
     <div class="lobby-char-card ${isFav ? 'is-char-fav' : ''}" 
          data-char-index="${index}" 
          data-char-avatar="${safeAvatar}" 
-         data-is-fav="${isFav}">
+         data-is-fav="${isFav}"
+         draggable="false">
         ${favBtn}
         <img class="lobby-char-avatar" 
              src="${avatarUrl}" 
              alt="${escapeHtml(name)}" 
              loading="lazy"
+             draggable="false"
              onerror="this.src='/img/ai4.png'">
         <div class="lobby-char-name">
             <span class="char-name-text">${escapeHtml(name)}</span>
