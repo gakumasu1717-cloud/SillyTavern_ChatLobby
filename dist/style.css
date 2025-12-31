@@ -901,7 +901,9 @@
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
-    line-height: 26px;
+    line-height: 28px;
+    display: flex;
+    align-items: center;
 }
 
 #chat-lobby-chat-sort {
