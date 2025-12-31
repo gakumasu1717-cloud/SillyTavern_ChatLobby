@@ -356,14 +356,23 @@ function renderCalendar() {
             const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
             const charName = snapshot.topChar.replace(/\.[^/.]+$/, '');
             
-            // 어제 대비 메시지 증감량 계산
+            // 어제 대비 메시지 증감량 계산 (캐릭터/전체)
             const prevDate = new Date(THIS_YEAR, currentMonth, day - 1);
             const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
             const prevSnapshot = snapshots[prevDateStr];
-            const prevMsgs = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
-            const todayMsgs = snapshot.byChar?.[snapshot.topChar] || 0;
-            const increase = todayMsgs - prevMsgs;
-            const increaseText = increase > 0 ? `+${increase}` : `${increase}`;
+            
+            // 캐릭터 증감량
+            const prevCharMsgs = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
+            const todayCharMsgs = snapshot.byChar?.[snapshot.topChar] || 0;
+            const charIncrease = todayCharMsgs - prevCharMsgs;
+            
+            // 전체 증감량
+            const prevTotal = prevSnapshot?.total || 0;
+            const todayTotal = snapshot.total || 0;
+            const totalIncrease = todayTotal - prevTotal;
+            
+            const charText = charIncrease >= 0 ? `+${charIncrease}` : `${charIncrease}`;
+            const totalText = totalIncrease >= 0 ? `+${totalIncrease}` : `${totalIncrease}`;
             
             contentHtml = `
                 <img class="cal-card-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0'">
@@ -371,7 +380,7 @@ function renderCalendar() {
                 <div class="cal-card-gradient"></div>
                 <div class="cal-card-info">
                     <div class="cal-card-name">${charName}</div>
-                    <div class="cal-card-count">${increaseText}</div>
+                    <div class="cal-card-count">${charText}/${totalText}</div>
                 </div>
             `;
         } else {
@@ -387,13 +396,6 @@ function renderCalendar() {
     }
     
     grid.innerHTML = html;
-}
-
-/**
- * 날짜 클릭 - 지금은 아무 동작 없음 (정보가 카드에 다 표시됨)
- */
-function handleDateClick(e) {
-    // 클릭 시 아무것도 안함 - 정보는 카드에 이미 표시됨
 }
 
 /**

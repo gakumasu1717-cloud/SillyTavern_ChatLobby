@@ -124,54 +124,6 @@ export function saveSnapshot(date, total, topChar, byChar = {}, isBaseline = fal
 }
 
 /**
- * 해당 날짜 데이터 있는지 확인
- * @param {string} date - YYYY-MM-DD 형식
- * @returns {boolean}
- */
-export function hasSnapshot(date) {
-    const snapshots = loadSnapshots();
-    return !!snapshots[date];
-}
-
-/**
- * 전날 대비 증가량 계산
- * @param {string} date - YYYY-MM-DD 형식
- * @returns {number|null} - 증가량 (전날 데이터 없으면 null)
- */
-export function getIncrease(date) {
-    const snapshots = loadSnapshots();
-    const today = snapshots[date];
-    
-    if (!today) return null;
-    
-    // 전날 날짜 계산 (로컬 타임존)
-    const dateObj = new Date(date + 'T00:00:00');
-    dateObj.setDate(dateObj.getDate() - 1);
-    const prevDate = getLocalDateString(dateObj);
-    
-    const prev = snapshots[prevDate];
-    
-    if (!prev) return null;
-    
-    return today.total - prev.total;
-}
-
-/**
- * 특정 날짜 스냅샷 삭제
- * @param {string} date - YYYY-MM-DD 형식
- */
-export function deleteSnapshot(date) {
-    try {
-        _snapshotsCache = null;
-        const snapshots = loadSnapshots(true);
-        delete snapshots[date];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-    } catch (e) {
-        console.error('[Calendar] Failed to delete snapshot:', e);
-    }
-}
-
-/**
  * 전체 스냅샷 삭제
  */
 export function clearAllSnapshots() {

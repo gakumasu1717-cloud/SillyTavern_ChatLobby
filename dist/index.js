@@ -4077,17 +4077,21 @@ ${message}` : message;
         const prevDate = new Date(THIS_YEAR2, currentMonth, day - 1);
         const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-${String(prevDate.getDate()).padStart(2, "0")}`;
         const prevSnapshot = snapshots[prevDateStr];
-        const prevMsgs = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
-        const todayMsgs = snapshot.byChar?.[snapshot.topChar] || 0;
-        const increase = todayMsgs - prevMsgs;
-        const increaseText = increase > 0 ? `+${increase}` : `${increase}`;
+        const prevCharMsgs = prevSnapshot?.byChar?.[snapshot.topChar] || 0;
+        const todayCharMsgs = snapshot.byChar?.[snapshot.topChar] || 0;
+        const charIncrease = todayCharMsgs - prevCharMsgs;
+        const prevTotal = prevSnapshot?.total || 0;
+        const todayTotal = snapshot.total || 0;
+        const totalIncrease = todayTotal - prevTotal;
+        const charText = charIncrease >= 0 ? `+${charIncrease}` : `${charIncrease}`;
+        const totalText = totalIncrease >= 0 ? `+${totalIncrease}` : `${totalIncrease}`;
         contentHtml = `
                 <img class="cal-card-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0'">
                 <div class="cal-card-day">${day}</div>
                 <div class="cal-card-gradient"></div>
                 <div class="cal-card-info">
                     <div class="cal-card-name">${charName}</div>
-                    <div class="cal-card-count">${increaseText}</div>
+                    <div class="cal-card-count">${charText}/${totalText}</div>
                 </div>
             `;
       } else {
@@ -4100,8 +4104,6 @@ ${message}` : message;
         `;
     }
     grid.innerHTML = html;
-  }
-  function handleDateClick(e) {
   }
   function showDebugModal() {
     const modal = calendarOverlay.querySelector("#calendar-debug-modal");
