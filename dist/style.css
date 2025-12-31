@@ -2761,7 +2761,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     min-height: 0;
 }
 
-/* 날짜 그리드 - 7열, 연속적인 선 (칸마다 X, 전체에 6개 세로선) */
+/* 날짜 그리드 - 7열, 열린 그리드 (외곽 테두리 없음) */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -2770,44 +2770,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     overflow: visible;
 }
 
-/* 6개 세로선 (열 사이) */
-.calendar-grid::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: -60px;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 10;
-    background:
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) calc(100% / 7 * 1) 0 / 1px calc(100% + 60px) no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) calc(100% / 7 * 2) 0 / 1px calc(100% + 60px) no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) calc(100% / 7 * 3) 0 / 1px calc(100% + 60px) no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) calc(100% / 7 * 4) 0 / 1px calc(100% + 60px) no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) calc(100% / 7 * 5) 0 / 1px calc(100% + 60px) no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) calc(100% / 7 * 6) 0 / 1px calc(100% + 60px) no-repeat;
-}
-
-/* 가로선 (행 사이, 최대 5개 행 = 4개 선) - 오른쪽으로 흐려짐 */
-.calendar-grid::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: -60px;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 10;
-    --row-h: calc(100% / 5); /* 대략 5행 기준 */
-    background:
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) 0 calc(var(--row-h) * 1) / calc(100% + 60px) 1px no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) 0 calc(var(--row-h) * 2) / calc(100% + 60px) 1px no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) 0 calc(var(--row-h) * 3) / calc(100% + 60px) 1px no-repeat,
-        linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 85%, transparent 100%) 0 calc(var(--row-h) * 4) / calc(100% + 60px) 1px no-repeat;
-}
-
-/* 각 날짜 셀 - 단순 컨테이너, 테두리 없음 */
+/* 각 날짜 셀 - 오른쪽/아래 선만 (셀 기준) */
 .cal-card {
     position: relative;
     aspect-ratio: 2 / 3;
@@ -2815,6 +2778,37 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: transparent;
     overflow: visible;
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* 세로선 - 오른쪽 (아래로 흐려짐) */
+.cal-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 1px;
+    height: calc(100% + 30px);
+    background: linear-gradient(to bottom, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 80%, transparent 100%);
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* 가로선 - 아래쪽 (오른쪽으로 흐려짐) */
+.cal-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: calc(100% + 30px);
+    height: 1px;
+    background: linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.15) 80%, transparent 100%);
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* 맨 오른쪽 열 (7번째) - 세로선 없음 */
+.cal-card:nth-child(7n)::before {
+    display: none;
 }
 
 .cal-card.today {
