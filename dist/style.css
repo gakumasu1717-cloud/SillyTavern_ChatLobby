@@ -875,17 +875,25 @@
     gap: 8px;
 }
 
+.filters-row select,
+.filters-row button {
+    height: 32px;
+    min-height: 32px;
+    box-sizing: border-box;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
 .filters-row select {
-    padding: 6px 10px;
+    padding: 0 10px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--text-primary);
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
-    height: 32px;
     min-width: 80px;
-    box-sizing: border-box;
+    line-height: 30px;
 }
 
 #chat-lobby-folder-filter {
@@ -898,28 +906,23 @@
     color: var(--text-primary);
     padding: 0;
     width: 32px;
-    height: 32px;
-    min-height: 32px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
     transition: all var(--transition-fast);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-sizing: border-box;
-    flex-shrink: 0;
 }
 
 /* 아이콘 버튼 내부 이모지 정렬 */
 .filters-row button .icon {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 100%;
+    height: 100%;
+    font-size: 15px;
     line-height: 1;
-    font-size: 16px;
 }
 
 .filters-row button:hover {
