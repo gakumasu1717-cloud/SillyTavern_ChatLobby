@@ -62,17 +62,6 @@ export async function openCalendarView() {
                     <div class="calendar-footer" id="calendar-footer"></div>
                 </div>
                 
-                <!-- 봇카드 (넷플릭스 스타일) - overlay 바로 아래에 위치 -->
-                <div class="calendar-bot-card" id="calendar-bot-card" style="display: none;">
-                    <img class="bot-card-avatar" id="bot-card-avatar" src="" alt="">
-                    <div class="bot-card-gradient"></div>
-                    <div class="bot-card-info">
-                        <div class="bot-card-name" id="bot-card-name"></div>
-                        <div class="bot-card-stats" id="bot-card-stats"></div>
-                        <div class="bot-card-date" id="bot-card-date"></div>
-                    </div>
-                </div>
-                
                 <!-- 디버그/삭제 모달 -->
                 <div class="calendar-debug-modal" id="calendar-debug-modal" style="display: none;">
                     <div class="debug-modal-header">
@@ -88,6 +77,22 @@ export async function openCalendarView() {
                 </div>
             `;
             document.body.appendChild(calendarOverlay);
+            
+            // 봇카드는 body에 직접 append (transform 영향 차단)
+            const botCard = document.createElement('div');
+            botCard.id = 'calendar-bot-card';
+            botCard.className = 'calendar-bot-card';
+            botCard.style.display = 'none';
+            botCard.innerHTML = `
+                <img class="bot-card-avatar" id="bot-card-avatar" src="" alt="">
+                <div class="bot-card-gradient"></div>
+                <div class="bot-card-info">
+                    <div class="bot-card-name" id="bot-card-name"></div>
+                    <div class="bot-card-stats" id="bot-card-stats"></div>
+                    <div class="bot-card-date" id="bot-card-date"></div>
+                </div>
+            `;
+            document.body.appendChild(botCard);
             
             // 이벤트 바인딩
             calendarOverlay.querySelector('#calendar-close').addEventListener('click', closeCalendarView);
@@ -489,13 +494,16 @@ function handleDateClick(e) {
 function showBotCard(date, snapshot) {
     console.log('[Calendar] showBotCard called:', date);
     
-    const card = calendarOverlay.querySelector('#calendar-bot-card');
-    const avatarEl = calendarOverlay.querySelector('#bot-card-avatar');
-    const nameEl = calendarOverlay.querySelector('#bot-card-name');
-    const statsEl = calendarOverlay.querySelector('#bot-card-stats');
-    const dateEl = calendarOverlay.querySelector('#bot-card-date');
+    // body에 직접 append된 봇카드 참조
+    const card = document.getElementById('calendar-bot-card');
+    const avatarEl = document.getElementById('bot-card-avatar');
+    const nameEl = document.getElementById('bot-card-name');
+    const statsEl = document.getElementById('bot-card-stats');
+    const dateEl = document.getElementById('bot-card-date');
     
     console.log('[Calendar] card element:', !!card);
+    
+    if (!card) return;
     
     if (!snapshot.topChar) {
         hideBotCard();
@@ -561,23 +569,14 @@ function showBotCard(date, snapshot) {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
     
-    // 모바일 CSS 버그 방지: 인라인 스타일 강제 적용
-    card.style.cssText = `
-        display: flex !important;
-        position: fixed !important;
-        bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        z-index: 2147483647 !important;
-    `;
+    // body에 직접 append되어 transform 영향 없음 - 간단한 표시
+    card.style.display = 'flex';
 }
 
 function hideBotCard() {
-    const card = calendarOverlay?.querySelector('#calendar-bot-card');
+    const card = document.getElementById('calendar-bot-card');
     if (card) {
-        card.style.cssText = 'display: none !important;';
+        card.style.display = 'none';
     }
 }
 

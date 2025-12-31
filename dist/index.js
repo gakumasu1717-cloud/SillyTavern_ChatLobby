@@ -3892,17 +3892,6 @@ ${message}` : message;
                     <div class="calendar-footer" id="calendar-footer"></div>
                 </div>
                 
-                <!-- \uBD07\uCE74\uB4DC (\uB137\uD50C\uB9AD\uC2A4 \uC2A4\uD0C0\uC77C) - overlay \uBC14\uB85C \uC544\uB798\uC5D0 \uC704\uCE58 -->
-                <div class="calendar-bot-card" id="calendar-bot-card" style="display: none;">
-                    <img class="bot-card-avatar" id="bot-card-avatar" src="" alt="">
-                    <div class="bot-card-gradient"></div>
-                    <div class="bot-card-info">
-                        <div class="bot-card-name" id="bot-card-name"></div>
-                        <div class="bot-card-stats" id="bot-card-stats"></div>
-                        <div class="bot-card-date" id="bot-card-date"></div>
-                    </div>
-                </div>
-                
                 <!-- \uB514\uBC84\uADF8/\uC0AD\uC81C \uBAA8\uB2EC -->
                 <div class="calendar-debug-modal" id="calendar-debug-modal" style="display: none;">
                     <div class="debug-modal-header">
@@ -3918,6 +3907,20 @@ ${message}` : message;
                 </div>
             `;
         document.body.appendChild(calendarOverlay);
+        const botCard = document.createElement("div");
+        botCard.id = "calendar-bot-card";
+        botCard.className = "calendar-bot-card";
+        botCard.style.display = "none";
+        botCard.innerHTML = `
+                <img class="bot-card-avatar" id="bot-card-avatar" src="" alt="">
+                <div class="bot-card-gradient"></div>
+                <div class="bot-card-info">
+                    <div class="bot-card-name" id="bot-card-name"></div>
+                    <div class="bot-card-stats" id="bot-card-stats"></div>
+                    <div class="bot-card-date" id="bot-card-date"></div>
+                </div>
+            `;
+        document.body.appendChild(botCard);
         calendarOverlay.querySelector("#calendar-close").addEventListener("click", closeCalendarView);
         calendarOverlay.querySelector("#calendar-prev").addEventListener("click", () => navigateMonth(-1));
         calendarOverlay.querySelector("#calendar-next").addEventListener("click", () => navigateMonth(1));
@@ -4186,12 +4189,13 @@ ${message}` : message;
   }
   function showBotCard(date, snapshot) {
     console.log("[Calendar] showBotCard called:", date);
-    const card = calendarOverlay.querySelector("#calendar-bot-card");
-    const avatarEl = calendarOverlay.querySelector("#bot-card-avatar");
-    const nameEl = calendarOverlay.querySelector("#bot-card-name");
-    const statsEl = calendarOverlay.querySelector("#bot-card-stats");
-    const dateEl = calendarOverlay.querySelector("#bot-card-date");
+    const card = document.getElementById("calendar-bot-card");
+    const avatarEl = document.getElementById("bot-card-avatar");
+    const nameEl = document.getElementById("bot-card-name");
+    const statsEl = document.getElementById("bot-card-stats");
+    const dateEl = document.getElementById("bot-card-date");
     console.log("[Calendar] card element:", !!card);
+    if (!card) return;
     if (!snapshot.topChar) {
       hideBotCard();
       return;
@@ -4239,21 +4243,12 @@ ${message}` : message;
     const displayDate = new Date(date);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     dateEl.textContent = `${monthNames[displayDate.getMonth()]} ${displayDate.getDate()}`;
-    card.style.cssText = `
-        display: flex !important;
-        position: fixed !important;
-        bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        z-index: 2147483647 !important;
-    `;
+    card.style.display = "flex";
   }
   function hideBotCard() {
-    const card = calendarOverlay?.querySelector("#calendar-bot-card");
+    const card = document.getElementById("calendar-bot-card");
     if (card) {
-      card.style.cssText = "display: none !important;";
+      card.style.display = "none";
     }
   }
   function showDebugModal() {
