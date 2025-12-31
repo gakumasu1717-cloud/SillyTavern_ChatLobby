@@ -61,9 +61,14 @@ export function parseDateFromFilename(filename) {
 export function getTimestamp(chat) {
     // 1. last_mes 우선 (마지막 메시지 시간)
     if (chat.last_mes) {
-        const ts = typeof chat.last_mes === 'number' 
-            ? chat.last_mes 
-            : new Date(chat.last_mes).getTime();
+        let ts;
+        if (typeof chat.last_mes === 'number') {
+            ts = chat.last_mes;
+        } else {
+            // SillyTavern 형식: 'December 31, 2025 5:48pm' → '5:48 pm' 공백 추가
+            const fixedStr = String(chat.last_mes).replace(/(\d+)(am|pm)/i, '$1 $2');
+            ts = new Date(fixedStr).getTime();
+        }
         if (ts > 0 && !isNaN(ts)) return ts;
     }
     

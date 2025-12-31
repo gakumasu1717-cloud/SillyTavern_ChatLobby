@@ -1729,7 +1729,13 @@ ${message}` : message;
   }
   function getTimestamp(chat) {
     if (chat.last_mes) {
-      const ts2 = typeof chat.last_mes === "number" ? chat.last_mes : new Date(chat.last_mes).getTime();
+      let ts2;
+      if (typeof chat.last_mes === "number") {
+        ts2 = chat.last_mes;
+      } else {
+        const fixedStr = String(chat.last_mes).replace(/(\d+)(am|pm)/i, "$1 $2");
+        ts2 = new Date(fixedStr).getTime();
+      }
       if (ts2 > 0 && !isNaN(ts2)) return ts2;
     }
     if (chat.file_date || chat.date) {
