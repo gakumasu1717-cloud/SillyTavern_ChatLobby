@@ -1,69 +1,98 @@
 // ============================================
-// 캘린더 뷰 - Wrapped 스타일 오버레이
+// 캘린더 뷰 - Wrapped 스타일 풀스크린
 // ============================================
 
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
-import { loadSnapshots, getSnapshot, saveSnapshot, getIncrease } from '../data/calendarStorage.js';
+import { loadSnapshots, getSnapshot, saveSnapshot, getIncrease, getLocalDateString } from '../data/calendarStorage.js';
 
 let calendarOverlay = null;
-let currentYear = new Date().getFullYear();
+const THIS_YEAR = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
 let selectedDateInfo = null;
+let isCalculating = false;
 
 /**
  * 캘린더 뷰 열기
  */
 export async function openCalendarView() {
-    // 오버레이 생성
-    if (!calendarOverlay) {
-        calendarOverlay = document.createElement('div');
-        calendarOverlay.id = 'calendar-overlay';
-        calendarOverlay.innerHTML = `
-            <div class="calendar-container">
-                <div class="calendar-header">
-                    <button class="calendar-back" id="calendar-close">←</button>
-                    <h3>📅 채팅 캘린더</h3>
+    // 레이스 컨디션 방지
+    if (isCalculating) return;
+    isCalculating = true;
+    
+    try {
+        // 오버레이 생성
+        if (!calendarOverlay) {
+            calendarOverlay = document.createElement('div');
+            calendarOverlay.id = 'calendar-overlay';
+            calendarOverlay.innerHTML = `
+                <div class="calendar-fullscreen">
+                    <div class="calendar-header">
+                        <button class="calendar-close-btn" id="calendar-close">←</button>
+                        <h2>📅 채팅 캘린더</h2>
+                    </div>
+                    
+                    <div class="calendar-main">
+                        <div class="calendar-nav">
+                            <button class="cal-nav-btn" id="calendar-prev">◀</button>
+                            <span class="cal-month-title" id="calendar-title"></span>
+                            <button class="cal-nav-btn" id="calendar-next">▶</button>
+                        </div>
+                        
+                        <div class="calendar-weekdays">
+                            <span class="sun">일</span>
+                            <span>월</span>
+                            <span>화</span>
+                            <span>수</span>
+                            <span>목</span>
+                            <span>금</span>
+                            <span class="sat">토</span>
+                        </div>
+                        
+                        <div class="calendar-grid" id="calendar-grid"></div>
+                    </div>
+                    
+                    <!-- 선택된 날짜 봇카드 -->
+                    <div class="calendar-detail-card" id="calendar-detail" style="display: none;">
+                        <div class="detail-card-inner">
+                            <img class="detail-card-avatar" id="detail-avatar" src="" alt="">
+                            <div class="detail-card-overlay">
+                                <div class="detail-card-name" id="detail-name"></div>
+                                <div class="detail-card-stats" id="detail-stats"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="calendar-footer" id="calendar-footer"></div>
                 </div>
-                <div class="calendar-nav-row">
-                    <button class="calendar-nav" id="calendar-prev">◀</button>
-                    <span id="calendar-title"></span>
-                    <button class="calendar-nav" id="calendar-next">▶</button>
-                </div>
-                <div class="calendar-weekdays">
-                    <span class="sunday">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="saturday">토</span>
-                </div>
-                <div class="calendar-grid" id="calendar-grid"></div>
-                <div class="calendar-detail" id="calendar-detail" style="display: none;">
-                    <div class="detail-date" id="detail-date"></div>
-                    <div class="detail-increase" id="detail-increase"></div>
-                    <div class="detail-char" id="detail-char"></div>
-                </div>
-                <div class="calendar-footer" id="calendar-footer"></div>
-            </div>
-        `;
-        document.body.appendChild(calendarOverlay);
+            `;
+            document.body.appendChild(calendarOverlay);
+            
+            // 이벤트 바인딩
+            calendarOverlay.querySelector('#calendar-close').addEventListener('click', closeCalendarView);
+            calendarOverlay.querySelector('#calendar-prev').addEventListener('click', () => navigateMonth(-1));
+            calendarOverlay.querySelector('#calendar-next').addEventListener('click', () => navigateMonth(1));
+            calendarOverlay.addEventListener('click', (e) => {
+                if (e.target === calendarOverlay) closeCalendarView();
+            });
+            
+            // 날짜 클릭/호버 이벤트 위임
+            const grid = calendarOverlay.querySelector('#calendar-grid');
+            grid.addEventListener('click', handleDateClick);
+            bindHoverEvents(grid);
+        }
         
-        // 이벤트 바인딩
-        calendarOverlay.querySelector('#calendar-close').addEventListener('click', closeCalendarView);
-        calendarOverlay.querySelector('#calendar-prev').addEventListener('click', () => navigateMonth(-1));
-        calendarOverlay.querySelector('#calendar-next').addEventListener('click', () => navigateMonth(1));
-        calendarOverlay.addEventListener('click', (e) => {
-            if (e.target === calendarOverlay) closeCalendarView();
-        });
+        calendarOverlay.style.display = 'flex';
+        selectedDateInfo = null;
         
-        // 날짜 클릭 이벤트 위임
-        calendarOverlay.querySelector('#calendar-grid').addEventListener('click', handleDateClick);
+        // 오늘 스냅샷 저장 (매번 연산)
+        await saveTodaySnapshot();
+        
+        // 캘린더 렌더링
+        renderCalendar();
+    } finally {
+        isCalculating = false;
     }
-    
-    calendarOverlay.style.display = 'flex';
-    selectedDateInfo = null;
-    
-    // 오늘 스냅샷 저장 (매번 연산)
-    await saveTodaySnapshot();
-    
-    // 캘린더 렌더링
-    renderCalendar();
 }
 
 /**
@@ -76,51 +105,63 @@ export function closeCalendarView() {
 }
 
 /**
- * 월 이동
+ * 월 이동 (올해만)
  */
 function navigateMonth(delta) {
-    currentMonth += delta;
-    if (currentMonth < 0) {
-        currentMonth = 11;
-        currentYear--;
-    } else if (currentMonth > 11) {
-        currentMonth = 0;
-        currentYear++;
+    const newMonth = currentMonth + delta;
+    
+    // 올해 1월~12월만 허용
+    if (newMonth < 0 || newMonth > 11) {
+        return;
     }
+    
+    currentMonth = newMonth;
     selectedDateInfo = null;
     renderCalendar();
 }
 
 /**
- * 오늘 스냅샷 저장 (매번 연산 실행)
+ * 오늘 스냅샷 저장 (매번 연산 실행) - 배치 처리
  */
 async function saveTodaySnapshot() {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateString();
         
-        // 캐릭터 목록 가져오기
-        let characters = cache.get('characters', 'all');
+        // 캐릭터 목록 가져오기 (캐시 키 수정)
+        let characters = cache.get('characters');
         if (!characters) {
             characters = await api.fetchCharacters();
         }
         
-        // 전체 채팅 수 계산 + 1위 캐릭터 찾기 (statsView.js 로직 재활용)
+        if (!characters || !Array.isArray(characters)) {
+            console.warn('[Calendar] No characters found');
+            return;
+        }
+        
+        // 배치 처리로 API 호출 최적화
+        const BATCH_SIZE = 5;
         const rankings = [];
         
-        for (const char of characters) {
-            let chats = cache.get('chats', char.avatar);
-            if (!chats || !Array.isArray(chats)) {
-                try {
-                    chats = await api.fetchChatsForCharacter(char.avatar);
-                } catch {
-                    chats = [];
-                }
-            }
-            const chatCount = Array.isArray(chats) ? chats.length : 0;
-            const messageCount = Array.isArray(chats) 
-                ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) 
-                : 0;
-            rankings.push({ name: char.name, avatar: char.avatar, chatCount, messageCount });
+        for (let i = 0; i < characters.length; i += BATCH_SIZE) {
+            const batch = characters.slice(i, i + BATCH_SIZE);
+            const batchResults = await Promise.all(
+                batch.map(async (char) => {
+                    let chats = cache.get('chats', char.avatar);
+                    if (!chats || !Array.isArray(chats)) {
+                        try {
+                            chats = await api.fetchChatsForCharacter(char.avatar);
+                        } catch {
+                            chats = [];
+                        }
+                    }
+                    const chatCount = Array.isArray(chats) ? chats.length : 0;
+                    const messageCount = Array.isArray(chats) 
+                        ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) 
+                        : 0;
+                    return { name: char.name, avatar: char.avatar, chatCount, messageCount };
+                })
+            );
+            rankings.push(...batchResults);
         }
         
         // 메시지 수로 정렬해서 1위 찾기
@@ -144,12 +185,18 @@ function renderCalendar() {
     const grid = calendarOverlay.querySelector('#calendar-grid');
     const footer = calendarOverlay.querySelector('#calendar-footer');
     const detail = calendarOverlay.querySelector('#calendar-detail');
+    const prevBtn = calendarOverlay.querySelector('#calendar-prev');
+    const nextBtn = calendarOverlay.querySelector('#calendar-next');
     
-    title.textContent = `${currentYear}년 ${currentMonth + 1}월`;
+    title.textContent = `${currentMonth + 1}월`;
+    
+    // 이전/다음 버튼 비활성화
+    prevBtn.disabled = (currentMonth === 0);
+    nextBtn.disabled = (currentMonth === 11);
     
     // 해당 월 첫째 날 요일과 마지막 날짜
-    const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const firstDay = new Date(THIS_YEAR, currentMonth, 1).getDay();
+    const daysInMonth = new Date(THIS_YEAR, currentMonth + 1, 0).getDate();
     
     // 스냅샷 데이터 가져오기
     const snapshots = loadSnapshots();
@@ -163,10 +210,10 @@ function renderCalendar() {
     }
     
     // 날짜 셀
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     
     for (let day = 1; day <= daysInMonth; day++) {
-        const date = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const date = `${THIS_YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const snapshot = snapshots[date];
         const isToday = date === today;
         const hasData = !!snapshot;
@@ -175,8 +222,9 @@ function renderCalendar() {
         if (hasData && snapshot.topChar) {
             // topChar 아바타 썸네일 표시
             const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
-            content = `<img class="day-avatar" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`;
-        } else if (!hasData) {
+            content = `<img class="day-avatar" src="${avatarUrl}" alt="" onerror="this.style.display='none'; this.parentElement.querySelector('.day-no-data')?.style.display='block';">`;
+        }
+        if (!hasData) {
             content = '<span class="day-no-data">-</span>';
         }
         
@@ -191,14 +239,36 @@ function renderCalendar() {
     grid.innerHTML = html;
     
     // 상세 정보 숨김
-    detail.style.display = selectedDateInfo ? 'block' : 'none';
+    detail.style.display = selectedDateInfo ? 'flex' : 'none';
     if (selectedDateInfo) {
         showDateDetail(selectedDateInfo);
     }
     
-    // 푸터에 통계 표시
+    // 푸터에 연도 표시
     const totalDays = Object.keys(snapshots).length;
-    footer.textContent = `📊 기록된 날: ${totalDays}일`;
+    footer.textContent = `${THIS_YEAR}년 • 기록된 날: ${totalDays}일`;
+}
+
+/**
+ * hover 이벤트 바인딩 (PC)
+ */
+function bindHoverEvents(grid) {
+    grid.addEventListener('mouseenter', (e) => {
+        const dayEl = e.target.closest('.calendar-day');
+        if (dayEl && !dayEl.classList.contains('empty') && dayEl.dataset.date) {
+            const snapshot = getSnapshot(dayEl.dataset.date);
+            if (snapshot) {
+                showDateDetail(dayEl.dataset.date);
+            }
+        }
+    }, true);
+    
+    grid.addEventListener('mouseleave', (e) => {
+        const dayEl = e.target.closest('.calendar-day');
+        if (dayEl && !selectedDateInfo) {
+            calendarOverlay.querySelector('#calendar-detail').style.display = 'none';
+        }
+    }, true);
 }
 
 /**
@@ -212,7 +282,13 @@ function handleDateClick(e) {
     const snapshot = getSnapshot(date);
     
     if (!snapshot) {
-        // 데이터 없는 날짜
+        selectedDateInfo = null;
+        calendarOverlay.querySelector('#calendar-detail').style.display = 'none';
+        return;
+    }
+    
+    // 같은 날짜 클릭 시 토글
+    if (selectedDateInfo === date) {
         selectedDateInfo = null;
         calendarOverlay.querySelector('#calendar-detail').style.display = 'none';
         return;
@@ -223,52 +299,43 @@ function handleDateClick(e) {
 }
 
 /**
- * 날짜 상세 정보 표시
+ * 날짜 상세 정보 표시 (봇카드 스타일)
  */
 function showDateDetail(date) {
     const detail = calendarOverlay.querySelector('#calendar-detail');
-    const dateEl = calendarOverlay.querySelector('#detail-date');
-    const increaseEl = calendarOverlay.querySelector('#detail-increase');
-    const charEl = calendarOverlay.querySelector('#detail-char');
+    const avatarEl = calendarOverlay.querySelector('#detail-avatar');
+    const nameEl = calendarOverlay.querySelector('#detail-name');
+    const statsEl = calendarOverlay.querySelector('#detail-stats');
     
     const snapshot = getSnapshot(date);
-    if (!snapshot) return;
+    if (!snapshot || !snapshot.topChar) {
+        detail.style.display = 'none';
+        return;
+    }
     
-    // 날짜 표시
-    const dateObj = new Date(date);
-    const monthDay = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일`;
-    dateEl.textContent = monthDay;
+    // 아바타
+    const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
+    avatarEl.src = avatarUrl;
+    avatarEl.onerror = () => { avatarEl.src = '/img/ai4.png'; };
     
-    // 증감량 계산
+    // 이름 (확장자 제거)
+    const charName = snapshot.topChar.replace(/\.[^/.]+$/, '');
+    nameEl.textContent = charName;
+    
+    // 증감량
     const increase = getIncrease(date);
     if (increase !== null) {
-        if (increase > 0) {
-            increaseEl.textContent = `+${increase}개 채팅 증가`;
-            increaseEl.className = 'detail-increase positive';
-        } else if (increase < 0) {
-            increaseEl.textContent = `${increase}개 채팅 감소`;
-            increaseEl.className = 'detail-increase negative';
+        if (increase >= 0) {
+            statsEl.textContent = `+${increase}개 채팅`;
+            statsEl.className = 'detail-card-stats';
         } else {
-            increaseEl.textContent = `변화 없음`;
-            increaseEl.className = 'detail-increase zero';
+            statsEl.textContent = `${increase}개 채팅`;
+            statsEl.className = 'detail-card-stats negative';
         }
     } else {
-        increaseEl.textContent = `총 ${snapshot.total}개 채팅`;
-        increaseEl.className = 'detail-increase first';
+        statsEl.textContent = `총 ${snapshot.total}개 채팅`;
+        statsEl.className = 'detail-card-stats';
     }
     
-    // topChar 표시
-    if (snapshot.topChar) {
-        const avatarUrl = `/characters/${encodeURIComponent(snapshot.topChar)}`;
-        const charName = snapshot.topChar.replace(/\.[^/.]+$/, ''); // 확장자 제거
-        charEl.innerHTML = `
-            <img class="detail-avatar" src="${avatarUrl}" alt="${charName}" onerror="this.style.display='none'">
-            <span class="detail-char-name">${charName}</span>
-            <span class="detail-char-label">가장 많이 대화함</span>
-        `;
-    } else {
-        charEl.innerHTML = '';
-    }
-    
-    detail.style.display = 'block';
+    detail.style.display = 'flex';
 }

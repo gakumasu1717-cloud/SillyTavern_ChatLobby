@@ -3,22 +3,41 @@
 // ============================================
 
 const STORAGE_KEY = 'chatLobby_calendar';
+const THIS_YEAR = new Date().getFullYear();
+
+// 캐시
+let _snapshotsCache = null;
 
 /**
- * 전체 스냅샷 객체 로드
+ * 로컬 날짜 문자열 반환 (타임존 안전)
+ * @param {Date} date
+ * @returns {string} YYYY-MM-DD
+ */
+export function getLocalDateString(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 전체 스냅샷 객체 로드 (캐싱)
+ * @param {boolean} forceRefresh - 캐시 무시하고 새로 로드
  * @returns {Object} - { 'YYYY-MM-DD': { total, topChar } }
  */
-export function loadSnapshots() {
+export function loadSnapshots(forceRefresh = false) {
+    if (_snapshotsCache && !forceRefresh) {
+        return _snapshotsCache;
+    }
     try {
         const data = localStorage.getItem(STORAGE_KEY);
         if (data) {
             const parsed = JSON.parse(data);
-            return parsed.snapshots || {};
+            _snapshotsCache = parsed.snapshots || {};
+            return _snapshotsCache;
         }
     } catch (e) {
         console.error('[Calendar] Failed to load snapshots:', e);
     }
-    return {};
+    _snapshotsCache = {};
+    return _snapshotsCache;
 }
 
 /**
@@ -38,8 +57,15 @@ export function getSnapshot(date) {
  * @param {string} topChar - 1위 캐릭터 아바타
  */
 export function saveSnapshot(date, total, topChar) {
+    // 올해 1월 1일 이전 데이터는 저장 안 함
+    const jan1 = `${THIS_YEAR}-01-01`;
+    if (date < jan1) return;
+    
     try {
-        const snapshots = loadSnapshots();
+        // 캐시 무효화
+        _snapshotsCache = null;
+        
+        const snapshots = loadSnapshots(true);
         snapshots[date] = { total, topChar };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ snapshots }));
     } catch (e) {
@@ -68,10 +94,10 @@ export function getIncrease(date) {
     
     if (!today) return null;
     
-    // 전날 날짜 계산
-    const dateObj = new Date(date);
+    // 전날 날짜 계산 (로컬 타임존)
+    const dateObj = new Date(date + 'T00:00:00');
     dateObj.setDate(dateObj.getDate() - 1);
-    const prevDate = dateObj.toISOString().split('T')[0];
+    const prevDate = getLocalDateString(dateObj);
     
     const prev = snapshots[prevDate];
     
