@@ -1511,7 +1511,7 @@ ${message}` : message;
       scrollThreshold = 10,
       debugName = "unknown"
     } = options;
-    let touchStartX2 = 0;
+    let touchStartX = 0;
     let touchStartY = 0;
     let isScrolling = false;
     let touchHandled = false;
@@ -1536,11 +1536,11 @@ ${message}` : message;
     element.addEventListener("touchstart", (e) => {
       touchHandled = false;
       isScrolling = false;
-      touchStartX2 = e.touches[0].clientX;
+      touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
     }, { passive: true });
     element.addEventListener("touchmove", (e) => {
-      const deltaX = Math.abs(e.touches[0].clientX - touchStartX2);
+      const deltaX = Math.abs(e.touches[0].clientX - touchStartX);
       const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
       if (deltaX > scrollThreshold || deltaY > scrollThreshold) {
         isScrolling = true;
@@ -3836,8 +3836,6 @@ ${message}` : message;
   var THIS_YEAR2 = (/* @__PURE__ */ new Date()).getFullYear();
   var currentMonth = (/* @__PURE__ */ new Date()).getMonth();
   var isCalculating = false;
-  var touchStartX = 0;
-  var touchEndX = 0;
   var originalViewport = null;
   var currentScale = 1;
   var lastDistance = 0;
@@ -3896,8 +3894,6 @@ ${message}` : message;
         calendarOverlay.querySelector("#debug-modal-close").addEventListener("click", hideDebugModal);
         calendarOverlay.querySelector("#debug-clear-all").addEventListener("click", handleClearAll);
         const main = calendarOverlay.querySelector("#calendar-main");
-        main.addEventListener("touchstart", handleTouchStart, { passive: true });
-        main.addEventListener("touchend", handleTouchEnd, { passive: true });
         main.addEventListener("touchstart", handlePinchStart, { passive: true });
         main.addEventListener("touchmove", handlePinchMove, { passive: false });
         main.addEventListener("touchend", handleDoubleTap, { passive: true });
@@ -3952,24 +3948,6 @@ ${message}` : message;
     if (newMonth < 0 || newMonth > 11) return;
     currentMonth = newMonth;
     renderCalendar();
-  }
-  function handleTouchStart(e) {
-    touchStartX = e.changedTouches[0].screenX;
-  }
-  function handleTouchEnd(e) {
-    touchEndX = e.changedTouches[0].screenX;
-    handleSwipe();
-  }
-  function handleSwipe() {
-    const diff = touchStartX - touchEndX;
-    const threshold = 50;
-    if (Math.abs(diff) > threshold) {
-      if (diff > 0) {
-        navigateMonth(1);
-      } else {
-        navigateMonth(-1);
-      }
-    }
   }
   function getDistance(touch1, touch2) {
     const dx = touch1.clientX - touch2.clientX;

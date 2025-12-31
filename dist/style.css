@@ -2805,15 +2805,15 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 가로선 - 행의 첫번째 셀에서만, 전체 너비, 오른쪽 끝 흐려짐 */
+/* 가로선 - 행의 첫번째 셀에서만, 7셀 전체 너비 + 오른쪽 흐려짐 */
 .cal-card:nth-child(7n+1)::after {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
-    width: 110%;
+    width: 750%;
     height: 1px;
-    background: linear-gradient(to right, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 90%, transparent 100%);
+    background: linear-gradient(to right, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 93%, transparent 100%);
     z-index: 5;
     pointer-events: none;
 }

@@ -11,10 +11,6 @@ const THIS_YEAR = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
 let isCalculating = false;
 
-// 스와이프 관련
-let touchStartX = 0;
-let touchEndX = 0;
-
 // 핀치줌 관련
 let originalViewport = null;
 let currentScale = 1;
@@ -85,12 +81,8 @@ export async function openCalendarView() {
             calendarOverlay.querySelector('#debug-modal-close').addEventListener('click', hideDebugModal);
             calendarOverlay.querySelector('#debug-clear-all').addEventListener('click', handleClearAll);
             
-            // 모바일 스와이프 (월 이동) + 핀치줌
-            const main = calendarOverlay.querySelector('#calendar-main');
-            main.addEventListener('touchstart', handleTouchStart, { passive: true });
-            main.addEventListener('touchend', handleTouchEnd, { passive: true });
-            
             // 핀치줌 이벤트
+            const main = calendarOverlay.querySelector('#calendar-main');
             main.addEventListener('touchstart', handlePinchStart, { passive: true });
             main.addEventListener('touchmove', handlePinchMove, { passive: false });
             main.addEventListener('touchend', handleDoubleTap, { passive: true });
@@ -173,33 +165,6 @@ function navigateMonth(delta) {
     
     currentMonth = newMonth;
     renderCalendar();
-}
-
-/**
- * 터치 스와이프 핸들러
- */
-function handleTouchStart(e) {
-    touchStartX = e.changedTouches[0].screenX;
-}
-
-function handleTouchEnd(e) {
-    touchEndX = e.changedTouches[0].screenX;
-    handleSwipe();
-}
-
-function handleSwipe() {
-    const diff = touchStartX - touchEndX;
-    const threshold = 50; // 최소 스와이프 거리
-    
-    if (Math.abs(diff) > threshold) {
-        if (diff > 0) {
-            // 왼쪽 스와이프 -> 다음 달
-            navigateMonth(1);
-        } else {
-            // 오른쪽 스와이프 -> 이전 달
-            navigateMonth(-1);
-        }
-    }
 }
 
 /**
