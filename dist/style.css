@@ -840,8 +840,8 @@
     gap: 8px;
     overflow-x: auto;
     scrollbar-width: none;
-    margin-top: 4px;
-    margin-bottom: 8px;
+    margin-top: 2px;
+    margin-bottom: 6px;
 }
 
 #chat-lobby-char-tags::-webkit-scrollbar {
@@ -880,28 +880,28 @@
     height: 28px;
     box-sizing: border-box;
     flex-shrink: 0;
+    margin: 0;
+    vertical-align: top;
 }
 
 .filters-row select {
-    padding: 0 8px;
-    background: rgba(255, 255, 255, 0.1);
+    padding: 0 24px 0 8px;
+    background: rgba(255, 255, 255, 0.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 6px center;
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--text-primary);
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
-    max-width: 110px;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 #chat-lobby-chat-sort {
-    width: 95px;
+    width: 100px;
 }
 
 #chat-lobby-folder-filter {
-    width: 85px;
+    width: 90px;
 }
 
 .filters-row button {
