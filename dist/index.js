@@ -2162,7 +2162,7 @@ ${message}` : message;
     storage.setSortOption(sortValue);
     refreshCurrentChatList();
   }
-  function refreshCurrentChatList() {
+  async function refreshCurrentChatList() {
     const character = store.currentCharacter;
     if (!character) return;
     const chatsList = document.getElementById("chat-lobby-chats-list");
@@ -2171,7 +2171,7 @@ ${message}` : message;
     if (cachedChats) {
       renderChats(chatsList, cachedChats, character.avatar);
     } else {
-      renderChatList(character);
+      await renderChatList(character);
     }
   }
   function toggleBatchMode() {
@@ -2226,7 +2226,7 @@ ${message}` : message;
       const currentValue = filterSelect.value;
       filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
     }
-    refreshCurrentChatList();
+    await refreshCurrentChatList();
   }
   function isBatchMode() {
     return store.batchModeActive;
@@ -2998,11 +2998,11 @@ ${message}` : message;
       });
     });
     container.querySelectorAll(".folder-item").forEach((item) => {
-      item.addEventListener("click", () => {
+      item.addEventListener("click", async () => {
         const folderId = item.dataset.id;
         if (isBatchMode() && folderId && folderId !== "favorites") {
           closeFolderModal();
-          executeBatchMove(folderId);
+          await executeBatchMove(folderId);
         }
       });
     });

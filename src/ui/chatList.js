@@ -676,7 +676,7 @@ export function handleSortChange(sortValue) {
 /**
  * 현재 채팅 목록 새로고침 (정렬/필터 변경 시)
  */
-export function refreshCurrentChatList() {
+export async function refreshCurrentChatList() {
     const character = store.currentCharacter;
     if (!character) return;
     
@@ -690,7 +690,7 @@ export function refreshCurrentChatList() {
         renderChats(chatsList, cachedChats, character.avatar);
     } else {
         // 캐시가 없으면 전체 재렌더
-        renderChatList(character);
+        await renderChatList(character);
     }
 }
 
@@ -778,7 +778,7 @@ export async function executeBatchMove(targetFolder) {
     }
     
     // 채팅 목록만 재렌더 (캐시된 채팅 데이터로 필터/정렬만 다시 적용)
-    refreshCurrentChatList();
+    await refreshCurrentChatList();
     
 }
 

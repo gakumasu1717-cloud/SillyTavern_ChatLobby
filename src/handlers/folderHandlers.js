@@ -194,12 +194,12 @@ function bindFolderEvents(container) {
     
     // 배치 모드일 때: 폴더 클릭 시 선택한 채팅들 이동
     container.querySelectorAll('.folder-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', async () => {
             const folderId = item.dataset.id;
             
             if (isBatchMode() && folderId && folderId !== 'favorites') {
                 closeFolderModal();
-                executeBatchMove(folderId);
+                await executeBatchMove(folderId);
             }
         });
     });
