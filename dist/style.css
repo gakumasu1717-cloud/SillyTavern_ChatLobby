@@ -865,7 +865,7 @@
 .filters-row {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between;
     gap: 6px;
 }
 
@@ -873,6 +873,13 @@
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.filter-group-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
 }
 
 .filters-row select,
@@ -898,11 +905,13 @@
 }
 
 #chat-lobby-chat-sort {
-    width: 105px;
+    width: 80px;
 }
 
 #chat-lobby-folder-filter {
-    width: 100px;
+    width: 120px;
+    min-width: 120px;
+    max-width: 120px;
 }
 
 .filters-row button {

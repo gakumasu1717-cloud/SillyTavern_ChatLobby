@@ -1405,6 +1405,8 @@ ${message}` : message;
                                     <option value="all">\u{1F4C1} \uC804\uCCB4</option>
                                     <option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30</option>
                                 </select>
+                            </div>
+                            <div class="filter-group-buttons">
                                 <button id="chat-lobby-batch-mode" class="icon-btn" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD"><span class="icon">\u2611\uFE0F</span></button>
                                 <button id="chat-lobby-folder-manage" class="icon-btn" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC"><span class="icon">\u{1F4C1}</span></button>
                             </div>
