@@ -4759,10 +4759,15 @@ ${message}` : message;
       store.reset();
       closeChatPanel();
     }
+    let isDebugPanelOpen = false;
     function openDebugModal() {
-      let modal = document.getElementById("chat-lobby-debug-modal");
-      if (modal) {
-        modal.remove();
+      if (isDebugPanelOpen) {
+        closeDebugModal();
+        return;
+      }
+      let panel = document.getElementById("chat-lobby-debug-panel");
+      if (panel) {
+        panel.remove();
       }
       const lastChatData = {};
       if (lastChatCache.lastChatTimes) {
@@ -4791,6 +4796,11 @@ ${message}` : message;
         }
       }
       const debugData = {
+        _\uC124\uBA85: {
+          chatLobby_data: "\uD3F4\uB354 \uAD6C\uC870, \uCC44\uD305 \uBC30\uC815, \uC990\uACA8\uCC3E\uAE30, \uC815\uB82C \uC635\uC158",
+          chatLobby_lastChatTimes: "\uCE90\uB9AD\uD130\uBCC4 \uB9C8\uC9C0\uB9C9 \uCC44\uD305 \uC2DC\uAC04 (\uC815\uB82C\uC6A9)",
+          chatLobby_calendar: "\uB0A0\uC9DC\uBCC4 \uC2A4\uB0C5\uC0F7 (\uCE98\uB9B0\uB354 \uD788\uD2B8\uB9F5\uC6A9)"
+        },
         _meta: {
           timestamp: (/* @__PURE__ */ new Date()).toLocaleString("ko-KR"),
           cacheInitialized: lastChatCache.initialized,
@@ -4801,52 +4811,53 @@ ${message}` : message;
         lastChatCache: lastChatData,
         calendarSnapshots
       };
-      modal = document.createElement("div");
-      modal.id = "chat-lobby-debug-modal";
-      modal.innerHTML = `
-            <div class="debug-modal-backdrop" data-action="close-debug"></div>
-            <div class="debug-modal-content">
-                <div class="debug-modal-header">
-                    <h3>\u{1F527} Debug Data</h3>
-                    <div class="debug-modal-actions">
-                        <button class="debug-copy-btn" id="debug-copy-btn">\u{1F4CB} Copy</button>
-                        <button class="debug-clear-btn" id="debug-clear-lastchat">\u{1F5D1}\uFE0F Clear LastChat</button>
-                        <button class="debug-modal-close" data-action="close-debug">\u2715</button>
-                    </div>
-                </div>
-                <div class="debug-modal-body">
-                    <pre class="debug-modal-pre">${JSON.stringify(debugData, null, 2)}</pre>
+      panel = document.createElement("div");
+      panel.id = "chat-lobby-debug-panel";
+      panel.className = "debug-panel slide-up";
+      panel.innerHTML = `
+            <div class="debug-panel-header">
+                <h3>\u{1F527} Debug Data</h3>
+                <div class="debug-panel-actions">
+                    <button class="debug-copy-btn" id="debug-copy-btn">\u{1F4CB}</button>
+                    <button class="debug-clear-btn" id="debug-clear-lastchat">\u{1F5D1}\uFE0F</button>
+                    <button class="debug-close-btn" id="debug-close-btn">\u2715</button>
                 </div>
             </div>
+            <div class="debug-panel-body">
+                <pre class="debug-panel-pre">${JSON.stringify(debugData, null, 2)}</pre>
+            </div>
         `;
-      modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10001;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        `;
-      document.body.appendChild(modal);
-      modal.querySelector("#debug-copy-btn")?.addEventListener("click", () => {
+      const container = document.getElementById("chat-lobby-container");
+      if (container) {
+        container.appendChild(panel);
+      } else {
+        document.body.appendChild(panel);
+      }
+      isDebugPanelOpen = true;
+      requestAnimationFrame(() => {
+        panel.classList.add("open");
+      });
+      panel.querySelector("#debug-copy-btn")?.addEventListener("click", () => {
         navigator.clipboard.writeText(JSON.stringify(debugData, null, 2)).then(() => showToast("\uD074\uB9BD\uBCF4\uB4DC\uC5D0 \uBCF5\uC0AC\uB428", "success")).catch(() => showToast("\uBCF5\uC0AC \uC2E4\uD328", "error"));
       });
-      modal.querySelector("#debug-clear-lastchat")?.addEventListener("click", () => {
+      panel.querySelector("#debug-clear-lastchat")?.addEventListener("click", () => {
         if (confirm("LastChatCache \uB370\uC774\uD130\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) {
           lastChatCache.clear();
           showToast("LastChatCache \uC0AD\uC81C\uB428", "success");
           closeDebugModal();
         }
       });
+      panel.querySelector("#debug-close-btn")?.addEventListener("click", () => {
+        closeDebugModal();
+      });
     }
     function closeDebugModal() {
-      const modal = document.getElementById("chat-lobby-debug-modal");
-      if (modal) {
-        modal.remove();
+      const panel = document.getElementById("chat-lobby-debug-panel");
+      if (panel) {
+        panel.classList.remove("open");
+        setTimeout(() => panel.remove(), 300);
       }
+      isDebugPanelOpen = false;
     }
     window.ChatLobby = window.ChatLobby || {};
     function cleanup() {
@@ -5047,6 +5058,10 @@ ${message}` : message;
     }
     function handleKeydown(e) {
       if (e.key === "Escape") {
+        if (isDebugPanelOpen) {
+          closeDebugModal();
+          return;
+        }
         if (isStatsViewOpen()) {
           closeStatsView();
           return;

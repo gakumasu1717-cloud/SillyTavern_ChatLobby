@@ -493,13 +493,24 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     // ============================================
     
     /**
-     * 디버그 모달 열기 - 저장된 스냅샷 데이터 확인
+     * 디버그 패널 열림 상태
+     */
+    let isDebugPanelOpen = false;
+    
+    /**
+     * 디버그 패널 열기 - 채팅목록처럼 슬라이드 업 형태
      */
     function openDebugModal() {
-        // 기존 모달 있으면 제거
-        let modal = document.getElementById('chat-lobby-debug-modal');
-        if (modal) {
-            modal.remove();
+        // 이미 열려있으면 닫기
+        if (isDebugPanelOpen) {
+            closeDebugModal();
+            return;
+        }
+        
+        // 기존 패널 있으면 제거
+        let panel = document.getElementById('chat-lobby-debug-panel');
+        if (panel) {
+            panel.remove();
         }
         
         // lastChatCache 데이터
@@ -535,6 +546,11 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         }
         
         const debugData = {
+            _설명: {
+                chatLobby_data: '폴더 구조, 채팅 배정, 즐겨찾기, 정렬 옵션',
+                chatLobby_lastChatTimes: '캐릭터별 마지막 채팅 시간 (정렬용)',
+                chatLobby_calendar: '날짜별 스냅샷 (캘린더 히트맵용)'
+            },
             _meta: {
                 timestamp: new Date().toLocaleString('ko-KR'),
                 cacheInitialized: lastChatCache.initialized,
@@ -546,65 +562,69 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             calendarSnapshots: calendarSnapshots
         };
         
-        // 모달 생성
-        modal = document.createElement('div');
-        modal.id = 'chat-lobby-debug-modal';
-        modal.innerHTML = `
-            <div class="debug-modal-backdrop" data-action="close-debug"></div>
-            <div class="debug-modal-content">
-                <div class="debug-modal-header">
-                    <h3>🔧 Debug Data</h3>
-                    <div class="debug-modal-actions">
-                        <button class="debug-copy-btn" id="debug-copy-btn">📋 Copy</button>
-                        <button class="debug-clear-btn" id="debug-clear-lastchat">🗑️ Clear LastChat</button>
-                        <button class="debug-modal-close" data-action="close-debug">✕</button>
-                    </div>
+        // 슬라이드 업 패널 생성 (채팅목록 스타일)
+        panel = document.createElement('div');
+        panel.id = 'chat-lobby-debug-panel';
+        panel.className = 'debug-panel slide-up';
+        panel.innerHTML = `
+            <div class="debug-panel-header">
+                <h3>🔧 Debug Data</h3>
+                <div class="debug-panel-actions">
+                    <button class="debug-copy-btn" id="debug-copy-btn">📋</button>
+                    <button class="debug-clear-btn" id="debug-clear-lastchat">🗑️</button>
+                    <button class="debug-close-btn" id="debug-close-btn">✕</button>
                 </div>
-                <div class="debug-modal-body">
-                    <pre class="debug-modal-pre">${JSON.stringify(debugData, null, 2)}</pre>
-                </div>
+            </div>
+            <div class="debug-panel-body">
+                <pre class="debug-panel-pre">${JSON.stringify(debugData, null, 2)}</pre>
             </div>
         `;
         
-        // 스타일 추가
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10001;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        `;
+        // 로비 컨테이너 안에 추가 (오버레이 아님)
+        const container = document.getElementById('chat-lobby-container');
+        if (container) {
+            container.appendChild(panel);
+        } else {
+            document.body.appendChild(panel);
+        }
         
-        document.body.appendChild(modal);
+        isDebugPanelOpen = true;
         
-        // 이벤트 바인딩
-        modal.querySelector('#debug-copy-btn')?.addEventListener('click', () => {
+        // 애니메이션 트리거
+        requestAnimationFrame(() => {
+            panel.classList.add('open');
+        });
+        
+        // 이벤트 바인딩 (직접 연결)
+        panel.querySelector('#debug-copy-btn')?.addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(debugData, null, 2))
                 .then(() => showToast('클립보드에 복사됨', 'success'))
                 .catch(() => showToast('복사 실패', 'error'));
         });
         
-        modal.querySelector('#debug-clear-lastchat')?.addEventListener('click', () => {
+        panel.querySelector('#debug-clear-lastchat')?.addEventListener('click', () => {
             if (confirm('LastChatCache 데이터를 삭제하시겠습니까?')) {
                 lastChatCache.clear();
                 showToast('LastChatCache 삭제됨', 'success');
                 closeDebugModal();
             }
         });
+        
+        panel.querySelector('#debug-close-btn')?.addEventListener('click', () => {
+            closeDebugModal();
+        });
     }
     
     /**
-     * 디버그 모달 닫기
+     * 디버그 패널 닫기
      */
     function closeDebugModal() {
-        const modal = document.getElementById('chat-lobby-debug-modal');
-        if (modal) {
-            modal.remove();
+        const panel = document.getElementById('chat-lobby-debug-panel');
+        if (panel) {
+            panel.classList.remove('open');
+            setTimeout(() => panel.remove(), 300);
         }
+        isDebugPanelOpen = false;
     }
     
     // 전역 API (네임스페이스 정리)
@@ -908,6 +928,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      */
     function handleKeydown(e) {
         if (e.key === 'Escape') {
+            // 디버그 패널 열려있으면 먼저 닫기
+            if (isDebugPanelOpen) {
+                closeDebugModal();
+                return;
+            }
+            
             // 통계 화면 열려있으면 먼저 닫기
             if (isStatsViewOpen()) {
                 closeStatsView();

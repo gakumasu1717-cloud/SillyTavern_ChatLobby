@@ -3357,3 +3357,131 @@ body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
     background: #f5f5f5;
     color: #333;
 }
+/* ============================================
+   Debug Panel (슬라이드 업 형태)
+   ============================================ */
+
+.debug-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: #1a1a1a;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.debug-panel.open {
+    transform: translateY(0);
+}
+
+.debug-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px 16px 0 0;
+}
+
+.debug-panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #fff;
+}
+
+.debug-panel-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.debug-panel-actions button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.debug-panel-actions button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.debug-panel-actions .debug-clear-btn {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+.debug-panel-actions .debug-clear-btn:hover {
+    background: rgba(255, 100, 100, 0.3);
+}
+
+.debug-panel-actions .debug-close-btn {
+    background: transparent;
+    font-size: 18px;
+}
+
+.debug-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.debug-panel-pre {
+    margin: 0;
+    padding: 12px;
+    background: #111;
+    border-radius: 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    color: #0f0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+/* Light mode */
+#chat-lobby-container.light-mode .debug-panel {
+    background: #fff;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .debug-panel-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode .debug-panel-header h3 {
+    color: #000;
+}
+
+#chat-lobby-container.light-mode .debug-panel-actions button {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+#chat-lobby-container.light-mode .debug-panel-pre {
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .debug-panel {
+        height: 70%;
+    }
+    
+    .debug-panel-pre {
+        font-size: 10px;
+    }
+}
