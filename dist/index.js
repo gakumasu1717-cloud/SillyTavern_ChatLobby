@@ -4209,9 +4209,11 @@ ${message}` : message;
     _snapshotsCache = null;
     try {
       const snapshots = loadSnapshots(true);
-      snapshots[date] = { total, topChar, byChar, lastChatTimes };
+      const existingTimes = snapshots[date]?.lastChatTimes || {};
+      const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+      snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
       localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(lastChatTimes).length);
+      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
     } catch (e) {
       if (e.name === "QuotaExceededError") {
         console.warn("[Calendar] QuotaExceededError - cleaning old data");

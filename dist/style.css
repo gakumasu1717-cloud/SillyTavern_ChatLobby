@@ -3187,18 +3187,6 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 /* 이미지 우측 그라데이션 (흐려지게) */
-.lastmsg-card::before {
-    content: '';
-    position: absolute;
-    left: 120px;
-    top: 0;
-    width: 80px;
-    height: 100%;
-    background: linear-gradient(to right, transparent, rgba(0,0,0,0.7));
-    pointer-events: none;
-    z-index: 2;
-}
-
 /* 이름 - 좌측 하단 (이미지 위) */
 .lastmsg-name {
     position: absolute;
@@ -3263,11 +3251,6 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     
     .lastmsg-card::after {
         width: 160px;
-    }
-    
-    .lastmsg-card::before {
-        left: 90px;
-        width: 70px;
     }
     
     .lastmsg-name {
