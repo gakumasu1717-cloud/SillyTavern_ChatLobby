@@ -2724,10 +2724,14 @@ ${message}` : message;
     if (sortOption === "recent") {
       const lastChatTime = lastChatCache.getForSort(char);
       if (lastChatTime > 0) {
-        const date = new Date(lastChatTime);
-        const hours = date.getHours();
-        const minutes = String(date.getMinutes()).padStart(2, "0");
-        lastChatTimeStr = `${hours}:${minutes}`;
+        const now = /* @__PURE__ */ new Date();
+        const lastDate = new Date(lastChatTime);
+        const isToday = now.toDateString() === lastDate.toDateString();
+        if (isToday) {
+          const hours = lastDate.getHours();
+          const minutes = String(lastDate.getMinutes()).padStart(2, "0");
+          lastChatTimeStr = `${hours}:${minutes}`;
+        }
       }
     }
     const cachedChatCount = cache.get("chatCounts", char.avatar);
@@ -2784,25 +2788,29 @@ ${message}` : message;
           }, 0);
           cache.set("chatCounts", count, char.avatar);
           cache.set("messageCounts", messageCount, char.avatar);
+          const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(char.avatar)}"]`);
           if (chatArray.length > 0) {
             await lastChatCache.refreshForCharacter(char.avatar, chatArray);
             if (sortOption === "recent" && card) {
-              const nameTextEl = card.querySelector(".char-name-text");
-              if (nameTextEl && !nameTextEl.querySelector(".char-last-time")) {
-                const lastTime = lastChatCache.get(char.avatar);
-                if (lastTime > 0) {
-                  const date = new Date(lastTime);
-                  const hours = date.getHours();
-                  const minutes = String(date.getMinutes()).padStart(2, "0");
-                  const timeSpan = document.createElement("span");
-                  timeSpan.className = "char-last-time";
-                  timeSpan.textContent = ` ${hours}:${minutes}`;
-                  nameTextEl.appendChild(timeSpan);
+              const lastTime = lastChatCache.get(char.avatar);
+              if (lastTime > 0) {
+                const now = /* @__PURE__ */ new Date();
+                const lastDate = new Date(lastTime);
+                const isToday = now.toDateString() === lastDate.toDateString();
+                if (isToday) {
+                  const nameTextEl = card.querySelector(".char-name-text");
+                  if (nameTextEl && !nameTextEl.querySelector(".char-last-time")) {
+                    const hours = lastDate.getHours();
+                    const minutes = String(lastDate.getMinutes()).padStart(2, "0");
+                    const timeSpan = document.createElement("span");
+                    timeSpan.className = "char-last-time";
+                    timeSpan.textContent = ` ${hours}:${minutes}`;
+                    nameTextEl.appendChild(timeSpan);
+                  }
                 }
               }
             }
           }
-          const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(char.avatar)}"]`);
           if (card) {
             const chatValueEl = card.querySelector(".chat-count-value");
             if (chatValueEl) {
