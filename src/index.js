@@ -153,17 +153,15 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         
         // 핸들러 함수들을 별도로 정의 (off 호출 가능하도록)
         eventHandlers = {
-            onCharacterDeleted: () => {
+            onCharacterDeleted: (eventData) => {
                 cache.invalidate('characters');
                 
-                // 🔥 삭제된 캐릭터를 lastChatCache에서도 정리
-                // 약간의 딜레이 후 현재 캐릭터 목록과 비교하여 정리
-                setTimeout(() => {
-                    const currentChars = api.getCharacters();
-                    if (currentChars && currentChars.length > 0) {
-                        lastChatCache.cleanupDeleted(currentChars);
-                    }
-                }, 100);
+                // 🔥 삭제된 캐릭터를 lastChatCache에서 즉시 제거
+                // eventData: { id: chid, character: characterObject }
+                if (eventData?.character?.avatar) {
+                    lastChatCache.remove(eventData.character.avatar);
+                    console.log('[ChatLobby] Removed deleted character from lastChatCache:', eventData.character.avatar);
+                }
                 
                 if (isLobbyOpen()) {
                     renderCharacterGrid(store.searchTerm);

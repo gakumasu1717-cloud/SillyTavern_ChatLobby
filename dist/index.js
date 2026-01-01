@@ -4624,14 +4624,12 @@ ${message}` : message;
         }, 500);
       };
       eventHandlers = {
-        onCharacterDeleted: () => {
+        onCharacterDeleted: (eventData) => {
           cache.invalidate("characters");
-          setTimeout(() => {
-            const currentChars = api.getCharacters();
-            if (currentChars && currentChars.length > 0) {
-              lastChatCache.cleanupDeleted(currentChars);
-            }
-          }, 100);
+          if (eventData?.character?.avatar) {
+            lastChatCache.remove(eventData.character.avatar);
+            console.log("[ChatLobby] Removed deleted character from lastChatCache:", eventData.character.avatar);
+          }
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
           }
