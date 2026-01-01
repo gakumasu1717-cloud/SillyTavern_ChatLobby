@@ -4220,7 +4220,9 @@ ${message}` : message;
         cleanOldSnapshots();
         try {
           const snapshots = loadSnapshots(true);
-          snapshots[date] = { total, topChar, byChar, lastChatTimes };
+          const existingTimes = snapshots[date]?.lastChatTimes || {};
+          const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+          snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
           localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
         } catch (e2) {
           console.error("[Calendar] Still failed after cleanup:", e2);
@@ -4528,14 +4530,17 @@ ${message}` : message;
       });
       const lastChatTimes = {};
       let savedTimeCount = 0;
+      const todayStart = /* @__PURE__ */ new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayStartMs = todayStart.getTime();
       rankings.forEach((r) => {
         const lastTime = lastChatCache.get(r.avatar);
-        if (lastTime > 0) {
+        if (lastTime >= todayStartMs) {
           lastChatTimes[r.avatar] = lastTime;
           savedTimeCount++;
         }
       });
-      console.log("[Calendar] Saving lastChatTimes for", savedTimeCount, "characters");
+      console.log("[Calendar] Saving lastChatTimes for", savedTimeCount, "characters (today only)");
       let topChar = "";
       let maxIncrease = -Infinity;
       let maxMsgCountOnTie = -1;

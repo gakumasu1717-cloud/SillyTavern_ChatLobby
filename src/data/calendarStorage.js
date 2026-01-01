@@ -118,10 +118,12 @@ export function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = 
         if (e.name === 'QuotaExceededError') {
             console.warn('[Calendar] QuotaExceededError - cleaning old data');
             cleanOldSnapshots();
-            // 재시도
+            // 재시도 (병합 로직 동일하게 적용)
             try {
                 const snapshots = loadSnapshots(true);
-                snapshots[date] = { total, topChar, byChar, lastChatTimes };
+                const existingTimes = snapshots[date]?.lastChatTimes || {};
+                const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+                snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
             } catch (e2) {
                 console.error('[Calendar] Still failed after cleanup:', e2);

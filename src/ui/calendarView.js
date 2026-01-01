@@ -427,16 +427,22 @@ async function saveTodaySnapshot() {
         });
         
         // 🔥 캐릭터별 마지막 채팅 시간 복사 (현재 lastChatCache에서)
+        // ⚠️ 오늘 날짜에 채팅한 것만 저장 (다른 날짜 시간은 제외)
         const lastChatTimes = {};
         let savedTimeCount = 0;
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayStartMs = todayStart.getTime();
+        
         rankings.forEach(r => {
             const lastTime = lastChatCache.get(r.avatar);
-            if (lastTime > 0) {
+            // 오늘 0시 이후에 채팅한 경우만 저장
+            if (lastTime >= todayStartMs) {
                 lastChatTimes[r.avatar] = lastTime;
                 savedTimeCount++;
             }
         });
-        console.log('[Calendar] Saving lastChatTimes for', savedTimeCount, 'characters');
+        console.log('[Calendar] Saving lastChatTimes for', savedTimeCount, 'characters (today only)');
         
         // 가장 증가한 캐릭터 찾기 (메시지 수 기준)
         let topChar = '';
