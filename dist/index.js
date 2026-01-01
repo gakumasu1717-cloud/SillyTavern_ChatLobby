@@ -2447,7 +2447,7 @@ ${message}` : message;
   }
   function updateHasChats(totalCount) {
     const newChatBtn = document.getElementById("chat-lobby-new-chat");
-    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 0 ? "true" : "false";
+    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 1 ? "true" : "false";
   }
   function showFolderBar(visible) {
     const filtersSection = document.getElementById("chat-lobby-filters");

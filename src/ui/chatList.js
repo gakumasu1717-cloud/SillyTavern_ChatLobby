@@ -663,11 +663,12 @@ function updateChatCount(count) {
 
 /**
  * hasChats 업데이트 (필터 전 전체 수, 새 채팅 버튼용)
+ * 💡 채팅이 1개만 있는 경우(첫 그리팅만 있는 경우)는 새 채팅 확인 팝업을 띄우지 않음
  * @param {number} totalCount
  */
 function updateHasChats(totalCount) {
     const newChatBtn = document.getElementById('chat-lobby-new-chat');
-    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 0 ? 'true' : 'false';
+    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 1 ? 'true' : 'false';
 }
 
 /**
