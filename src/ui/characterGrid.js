@@ -166,7 +166,7 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     }
     
     // 백그라운드에서 채팅 수 로딩 후 UI 업데이트
-    loadChatCountsAsync(filtered);
+    loadChatCountsAsync(filtered, sortOption);
 }
 
 /**
@@ -250,8 +250,9 @@ function renderCharacterCard(char, index, sortOption = 'recent') {
  * 백그라운드에서 채팅 수 로딩 후 UI 업데이트
  * 배치 처리로 메모리 최적화 + 메인 스레드 블로킹 방지
  * @param {Array} characters - 캐릭터 배열
+ * @param {string} sortOption - 정렬 옵션
  */
-async function loadChatCountsAsync(characters) {
+async function loadChatCountsAsync(characters, sortOption = 'recent') {
     const BATCH_SIZE = 5;
     
     for (let i = 0; i < characters.length; i += BATCH_SIZE) {
@@ -279,6 +280,23 @@ async function loadChatCountsAsync(characters) {
                 // ★ lastChatCache에도 마지막 채팅 시간 갱신 (재접속 정렬 정확도 향상)
                 if (chatArray.length > 0) {
                     await lastChatCache.refreshForCharacter(char.avatar, chatArray);
+                    
+                    // 최근 채팅순 정렬일 때 DOM에 시간 추가
+                    if (sortOption === 'recent' && card) {
+                        const nameTextEl = card.querySelector('.char-name-text');
+                        if (nameTextEl && !nameTextEl.querySelector('.char-last-time')) {
+                            const lastTime = lastChatCache.get(char.avatar);
+                            if (lastTime > 0) {
+                                const date = new Date(lastTime);
+                                const hours = date.getHours();
+                                const minutes = String(date.getMinutes()).padStart(2, '0');
+                                const timeSpan = document.createElement('span');
+                                timeSpan.className = 'char-last-time';
+                                timeSpan.textContent = ` ${hours}:${minutes}`;
+                                nameTextEl.appendChild(timeSpan);
+                            }
+                        }
+                    }
                 }
                 
                 // DOM 업데이트 (CSS.escape로 특수문자 처리)
