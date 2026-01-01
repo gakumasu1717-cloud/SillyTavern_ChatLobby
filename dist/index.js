@@ -2745,6 +2745,7 @@ ${message}` : message;
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
          data-char-index="${index}" 
          data-char-avatar="${safeAvatar}" 
+         data-char-name="${escapeHtml(name)}"
          data-is-fav="${isFav}"
          draggable="false">
         ${favBtn}
@@ -2894,8 +2895,7 @@ ${message}` : message;
   }
   function bindCharacterEvents(container) {
     container.querySelectorAll(".lobby-char-card").forEach((card, index) => {
-      const charNameEl = card.querySelector(".char-name-text");
-      const charName = charNameEl?.textContent || card.querySelector(".lobby-char-name")?.textContent || "Unknown";
+      const charName = card.dataset.charName || "Unknown";
       const charAvatar = card.dataset.charAvatar;
       const charIndex = card.dataset.charIndex;
       const favBtn = card.querySelector(".char-fav-btn");
