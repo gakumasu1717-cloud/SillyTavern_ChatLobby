@@ -605,34 +605,18 @@ function showLastMessagePanel(date) {
     const [year, month, day] = date.split('-');
     const dateStr = `${parseInt(month)}/${parseInt(day)}`;
     
-    // 마지막 채팅 시간 기준 상위 3명 캐릭터 찾기
-    const lastChatTimes = snapshot.lastChatTimes || {};
-    const byChar = snapshot.byChar || {};
+    // 🔥 lastChatTimes 기준으로 가장 최근 채팅한 캐릭터 3명 정렬
+    const snapshotLastChatTimes = snapshot.lastChatTimes || {};
     
-    // lastChatTimes가 있으면 시간 기준, 없으면 메시지 수 기준
-    let topChars = [];
-    
-    if (Object.keys(lastChatTimes).length > 0) {
-        topChars = Object.entries(lastChatTimes)
-            .filter(([avatar]) => isCharacterExists(avatar))
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 3)
-            .map(([avatar, time]) => ({
-                avatar,
-                lastChatTime: time,
-                messageCount: byChar[avatar] || 0
-            }));
-    } else {
-        topChars = Object.entries(byChar)
-            .filter(([avatar]) => isCharacterExists(avatar))
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 3)
-            .map(([avatar, count]) => ({
-                avatar,
-                lastChatTime: 0,
-                messageCount: count
-            }));
-    }
+    // lastChatTimes에서 시간 기준 정렬 (가장 최근 채팅 순)
+    let topChars = Object.entries(snapshotLastChatTimes)
+        .filter(([avatar]) => isCharacterExists(avatar))
+        .sort((a, b) => b[1] - a[1]) // 시간 내림차순 (최신이 위로)
+        .slice(0, 3)
+        .map(([avatar, time]) => ({
+            avatar,
+            lastChatTime: time
+        }));
     
     // 카드 HTML 생성
     let cardsHtml = '';
@@ -646,18 +630,15 @@ function showLastMessagePanel(date) {
             const timeStr = char.lastChatTime > 0 
                 ? formatLastChatTime(char.lastChatTime)
                 : '-';
-            const msgCount = char.messageCount;
             
             cardsHtml += `
                 <div class="lastmsg-card">
                     <img class="lastmsg-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
-                    <div class="lastmsg-gradient"></div>
-                    <div class="lastmsg-info">
-                        <div class="lastmsg-name">${charName}</div>
-                    </div>
+                    <div class="lastmsg-overlay"></div>
+                    <div class="lastmsg-name">${charName}</div>
                     <div class="lastmsg-stats">
+                        <div class="lastmsg-label">Recent Chat</div>
                         <div class="lastmsg-time">${timeStr}</div>
-                        <div class="lastmsg-count">${msgCount} msgs</div>
                     </div>
                 </div>
             `;

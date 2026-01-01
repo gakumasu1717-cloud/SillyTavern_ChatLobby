@@ -4613,22 +4613,11 @@ ${message}` : message;
     if (!snapshot) return;
     const [year, month, day] = date.split("-");
     const dateStr = `${parseInt(month)}/${parseInt(day)}`;
-    const lastChatTimes = snapshot.lastChatTimes || {};
-    const byChar = snapshot.byChar || {};
-    let topChars = [];
-    if (Object.keys(lastChatTimes).length > 0) {
-      topChars = Object.entries(lastChatTimes).filter(([avatar]) => isCharacterExists(avatar)).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([avatar, time]) => ({
-        avatar,
-        lastChatTime: time,
-        messageCount: byChar[avatar] || 0
-      }));
-    } else {
-      topChars = Object.entries(byChar).filter(([avatar]) => isCharacterExists(avatar)).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([avatar, count]) => ({
-        avatar,
-        lastChatTime: 0,
-        messageCount: count
-      }));
-    }
+    const snapshotLastChatTimes = snapshot.lastChatTimes || {};
+    let topChars = Object.entries(snapshotLastChatTimes).filter(([avatar]) => isCharacterExists(avatar)).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([avatar, time]) => ({
+      avatar,
+      lastChatTime: time
+    }));
     let cardsHtml = "";
     if (topChars.length === 0) {
       cardsHtml = '<div class="lastmsg-no-data">No character data</div>';
@@ -4637,17 +4626,14 @@ ${message}` : message;
         const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
         const charName = char.avatar.replace(/\.[^/.]+$/, "");
         const timeStr = char.lastChatTime > 0 ? formatLastChatTime(char.lastChatTime) : "-";
-        const msgCount = char.messageCount;
         cardsHtml += `
                 <div class="lastmsg-card">
                     <img class="lastmsg-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
-                    <div class="lastmsg-gradient"></div>
-                    <div class="lastmsg-info">
-                        <div class="lastmsg-name">${charName}</div>
-                    </div>
+                    <div class="lastmsg-overlay"></div>
+                    <div class="lastmsg-name">${charName}</div>
                     <div class="lastmsg-stats">
+                        <div class="lastmsg-label">Recent Chat</div>
                         <div class="lastmsg-time">${timeStr}</div>
-                        <div class="lastmsg-count">${msgCount} msgs</div>
                     </div>
                 </div>
             `;
