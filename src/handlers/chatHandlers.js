@@ -270,12 +270,22 @@ export async function startNewChat() {
     const btn = document.getElementById('chat-lobby-new-chat');
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
-    const hasChats = btn?.dataset.hasChats === 'true';
     
     if (!charIndex || !charAvatar) {
         console.error('[ChatHandlers] No character selected');
         showToast('캐릭터가 선택되지 않았습니다.', 'error');
         return;
+    }
+    
+    // 🔥 채팅 수를 직접 확인 (dataset은 비동기 로딩으로 인해 신뢰할 수 없음)
+    let actualChatCount = 0;
+    try {
+        const chats = await api.fetchChatsForCharacter(charAvatar);
+        actualChatCount = Array.isArray(chats) ? chats.length : 0;
+        console.log('[ChatHandlers] Actual chat count:', actualChatCount);
+    } catch (e) {
+        console.warn('[ChatHandlers] Failed to get chat count, using dataset fallback');
+        actualChatCount = btn?.dataset.hasChats === 'true' ? 1 : 0;
     }
     
     try {
@@ -290,8 +300,9 @@ export async function startNewChat() {
         // 캐릭터 선택 완료 대기
         await waitForCharacterSelect(charAvatar, 2000);
         
-        // 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
-        if (hasChats) {
+        // 🔥 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
+        // 채팅이 0개면 SillyTavern이 자동으로 첫 채팅을 생성하므로 추가 동작 불필요
+        if (actualChatCount > 0) {
             const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
             if (newChatBtn) newChatBtn.click();
         }

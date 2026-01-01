@@ -3096,18 +3096,26 @@ ${message}` : message;
     const btn = document.getElementById("chat-lobby-new-chat");
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
-    const hasChats = btn?.dataset.hasChats === "true";
     if (!charIndex || !charAvatar) {
       console.error("[ChatHandlers] No character selected");
       showToast("\uCE90\uB9AD\uD130\uAC00 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
+    }
+    let actualChatCount = 0;
+    try {
+      const chats = await api.fetchChatsForCharacter(charAvatar);
+      actualChatCount = Array.isArray(chats) ? chats.length : 0;
+      console.log("[ChatHandlers] Actual chat count:", actualChatCount);
+    } catch (e) {
+      console.warn("[ChatHandlers] Failed to get chat count, using dataset fallback");
+      actualChatCount = btn?.dataset.hasChats === "true" ? 1 : 0;
     }
     try {
       cache.invalidate("chats", charAvatar);
       closeLobbyKeepState();
       await api.selectCharacterById(parseInt(charIndex, 10));
       await waitForCharacterSelect(charAvatar, 2e3);
-      if (hasChats) {
+      if (actualChatCount > 0) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
         if (newChatBtn) newChatBtn.click();
       }
