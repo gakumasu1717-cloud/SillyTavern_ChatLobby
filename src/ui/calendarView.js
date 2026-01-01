@@ -110,16 +110,6 @@ export async function openCalendarView() {
                         <pre class="debug-modal-content" id="debug-modal-content"></pre>
                     </div>
                 </div>
-                
-                <!-- Statistics 슬라이드 팝업 -->
-                <div class="calendar-stats-panel" id="calendar-stats-panel">
-                    <div class="stats-panel-header">
-                        <span class="stats-panel-title">Statistics</span>
-                        <button class="stats-panel-close" id="stats-panel-close">×</button>
-                    </div>
-                    <div class="stats-panel-date" id="stats-panel-date"></div>
-                    <div class="stats-panel-content" id="stats-panel-content"></div>
-                </div>
             `;
             document.body.appendChild(calendarOverlay);
             
@@ -132,9 +122,6 @@ export async function openCalendarView() {
             calendarOverlay.querySelector('#calendar-debug').addEventListener('click', showDebugModal);
             calendarOverlay.querySelector('#debug-modal-close').addEventListener('click', hideDebugModal);
             calendarOverlay.querySelector('#debug-clear-all').addEventListener('click', handleClearAll);
-            
-            // Statistics 패널 닫기
-            calendarOverlay.querySelector('#stats-panel-close').addEventListener('click', closeStatsPanel);
             
             // 핀치줌 이벤트
             const main = calendarOverlay.querySelector('#calendar-main');
@@ -586,26 +573,37 @@ function renderCalendar() {
     grid.querySelectorAll('.cal-card.has-data').forEach(card => {
         card.addEventListener('click', () => {
             const date = card.dataset.date;
-            showStatsPanel(date);
+            showLastMessagePanel(date);
         });
     });
 }
 
+// Last Message 패널 열림 상태
+let isLastMessagePanelOpen = false;
+
 /**
- * Statistics 패널 열기
+ * Last Message 패널 열기 (디버그 패널과 같은 방식)
  * @param {string} date - YYYY-MM-DD 형식
  */
-function showStatsPanel(date) {
-    const panel = calendarOverlay.querySelector('#calendar-stats-panel');
-    const dateLabel = calendarOverlay.querySelector('#stats-panel-date');
-    const content = calendarOverlay.querySelector('#stats-panel-content');
+function showLastMessagePanel(date) {
+    // 이미 열려있으면 닫기
+    if (isLastMessagePanelOpen) {
+        closeLastMessagePanel();
+        return;
+    }
+    
+    // 기존 패널 있으면 제거
+    let panel = document.getElementById('calendar-lastmsg-panel');
+    if (panel) {
+        panel.remove();
+    }
     
     const snapshot = getSnapshot(date);
     if (!snapshot) return;
     
     // 날짜 표시
     const [year, month, day] = date.split('-');
-    dateLabel.textContent = `${parseInt(month)}/${parseInt(day)}`;
+    const dateStr = `${parseInt(month)}/${parseInt(day)}`;
     
     // 마지막 채팅 시간 기준 상위 3명 캐릭터 찾기
     const lastChatTimes = snapshot.lastChatTimes || {};
@@ -615,7 +613,6 @@ function showStatsPanel(date) {
     let topChars = [];
     
     if (Object.keys(lastChatTimes).length > 0) {
-        // 마지막 채팅 시간 기준 정렬
         topChars = Object.entries(lastChatTimes)
             .filter(([avatar]) => isCharacterExists(avatar))
             .sort((a, b) => b[1] - a[1])
@@ -626,7 +623,6 @@ function showStatsPanel(date) {
                 messageCount: byChar[avatar] || 0
             }));
     } else {
-        // fallback: 메시지 수 기준 정렬
         topChars = Object.entries(byChar)
             .filter(([avatar]) => isCharacterExists(avatar))
             .sort((a, b) => b[1] - a[1])
@@ -642,38 +638,77 @@ function showStatsPanel(date) {
     let cardsHtml = '';
     
     if (topChars.length === 0) {
-        cardsHtml = '<div class="stats-no-data">No character data</div>';
+        cardsHtml = '<div class="lastmsg-no-data">No character data</div>';
     } else {
-        topChars.forEach((char, index) => {
+        topChars.forEach((char) => {
             const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
             const charName = char.avatar.replace(/\.[^/.]+$/, '');
             const timeStr = char.lastChatTime > 0 
                 ? formatLastChatTime(char.lastChatTime)
                 : '-';
+            const msgCount = char.messageCount;
             
             cardsHtml += `
-                <div class="stats-char-card" data-rank="${index + 1}">
-                    <img class="stats-char-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
-                    <div class="stats-char-gradient"></div>
-                    <div class="stats-char-info">
-                        <div class="stats-char-name">${charName}</div>
-                        <div class="stats-char-time">${timeStr}</div>
+                <div class="lastmsg-card">
+                    <img class="lastmsg-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
+                    <div class="lastmsg-gradient"></div>
+                    <div class="lastmsg-info">
+                        <div class="lastmsg-name">${charName}</div>
+                    </div>
+                    <div class="lastmsg-stats">
+                        <div class="lastmsg-time">${timeStr}</div>
+                        <div class="lastmsg-count">${msgCount} msgs</div>
                     </div>
                 </div>
             `;
         });
     }
     
-    content.innerHTML = cardsHtml;
-    panel.classList.add('open');
+    // 슬라이드 업 패널 생성 (디버그 패널 스타일)
+    panel = document.createElement('div');
+    panel.id = 'calendar-lastmsg-panel';
+    panel.className = 'lastmsg-panel slide-up';
+    panel.innerHTML = `
+        <div class="lastmsg-panel-header">
+            <h3>Last Message</h3>
+            <span class="lastmsg-panel-date">${dateStr}</span>
+            <button class="lastmsg-close-btn" id="lastmsg-close-btn">✕</button>
+        </div>
+        <div class="lastmsg-panel-body">
+            ${cardsHtml}
+        </div>
+    `;
+    
+    // calendar-overlay 안에 추가
+    if (calendarOverlay) {
+        calendarOverlay.appendChild(panel);
+    } else {
+        document.body.appendChild(panel);
+    }
+    
+    isLastMessagePanelOpen = true;
+    
+    // 애니메이션 트리거
+    requestAnimationFrame(() => {
+        panel.classList.add('open');
+    });
+    
+    // 닫기 버튼 이벤트
+    panel.querySelector('#lastmsg-close-btn')?.addEventListener('click', () => {
+        closeLastMessagePanel();
+    });
 }
 
 /**
- * Statistics 패널 닫기
+ * Last Message 패널 닫기
  */
-function closeStatsPanel() {
-    const panel = calendarOverlay.querySelector('#calendar-stats-panel');
-    panel.classList.remove('open');
+function closeLastMessagePanel() {
+    const panel = document.getElementById('calendar-lastmsg-panel');
+    if (panel) {
+        panel.classList.remove('open');
+        setTimeout(() => panel.remove(), 300);
+    }
+    isLastMessagePanelOpen = false;
 }
 
 /**

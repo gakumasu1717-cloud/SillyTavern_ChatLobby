@@ -4278,16 +4278,6 @@ ${message}` : message;
                         <pre class="debug-modal-content" id="debug-modal-content"></pre>
                     </div>
                 </div>
-                
-                <!-- Statistics \uC2AC\uB77C\uC774\uB4DC \uD31D\uC5C5 -->
-                <div class="calendar-stats-panel" id="calendar-stats-panel">
-                    <div class="stats-panel-header">
-                        <span class="stats-panel-title">Statistics</span>
-                        <button class="stats-panel-close" id="stats-panel-close">\xD7</button>
-                    </div>
-                    <div class="stats-panel-date" id="stats-panel-date"></div>
-                    <div class="stats-panel-content" id="stats-panel-content"></div>
-                </div>
             `;
         document.body.appendChild(calendarOverlay);
         calendarOverlay.querySelector("#calendar-close").addEventListener("click", closeCalendarView);
@@ -4296,7 +4286,6 @@ ${message}` : message;
         calendarOverlay.querySelector("#calendar-debug").addEventListener("click", showDebugModal);
         calendarOverlay.querySelector("#debug-modal-close").addEventListener("click", hideDebugModal);
         calendarOverlay.querySelector("#debug-clear-all").addEventListener("click", handleClearAll);
-        calendarOverlay.querySelector("#stats-panel-close").addEventListener("click", closeStatsPanel);
         const main = calendarOverlay.querySelector("#calendar-main");
         main.addEventListener("touchstart", handlePinchStart, { passive: true });
         main.addEventListener("touchmove", handlePinchMove, { passive: false });
@@ -4606,18 +4595,24 @@ ${message}` : message;
     grid.querySelectorAll(".cal-card.has-data").forEach((card) => {
       card.addEventListener("click", () => {
         const date = card.dataset.date;
-        showStatsPanel(date);
+        showLastMessagePanel(date);
       });
     });
   }
-  function showStatsPanel(date) {
-    const panel = calendarOverlay.querySelector("#calendar-stats-panel");
-    const dateLabel = calendarOverlay.querySelector("#stats-panel-date");
-    const content = calendarOverlay.querySelector("#stats-panel-content");
+  var isLastMessagePanelOpen = false;
+  function showLastMessagePanel(date) {
+    if (isLastMessagePanelOpen) {
+      closeLastMessagePanel();
+      return;
+    }
+    let panel = document.getElementById("calendar-lastmsg-panel");
+    if (panel) {
+      panel.remove();
+    }
     const snapshot = getSnapshot(date);
     if (!snapshot) return;
     const [year, month, day] = date.split("-");
-    dateLabel.textContent = `${parseInt(month)}/${parseInt(day)}`;
+    const dateStr = `${parseInt(month)}/${parseInt(day)}`;
     const lastChatTimes = snapshot.lastChatTimes || {};
     const byChar = snapshot.byChar || {};
     let topChars = [];
@@ -4636,30 +4631,61 @@ ${message}` : message;
     }
     let cardsHtml = "";
     if (topChars.length === 0) {
-      cardsHtml = '<div class="stats-no-data">No character data</div>';
+      cardsHtml = '<div class="lastmsg-no-data">No character data</div>';
     } else {
-      topChars.forEach((char, index) => {
+      topChars.forEach((char) => {
         const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
         const charName = char.avatar.replace(/\.[^/.]+$/, "");
         const timeStr = char.lastChatTime > 0 ? formatLastChatTime(char.lastChatTime) : "-";
+        const msgCount = char.messageCount;
         cardsHtml += `
-                <div class="stats-char-card" data-rank="${index + 1}">
-                    <img class="stats-char-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
-                    <div class="stats-char-gradient"></div>
-                    <div class="stats-char-info">
-                        <div class="stats-char-name">${charName}</div>
-                        <div class="stats-char-time">${timeStr}</div>
+                <div class="lastmsg-card">
+                    <img class="lastmsg-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
+                    <div class="lastmsg-gradient"></div>
+                    <div class="lastmsg-info">
+                        <div class="lastmsg-name">${charName}</div>
+                    </div>
+                    <div class="lastmsg-stats">
+                        <div class="lastmsg-time">${timeStr}</div>
+                        <div class="lastmsg-count">${msgCount} msgs</div>
                     </div>
                 </div>
             `;
       });
     }
-    content.innerHTML = cardsHtml;
-    panel.classList.add("open");
+    panel = document.createElement("div");
+    panel.id = "calendar-lastmsg-panel";
+    panel.className = "lastmsg-panel slide-up";
+    panel.innerHTML = `
+        <div class="lastmsg-panel-header">
+            <h3>Last Message</h3>
+            <span class="lastmsg-panel-date">${dateStr}</span>
+            <button class="lastmsg-close-btn" id="lastmsg-close-btn">\u2715</button>
+        </div>
+        <div class="lastmsg-panel-body">
+            ${cardsHtml}
+        </div>
+    `;
+    if (calendarOverlay) {
+      calendarOverlay.appendChild(panel);
+    } else {
+      document.body.appendChild(panel);
+    }
+    isLastMessagePanelOpen = true;
+    requestAnimationFrame(() => {
+      panel.classList.add("open");
+    });
+    panel.querySelector("#lastmsg-close-btn")?.addEventListener("click", () => {
+      closeLastMessagePanel();
+    });
   }
-  function closeStatsPanel() {
-    const panel = calendarOverlay.querySelector("#calendar-stats-panel");
-    panel.classList.remove("open");
+  function closeLastMessagePanel() {
+    const panel = document.getElementById("calendar-lastmsg-panel");
+    if (panel) {
+      panel.classList.remove("open");
+      setTimeout(() => panel.remove(), 300);
+    }
+    isLastMessagePanelOpen = false;
   }
   function formatLastChatTime(timestamp) {
     const date = new Date(timestamp);

@@ -3071,150 +3071,149 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     min-height: 100%;
 }
 
-/* ========== Statistics 슬라이드 패널 ========== */
-.calendar-stats-panel {
-    position: fixed;
+/* ========== Last Message 슬라이드 패널 (디버그 패널 스타일) ========== */
+.lastmsg-panel {
+    position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(to top, #0a0a0a 0%, #141414 100%);
-    border-radius: 20px 20px 0 0;
-    padding: 0;
-    transform: translateY(100%);
-    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-    z-index: 83000;
-    max-height: 60vh;
-    overflow: hidden;
+    height: auto;
+    max-height: 45%;
+    background: #1a1a1a;
+    border-radius: 16px 16px 0 0;
     display: flex;
     flex-direction: column;
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
 }
 
-.calendar-stats-panel.open {
+.lastmsg-panel.open {
     transform: translateY(0);
 }
 
-.stats-panel-header {
+.lastmsg-panel-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 18px 24px 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px 16px 0 0;
+    gap: 12px;
 }
 
-.stats-panel-title {
-    font-size: 1.1em;
-    font-weight: 600;
+.lastmsg-panel-header h3 {
+    margin: 0;
+    font-size: 16px;
     color: #fff;
-    letter-spacing: -0.3px;
+    font-weight: 600;
 }
 
-.stats-panel-close {
+.lastmsg-panel-date {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 14px;
+    flex: 1;
+}
+
+.lastmsg-close-btn {
     background: transparent;
     border: none;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 1.6em;
+    font-size: 18px;
     cursor: pointer;
     padding: 4px 8px;
     line-height: 1;
     transition: color 0.2s;
 }
 
-.stats-panel-close:hover {
+.lastmsg-close-btn:hover {
     color: #fff;
 }
 
-.stats-panel-date {
-    padding: 8px 24px 16px;
-    font-size: 0.85em;
-    color: rgba(255, 255, 255, 0.4);
-    font-weight: 500;
-}
-
-.stats-panel-content {
-    padding: 0 24px 24px;
+.lastmsg-panel-body {
+    padding: 12px;
     display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
 }
 
-.stats-panel-content::-webkit-scrollbar {
-    display: none;
-}
-
-/* Statistics 캐릭터 카드 - 직사각형 */
-.stats-char-card {
+/* Last Message 캐릭터 카드 - 가로로 긴 직사각형 */
+.lastmsg-card {
     position: relative;
-    width: 140px;
-    min-width: 140px;
-    height: 200px;
+    width: 100%;
+    height: 80px;
     border-radius: 12px;
     overflow: hidden;
-    background: #1a1a1a;
-    flex-shrink: 0;
-    cursor: pointer;
-    transition: transform 0.2s ease;
+    background: #252525;
+    display: flex;
+    align-items: center;
 }
 
-.stats-char-card:hover {
-    transform: scale(1.03);
-}
-
-.stats-char-avatar {
+.lastmsg-avatar {
     position: absolute;
-    top: 0;
     left: 0;
-    width: 100%;
+    top: 0;
+    width: 120px;
     height: 100%;
     object-fit: cover;
 }
 
-.stats-char-gradient {
+.lastmsg-gradient {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60%;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 40%, transparent 100%);
+    left: 80px;
+    top: 0;
+    width: 60px;
+    height: 100%;
+    background: linear-gradient(to right, transparent 0%, #252525 100%);
     z-index: 2;
 }
 
-.stats-char-info {
+.lastmsg-info {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 12px;
+    left: 130px;
+    top: 50%;
+    transform: translateY(-50%);
     z-index: 3;
 }
 
-.stats-char-name {
-    font-size: 0.9em;
+.lastmsg-name {
+    font-size: 0.95em;
     font-weight: 600;
     color: #fff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 4px;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    max-width: 120px;
 }
 
-.stats-char-time {
-    font-size: 0.75em;
-    color: rgba(255, 255, 255, 0.85);
+.lastmsg-stats {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: right;
+    z-index: 3;
+}
+
+.lastmsg-time {
+    font-size: 0.85em;
+    color: #fff;
     font-weight: 500;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: 2px;
 }
 
-.stats-no-data {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.lastmsg-count {
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.lastmsg-no-data {
+    padding: 24px;
+    text-align: center;
     color: rgba(255, 255, 255, 0.3);
     font-size: 0.9em;
     font-style: italic;
@@ -3222,22 +3221,33 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 
 /* 모바일 최적화 */
 @media (max-width: 768px) {
-    .calendar-stats-panel {
-        max-height: 50vh;
+    .lastmsg-panel {
+        max-height: 50%;
     }
     
-    .stats-char-card {
-        width: 120px;
-        min-width: 120px;
-        height: 170px;
+    .lastmsg-card {
+        height: 70px;
     }
     
-    .stats-char-name {
+    .lastmsg-avatar {
+        width: 100px;
+    }
+    
+    .lastmsg-gradient {
+        left: 60px;
+    }
+    
+    .lastmsg-info {
+        left: 110px;
+    }
+    
+    .lastmsg-name {
         font-size: 0.85em;
+        max-width: 100px;
     }
     
-    .stats-char-time {
-        font-size: 0.7em;
+    .lastmsg-time {
+        font-size: 0.8em;
     }
 }
 
