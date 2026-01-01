@@ -16,6 +16,8 @@ import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } f
 import { showToast } from './ui/notifications.js';
 import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
 import { openCalendarView, closeCalendarView } from './ui/calendarView.js';
+import { lastChatCache } from './data/lastChatCache.js';
+import { loadSnapshots as loadCalendarSnapshots } from './data/calendarStorage.js';
 import { debounce, isMobile } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 import { intervalManager } from './utils/intervalManager.js';
@@ -45,6 +47,13 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * @returns {Promise<void>}
      */
     async function init() {
+        // 🔥 중복 초기화 방지 - 이미 초기화되었으면 스킵
+        if (window._chatLobbyInitialized) {
+            console.warn('[ChatLobby] Already initialized, skipping duplicate init');
+            return;
+        }
+        window._chatLobbyInitialized = true;
+        console.log('[ChatLobby] 🚀 Initializing...');
         
         // 기존 UI 제거
         removeExistingUI();
@@ -90,9 +99,10 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             return;
         }
         
-        // 이미 등록되어 있으면 스킵
+        // 🔥 이미 등록되어 있으면 먼저 정리 후 재등록
         if (eventsRegistered) {
-            return;
+            console.warn('[ChatLobby] Events already registered, cleaning up first');
+            cleanupSillyTavernEvents();
         }
         
         const { eventSource, eventTypes } = context;
@@ -249,21 +259,51 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     
     /**
      * 백그라운드 프리로딩 시작
+     * 🔥 순차 실행으로 메모리 부하 감소
      */
     async function startBackgroundPreload() {
         // 약간의 딜레이 후 프리로딩 (메인 스레드 블로킹 방지)
         setTimeout(async () => {
-            await cache.preloadAll(api);
+            console.log('[ChatLobby] Starting background preload...');
             
-            // 최근 사용 캐릭터들의 채팅도 프리로딩
-            const characters = cache.get('characters');
-            if (characters && characters.length > 0) {
-                // 최근 채팅순으로 정렬된 상위 5개
+            try {
+                // 1단계: 기본 데이터만 순차 로드
+                await cache.preloadPersonas(api);
+                await new Promise(r => setTimeout(r, 100)); // 100ms 간격
+                await cache.preloadCharacters(api);
+                
+                console.log('[ChatLobby] Basic preload completed');
+            } catch (e) {
+                console.error('[ChatLobby] Preload failed:', e);
+                return;
+            }
+            
+            // 2단계: 채팅은 더 나중에 (3초 후) + 순차 로드
+            setTimeout(async () => {
+                const characters = cache.get('characters');
+                if (!characters || characters.length === 0) return;
+                
+                // 최근 채팅순으로 정렬된 상위 3개만 (5개 → 3개로 축소)
                 const recent = [...characters]
                     .sort((a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0))
-                    .slice(0, 5);
-                await cache.preloadRecentChats(api, recent);
-            }
+                    .slice(0, 3);
+                
+                console.log('[ChatLobby] Preloading chats for', recent.length, 'characters');
+                
+                // 순차 로딩 (동시 부하 방지)
+                for (const char of recent) {
+                    if (cache.isValid('chats', char.avatar)) continue;
+                    try {
+                        const chats = await api.fetchChatsForCharacter(char.avatar);
+                        cache.set('chats', chats, char.avatar);
+                        await new Promise(r => setTimeout(r, 200)); // 200ms 간격
+                    } catch (e) {
+                        console.error('[ChatLobby] Chat preload failed:', char.name, e);
+                    }
+                }
+                
+                console.log('[ChatLobby] Chat preload completed');
+            }, 3000);
         }, CONFIG.timing.preloadDelay);
     }
     
@@ -421,6 +461,125 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         closeChatPanel();
     }
     
+    // ============================================
+    // 디버그 모달
+    // ============================================
+    
+    /**
+     * 디버그 모달 열기 - 저장된 스냅샷 데이터 확인
+     */
+    function openDebugModal() {
+        // 기존 모달 있으면 제거
+        let modal = document.getElementById('chat-lobby-debug-modal');
+        if (modal) {
+            modal.remove();
+        }
+        
+        // lastChatCache 데이터
+        const lastChatData = {};
+        if (lastChatCache.lastChatTimes) {
+            lastChatCache.lastChatTimes.forEach((timestamp, avatar) => {
+                lastChatData[avatar] = {
+                    timestamp,
+                    date: new Date(timestamp).toLocaleString('ko-KR')
+                };
+            });
+        }
+        
+        // 캘린더 스냅샷 데이터
+        const calendarSnapshots = loadCalendarSnapshots(true);
+        
+        // localStorage 키 목록
+        const storageKeys = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('chatLobby')) {
+                try {
+                    const value = localStorage.getItem(key);
+                    const parsed = JSON.parse(value);
+                    storageKeys[key] = {
+                        size: value.length,
+                        itemCount: typeof parsed === 'object' ? Object.keys(parsed).length : 1
+                    };
+                } catch {
+                    storageKeys[key] = { size: localStorage.getItem(key)?.length || 0 };
+                }
+            }
+        }
+        
+        const debugData = {
+            _meta: {
+                timestamp: new Date().toLocaleString('ko-KR'),
+                cacheInitialized: lastChatCache.initialized,
+                totalLastChatEntries: lastChatCache.lastChatTimes?.size || 0,
+                totalCalendarSnapshots: Object.keys(calendarSnapshots).length
+            },
+            storageKeys,
+            lastChatCache: lastChatData,
+            calendarSnapshots: calendarSnapshots
+        };
+        
+        // 모달 생성
+        modal = document.createElement('div');
+        modal.id = 'chat-lobby-debug-modal';
+        modal.innerHTML = `
+            <div class="debug-modal-backdrop" data-action="close-debug"></div>
+            <div class="debug-modal-content">
+                <div class="debug-modal-header">
+                    <h3>🔧 Debug Data</h3>
+                    <div class="debug-modal-actions">
+                        <button class="debug-copy-btn" id="debug-copy-btn">📋 Copy</button>
+                        <button class="debug-clear-btn" id="debug-clear-lastchat">🗑️ Clear LastChat</button>
+                        <button class="debug-modal-close" data-action="close-debug">✕</button>
+                    </div>
+                </div>
+                <div class="debug-modal-body">
+                    <pre class="debug-modal-pre">${JSON.stringify(debugData, null, 2)}</pre>
+                </div>
+            </div>
+        `;
+        
+        // 스타일 추가
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // 이벤트 바인딩
+        modal.querySelector('#debug-copy-btn')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(debugData, null, 2))
+                .then(() => showToast('클립보드에 복사됨', 'success'))
+                .catch(() => showToast('복사 실패', 'error'));
+        });
+        
+        modal.querySelector('#debug-clear-lastchat')?.addEventListener('click', () => {
+            if (confirm('LastChatCache 데이터를 삭제하시겠습니까?')) {
+                lastChatCache.clear();
+                showToast('LastChatCache 삭제됨', 'success');
+                closeDebugModal();
+            }
+        });
+    }
+    
+    /**
+     * 디버그 모달 닫기
+     */
+    function closeDebugModal() {
+        const modal = document.getElementById('chat-lobby-debug-modal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+    
     // 전역 API (네임스페이스 정리)
     window.ChatLobby = window.ChatLobby || {};
     
@@ -430,12 +589,27 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * ⚠️ idempotent: 여러 번 호출해도 안전해야 함
      */
     function cleanup() {
+        console.log('[ChatLobby] 🧹 Cleanup started');
+        
         cleanupSillyTavernEvents();
         cleanupEventDelegation();
         cleanupIntegration();
         cleanupTooltip();
         intervalManager.clearAll();
+        
+        // 타이머 정리
+        if (chatChangedCooldownTimer) {
+            clearTimeout(chatChangedCooldownTimer);
+            chatChangedCooldownTimer = null;
+        }
+        
+        // 플래그 초기화 (재초기화 허용)
+        eventsRegistered = false;
+        window._chatLobbyInitialized = false;
+        
         removeExistingUI();
+        
+        console.log('[ChatLobby] ✅ Cleanup completed');
     }
     
     // 기존 인스턴스 정리 (확장 재로드 대비)
@@ -681,6 +855,12 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 break;
             case 'close-calendar':
                 closeCalendarView();
+                break;
+            case 'open-debug':
+                openDebugModal();
+                break;
+            case 'close-debug':
+                closeDebugModal();
                 break;
         }
     }

@@ -3227,3 +3227,133 @@ body.light-mode #calendar-overlay .debug-modal-content {
     color: #333;
 }
 
+
+/* ============================================
+   Debug Modal Styles
+   ============================================ */
+
+#chat-lobby-debug-modal .debug-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+}
+
+#chat-lobby-debug-modal .debug-modal-content {
+    position: relative;
+    background: #1a1a1a;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    z-index: 1;
+}
+
+#chat-lobby-debug-modal .debug-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+#chat-lobby-debug-modal .debug-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #fff;
+}
+
+#chat-lobby-debug-modal .debug-modal-actions {
+    display: flex;
+    gap: 8px;
+}
+
+#chat-lobby-debug-modal .debug-copy-btn,
+#chat-lobby-debug-modal .debug-clear-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+#chat-lobby-debug-modal .debug-copy-btn {
+    background: rgba(100, 150, 255, 0.2);
+    color: #6496ff;
+}
+
+#chat-lobby-debug-modal .debug-copy-btn:hover {
+    background: rgba(100, 150, 255, 0.3);
+}
+
+#chat-lobby-debug-modal .debug-clear-btn {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+#chat-lobby-debug-modal .debug-clear-btn:hover {
+    background: rgba(255, 100, 100, 0.3);
+}
+
+#chat-lobby-debug-modal .debug-modal-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 8px;
+}
+
+#chat-lobby-debug-modal .debug-modal-close:hover {
+    color: #fff;
+}
+
+#chat-lobby-debug-modal .debug-modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+#chat-lobby-debug-modal .debug-modal-pre {
+    margin: 0;
+    padding: 16px;
+    background: #111;
+    border-radius: 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    color: #0f0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-x: auto;
+}
+
+/* Light mode */
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-content,
+body.light-mode #chat-lobby-debug-modal .debug-modal-content {
+    background: #fff;
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-header,
+body.light-mode #chat-lobby-debug-modal .debug-modal-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-header h3,
+body.light-mode #chat-lobby-debug-modal .debug-modal-header h3 {
+    color: #000;
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-pre,
+body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
+    background: #f5f5f5;
+    color: #333;
+}
