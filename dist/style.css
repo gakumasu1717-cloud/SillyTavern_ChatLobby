@@ -2782,30 +2782,14 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     min-height: 0;
 }
 
-/* 날짜 그리드 - 7열, 선을 먼저 그리고 카드를 얹는 느낌 */
+/* 날짜 그리드 - 7열, 선 없이 깔끔하게 */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
     position: relative;
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
     overflow: visible;
-    /* 6개 세로선 (열 사이) - 아래로 갈수록 흐려짐 */
-    background-image:
-        linear-gradient(to bottom, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 85%, transparent 100%),
-        linear-gradient(to bottom, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 85%, transparent 100%),
-        linear-gradient(to bottom, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 85%, transparent 100%),
-        linear-gradient(to bottom, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 85%, transparent 100%),
-        linear-gradient(to bottom, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 85%, transparent 100%),
-        linear-gradient(to bottom, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.5) 85%, transparent 100%);
-    background-size: 1px 110%;
-    background-position:
-        calc(100% / 7 * 1) 0,
-        calc(100% / 7 * 2) 0,
-        calc(100% / 7 * 3) 0,
-        calc(100% / 7 * 4) 0,
-        calc(100% / 7 * 5) 0,
-        calc(100% / 7 * 6) 0;
-    background-repeat: no-repeat;
 }
 
 /* 각 날짜 셀 - 테두리 없음 */
@@ -2865,12 +2849,12 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     z-index: 2;
 }
 
-/* 날짜 - 좌측 상단, 16pt */
+/* 날짜 - 좌측 상단, 14pt */
 .cal-card-day {
     position: absolute;
     top: 8px;
     left: 10px;
-    font-size: 16pt;
+    font-size: 14pt;
     font-weight: 600;
     color: #fff;
     z-index: 6;
@@ -3084,12 +3068,13 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     min-height: 100%;
 }
 
-/* ========== Last Message 슬라이드 패널 (디버그 패널 스타일) ========== */
+/* ========== Last Message 슬라이드 패널 (중앙 정렬) ========== */
 .lastmsg-panel {
     position: absolute;
     bottom: 0;
-    left: 0;
-    right: 0;
+    left: 50%;
+    width: 400px;
+    max-width: 90%;
     height: auto;
     max-height: 45%;
     background: #1a1a1a;
@@ -3097,14 +3082,14 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     display: flex;
     flex-direction: column;
     z-index: 1000;
-    transform: translateY(100%);
+    transform: translateX(-50%) translateY(100%);
     transition: transform 0.3s ease;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .lastmsg-panel.open {
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
 }
 
 .lastmsg-panel-header {
