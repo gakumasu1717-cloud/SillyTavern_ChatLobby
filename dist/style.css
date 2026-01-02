@@ -729,18 +729,20 @@
 }
 
 /* ============================================
-   캐릭터 그리드 - 넷플릭스 Row 스타일
+   캐릭터 그리드 - 반응형 Grid 레이아웃
    ============================================ */
 #chat-lobby-characters {
     flex: 1;
-    padding: 30px 15px;
+    width: 100%;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 30px 24px;
     overflow-y: auto;
     overflow-x: clip;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: var(--card-gap);
     align-content: start;
-    justify-content: center;
     scrollbar-width: thin;
     scrollbar-color: var(--lobby-bg-hover) transparent;
     position: relative;
@@ -764,9 +766,8 @@
    ============================================ */
 .lobby-char-card {
     position: relative;
-    width: var(--card-width);
-    height: var(--card-height);
-    flex-shrink: 0;
+    width: 100%;
+    aspect-ratio: 2 / 3;
     border-radius: var(--radius-sm);
     overflow: visible;
     cursor: pointer;
@@ -2417,11 +2418,13 @@
     
     #chat-lobby-characters {
         gap: 8px;
+        padding: 20px 12px;
+        grid-template-columns: repeat(3, 1fr);
     }
     
     .lobby-char-card {
-        width: var(--card-width);
-        height: var(--card-height);
+        width: 100%;
+        aspect-ratio: 2 / 3;
     }
     
     .lobby-char-card .lobby-char-name {
