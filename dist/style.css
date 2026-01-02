@@ -729,7 +729,7 @@
 }
 
 /* ============================================
-   캐릭터 그리드 - 고정 카드 크기 + 우측 정렬
+   캐릭터 그리드 - 고정 카드 크기 + 좌측 정렬
    ============================================ */
 #chat-lobby-characters {
     flex: 1;
@@ -738,7 +738,7 @@
     overflow-x: clip;
     display: grid;
     grid-template-columns: repeat(auto-fit, 200px);
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--card-gap);
     align-content: start;
     scrollbar-width: thin;
