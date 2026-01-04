@@ -4460,13 +4460,16 @@ ${message}` : message;
       byChar[r.avatar] = r.messageCount;
     });
     const lastChatTimes = {};
-    const yesterdayStart = (/* @__PURE__ */ new Date(yesterday + "T00:00:00")).getTime();
-    const todayStart = /* @__PURE__ */ new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayStartMs = todayStart.getTime();
+    const yesterdayDate = /* @__PURE__ */ new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    yesterdayDate.setHours(0, 0, 0, 0);
+    const yesterdayStartMs = yesterdayDate.getTime();
+    const todayDate = /* @__PURE__ */ new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const todayStartMs = todayDate.getTime();
     rankings.forEach((r) => {
       const lastTime = lastChatCache.get(r.avatar);
-      if (lastTime >= yesterdayStart && lastTime < todayStartMs) {
+      if (lastTime >= yesterdayStartMs && lastTime < todayStartMs) {
         lastChatTimes[r.avatar] = lastTime;
       }
     });

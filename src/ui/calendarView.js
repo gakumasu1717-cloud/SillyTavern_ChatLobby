@@ -325,15 +325,21 @@ async function saveBaselineSnapshot() {
     
     // 🔥 캐릭터별 마지막 채팅 시간 복사 (어제 날짜에 채팅한 것만)
     const lastChatTimes = {};
-    const yesterdayStart = new Date(yesterday + 'T00:00:00').getTime();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayStartMs = todayStart.getTime();
+    
+    // 어제 0시 ~ 오늘 0시 범위 계산 (타임존 안전)
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    yesterdayDate.setHours(0, 0, 0, 0);
+    const yesterdayStartMs = yesterdayDate.getTime();
+    
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const todayStartMs = todayDate.getTime();
     
     rankings.forEach(r => {
         const lastTime = lastChatCache.get(r.avatar);
         // 어제 0시 ~ 오늘 0시 사이에 채팅한 경우만 저장
-        if (lastTime >= yesterdayStart && lastTime < todayStartMs) {
+        if (lastTime >= yesterdayStartMs && lastTime < todayStartMs) {
             lastChatTimes[r.avatar] = lastTime;
         }
     });
