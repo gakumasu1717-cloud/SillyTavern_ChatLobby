@@ -1,12 +1,12 @@
 /* ============================================
-   🎬 Chat Lobby - Netflix Style with Dark/Light Mode
-   Pretendard 폰트 + 다크/라이트 테마 지원
+   ?�� Chat Lobby - Netflix Style with Dark/Light Mode
+   Pretendard ?�트 + ?�크/?�이???�마 지??
    ============================================ */
 
-/* Pretendard 폰트 */
+/* Pretendard ?�트 */
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
-/* 🎨 다크 모드 (기본) - 넷플릭스 스타일 */
+/* ?�� ?�크 모드 (기본) - ?�플�?�� ?��???*/
 :root,
 #chat-lobby-container.dark-mode {
     /* Netflix Colors */
@@ -23,12 +23,12 @@
     --text-muted: #A3A3A3;
     --text-dim: #808080;
     
-    /* Favorite Star - 테마 액센트 컬러 */
+    /* Favorite Star - ?�마 ?�센??컬러 */
     --star-color: #E50914;
     --star-glow: rgba(229, 9, 20, 0.6);
 }
 
-/* ☀️ 라이트 모드 - 모노톤 */
+/* ?��??�이??모드 - 모노??*/
 #chat-lobby-container.light-mode {
     --lobby-bg: #F5F5F5;
     --lobby-bg-light: #FFFFFF;
@@ -43,12 +43,12 @@
     --text-muted: #666666;
     --text-dim: #999999;
     
-    /* Favorite Star - 테마 액센트 컬러 */
+    /* Favorite Star - ?�마 ?�센??컬러 */
     --star-color: #333333;
     --star-glow: rgba(51, 51, 51, 0.4);
 }
 
-/* 공통 변수 */
+/* 공통 변??*/
 :root {
     /* Spacing */
     --space-xs: 4px;
@@ -88,7 +88,7 @@
     --font-weight-bold: 700;
 }
 
-/* 전체 폰트 적용 */
+/* ?�체 ?�트 ?�용 */
 #chat-lobby-container,
 #chat-lobby-container *,
 #chat-lobby-overlay,
@@ -97,7 +97,7 @@
 }
 
 /* ============================================
-   FAB 버튼 (플로팅 버튼)
+   FAB 버튼 (?�로??버튼)
    ============================================ */
 #chat-lobby-fab {
     position: fixed;
@@ -130,7 +130,7 @@
 }
 
 /* ============================================
-   오버레이 & 컨테이너
+   ?�버?�이 & 컨테?�너
    ============================================ */
 #chat-lobby-overlay {
     position: fixed;
@@ -159,7 +159,7 @@
 }
 
 /* ============================================
-   헤더 - 넷플릭스 스타일
+   ?�더 - ?�플�?�� ?��???
    ============================================ */
 #chat-lobby-header {
     display: flex;
@@ -199,7 +199,7 @@
     letter-spacing: -0.5px;
 }
 
-/* 모바일 메뉴 토글 버튼 - PC에서 숨김 */
+/* 모바??메뉴 ?��? 버튼 - PC?�서 ?��? */
 #chat-lobby-menu-toggle {
     display: none;
 }
@@ -225,7 +225,7 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
-/* X 닫기 버튼 - header-actions 밖에 독립 배치 */
+/* X ?�기 버튼 - header-actions 밖에 ?�립 배치 */
 #chat-lobby-close {
     background: transparent;
     border: none;
@@ -242,7 +242,7 @@
 }
 
 /* ============================================
-   메인 레이아웃
+   메인 ?�이?�웃
    ============================================ */
 #chat-lobby-main {
     display: flex;
@@ -260,7 +260,7 @@
 }
 
 /* ============================================
-   페르소나 바 - 넷플릭스 프로필 스타일
+   ?�르?�나 �?- ?�플�?�� ?�로???��???
    ============================================ */
 #chat-lobby-persona-bar {
     display: flex;
@@ -370,7 +370,7 @@
 }
 
 /* ============================================
-   검색 + 정렬 (접기 가능)
+   검??+ ?�렬 (?�기 가??
    ============================================ */
 #chat-lobby-search {
     display: flex;
@@ -421,7 +421,7 @@
 }
 
 /* ============================================
-   태그 바 (접기 가능)
+   ?�그 �?(?�기 가??
    ============================================ */
 #chat-lobby-tag-bar {
     display: flex;
@@ -478,7 +478,7 @@
 }
 
 /* ============================================
-   상단 영역 접기/펼치기 기능
+   ?�단 ?�역 ?�기/?�치�?기능
    ============================================ */
 #chat-lobby-collapse-btn {
     background: transparent;
@@ -501,7 +501,7 @@
     color: var(--text-primary);
 }
 
-/* 접힌 상태의 상단 영역 - 스무스한 슬라이드 */
+/* ?�힌 ?�태???�단 ?�역 - ?�무?�한 ?�라?�드 */
 #chat-lobby-persona-bar,
 #chat-lobby-search,
 #chat-lobby-tag-bar {
@@ -521,7 +521,7 @@
     pointer-events: none;
 }
 
-/* 테마 토글 버튼 */
+/* ?�마 ?��? 버튼 */
 #chat-lobby-theme-toggle {
     background: transparent;
     border: none;
@@ -538,7 +538,7 @@
     background: rgba(255, 255, 255, 0.1);
 }
 
-/* 라이트 모드용 추가 스타일 */
+/* ?�이??모드??추�? ?��???*/
 #chat-lobby-container.light-mode #chat-lobby-header {
     background: transparent;
 }
@@ -578,10 +578,10 @@
 }
 
 /* ============================================
-   라이트 모드 추가 스타일 - 가시성 개선
+   ?�이??모드 추�? ?��???- 가?�성 개선
    ============================================ */
 
-/* 채팅 패널 */
+/* 채팅 ?�널 */
 #chat-lobby-container.light-mode #chat-lobby-chats {
     border-left: 1px solid rgba(0, 0, 0, 0.1);
 }
@@ -594,7 +594,7 @@
     background: rgba(0, 0, 0, 0.05);
 }
 
-/* 필터 섹션 */
+/* ?�터 ?�션 */
 #chat-lobby-container.light-mode #chat-lobby-filters {
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
@@ -619,7 +619,7 @@
     border-color: rgba(0, 0, 0, 0.15);
 }
 
-/* 채팅 아이템 */
+/* 채팅 ?�이??*/
 #chat-lobby-container.light-mode .lobby-chat-item {
     border-color: rgba(0, 0, 0, 0.08);
 }
@@ -637,13 +637,13 @@
     border-color: rgba(0, 0, 0, 0.15);
 }
 
-/* 배치 모드 툴바 */
+/* 배치 모드 ?�바 */
 #chat-lobby-container.light-mode #chat-lobby-batch-toolbar {
     background: rgba(0, 0, 0, 0.05);
     border-color: rgba(0, 0, 0, 0.15);
 }
 
-/* 폴더 모달 */
+/* ?�더 모달 */
 #chat-lobby-container.light-mode ~ #chat-lobby-folder-modal .folder-modal-content {
     border-color: rgba(0, 0, 0, 0.15);
 }
@@ -662,23 +662,23 @@
     border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* 접기 버튼 */
+/* ?�기 버튼 */
 #chat-lobby-container.light-mode #chat-lobby-collapse-btn {
     background: rgba(0, 0, 0, 0.05);
     border-color: rgba(0, 0, 0, 0.15);
 }
 
-/* 페르소나 삭제 버튼 */
+/* ?�르?�나 ??�� 버튼 */
 #chat-lobby-container.light-mode .persona-delete-btn {
     background: #dc3545;
 }
 
-/* 빈 상태 */
+/* �??�태 */
 #chat-lobby-container.light-mode .lobby-empty-state {
     color: var(--text-muted);
 }
 
-/* 새 채팅 버튼 (라이트 모드에서도 눈에 띄게) */
+/* ??채팅 버튼 (?�이??모드?�서???�에 ?�게) */
 #chat-lobby-container.light-mode #chat-lobby-new-chat {
     background: #333333;
     color: #ffffff;
@@ -688,7 +688,7 @@
     background: #1a1a1a;
 }
 
-/* 검색창 라이트 모드 */
+/* 검?�창 ?�이??모드 */
 #chat-lobby-container.light-mode #chat-lobby-search select {
     background: rgba(0, 0, 0, 0.05);
     border-color: rgba(0, 0, 0, 0.15);
@@ -704,7 +704,7 @@
     border-color: #333333;
 }
 
-/* 스크롤바 라이트 모드 */
+/* ?�크롤바 ?�이??모드 */
 #chat-lobby-container.light-mode #chat-lobby-characters::-webkit-scrollbar-thumb,
 #chat-lobby-container.light-mode #chat-lobby-chats-list::-webkit-scrollbar-thumb,
 #chat-lobby-container.light-mode #chat-lobby-persona-list::-webkit-scrollbar-thumb {
@@ -717,19 +717,19 @@
     scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
-/* 캐릭터 삭제 버튼 */
+/* 캐릭????�� 버튼 */
 #chat-lobby-container.light-mode #chat-lobby-delete-char {
     border-color: rgba(220, 53, 69, 0.5);
 }
 
-/* 채팅 패널 필터 select option */
+/* 채팅 ?�널 ?�터 select option */
 #chat-lobby-container.light-mode .filters-row select option {
     background: #ffffff;
     color: #1a1a1a;
 }
 
 /* ============================================
-   캐릭터 그리드 - 고정 카드 크기 + 중앙 정렬
+   캐릭??그리??- 고정 카드 ?�기 + 중앙 ?�렬
    ============================================ */
 #chat-lobby-characters {
     flex: 1;
@@ -760,7 +760,7 @@
 }
 
 /* ============================================
-   캐릭터 카드 - 넷플릭스 스타일 + 호버 정보 표시
+   캐릭??카드 - ?�플�?�� ?��???+ ?�버 ?�보 ?�시
    ============================================ */
 .lobby-char-card {
     position: relative;
@@ -787,7 +787,7 @@
     transition: all var(--transition-normal);
 }
 
-/* 캐릭터 이름 - 기본 숨김, 호버 시 그라데이션과 함께 표시 */
+/* 캐릭???�름 - 기본 ?��?, ?�버 ??그라?�이?�과 ?�께 ?�시 */
 .lobby-char-name {
     position: absolute;
     bottom: 0;
@@ -807,13 +807,13 @@
     gap: 4px;
 }
 
-/* 호버 시 정보 표시 */
+/* ?�버 ???�보 ?�시 */
 .lobby-char-card:hover .lobby-char-name {
     opacity: 1;
     transform: translateY(0);
 }
 
-/* 카드 호버 시 표시되는 추가 정보 */
+/* 카드 ?�버 ???�시?�는 추�? ?�보 */
 .char-hover-info {
     display: flex;
     flex-direction: column;
@@ -839,7 +839,7 @@
     color: #FFFFFF;
 }
 
-/* 최근 채팅 시간 표시 (최근순 정렬 시만 표시) */
+/* 최근 채팅 ?�간 ?�시 (최근???�렬 ?�만 ?�시) */
 .char-last-time {
     font-size: 0.8em;
     font-weight: 500;
@@ -883,7 +883,7 @@
     text-shadow: 0 0 8px var(--star-glow);
 }
 
-/* 채팅 관리 버튼 */
+/* 채팅 관�?버튼 */
 .char-manage-btn {
     position: absolute;
     top: 8px;
@@ -920,7 +920,7 @@
 }
 
 /* ============================================
-   채팅 패널 - 사이드 슬라이드 (PC 여백 축소)
+   채팅 ?�널 - ?�이???�라?�드 (PC ?�백 축소)
    ============================================ */
 #chat-lobby-chats {
     width: 420px;
@@ -928,19 +928,19 @@
     max-width: 480px;
     background: var(--lobby-bg-light);
     border-left: 1px solid rgba(255, 255, 255, 0.1);
-    display: none; /* 기본값: 숨김 */
+    display: none; /* 기본�? ?��? */
     flex-direction: column;
     flex-shrink: 0;
     transition: transform var(--transition-smooth);
 }
 
 #chat-lobby-chats.visible {
-    display: flex; /* 보일 때만 표시 */
+    display: flex; /* 보일 ?�만 ?�시 */
     transform: translateX(0);
     box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
 }
 
-/* 채팅 패널 헤더 */
+/* 채팅 ?�널 ?�더 */
 #chat-lobby-chats-header {
     padding: 14px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -1030,7 +1030,7 @@
 }
 
 /* ============================================
-   필터 섹션
+   ?�터 ?�션
    ============================================ */
 #chat-lobby-filters {
     display: flex;
@@ -1137,7 +1137,7 @@
     font-size: 14px;
 }
 
-/* 아이콘 버튼 내부 이모지 정렬 */
+/* ?�이�?버튼 ?��? ?�모지 ?�렬 */
 .filters-row button .icon {
     display: inline-block;
     font-size: 14px;
@@ -1154,7 +1154,7 @@
 }
 
 /* ============================================
-   배치 모드 툴바
+   배치 모드 ?�바
    ============================================ */
 #chat-lobby-batch-toolbar {
     display: none;
@@ -1210,7 +1210,7 @@
     border-radius: 3px;
 }
 
-/* 채팅 아이템 - 여백 최적화 */
+/* 채팅 ?�이??- ?�백 최적??*/
 .lobby-chat-item {
     display: flex;
     align-items: center;
@@ -1267,7 +1267,7 @@
     border-radius: var(--radius-sm);
 }
 
-/* 채팅 액션 버튼들 */
+/* 채팅 ?�션 버튼??*/
 .chat-fav-btn,
 .chat-delete-btn {
     background: transparent;
@@ -1321,7 +1321,7 @@
 }
 
 /* ============================================
-   빈 상태 & 로딩
+   �??�태 & 로딩
    ============================================ */
 .lobby-empty-state {
     display: flex;
@@ -1349,7 +1349,7 @@
 }
 
 /* ============================================
-   폴더 모달
+   ?�더 모달
    ============================================ */
 #chat-lobby-folder-modal {
     position: fixed;
@@ -1502,7 +1502,7 @@
 }
 
 /* ============================================
-   🎊 Wrapped 통계 화면 - PC 레이아웃 개선
+   ?�� Wrapped ?�계 ?�면 - PC ?�이?�웃 개선
    ============================================ */
 #chat-lobby-stats-view {
     position: absolute;
@@ -1638,7 +1638,7 @@
     color: var(--text-primary);
 }
 
-/* 퀴즈 옵션 */
+/* ?�즈 ?�션 */
 .quiz-options {
     display: flex;
     gap: 20px;
@@ -1704,7 +1704,7 @@
     }
 }
 
-/* 결과 아바타 */
+/* 결과 ?�바?� */
 .result-avatar {
     display: flex;
     flex-direction: column;
@@ -1737,7 +1737,7 @@
     50% { box-shadow: 0 0 40px gold, 0 0 80px gold; }
 }
 
-/* 메시지 입력 */
+/* 메시지 ?�력 */
 .message-input-wrap {
     margin: 35px 0;
 }
@@ -1763,7 +1763,7 @@
     color: var(--text-dim);
 }
 
-/* 날짜 퀴즈 */
+/* ?�짜 ?�즈 */
 .date-select-wrap {
     display: flex;
     gap: 15px;
@@ -1787,7 +1787,7 @@
     outline: none;
 }
 
-/* 날짜 결과 */
+/* ?�짜 결과 */
 .date-reveal {
     margin: 25px 0;
     padding: 20px 40px;
@@ -1868,7 +1868,7 @@
 .compare-value.too-high { color: #f87171 !important; }
 .compare-value.too-low { color: #60a5fa !important; }
 
-/* 최종 통계 */
+/* 최종 ?�계 */
 .final-step {
     max-width: 650px;
     align-items: stretch;
@@ -1985,7 +1985,7 @@
     margin-top: 4px;
 }
 
-/* 통계 그리드 */
+/* ?�계 그리??*/
 .stats-total {
     background: var(--lobby-bg-card);
     border-radius: var(--radius-lg);
@@ -2029,7 +2029,7 @@
     border-radius: var(--radius-md);
 }
 
-/* Fun Facts 그리드 - PC 레이아웃 개선 */
+/* Fun Facts 그리??- PC ?�이?�웃 개선 */
 .stats-fun-facts {
     background: var(--lobby-bg-card);
     border-radius: var(--radius-lg);
@@ -2066,7 +2066,7 @@
     line-height: 1.4;
 }
 
-/* 첫 대화 날짜 섹션 */
+/* �??�???�짜 ?�션 */
 .first-chat-section {
     margin-top: 15px;
     padding-top: 15px;
@@ -2117,7 +2117,7 @@
     color: var(--text-muted);
 }
 
-/* 1위 캐릭터 통계 섹션 */
+/* 1??캐릭???�계 ?�션 */
 .stats-top-char {
     background: var(--lobby-bg-card);
     border-radius: var(--radius-lg);
@@ -2248,7 +2248,7 @@
 }
 
 /* ============================================
-   애니메이션
+   ?�니메이??
    ============================================ */
 @keyframes fadeIn {
     from { opacity: 0; }
@@ -2266,7 +2266,7 @@
 }
 
 /* ============================================
-   반응형 - 모바일
+   반응??- 모바??
    ============================================ */
 @media (max-width: 850px) {
     #chat-lobby-main {
@@ -2323,7 +2323,7 @@
         font-size: 1.2em;
     }
     
-    /* 모바일 헤더 - 토글 메뉴 */
+    /* 모바???�더 - ?��? 메뉴 */
     #chat-lobby-menu-toggle {
         display: flex;
         align-items: center;
@@ -2342,9 +2342,9 @@
         background: rgba(255, 255, 255, 0.1);
     }
     
-/* 메뉴 토글 - 햄버거 이모지 유지 */
+/* 메뉴 ?��? - ?�버�??�모지 ?��? */
     
-/* 모바일 헤더 액션 - 드롭다운 서랍 */
+/* 모바???�더 ?�션 - ?�롭?�운 ?�랍 */
     .header-actions {
         position: absolute;
         top: 100%;
@@ -2363,7 +2363,7 @@
         z-index: -1;
     }
     
-    /* 메뉴 열림 상태 - 버튼들 표시 */
+    /* 메뉴 ?�림 ?�태 - 버튼???�시 */
     #chat-lobby-header.menu-open .header-actions {
         transform: translateY(0);
         opacity: 1;
@@ -2371,7 +2371,7 @@
         z-index: 1;
     }
     
-    /* 액션 버튼들 작게 */
+    /* ?�션 버튼???�게 */
     .header-actions button {
         padding: 8px 12px;
         font-size: 1.1em;
@@ -2385,7 +2385,7 @@
         padding-right: 15px;
     }
     
-    /* 모바일 검색 영역 - 세로 배치 또는 축소 */
+    /* 모바??검???�역 - ?�로 배치 ?�는 축소 */
     #chat-lobby-search {
         flex-wrap: wrap;
         gap: 8px;
@@ -2394,7 +2394,7 @@
     
     #chat-lobby-search input {
         flex: 1;
-        min-width: 0; /* flex 축소 허용 */
+        min-width: 0; /* flex 축소 ?�용 */
     }
     
     #chat-lobby-search select {
@@ -2434,7 +2434,7 @@
         font-size: 12px;
     }
     
-    /* 모바일에서 상세정보 숨김 - 이름만 표시 */
+    /* 모바?�에???�세?�보 ?��? - ?�름�??�시 */
     .lobby-char-card .char-hover-info {
         display: none;
     }
@@ -2446,7 +2446,7 @@
         font-size: 1em;
     }
     
-    /* Wrapped 모바일 */
+    /* Wrapped 모바??*/
     .wrapped-step {
         padding: 25px 20px;
     }
@@ -2522,7 +2522,7 @@
         font-size: 0.9em;
     }
     
-    /* 아주 작은 화면 검색 영역 */
+    /* ?�주 ?��? ?�면 검???�역 */
     #chat-lobby-search {
         padding: 8px 12px;
     }
@@ -2545,7 +2545,7 @@
 }
 
 /* ============================================
-   호버 불가능 디바이스 (터치)
+   ?�버 불�????�바?�스 (?�치)
    ============================================ */
 @media (hover: none) {
     .persona-item:hover {
@@ -2566,7 +2566,7 @@
 }
 
 /* ============================================
-   CustomTheme 호환성
+   CustomTheme ?�환??
    ============================================ */
 body.st-custom-theme-active #chat-lobby-overlay,
 body.st-menu-layout-hamburger #chat-lobby-overlay {
@@ -2589,7 +2589,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: none !important;
 }
 
-/* 옵션 메뉴 버튼 */
+/* ?�션 메뉴 버튼 */
 #option_chat_lobby {
     display: flex !important;
     align-items: center;
@@ -2607,12 +2607,12 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: rgba(255, 255, 255, 0.15);
 }
 
-/* 상단바 버튼 숨김 */
+/* ?�단�?버튼 ?��? */
 #chat-lobby-btn {
     display: none !important;
 }
 
-/* 툴팁 */
+/* ?�팁 */
 #chat-preview-tooltip {
     position: fixed;
     display: none;
@@ -2634,7 +2634,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     backdrop-filter: blur(10px);
 }
 
-/* 모바일에서 툴팁 숨김 */
+/* 모바?�에???�팁 ?��? */
 @media (max-width: 768px) {
     #chat-preview-tooltip {
         display: none !important;
@@ -2642,7 +2642,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 /* ============================================
-   캘린더 뷰 - iOS Modern Grid Style
+   캘린??�?- iOS Modern Grid Style
    ============================================ */
 #calendar-overlay {
     position: fixed !important;
@@ -2678,7 +2678,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     margin: 0 auto;
 }
 
-/* 헤더 - 네비게이션 중앙 */
+/* ?�더 - ?�비게이??중앙 */
 .calendar-header {
     display: flex;
     align-items: center;
@@ -2702,7 +2702,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     opacity: 0.7;
 }
 
-/* 타이틀 영역 (버튼 + 날짜) */
+/* ?�?��? ?�역 (버튼 + ?�짜) */
 .calendar-title-area {
     display: flex;
     align-items: center;
@@ -2729,7 +2729,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-weight: 600;
 }
 
-/* 네비게이션 버튼 - 헤더 내 */
+/* ?�비게이??버튼 - ?�더 ??*/
 .cal-nav-btn {
     background: rgba(255, 255, 255, 0.08);
     border: none;
@@ -2755,7 +2755,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
 }
 
 .calendar-debug-btn {
-    display: none; /* 프로덕션용 숨김 */
+    display: none; /* ?�로?�션???��? */
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: rgba(255, 255, 255, 0.5);
@@ -2773,7 +2773,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     color: #fff;
 }
 
-/* 메인 영역 - 스크롤 가능 */
+/* 메인 ?�역 - ?�크�?가??*/
 .calendar-main {
     flex: 1;
     overflow: auto;
@@ -2782,7 +2782,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     min-height: 0;
 }
 
-/* 날짜 그리드 - 7열, 선 없이 깔끔하게 */
+/* ?�짜 그리??- 7?? ???�이 깔끔?�게 */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -2794,7 +2794,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: #000;
 }
 
-/* 각 날짜 셀 - 라운드 없음 */
+/* �??�짜 ?� - ?�운???�음 */
 .cal-card {
     position: relative;
     aspect-ratio: 2 / 3;
@@ -2805,7 +2805,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 가로선 제거 */
+/* 가로선 ?�거 */
 .cal-card:nth-child(7n+1)::after {
     display: none;
 }
@@ -2818,7 +2818,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     background: #000;
 }
 
-/* 카드 아바타 */
+/* 카드 ?�바?� */
 .cal-card-avatar {
     position: absolute;
     top: 0;
@@ -2828,7 +2828,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     object-fit: cover;
 }
 
-/* 카드 그라데이션 - 하단 */
+/* 카드 그라?�이??- ?�단 */
 .cal-card-gradient {
     position: absolute;
     bottom: 0;
@@ -2839,7 +2839,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     z-index: 2;
 }
 
-/* 날짜 - 좌측 상단, 16pt Light */
+/* ?�짜 - 좌측 ?�단, 16pt Light */
 .cal-card-day {
     position: absolute;
     top: 8px;
@@ -2852,7 +2852,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 카드 정보 - 하단 (이름 위, 채팅수 아래) */
+/* 카드 ?�보 - ?�단 (?�름 ?? 채팅???�래) */
 .cal-card-info {
     position: absolute;
     bottom: 0;
@@ -2877,7 +2877,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     color: rgba(255, 255, 255, 0.6);
 }
 
-/* 빈 카드 - 좌측 상단에 날짜만, 16pt Light 회색 */
+/* �?카드 - 좌측 ?�단???�짜�? 16pt Light ?�색 */
 .cal-card-empty {
     position: absolute;
     top: 8px;
@@ -2888,7 +2888,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 모바일 - 드래그 스크롤, 핀치줌 가능 */
+/* 모바??- ?�래�??�크�? ?�치줌 가??*/
 @media (max-width: 768px) {
     #calendar-overlay {
         overflow: auto;
@@ -2915,7 +2915,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
         min-width: 70px;
     }
     
-    /* 모바일 기본: 이름/상세정보 숨김 */
+    /* 모바??기본: ?�름/?�세?�보 ?��? */
     .cal-card-info {
         display: none;
     }
@@ -2924,7 +2924,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
         display: none;
     }
     
-    /* 확대 시 (zoomed-in): 정보 표시 */
+    /* ?��? ??(zoomed-in): ?�보 ?�시 */
     .calendar-grid.zoomed-in .cal-card-info,
     .calendar-grid.zoomed-in .cal-card-gradient {
         display: block;
@@ -2939,13 +2939,13 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     }
 }
 
-/* 축소 시 (zoomed-out): 날짜만 */
+/* 축소 ??(zoomed-out): ?�짜�?*/
 .calendar-grid.zoomed-out .cal-card-info,
 .calendar-grid.zoomed-out .cal-card-gradient {
     display: none !important;
 }
 
-/* PC에서 카드 더 크게 */
+/* PC?�서 카드 ???�게 */
 @media (min-width: 769px) {
     .cal-card {
         min-width: 100px;
@@ -2968,7 +2968,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     }
 }
 
-/* 디버그 모달 */
+/* ?�버�?모달 */
 .calendar-debug-modal {
     position: fixed;
     top: 50%;
@@ -3058,7 +3058,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     min-height: 100%;
 }
 
-/* ========== Last Message 슬라이드 패널 (중앙 정렬) ========== */
+/* ========== Last Message ?�라?�드 ?�널 (중앙 ?�렬) ========== */
 .lastmsg-panel {
     position: absolute;
     bottom: 0;
@@ -3129,7 +3129,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Last Message 캐릭터 카드 - 가로로 긴 직사각형, 배경 없음 */
+/* Last Message 캐릭??카드 - 가로로 �?직사각형, 배경 ?�음 */
 .lastmsg-card {
     position: relative;
     width: 100%;
@@ -3141,7 +3141,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     align-items: stretch;
 }
 
-/* Last Message 아바타 - ST 기본 스타일 우선순위 이기기 */
+/* Last Message ?�바?� - ST 기본 ?��????�선?�위 ?�기�?*/
 .lastmsg-card > img.lastmsg-avatar {
     position: absolute;
     left: 0;
@@ -3152,7 +3152,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     object-position: 50% 30% !important;
 }
 
-/* 이미지 하단 그라데이션 오버레이 (이름 가독성) - 아바타 너비에 맞춤 */
+/* ?��?지 ?�단 그라?�이???�버?�이 (?�름 가?�성) - ?�바?� ?�비??맞춤 */
 .lastmsg-card::after {
     content: '';
     position: absolute;
@@ -3174,7 +3174,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     z-index: 2;
 }
 
-/* 이름 - 좌측 하단 (이미지 위) */
+/* ?�름 - 좌측 ?�단 (?��?지 ?? */
 .lastmsg-name {
     position: absolute;
     left: 12px;
@@ -3190,7 +3190,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
 }
 
-/* 통계 - 우측 */
+/* ?�계 - ?�측 */
 .lastmsg-stats {
     position: absolute;
     right: 16px;
@@ -3222,7 +3222,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     font-style: italic;
 }
 
-/* 모바일 최적화 */
+/* 모바??최적??*/
 @media (max-width: 768px) {
     .lastmsg-panel {
         max-height: 50%;
@@ -3263,7 +3263,7 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     }
 }
 
-/* 클릭 가능 표시 - cal-card */
+/* ?�릭 가???�시 - cal-card */
 .cal-card.has-data {
     cursor: pointer;
     transition: transform 0.15s ease;
@@ -3277,265 +3277,265 @@ body.st-menu-layout-hamburger #chat-lobby-fab {
     transform: scale(0.98);
 }
 
-/* ========== 라이트 모드 - 모노톤 ========== */
-#chat-lobby-container.light-mode ~ #calendar-overlay,
-body.light-mode #calendar-overlay {
+/* ========== ?�이??모드 - 모노??========== */
+#calendar-overlay.light-mode,
+#calendar-overlay.light-mode {
     background: #fff;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-fullscreen,
-body.light-mode #calendar-overlay .calendar-fullscreen {
+#calendar-overlay.light-mode .calendar-fullscreen,
+#calendar-overlay.light-mode .calendar-fullscreen {
     background: #fff;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-close-btn,
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-year,
-body.light-mode #calendar-overlay .calendar-close-btn,
-body.light-mode #calendar-overlay .calendar-year {
+#calendar-overlay.light-mode .calendar-close-btn,
+#calendar-overlay.light-mode .calendar-year,
+#calendar-overlay.light-mode .calendar-close-btn,
+#calendar-overlay.light-mode .calendar-year {
     color: rgba(0, 0, 0, 0.4);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-month,
-body.light-mode #calendar-overlay .calendar-month {
+#calendar-overlay.light-mode .calendar-month,
+#calendar-overlay.light-mode .calendar-month {
     color: #000;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-debug-btn,
-body.light-mode #calendar-overlay .calendar-debug-btn {
+#calendar-overlay.light-mode .calendar-debug-btn,
+#calendar-overlay.light-mode .calendar-debug-btn {
     border-color: rgba(0, 0, 0, 0.15);
     color: rgba(0, 0, 0, 0.4);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-grid-wrapper,
-body.light-mode #calendar-overlay .calendar-grid-wrapper {
+#calendar-overlay.light-mode .calendar-grid-wrapper,
+#calendar-overlay.light-mode .calendar-grid-wrapper {
     background: #fff;
     border-color: rgba(0, 0, 0, 0.1);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays,
-body.light-mode #calendar-overlay .calendar-weekdays {
+#calendar-overlay.light-mode .calendar-weekdays,
+#calendar-overlay.light-mode .calendar-weekdays {
     background: rgba(0, 0, 0, 0.02);
     border-color: rgba(0, 0, 0, 0.08);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays span,
-body.light-mode #calendar-overlay .calendar-weekdays span {
+#calendar-overlay.light-mode .calendar-weekdays span,
+#calendar-overlay.light-mode .calendar-weekdays span {
     color: rgba(0, 0, 0, 0.4);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays .sun,
-body.light-mode #calendar-overlay .calendar-weekdays .sun {
+#calendar-overlay.light-mode .calendar-weekdays .sun,
+#calendar-overlay.light-mode .calendar-weekdays .sun {
     color: #333;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-weekdays .sat,
-body.light-mode #calendar-overlay .calendar-weekdays .sat {
+#calendar-overlay.light-mode .calendar-weekdays .sat,
+#calendar-overlay.light-mode .calendar-weekdays .sat {
     color: #666;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day,
-body.light-mode #calendar-overlay .calendar-day {
+#calendar-overlay.light-mode .calendar-day,
+#calendar-overlay.light-mode .calendar-day {
     border-color: rgba(0, 0, 0, 0.06);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day:not(.empty):hover,
-body.light-mode #calendar-overlay .calendar-day:not(.empty):hover {
+#calendar-overlay.light-mode .calendar-day:not(.empty):hover,
+#calendar-overlay.light-mode .calendar-day:not(.empty):hover {
     background: rgba(0, 0, 0, 0.04);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day.today,
-body.light-mode #calendar-overlay .calendar-day.today {
+#calendar-overlay.light-mode .calendar-day.today,
+#calendar-overlay.light-mode .calendar-day.today {
     background: rgba(0, 0, 0, 0.06);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-day.today .day-number,
-body.light-mode #calendar-overlay .calendar-day.today .day-number {
+#calendar-overlay.light-mode .calendar-day.today .day-number,
+#calendar-overlay.light-mode .calendar-day.today .day-number {
     color: #333;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .day-number,
-body.light-mode #calendar-overlay .day-number {
+#calendar-overlay.light-mode .day-number,
+#calendar-overlay.light-mode .day-number {
     color: #000;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-nav-btn,
-body.light-mode #calendar-overlay .cal-nav-btn {
+#calendar-overlay.light-mode .cal-nav-btn,
+#calendar-overlay.light-mode .cal-nav-btn {
     background: rgba(0, 0, 0, 0.06);
     color: #000;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-nav-btn:hover:not(:disabled),
-body.light-mode #calendar-overlay .cal-nav-btn:hover:not(:disabled) {
+#calendar-overlay.light-mode .cal-nav-btn:hover:not(:disabled),
+#calendar-overlay.light-mode .cal-nav-btn:hover:not(:disabled) {
     background: rgba(0, 0, 0, 0.1);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-bot-card,
-body.light-mode #calendar-overlay .calendar-bot-card {
+#calendar-overlay.light-mode .calendar-bot-card,
+#calendar-overlay.light-mode .calendar-bot-card {
     background: #fff;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .bot-card-gradient,
-body.light-mode #calendar-overlay .bot-card-gradient {
+#calendar-overlay.light-mode .bot-card-gradient,
+#calendar-overlay.light-mode .bot-card-gradient {
     background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.95) 30%, transparent 100%);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .bot-card-name,
-body.light-mode #calendar-overlay .bot-card-name {
+#calendar-overlay.light-mode .bot-card-name,
+#calendar-overlay.light-mode .bot-card-name {
     color: #000;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .bot-card-stats,
-body.light-mode #calendar-overlay .bot-card-stats {
+#calendar-overlay.light-mode .bot-card-stats,
+#calendar-overlay.light-mode .bot-card-stats {
     color: rgba(0, 0, 0, 0.6);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .bot-card-stats.positive,
-body.light-mode #calendar-overlay .bot-card-stats.positive {
+#calendar-overlay.light-mode .bot-card-stats.positive,
+#calendar-overlay.light-mode .bot-card-stats.positive {
     color: #333;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .bot-card-date,
-body.light-mode #calendar-overlay .bot-card-date {
+#calendar-overlay.light-mode .bot-card-date,
+#calendar-overlay.light-mode .bot-card-date {
     color: rgba(0, 0, 0, 0.4);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-footer,
-body.light-mode #calendar-overlay .calendar-footer {
+#calendar-overlay.light-mode .calendar-footer,
+#calendar-overlay.light-mode .calendar-footer {
     color: rgba(0, 0, 0, 0.3);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-debug-modal,
-body.light-mode #calendar-overlay .calendar-debug-modal {
+#calendar-overlay.light-mode .calendar-debug-modal,
+#calendar-overlay.light-mode .calendar-debug-modal {
     background: #fff;
     border-color: rgba(0, 0, 0, 0.1);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-header,
-body.light-mode #calendar-overlay .debug-modal-header {
+#calendar-overlay.light-mode .debug-modal-header,
+#calendar-overlay.light-mode .debug-modal-header {
     background: rgba(0, 0, 0, 0.02);
     border-color: rgba(0, 0, 0, 0.08);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-header h3,
-body.light-mode #calendar-overlay .debug-modal-header h3 {
+#calendar-overlay.light-mode .debug-modal-header h3,
+#calendar-overlay.light-mode .debug-modal-header h3 {
     color: #000;
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-close,
-body.light-mode #calendar-overlay .debug-modal-close {
+#calendar-overlay.light-mode .debug-modal-close,
+#calendar-overlay.light-mode .debug-modal-close {
     color: rgba(0, 0, 0, 0.4);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .debug-modal-content,
-body.light-mode #calendar-overlay .debug-modal-content {
+#calendar-overlay.light-mode .debug-modal-content,
+#calendar-overlay.light-mode .debug-modal-content {
     background: #f8f8f8;
     color: #333;
 }
 
 /* ============================================
-   캘린더 라이트 모드 - cal-card 계열
+   캘린???�이??모드 - cal-card 계열
    ============================================ */
 
-/* 그리드 배경 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-grid,
-body.light-mode #calendar-overlay .calendar-grid {
+/* 그리??배경 */
+#calendar-overlay.light-mode .calendar-grid,
+#calendar-overlay.light-mode .calendar-grid {
     background: #f5f5f5;
 }
 
 /* 기본 카드 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card,
-body.light-mode #calendar-overlay .cal-card {
+#calendar-overlay.light-mode .cal-card,
+#calendar-overlay.light-mode .cal-card {
     background: #e8e8e8;
 }
 
-/* 오늘 강조 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card.today,
-body.light-mode #calendar-overlay .cal-card.today {
+/* ?�늘 강조 */
+#calendar-overlay.light-mode .cal-card.today,
+#calendar-overlay.light-mode .cal-card.today {
     background: rgba(51, 51, 51, 0.1);
 }
 
-/* 데이터 있는 카드 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card.has-data,
-body.light-mode #calendar-overlay .cal-card.has-data {
+/* ?�이???�는 카드 */
+#calendar-overlay.light-mode .cal-card.has-data,
+#calendar-overlay.light-mode .cal-card.has-data {
     background: #fff;
 }
 
-/* 카드 그라데이션 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-gradient,
-body.light-mode #calendar-overlay .cal-card-gradient {
+/* 카드 그라?�이??*/
+#calendar-overlay.light-mode .cal-card-gradient,
+#calendar-overlay.light-mode .cal-card-gradient {
     background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.9) 50%, transparent 100%);
 }
 
-/* 날짜 텍스트 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-day,
-body.light-mode #calendar-overlay .cal-card-day {
+/* ?�짜 ?�스??*/
+#calendar-overlay.light-mode .cal-card-day,
+#calendar-overlay.light-mode .cal-card-day {
     color: #000;
     text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
 }
 
-/* 카드 이름 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-name,
-body.light-mode #calendar-overlay .cal-card-name {
+/* 카드 ?�름 */
+#calendar-overlay.light-mode .cal-card-name,
+#calendar-overlay.light-mode .cal-card-name {
     color: #000;
 }
 
-/* 카드 카운트 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-count,
-body.light-mode #calendar-overlay .cal-card-count {
+/* 카드 카운??*/
+#calendar-overlay.light-mode .cal-card-count,
+#calendar-overlay.light-mode .cal-card-count {
     color: rgba(0, 0, 0, 0.5);
 }
 
-/* 빈 카드 날짜 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-empty,
-body.light-mode #calendar-overlay .cal-card-empty {
+/* �?카드 ?�짜 */
+#calendar-overlay.light-mode .cal-card-empty,
+#calendar-overlay.light-mode .cal-card-empty {
     color: rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================
-   캘린더 라이트 모드 - lastmsg-panel 계열
+   캘린???�이??모드 - lastmsg-panel 계열
    ============================================ */
 
-/* 패널 배경 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel,
-body.light-mode #calendar-overlay .lastmsg-panel {
+/* ?�널 배경 */
+#calendar-overlay.light-mode .lastmsg-panel,
+#calendar-overlay.light-mode .lastmsg-panel {
     background: #fff;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
 }
 
-/* 패널 헤더 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel-header,
-body.light-mode #calendar-overlay .lastmsg-panel-header {
+/* ?�널 ?�더 */
+#calendar-overlay.light-mode .lastmsg-panel-header,
+#calendar-overlay.light-mode .lastmsg-panel-header {
     background: rgba(0, 0, 0, 0.02);
     border-bottom-color: rgba(0, 0, 0, 0.08);
 }
 
-/* 헤더 타이틀 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel-header h3,
-body.light-mode #calendar-overlay .lastmsg-panel-header h3 {
+/* ?�더 ?�?��? */
+#calendar-overlay.light-mode .lastmsg-panel-header h3,
+#calendar-overlay.light-mode .lastmsg-panel-header h3 {
     color: #000;
 }
 
-/* 날짜 텍스트 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel-date,
-body.light-mode #calendar-overlay .lastmsg-panel-date {
+/* ?�짜 ?�스??*/
+#calendar-overlay.light-mode .lastmsg-panel-date,
+#calendar-overlay.light-mode .lastmsg-panel-date {
     color: rgba(0, 0, 0, 0.4);
 }
 
-/* 닫기 버튼 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-close-btn,
-body.light-mode #calendar-overlay .lastmsg-close-btn {
+/* ?�기 버튼 */
+#calendar-overlay.light-mode .lastmsg-close-btn,
+#calendar-overlay.light-mode .lastmsg-close-btn {
     color: rgba(0, 0, 0, 0.4);
 }
 
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-close-btn:hover,
-body.light-mode #calendar-overlay .lastmsg-close-btn:hover {
+#calendar-overlay.light-mode .lastmsg-close-btn:hover,
+#calendar-overlay.light-mode .lastmsg-close-btn:hover {
     color: #000;
 }
 
-/* 캐릭터 카드 그라데이션 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-card::after,
-body.light-mode #calendar-overlay .lastmsg-card::after {
+/* 캐릭??카드 그라?�이??*/
+#calendar-overlay.light-mode .lastmsg-card::after,
+#calendar-overlay.light-mode .lastmsg-card::after {
     background: linear-gradient(to right, 
         transparent 0%, 
         transparent 100px,
@@ -3548,28 +3548,28 @@ body.light-mode #calendar-overlay .lastmsg-card::after {
     );
 }
 
-/* 캐릭터 이름 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-name,
-body.light-mode #calendar-overlay .lastmsg-name {
+/* 캐릭???�름 */
+#calendar-overlay.light-mode .lastmsg-name,
+#calendar-overlay.light-mode .lastmsg-name {
     color: #000;
     text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
 }
 
-/* 통계 레이블 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-label,
-body.light-mode #calendar-overlay .lastmsg-label {
+/* ?�계 ?�이�?*/
+#calendar-overlay.light-mode .lastmsg-label,
+#calendar-overlay.light-mode .lastmsg-label {
     color: rgba(0, 0, 0, 0.5);
 }
 
-/* 시간 텍스트 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-time,
-body.light-mode #calendar-overlay .lastmsg-time {
+/* ?�간 ?�스??*/
+#calendar-overlay.light-mode .lastmsg-time,
+#calendar-overlay.light-mode .lastmsg-time {
     color: #000;
 }
 
-/* 데이터 없음 */
-#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-no-data,
-body.light-mode #calendar-overlay .lastmsg-no-data {
+/* ?�이???�음 */
+#calendar-overlay.light-mode .lastmsg-no-data,
+#calendar-overlay.light-mode .lastmsg-no-data {
     color: rgba(0, 0, 0, 0.3);
 }
 
@@ -3704,7 +3704,7 @@ body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
     color: #333;
 }
 /* ============================================
-   Debug Panel (슬라이드 업 형태)
+   Debug Panel (?�라?�드 ???�태)
    ============================================ */
 
 .debug-panel {
@@ -3821,7 +3821,7 @@ body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
     color: #333;
 }
 
-/* 모바일 최적화 */
+/* 모바??최적??*/
 @media (max-width: 768px) {
     .debug-panel {
         height: 70%;

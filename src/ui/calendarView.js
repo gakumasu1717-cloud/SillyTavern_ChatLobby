@@ -154,6 +154,15 @@ export async function openCalendarView() {
         const lobbyContainer = document.getElementById('chat-lobby-container');
         if (lobbyContainer) lobbyContainer.style.display = 'none';
         
+        // 🔥 로비 테마를 캘린더에 복사 (라이트모드 연동)
+        if (lobbyContainer?.classList.contains('light-mode')) {
+            calendarOverlay.classList.add('light-mode');
+            calendarOverlay.classList.remove('dark-mode');
+        } else {
+            calendarOverlay.classList.add('dark-mode');
+            calendarOverlay.classList.remove('light-mode');
+        }
+        
         calendarOverlay.style.display = 'flex';
         
         // 스냅샷은 로비에서 이미 저장됨 (characterGrid.js)

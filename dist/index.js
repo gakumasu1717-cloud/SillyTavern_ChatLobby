@@ -4399,6 +4399,13 @@ ${message}` : message;
       }
       const lobbyContainer = document.getElementById("chat-lobby-container");
       if (lobbyContainer) lobbyContainer.style.display = "none";
+      if (lobbyContainer?.classList.contains("light-mode")) {
+        calendarOverlay.classList.add("light-mode");
+        calendarOverlay.classList.remove("dark-mode");
+      } else {
+        calendarOverlay.classList.add("dark-mode");
+        calendarOverlay.classList.remove("light-mode");
+      }
       calendarOverlay.style.display = "flex";
       renderCalendar();
     } finally {
