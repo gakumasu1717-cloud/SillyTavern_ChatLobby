@@ -7,6 +7,7 @@ import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
 import { lastChatCache } from '../data/lastChatCache.js';
+import { saveSnapshot, getLocalDateString, loadSnapshots } from '../data/calendarStorage.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
@@ -346,6 +347,87 @@ async function loadChatCountsAsync(characters, sortOption = 'recent') {
         if (i + BATCH_SIZE < characters.length) {
             await new Promise(r => setTimeout(r, 10));
         }
+    }
+    
+    // 🔥 로비 로드 완료 후 오늘 스냅샷 저장 (캐시 재사용, API 호출 0)
+    saveTodaySnapshotFromCache();
+}
+
+/**
+ * 🔥 캐시에서 오늘 스냅샷 저장 (API 호출 없음)
+ * loadChatCountsAsync 완료 후 호출됨
+ */
+function saveTodaySnapshotFromCache() {
+    try {
+        const today = getLocalDateString();
+        const characters = api.getCharacters();
+        
+        if (!characters || characters.length === 0) return;
+        
+        // 캐시에서 데이터 수집
+        const byChar = {};
+        let totalMessages = 0;
+        
+        characters.forEach(char => {
+            const msgCount = cache.get('messageCounts', char.avatar) || 0;
+            if (msgCount > 0) {
+                byChar[char.avatar] = msgCount;
+                totalMessages += msgCount;
+            }
+        });
+        
+        // lastChatTimes - 오늘 날짜만
+        const lastChatTimes = {};
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayStartMs = todayStart.getTime();
+        
+        characters.forEach(char => {
+            const lastTime = lastChatCache.get(char.avatar);
+            if (lastTime >= todayStartMs) {
+                lastChatTimes[char.avatar] = lastTime;
+            }
+        });
+        
+        // 가장 증가한 캐릭터 찾기 (이전 스냅샷과 비교)
+        const snapshots = loadSnapshots();
+        let topChar = '';
+        let maxIncrease = -Infinity;
+        
+        // 최근 스냅샷 찾기 (오늘 제외)
+        let recentSnapshot = null;
+        const checkDate = new Date();
+        for (let i = 0; i < 7; i++) {
+            checkDate.setDate(checkDate.getDate() - 1);
+            const dateStr = getLocalDateString(checkDate);
+            if (snapshots[dateStr]) {
+                recentSnapshot = snapshots[dateStr];
+                break;
+            }
+        }
+        
+        const baseByChar = recentSnapshot?.byChar || {};
+        
+        for (const [avatar, msgCount] of Object.entries(byChar)) {
+            const prev = baseByChar[avatar] || 0;
+            const increase = msgCount - prev;
+            if (increase > maxIncrease) {
+                maxIncrease = increase;
+                topChar = avatar;
+            }
+        }
+        
+        // 기준 없으면 메시지 1위
+        if (!topChar) {
+            const sorted = Object.entries(byChar).sort((a, b) => b[1] - a[1]);
+            topChar = sorted[0]?.[0] || '';
+        }
+        
+        saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
+        console.log('[CharacterGrid] Snapshot saved from cache');
+        
+    } catch (e) {
+        console.error('[CharacterGrid] Failed to save snapshot:', e);
     }
 }
 

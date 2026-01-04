@@ -156,11 +156,8 @@ export async function openCalendarView() {
         
         calendarOverlay.style.display = 'flex';
         
-        try {
-            await saveTodaySnapshot();
-        } catch (e) {
-            console.error('[Calendar] Failed to save today snapshot:', e);
-        }
+        // 스냅샷은 로비에서 이미 저장됨 (characterGrid.js)
+        // 캘린더는 읽기만 함
         
         renderCalendar();
     } finally {

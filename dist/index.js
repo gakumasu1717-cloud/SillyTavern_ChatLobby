@@ -2081,6 +2081,97 @@ ${message}` : message;
   };
   var lastChatCache = new LastChatCache();
 
+  // src/data/calendarStorage.js
+  var STORAGE_KEY2 = "chatLobby_calendar";
+  var CURRENT_VERSION = 1;
+  var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
+  var _snapshotsCache = null;
+  function getLocalDateString(date = /* @__PURE__ */ new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+  function loadSnapshots(forceRefresh = false) {
+    if (_snapshotsCache && !forceRefresh) {
+      return _snapshotsCache;
+    }
+    try {
+      const data = localStorage.getItem(STORAGE_KEY2);
+      if (data) {
+        const parsed = JSON.parse(data);
+        const version = parsed.version || 0;
+        if (version < CURRENT_VERSION) {
+          console.log("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
+          const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
+          localStorage.setItem(STORAGE_KEY2, JSON.stringify(migrated));
+        }
+        _snapshotsCache = parsed.snapshots || {};
+        return _snapshotsCache;
+      }
+    } catch (e) {
+      console.error("[Calendar] Failed to load snapshots:", e);
+    }
+    _snapshotsCache = {};
+    return _snapshotsCache;
+  }
+  function getSnapshot(date) {
+    const snapshots = loadSnapshots();
+    return snapshots[date] || null;
+  }
+  function cleanOldSnapshots() {
+    console.log("[Calendar] Cleaning old snapshots (2 years+)");
+    const snapshots = loadSnapshots(true);
+    const twoYearsAgo = /* @__PURE__ */ new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    const cutoff = getLocalDateString(twoYearsAgo);
+    let deleted = 0;
+    for (const date of Object.keys(snapshots)) {
+      if (date < cutoff) {
+        delete snapshots[date];
+        deleted++;
+      }
+    }
+    if (deleted > 0) {
+      console.log("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
+      localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
+    }
+  }
+  function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
+    const jan1 = `${THIS_YEAR}-01-01`;
+    if (!isBaseline && date < jan1) return;
+    _snapshotsCache = null;
+    try {
+      const snapshots = loadSnapshots(true);
+      const existingTimes = snapshots[date]?.lastChatTimes || {};
+      const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+      snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+      localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
+      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
+    } catch (e) {
+      if (e.name === "QuotaExceededError") {
+        console.warn("[Calendar] QuotaExceededError - cleaning old data");
+        cleanOldSnapshots();
+        try {
+          const snapshots = loadSnapshots(true);
+          const existingTimes = snapshots[date]?.lastChatTimes || {};
+          const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+          snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+          localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
+        } catch (e2) {
+          console.error("[Calendar] Still failed after cleanup:", e2);
+        }
+      } else {
+        console.error("[Calendar] Failed to save snapshot:", e);
+      }
+    }
+  }
+  function clearAllSnapshots() {
+    try {
+      _snapshotsCache = null;
+      localStorage.removeItem(STORAGE_KEY2);
+    } catch (e) {
+      console.error("[Calendar] Failed to clear snapshots:", e);
+    }
+  }
+
   // src/ui/characterGrid.js
   init_textUtils();
   init_notifications();
@@ -2840,6 +2931,63 @@ ${message}` : message;
       if (i + BATCH_SIZE < characters.length) {
         await new Promise((r) => setTimeout(r, 10));
       }
+    }
+    saveTodaySnapshotFromCache();
+  }
+  function saveTodaySnapshotFromCache() {
+    try {
+      const today = getLocalDateString();
+      const characters = api.getCharacters();
+      if (!characters || characters.length === 0) return;
+      const byChar = {};
+      let totalMessages = 0;
+      characters.forEach((char) => {
+        const msgCount = cache.get("messageCounts", char.avatar) || 0;
+        if (msgCount > 0) {
+          byChar[char.avatar] = msgCount;
+          totalMessages += msgCount;
+        }
+      });
+      const lastChatTimes = {};
+      const todayStart = /* @__PURE__ */ new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayStartMs = todayStart.getTime();
+      characters.forEach((char) => {
+        const lastTime = lastChatCache.get(char.avatar);
+        if (lastTime >= todayStartMs) {
+          lastChatTimes[char.avatar] = lastTime;
+        }
+      });
+      const snapshots = loadSnapshots();
+      let topChar = "";
+      let maxIncrease = -Infinity;
+      let recentSnapshot = null;
+      const checkDate = /* @__PURE__ */ new Date();
+      for (let i = 0; i < 7; i++) {
+        checkDate.setDate(checkDate.getDate() - 1);
+        const dateStr = getLocalDateString(checkDate);
+        if (snapshots[dateStr]) {
+          recentSnapshot = snapshots[dateStr];
+          break;
+        }
+      }
+      const baseByChar = recentSnapshot?.byChar || {};
+      for (const [avatar, msgCount] of Object.entries(byChar)) {
+        const prev = baseByChar[avatar] || 0;
+        const increase = msgCount - prev;
+        if (increase > maxIncrease) {
+          maxIncrease = increase;
+          topChar = avatar;
+        }
+      }
+      if (!topChar) {
+        const sorted = Object.entries(byChar).sort((a, b) => b[1] - a[1]);
+        topChar = sorted[0]?.[0] || "";
+      }
+      saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
+      console.log("[CharacterGrid] Snapshot saved from cache");
+    } catch (e) {
+      console.error("[CharacterGrid] Failed to save snapshot:", e);
     }
   }
   function isFavoriteChar(char) {
@@ -4150,97 +4298,6 @@ ${message}` : message;
     setTimeout(() => container.remove(), 5e3);
   }
 
-  // src/data/calendarStorage.js
-  var STORAGE_KEY2 = "chatLobby_calendar";
-  var CURRENT_VERSION = 1;
-  var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
-  var _snapshotsCache = null;
-  function getLocalDateString(date = /* @__PURE__ */ new Date()) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  }
-  function loadSnapshots(forceRefresh = false) {
-    if (_snapshotsCache && !forceRefresh) {
-      return _snapshotsCache;
-    }
-    try {
-      const data = localStorage.getItem(STORAGE_KEY2);
-      if (data) {
-        const parsed = JSON.parse(data);
-        const version = parsed.version || 0;
-        if (version < CURRENT_VERSION) {
-          console.log("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
-          const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
-          localStorage.setItem(STORAGE_KEY2, JSON.stringify(migrated));
-        }
-        _snapshotsCache = parsed.snapshots || {};
-        return _snapshotsCache;
-      }
-    } catch (e) {
-      console.error("[Calendar] Failed to load snapshots:", e);
-    }
-    _snapshotsCache = {};
-    return _snapshotsCache;
-  }
-  function getSnapshot(date) {
-    const snapshots = loadSnapshots();
-    return snapshots[date] || null;
-  }
-  function cleanOldSnapshots() {
-    console.log("[Calendar] Cleaning old snapshots (2 years+)");
-    const snapshots = loadSnapshots(true);
-    const twoYearsAgo = /* @__PURE__ */ new Date();
-    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-    const cutoff = getLocalDateString(twoYearsAgo);
-    let deleted = 0;
-    for (const date of Object.keys(snapshots)) {
-      if (date < cutoff) {
-        delete snapshots[date];
-        deleted++;
-      }
-    }
-    if (deleted > 0) {
-      console.log("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
-      localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-    }
-  }
-  function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
-    const jan1 = `${THIS_YEAR}-01-01`;
-    if (!isBaseline && date < jan1) return;
-    _snapshotsCache = null;
-    try {
-      const snapshots = loadSnapshots(true);
-      const existingTimes = snapshots[date]?.lastChatTimes || {};
-      const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-      snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
-      localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
-    } catch (e) {
-      if (e.name === "QuotaExceededError") {
-        console.warn("[Calendar] QuotaExceededError - cleaning old data");
-        cleanOldSnapshots();
-        try {
-          const snapshots = loadSnapshots(true);
-          const existingTimes = snapshots[date]?.lastChatTimes || {};
-          const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-          snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
-          localStorage.setItem(STORAGE_KEY2, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-        } catch (e2) {
-          console.error("[Calendar] Still failed after cleanup:", e2);
-        }
-      } else {
-        console.error("[Calendar] Failed to save snapshot:", e);
-      }
-    }
-  }
-  function clearAllSnapshots() {
-    try {
-      _snapshotsCache = null;
-      localStorage.removeItem(STORAGE_KEY2);
-    } catch (e) {
-      console.error("[Calendar] Failed to clear snapshots:", e);
-    }
-  }
-
   // src/ui/calendarView.js
   var calendarOverlay = null;
   var THIS_YEAR2 = (/* @__PURE__ */ new Date()).getFullYear();
@@ -4343,11 +4400,6 @@ ${message}` : message;
       const lobbyContainer = document.getElementById("chat-lobby-container");
       if (lobbyContainer) lobbyContainer.style.display = "none";
       calendarOverlay.style.display = "flex";
-      try {
-        await saveTodaySnapshot();
-      } catch (e) {
-        console.error("[Calendar] Failed to save today snapshot:", e);
-      }
       renderCalendar();
     } finally {
       isCalculating = false;
@@ -4492,84 +4544,6 @@ ${message}` : message;
       }
     }
     return null;
-  }
-  async function saveTodaySnapshot() {
-    try {
-      const today = getLocalDateString();
-      const recentData = findRecentSnapshot(today);
-      const baseByChar = recentData?.snapshot?.byChar || {};
-      let characters = cache.get("characters");
-      if (!characters || characters.length === 0) {
-        characters = api.getCharacters();
-      }
-      if (!characters || !Array.isArray(characters) || characters.length === 0) {
-        console.warn("[Calendar] No characters found");
-        return;
-      }
-      const BATCH_SIZE = 5;
-      const rankings = [];
-      for (let i = 0; i < characters.length; i += BATCH_SIZE) {
-        const batch = characters.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.all(
-          batch.map(async (char) => {
-            let chats;
-            try {
-              chats = await api.fetchChatsForCharacter(char.avatar, true);
-            } catch (e) {
-              console.error("[Calendar] API error:", char.avatar, e);
-              chats = [];
-            }
-            const chatCount = Array.isArray(chats) ? chats.length : 0;
-            const messageCount = Array.isArray(chats) ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) : 0;
-            return { avatar: char.avatar, chatCount, messageCount };
-          })
-        );
-        rankings.push(...batchResults);
-        if (i + BATCH_SIZE < characters.length) {
-          await new Promise((r) => setTimeout(r, 10));
-        }
-      }
-      rankings.sort((a, b) => b.messageCount - a.messageCount);
-      const totalMessages = rankings.reduce((sum, r) => sum + r.messageCount, 0);
-      const byChar = {};
-      rankings.forEach((r) => {
-        byChar[r.avatar] = r.messageCount;
-      });
-      const lastChatTimes = {};
-      let savedTimeCount = 0;
-      const todayStart = /* @__PURE__ */ new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayStartMs = todayStart.getTime();
-      rankings.forEach((r) => {
-        const lastTime = lastChatCache.get(r.avatar);
-        if (lastTime >= todayStartMs) {
-          lastChatTimes[r.avatar] = lastTime;
-          savedTimeCount++;
-        }
-      });
-      console.log("[Calendar] Saving lastChatTimes for", savedTimeCount, "characters (today only)");
-      let topChar = "";
-      let maxIncrease = -Infinity;
-      let maxMsgCountOnTie = -1;
-      for (const r of rankings) {
-        const prev = baseByChar[r.avatar] || 0;
-        const increase = r.messageCount - prev;
-        if (increase > maxIncrease) {
-          maxIncrease = increase;
-          maxMsgCountOnTie = r.messageCount;
-          topChar = r.avatar;
-        } else if (increase === maxIncrease && r.messageCount > maxMsgCountOnTie) {
-          maxMsgCountOnTie = r.messageCount;
-          topChar = r.avatar;
-        }
-      }
-      if (!recentData) {
-        topChar = rankings[0]?.avatar || "";
-      }
-      saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
-    } catch (e) {
-      console.error("[Calendar] Failed to save snapshot:", e);
-    }
   }
   function renderCalendar() {
     const title = calendarOverlay.querySelector("#calendar-title");
