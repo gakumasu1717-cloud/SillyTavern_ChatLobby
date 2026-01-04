@@ -3433,6 +3433,146 @@ body.light-mode #calendar-overlay .debug-modal-content {
     color: #333;
 }
 
+/* ============================================
+   캘린더 라이트 모드 - cal-card 계열
+   ============================================ */
+
+/* 그리드 배경 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .calendar-grid,
+body.light-mode #calendar-overlay .calendar-grid {
+    background: #f5f5f5;
+}
+
+/* 기본 카드 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card,
+body.light-mode #calendar-overlay .cal-card {
+    background: #e8e8e8;
+}
+
+/* 오늘 강조 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card.today,
+body.light-mode #calendar-overlay .cal-card.today {
+    background: rgba(51, 51, 51, 0.1);
+}
+
+/* 데이터 있는 카드 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card.has-data,
+body.light-mode #calendar-overlay .cal-card.has-data {
+    background: #fff;
+}
+
+/* 카드 그라데이션 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-gradient,
+body.light-mode #calendar-overlay .cal-card-gradient {
+    background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.9) 50%, transparent 100%);
+}
+
+/* 날짜 텍스트 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-day,
+body.light-mode #calendar-overlay .cal-card-day {
+    color: #000;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+/* 카드 이름 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-name,
+body.light-mode #calendar-overlay .cal-card-name {
+    color: #000;
+}
+
+/* 카드 카운트 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-count,
+body.light-mode #calendar-overlay .cal-card-count {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* 빈 카드 날짜 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .cal-card-empty,
+body.light-mode #calendar-overlay .cal-card-empty {
+    color: rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   캘린더 라이트 모드 - lastmsg-panel 계열
+   ============================================ */
+
+/* 패널 배경 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel,
+body.light-mode #calendar-overlay .lastmsg-panel {
+    background: #fff;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* 패널 헤더 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel-header,
+body.light-mode #calendar-overlay .lastmsg-panel-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* 헤더 타이틀 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel-header h3,
+body.light-mode #calendar-overlay .lastmsg-panel-header h3 {
+    color: #000;
+}
+
+/* 날짜 텍스트 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-panel-date,
+body.light-mode #calendar-overlay .lastmsg-panel-date {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+/* 닫기 버튼 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-close-btn,
+body.light-mode #calendar-overlay .lastmsg-close-btn {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-close-btn:hover,
+body.light-mode #calendar-overlay .lastmsg-close-btn:hover {
+    color: #000;
+}
+
+/* 캐릭터 카드 그라데이션 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-card::after,
+body.light-mode #calendar-overlay .lastmsg-card::after {
+    background: linear-gradient(to right, 
+        transparent 0%, 
+        transparent 100px,
+        rgba(255,255,255,0.5) 200px,
+        rgba(255,255,255,0.8) 100%
+    ), linear-gradient(to top,
+        rgba(255,255,255,0.95) 0%,
+        rgba(255,255,255,0.6) 30%,
+        transparent 60%
+    );
+}
+
+/* 캐릭터 이름 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-name,
+body.light-mode #calendar-overlay .lastmsg-name {
+    color: #000;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+/* 통계 레이블 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-label,
+body.light-mode #calendar-overlay .lastmsg-label {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* 시간 텍스트 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-time,
+body.light-mode #calendar-overlay .lastmsg-time {
+    color: #000;
+}
+
+/* 데이터 없음 */
+#chat-lobby-container.light-mode ~ #calendar-overlay .lastmsg-no-data,
+body.light-mode #calendar-overlay .lastmsg-no-data {
+    color: rgba(0, 0, 0, 0.3);
+}
+
 
 /* ============================================
    Debug Modal Styles
