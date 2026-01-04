@@ -48,7 +48,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      */
     function getCurrentCharacterAvatar() {
         const context = api.getContext();
-        if (!context?.characterId || context.characterId < 0) return null;
+        if (context?.characterId === undefined || context?.characterId === null || context.characterId < 0) return null;
         const char = context.characters?.[context.characterId];
         return char?.avatar || null;
     }
@@ -386,6 +386,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 overlay.style.display = 'flex';
                 if (container) container.style.display = 'flex';
                 if (fab) fab.style.display = 'none';
+            }
             
             // 핸들러가 설정되어 있는지 확인
             if (!store.onCharacterSelect) {
@@ -450,7 +451,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                             // 채팅 목록 렌더 제거 - 사용자가 직접 클릭할 때만 표시
                         }
                     }, 200);
-                }
                 }
             }
         } catch (e) {

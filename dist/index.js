@@ -4796,7 +4796,7 @@ ${message}` : message;
     let eventsRegistered = false;
     function getCurrentCharacterAvatar() {
       const context = api.getContext();
-      if (!context?.characterId || context.characterId < 0) return null;
+      if (context?.characterId === void 0 || context?.characterId === null || context.characterId < 0) return null;
       const char = context.characters?.[context.characterId];
       return char?.avatar || null;
     }
@@ -5003,45 +5003,45 @@ ${message}` : message;
           overlay.style.display = "flex";
           if (container) container.style.display = "flex";
           if (fab) fab.style.display = "none";
-          if (!store.onCharacterSelect) {
-            console.warn("[ChatLobby] Handler not set, re-running setupHandlers");
-            setupHandlers();
+        }
+        if (!store.onCharacterSelect) {
+          console.warn("[ChatLobby] Handler not set, re-running setupHandlers");
+          setupHandlers();
+        }
+        store.reset();
+        resetCharacterSelectLock();
+        try {
+          const context = api.getContext();
+          if (typeof context?.getCharacters === "function") {
+            await context.getCharacters();
           }
-          store.reset();
-          resetCharacterSelectLock();
-          try {
-            const context = api.getContext();
-            if (typeof context?.getCharacters === "function") {
-              await context.getCharacters();
-            }
-          } catch (error) {
-            console.warn("[ChatLobby] Failed to refresh characters:", error);
-          }
-          storage.setFilterFolder("all");
-          if (store.batchModeActive) {
-            toggleBatchMode();
-          }
-          closeChatPanel();
-          const characters = api.getCharacters();
-          await Promise.all([
-            renderPersonaBar(),
-            renderCharacterGrid()
-          ]);
-          setupPersonaWheelScroll();
-          updateFolderDropdowns();
-          const currentContext = api.getContext();
-          if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
-            const currentChar = currentContext.characters?.[currentContext.characterId];
-            if (currentChar) {
-              setTimeout(() => {
-                const charCard = document.querySelector(
-                  `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
-                );
-                if (charCard) {
-                  charCard.classList.add("selected");
-                }
-              }, 200);
-            }
+        } catch (error) {
+          console.warn("[ChatLobby] Failed to refresh characters:", error);
+        }
+        storage.setFilterFolder("all");
+        if (store.batchModeActive) {
+          toggleBatchMode();
+        }
+        closeChatPanel();
+        const characters = api.getCharacters();
+        await Promise.all([
+          renderPersonaBar(),
+          renderCharacterGrid()
+        ]);
+        setupPersonaWheelScroll();
+        updateFolderDropdowns();
+        const currentContext = api.getContext();
+        if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
+          const currentChar = currentContext.characters?.[currentContext.characterId];
+          if (currentChar) {
+            setTimeout(() => {
+              const charCard = document.querySelector(
+                `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
+              );
+              if (charCard) {
+                charCard.classList.add("selected");
+              }
+            }, 200);
           }
         }
       } catch (e) {
