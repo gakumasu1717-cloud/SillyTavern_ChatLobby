@@ -148,8 +148,7 @@ async function fetchRankings(characters) {
                         messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
                         
                         // 첫 대화 날짜 파싱 (가장 오래된 채팅)
-                        // 1. 파일명에서 날짜 추출 시도
-                        // 2. 실패 시 첫 메시지 send_date 조회 (API 호출)
+                        // statsView는 가끔 열리므로 정확성 우선
                         for (const chat of chats) {
                             let chatDate = null;
                             
@@ -161,7 +160,6 @@ async function fetchRankings(characters) {
                             }
                             
                             // 2차: 파일명에 날짜 없으면 첫 메시지 조회 (정확함)
-                            // 단, API 호출 비용 때문에 날짜 없는 채팅만 조회
                             if (!chatDate) {
                                 try {
                                     const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
