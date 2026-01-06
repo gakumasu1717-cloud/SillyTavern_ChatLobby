@@ -148,33 +148,34 @@ async function fetchRankings(characters) {
                         messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
                         
                         // 첫 대화 날짜 파싱 (가장 오래된 채팅)
-                        // statsView는 가끔 열리므로 정확성 우선
+                        // 1단계: 모든 채팅에서 파일명 날짜 패턴으로 빠르게 찾기
                         for (const chat of chats) {
-                            let chatDate = null;
-                            
-                            // 1차: 파일명에서 날짜 패턴 추출 (빠름)
                             const fileName = chat.file_name || '';
                             const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                             if (dateMatch) {
-                                chatDate = new Date(dateMatch[1]);
-                            }
-                            
-                            // 2차: 파일명에 날짜 없으면 첫 메시지 조회 (정확함)
-                            if (!chatDate) {
-                                try {
-                                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
-                                    if (createdDate) {
-                                        chatDate = createdDate;
+                                const chatDate = new Date(dateMatch[1]);
+                                if (!isNaN(chatDate.getTime())) {
+                                    if (!firstChatDate || chatDate < firstChatDate) {
+                                        firstChatDate = chatDate;
                                     }
-                                } catch (e) {
-                                    // 실패해도 무시 - 날짜 없음으로 처리
                                 }
                             }
-                            
-                            // 유효한 날짜면 비교
-                            if (chatDate && !isNaN(chatDate.getTime())) {
-                                if (!firstChatDate || chatDate < firstChatDate) {
-                                    firstChatDate = chatDate;
+                        }
+                        
+                        // 2단계: 파일명에 날짜 없는 채팅만 API fallback (최대 3개)
+                        // 가장 오래된 채팅은 보통 목록 끝에 있으므로 slice(-3)
+                        if (!firstChatDate) {
+                            const chatsToCheck = chats.slice(-3);
+                            for (const chat of chatsToCheck) {
+                                try {
+                                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
+                                    if (createdDate && !isNaN(createdDate.getTime())) {
+                                        if (!firstChatDate || createdDate < firstChatDate) {
+                                            firstChatDate = createdDate;
+                                        }
+                                    }
+                                } catch (e) {
+                                    // 실패해도 무시
                                 }
                             }
                         }

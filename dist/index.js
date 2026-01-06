@@ -1322,14 +1322,11 @@ ${message}` : message;
           })
         });
         if (!response.ok) {
-          console.warn("[API] getChatCreatedDate response not ok:", response.status);
           return null;
         }
         const chatData = await response.json();
-        console.log("[API] getChatCreatedDate data length:", chatData?.length, "for:", fileName);
         if (Array.isArray(chatData) && chatData.length > 1) {
           const firstMessage = chatData[1];
-          console.log("[API] First message send_date:", firstMessage?.send_date, "type:", typeof firstMessage?.send_date);
           if (firstMessage?.send_date) {
             if (typeof firstMessage.send_date === "number") {
               return new Date(firstMessage.send_date);
@@ -1339,12 +1336,10 @@ ${message}` : message;
             if (!isNaN(date.getTime())) {
               return date;
             }
-            console.warn("[API] Failed to parse send_date:", firstMessage.send_date);
           }
         }
         return null;
       } catch (error) {
-        console.warn("[API] Failed to get chat created date:", error);
         return null;
       }
     }
@@ -2048,12 +2043,10 @@ ${message}` : message;
         if (lastTime === 0 && !forceRefresh) {
           const cached = this.get(charAvatar);
           if (cached > 0) {
-            console.log("[LastChatCache] Using cached value:", charAvatar, new Date(cached));
             return cached;
           }
         }
         if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
-          console.log("[LastChatCache] Timestamp is 0, trying API fallback for:", charAvatar);
           const chatsToCheck = chats.slice(0, 3);
           const fallbackPromises = chatsToCheck.map(async (chat) => {
             const chatTime = this.getChatTimestamp(chat);
@@ -2062,11 +2055,9 @@ ${message}` : message;
               try {
                 const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
                 if (lastMsgDate > 0) {
-                  console.log("[LastChatCache] Got fallback last msg date:", chat.file_name, new Date(lastMsgDate));
                   return lastMsgDate;
                 }
               } catch (e) {
-                console.warn("[LastChatCache] API fallback failed:", chat.file_name, e);
               }
             }
             return 0;
@@ -3841,24 +3832,28 @@ ${message}` : message;
             if (Array.isArray(chats)) {
               messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
               for (const chat of chats) {
-                let chatDate = null;
                 const fileName = chat.file_name || "";
                 const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                 if (dateMatch) {
-                  chatDate = new Date(dateMatch[1]);
-                }
-                if (!chatDate) {
-                  try {
-                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
-                    if (createdDate) {
-                      chatDate = createdDate;
+                  const chatDate = new Date(dateMatch[1]);
+                  if (!isNaN(chatDate.getTime())) {
+                    if (!firstChatDate || chatDate < firstChatDate) {
+                      firstChatDate = chatDate;
                     }
-                  } catch (e) {
                   }
                 }
-                if (chatDate && !isNaN(chatDate.getTime())) {
-                  if (!firstChatDate || chatDate < firstChatDate) {
-                    firstChatDate = chatDate;
+              }
+              if (!firstChatDate) {
+                const chatsToCheck = chats.slice(-3);
+                for (const chat of chatsToCheck) {
+                  try {
+                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
+                    if (createdDate && !isNaN(createdDate.getTime())) {
+                      if (!firstChatDate || createdDate < firstChatDate) {
+                        firstChatDate = createdDate;
+                      }
+                    }
+                  } catch (e) {
                   }
                 }
               }

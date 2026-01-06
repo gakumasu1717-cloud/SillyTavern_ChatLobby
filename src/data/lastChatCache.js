@@ -189,17 +189,13 @@ class LastChatCache {
             if (lastTime === 0 && !forceRefresh) {
                 const cached = this.get(charAvatar);
                 if (cached > 0) {
-                    console.log('[LastChatCache] Using cached value:', charAvatar, new Date(cached));
                     return cached;
                 }
             }
             
             // 캐시도 없고 extractLastTime도 0이면 API fallback
             if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
-                console.log('[LastChatCache] Timestamp is 0, trying API fallback for:', charAvatar);
-                
                 // 최신 3개만 확인 (과도한 API 호출 방지)
-                // 마지막 채팅 시간만 필요하니까 최신 몇 개만 봐도 충분
                 const chatsToCheck = chats.slice(0, 3);
                 
                 const fallbackPromises = chatsToCheck.map(async (chat) => {
@@ -211,11 +207,10 @@ class LastChatCache {
                         try {
                             const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
                             if (lastMsgDate > 0) {
-                                console.log('[LastChatCache] Got fallback last msg date:', chat.file_name, new Date(lastMsgDate));
                                 return lastMsgDate;
                             }
                         } catch (e) {
-                            console.warn('[LastChatCache] API fallback failed:', chat.file_name, e);
+                            // 실패해도 무시
                         }
                     }
                     return 0;
