@@ -148,16 +148,38 @@ async function fetchRankings(characters) {
                         messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
                         
                         // 첫 대화 날짜 파싱 (가장 오래된 채팅)
-                        chats.forEach(chat => {
+                        // 1. 파일명에서 날짜 추출 시도
+                        // 2. 실패 시 첫 메시지 send_date 조회 (API 호출)
+                        for (const chat of chats) {
+                            let chatDate = null;
+                            
+                            // 1차: 파일명에서 날짜 패턴 추출 (빠름)
                             const fileName = chat.file_name || '';
                             const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                             if (dateMatch) {
-                                const chatDate = new Date(dateMatch[1]);
+                                chatDate = new Date(dateMatch[1]);
+                            }
+                            
+                            // 2차: 파일명에 날짜 없으면 첫 메시지 조회 (정확함)
+                            // 단, API 호출 비용 때문에 날짜 없는 채팅만 조회
+                            if (!chatDate) {
+                                try {
+                                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
+                                    if (createdDate) {
+                                        chatDate = createdDate;
+                                    }
+                                } catch (e) {
+                                    // 실패해도 무시 - 날짜 없음으로 처리
+                                }
+                            }
+                            
+                            // 유효한 날짜면 비교
+                            if (chatDate && !isNaN(chatDate.getTime())) {
                                 if (!firstChatDate || chatDate < firstChatDate) {
                                     firstChatDate = chatDate;
                                 }
                             }
-                        });
+                        }
                     }
                     
                     return { name: char.name, avatar: char.avatar, chatCount, messageCount, firstChatDate };

@@ -171,8 +171,9 @@ class LastChatCache {
     
     /**
      * 캐릭터의 채팅 목록을 가져와서 마지막 시간 갱신
+     * 타임스탬프가 0인 채팅은 API fallback으로 send_date 가져오기
      */
-    async refreshForCharacter(charAvatar, chats = null) {
+    async refreshForCharacter(charAvatar, chats = null, forceRefresh = false) {
         try {
             if (!chats) {
                 chats = cache.get('chats', charAvatar);
@@ -181,7 +182,46 @@ class LastChatCache {
                 }
             }
             
-            const lastTime = this.extractLastTime(chats);
+            // 먼저 기존 방식으로 시도
+            let lastTime = this.extractLastTime(chats);
+            
+            // 0이면서 캐시에 이미 값이 있으면 그거 사용 (API 재호출 방지)
+            if (lastTime === 0 && !forceRefresh) {
+                const cached = this.get(charAvatar);
+                if (cached > 0) {
+                    console.log('[LastChatCache] Using cached value:', charAvatar, new Date(cached));
+                    return cached;
+                }
+            }
+            
+            // 캐시도 없고 extractLastTime도 0이면 API fallback
+            if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
+                console.log('[LastChatCache] Timestamp is 0, trying API fallback for:', charAvatar);
+                
+                // 각 채팅에서 타임스탬프 0인 것들에 대해 API 호출
+                const fallbackPromises = chats.map(async (chat) => {
+                    const chatTime = this.getChatTimestamp(chat);
+                    if (chatTime > 0) return chatTime;
+                    
+                    // API로 마지막 메시지의 send_date 가져오기
+                    if (chat.file_name) {
+                        try {
+                            const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
+                            if (lastMsgDate > 0) {
+                                console.log('[LastChatCache] Got fallback last msg date:', chat.file_name, new Date(lastMsgDate));
+                                return lastMsgDate;
+                            }
+                        } catch (e) {
+                            console.warn('[LastChatCache] API fallback failed:', chat.file_name, e);
+                        }
+                    }
+                    return 0;
+                });
+                
+                const times = await Promise.all(fallbackPromises);
+                lastTime = Math.max(...times, 0);
+            }
+            
             if (lastTime > 0) {
                 this.set(charAvatar, lastTime);
             }
