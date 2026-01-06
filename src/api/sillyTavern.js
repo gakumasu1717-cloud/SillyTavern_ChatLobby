@@ -383,14 +383,25 @@ class SillyTavernAPI {
                 }),
             });
             
-            if (!response.ok) return null;
+            if (!response.ok) {
+                console.warn('[API] getChatCreatedDate response not ok:', response.status);
+                return null;
+            }
             
             const chatData = await response.json();
+            console.log('[API] getChatCreatedDate data length:', chatData?.length, 'for:', fileName);
             
             // 첫 번째 메시지 (인덱스 0은 메타데이터, 1부터 실제 메시지)
             if (Array.isArray(chatData) && chatData.length > 1) {
                 const firstMessage = chatData[1];
+                console.log('[API] First message send_date:', firstMessage?.send_date, 'type:', typeof firstMessage?.send_date);
+                
                 if (firstMessage?.send_date) {
+                    // 숫자면 그대로 사용
+                    if (typeof firstMessage.send_date === 'number') {
+                        return new Date(firstMessage.send_date);
+                    }
+                    // 문자열이면 파싱
                     const date = new Date(firstMessage.send_date);
                     if (!isNaN(date.getTime())) {
                         return date;

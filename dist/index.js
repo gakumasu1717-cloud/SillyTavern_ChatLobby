@@ -1321,11 +1321,19 @@ ${message}` : message;
             avatar_url: characterAvatar
           })
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+          console.warn("[API] getChatCreatedDate response not ok:", response.status);
+          return null;
+        }
         const chatData = await response.json();
+        console.log("[API] getChatCreatedDate data length:", chatData?.length, "for:", fileName);
         if (Array.isArray(chatData) && chatData.length > 1) {
           const firstMessage = chatData[1];
+          console.log("[API] First message send_date:", firstMessage?.send_date, "type:", typeof firstMessage?.send_date);
           if (firstMessage?.send_date) {
+            if (typeof firstMessage.send_date === "number") {
+              return new Date(firstMessage.send_date);
+            }
             const date = new Date(firstMessage.send_date);
             if (!isNaN(date.getTime())) {
               return date;
