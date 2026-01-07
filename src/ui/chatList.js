@@ -1176,7 +1176,8 @@ function bindGroupChatEvents(container, group) {
             }, { debugName: `group-fav-${index}` });
         }
         
-        // 채팅 열기 - 일반 캐릭터 채팅 열기와 동일한 플로우!
+        // 채팅 열기 - 그룹은 UI 클릭 시 최근 채팅이 자동으로 열리므로
+        // 채팅 관리 패널을 통해 원하는 채팅을 선택하는 방식 사용
         createTouchClickHandler(chatContent, async () => {
             try {
                 console.log('[ChatList] Opening group chat:', { groupId: group.id, chatFile });
@@ -1184,59 +1185,8 @@ function bindGroupChatEvents(container, group) {
                 const context = api.getContext();
                 const chatFileName = chatFile.replace('.jsonl', '');
                 
-                // 1. 그룹 선택 (캐릭터의 selectCharacterById와 동일한 역할)
-                console.log('[ChatList] Selecting group...');
-                let groupSelected = false;
-                
-                // 방법 1: openGroupById 시도
-                if (typeof context?.openGroupById === 'function') {
-                    try {
-                        await context.openGroupById(group.id, false); // 기본 채팅 안 열기
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                        // 실제로 선택됐는지 확인
-                        if (context.groupId === group.id) {
-                            groupSelected = true;
-                            console.log('[ChatList] Group selected via openGroupById');
-                        }
-                    } catch (e) {
-                        console.warn('[ChatList] openGroupById failed:', e);
-                    }
-                }
-                
-                // 방법 2: UI 클릭 (항상 시도)
-                if (!groupSelected) {
-                    console.log('[ChatList] Trying UI click fallback...');
-                    // 정확한 선택자: .group_select[data-grid="${id}"]
-                    const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
-                    
-                    if (groupCard) {
-                        console.log('[ChatList] Found group card:', groupCard);
-                        // jQuery 클릭 (SillyTavern 방식)
-                        if (window.$) {
-                            window.$(groupCard).trigger('click');
-                        } else {
-                            groupCard.click();
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        groupSelected = true;
-                        console.log('[ChatList] Group selected via UI click');
-                    } else {
-                        console.error('[ChatList] Group card not found. Looking for:', `.group_select[data-grid="${group.id}"]`);
-                    }
-                }
-                
-                if (!groupSelected) {
-                    console.error('[ChatList] All group selection methods failed');
-                    showToast('그룹 선택에 실패했습니다.', 'error');
-                    return;
-                }
-                
-                // 2. 그룹 선택 완료 대기 (waitForCharacterSelect와 동일)
-                console.log('[ChatList] Waiting for group selection...');
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                // 3. 로비 닫기 (closeLobbyKeepState와 동일)
-                console.log('[ChatList] Closing lobby...');
+                // 1. 로비 먼저 닫기
+                console.log('[ChatList] Closing lobby first...');
                 const overlay = document.getElementById('chat-lobby-overlay');
                 const lobbyContainer = document.getElementById('chat-lobby-container');
                 const fab = document.getElementById('chat-lobby-fab');
@@ -1251,54 +1201,71 @@ function bindGroupChatEvents(container, group) {
                 store.setCurrentCharacter(null);
                 store.setLobbyOpen(false);
                 
-                // 4. 그룹 채팅 열기 (openCharacterChat과 동일한 역할)
-                console.log('[ChatList] Opening chat:', chatFileName);
+                // 2. 그룹 카드 클릭하여 그룹 선택 (이때 최근 채팅이 열림)
+                console.log('[ChatList] Selecting group via UI click...');
+                const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
                 
-                if (typeof context?.openGroupChat === 'function') {
-                    try {
-                        await context.openGroupChat(chatFileName);
+                if (!groupCard) {
+                    console.error('[ChatList] Group card not found:', `.group_select[data-grid="${group.id}"]`);
+                    showToast('그룹을 찾을 수 없습니다.', 'error');
+                    return;
+                }
+                
+                // jQuery 클릭
+                if (window.$) {
+                    window.$(groupCard).trigger('click');
+                } else {
+                    groupCard.click();
+                }
+                
+                // 그룹 선택 완료 대기
+                await new Promise(resolve => setTimeout(resolve, 600));
+                
+                // 3. 현재 열린 채팅이 원하는 채팅인지 확인
+                const currentContext = api.getContext();
+                const currentChat = currentContext?.chatId || '';
+                console.log('[ChatList] Current chat after group select:', currentChat, 'Target:', chatFileName);
+                
+                if (currentChat === chatFileName || currentChat.includes(chatFileName)) {
+                    console.log('[ChatList] Target chat is already open');
+                    return;
+                }
+                
+                // 4. 원하는 채팅이 아니면 채팅 관리 패널을 통해 선택
+                console.log('[ChatList] Opening chat management panel...');
+                const manageChatsBtn = document.getElementById('option_select_chat');
+                if (!manageChatsBtn) {
+                    console.error('[ChatList] Chat management button not found');
+                    showToast('채팅 관리 버튼을 찾을 수 없습니다.', 'error');
+                    return;
+                }
+                
+                manageChatsBtn.click();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // 5. 채팅 목록에서 원하는 채팅 찾아 클릭
+                const chatItems = document.querySelectorAll('.select_chat_block');
+                console.log('[ChatList] Found', chatItems.length, 'chat items');
+                
+                for (const chatItem of chatItems) {
+                    const itemFileName = chatItem.getAttribute('file_name') || '';
+                    const cleanItemName = itemFileName.replace('.jsonl', '').trim();
+                    const cleanTargetName = chatFileName.replace('.jsonl', '').trim();
+                    
+                    if (cleanItemName === cleanTargetName) {
+                        console.log('[ChatList] Found target chat, clicking...');
+                        if (window.$) {
+                            window.$(chatItem).trigger('click');
+                        } else {
+                            chatItem.click();
+                        }
                         console.log('[ChatList] Group chat opened successfully');
                         return;
-                    } catch (err) {
-                        console.warn('[ChatList] context.openGroupChat failed:', err);
                     }
                 }
                 
-                // 5. Fallback: group-chats 모듈
-                try {
-                    const groupChatsModule = await import('../../../../group-chats.js');
-                    if (typeof groupChatsModule.openGroupChat === 'function') {
-                        await groupChatsModule.openGroupChat(chatFileName);
-                        console.log('[ChatList] Group chat opened via module');
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('[ChatList] group-chats import failed:', e);
-                }
-                
-                // 6. Fallback: UI 클릭 방식
-                console.log('[ChatList] Using UI fallback...');
-                const manageChatsBtn = document.getElementById('option_select_chat');
-                if (manageChatsBtn) {
-                    manageChatsBtn.click();
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    
-                    const chatItems = document.querySelectorAll('.select_chat_block');
-                    for (const chatItem of chatItems) {
-                        const itemFileName = chatItem.getAttribute('file_name') || '';
-                        if (itemFileName.includes(chatFileName)) {
-                            if (window.$) {
-                                window.$(chatItem).trigger('click');
-                            } else {
-                                chatItem.click();
-                            }
-                            console.log('[ChatList] Group chat opened via UI click');
-                            return;
-                        }
-                    }
-                }
-                
-                showToast('그룹 채팅을 열지 못했습니다.', 'error');
+                console.warn('[ChatList] Target chat not found in list');
+                showToast('채팅을 찾을 수 없습니다.', 'warning');
                 
             } catch (error) {
                 console.error('[ChatList] Failed to open group chat:', error);

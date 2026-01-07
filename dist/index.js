@@ -3358,45 +3358,7 @@ ${message}` : message;
           console.log("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
           const context = api.getContext();
           const chatFileName = chatFile.replace(".jsonl", "");
-          console.log("[ChatList] Selecting group...");
-          let groupSelected = false;
-          if (typeof context?.openGroupById === "function") {
-            try {
-              await context.openGroupById(group.id, false);
-              await new Promise((resolve) => setTimeout(resolve, 300));
-              if (context.groupId === group.id) {
-                groupSelected = true;
-                console.log("[ChatList] Group selected via openGroupById");
-              }
-            } catch (e) {
-              console.warn("[ChatList] openGroupById failed:", e);
-            }
-          }
-          if (!groupSelected) {
-            console.log("[ChatList] Trying UI click fallback...");
-            const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
-            if (groupCard) {
-              console.log("[ChatList] Found group card:", groupCard);
-              if (window.$) {
-                window.$(groupCard).trigger("click");
-              } else {
-                groupCard.click();
-              }
-              await new Promise((resolve) => setTimeout(resolve, 500));
-              groupSelected = true;
-              console.log("[ChatList] Group selected via UI click");
-            } else {
-              console.error("[ChatList] Group card not found. Looking for:", `.group_select[data-grid="${group.id}"]`);
-            }
-          }
-          if (!groupSelected) {
-            console.error("[ChatList] All group selection methods failed");
-            showToast("\uADF8\uB8F9 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
-            return;
-          }
-          console.log("[ChatList] Waiting for group selection...");
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          console.log("[ChatList] Closing lobby...");
+          console.log("[ChatList] Closing lobby first...");
           const overlay = document.getElementById("chat-lobby-overlay");
           const lobbyContainer = document.getElementById("chat-lobby-container");
           const fab = document.getElementById("chat-lobby-fab");
@@ -3408,46 +3370,54 @@ ${message}` : message;
           store.setCurrentGroup(null);
           store.setCurrentCharacter(null);
           store.setLobbyOpen(false);
-          console.log("[ChatList] Opening chat:", chatFileName);
-          if (typeof context?.openGroupChat === "function") {
-            try {
-              await context.openGroupChat(chatFileName);
+          console.log("[ChatList] Selecting group via UI click...");
+          const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
+          if (!groupCard) {
+            console.error("[ChatList] Group card not found:", `.group_select[data-grid="${group.id}"]`);
+            showToast("\uADF8\uB8F9\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+            return;
+          }
+          if (window.$) {
+            window.$(groupCard).trigger("click");
+          } else {
+            groupCard.click();
+          }
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          const currentContext = api.getContext();
+          const currentChat = currentContext?.chatId || "";
+          console.log("[ChatList] Current chat after group select:", currentChat, "Target:", chatFileName);
+          if (currentChat === chatFileName || currentChat.includes(chatFileName)) {
+            console.log("[ChatList] Target chat is already open");
+            return;
+          }
+          console.log("[ChatList] Opening chat management panel...");
+          const manageChatsBtn = document.getElementById("option_select_chat");
+          if (!manageChatsBtn) {
+            console.error("[ChatList] Chat management button not found");
+            showToast("\uCC44\uD305 \uAD00\uB9AC \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+            return;
+          }
+          manageChatsBtn.click();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const chatItems = document.querySelectorAll(".select_chat_block");
+          console.log("[ChatList] Found", chatItems.length, "chat items");
+          for (const chatItem of chatItems) {
+            const itemFileName = chatItem.getAttribute("file_name") || "";
+            const cleanItemName = itemFileName.replace(".jsonl", "").trim();
+            const cleanTargetName = chatFileName.replace(".jsonl", "").trim();
+            if (cleanItemName === cleanTargetName) {
+              console.log("[ChatList] Found target chat, clicking...");
+              if (window.$) {
+                window.$(chatItem).trigger("click");
+              } else {
+                chatItem.click();
+              }
               console.log("[ChatList] Group chat opened successfully");
               return;
-            } catch (err) {
-              console.warn("[ChatList] context.openGroupChat failed:", err);
             }
           }
-          try {
-            const groupChatsModule = await import("../../../../group-chats.js");
-            if (typeof groupChatsModule.openGroupChat === "function") {
-              await groupChatsModule.openGroupChat(chatFileName);
-              console.log("[ChatList] Group chat opened via module");
-              return;
-            }
-          } catch (e) {
-            console.warn("[ChatList] group-chats import failed:", e);
-          }
-          console.log("[ChatList] Using UI fallback...");
-          const manageChatsBtn = document.getElementById("option_select_chat");
-          if (manageChatsBtn) {
-            manageChatsBtn.click();
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            const chatItems = document.querySelectorAll(".select_chat_block");
-            for (const chatItem of chatItems) {
-              const itemFileName = chatItem.getAttribute("file_name") || "";
-              if (itemFileName.includes(chatFileName)) {
-                if (window.$) {
-                  window.$(chatItem).trigger("click");
-                } else {
-                  chatItem.click();
-                }
-                console.log("[ChatList] Group chat opened via UI click");
-                return;
-              }
-            }
-          }
-          showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+          console.warn("[ChatList] Target chat not found in list");
+          showToast("\uCC44\uD305\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "warning");
         } catch (error) {
           console.error("[ChatList] Failed to open group chat:", error);
           showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
