@@ -963,7 +963,7 @@ export async function renderGroupChatList(group) {
     // UI 표시
     chatsPanel.classList.add('visible');
     updateGroupChatHeader(group);
-    showFolderBar(false);  // 그룹은 폴더 기능 비활성화
+    showFolderBar(true);  // 그룹도 폴더 기능 활성화
     
     // 로딩 표시
     chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
@@ -1034,44 +1034,85 @@ function updateGroupChatHeader(group) {
 }
 
 /**
- * 그룹 채팅 목록 내부 렌더링
+ * 그룹 채팅 목록 내부 렌더링 - 일반 채팅과 동일한 로직 사용
  * @param {HTMLElement} container
  * @param {Array} chats
  * @param {Object} group
  */
 function renderGroupChats(container, chats, group) {
-    updateChatCount(chats.length);
-    updateHasChats(chats.length);
+    // 그룹용 가상 avatar (저장소 키로 사용)
+    const groupAvatar = `group_${group.id}`;
     
-    // 날짜순 정렬 (최신순)
-    const sortedChats = chats.sort((a, b) => {
-        const dateA = a.last_mes ? new Date(a.last_mes).getTime() : 0;
-        const dateB = b.last_mes ? new Date(b.last_mes).getTime() : 0;
-        return dateB - dateA;
-    });
+    // 전체 채팅 수
+    const totalChatCount = chats.length;
+    updateHasChats(totalChatCount);
+    
+    if (chats.length === 0) {
+        updateChatCount(0);
+        container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>💬</i>
+                <div>그룹 채팅이 없습니다</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // 폴더 필터 적용
+    const filterFolder = storage.getFilterFolder();
+    let filteredChats = [...chats];
+    if (filterFolder !== 'all') {
+        filteredChats = filterByFolder(filteredChats, groupAvatar, filterFolder);
+    }
+    
+    // 정렬 적용
+    const sortOption = storage.getSortOption();
+    filteredChats = sortChats(filteredChats, groupAvatar, sortOption);
+    
+    updateChatCount(filteredChats.length);
+    
+    // 필터 결과가 0이면 빈 상태 표시
+    if (filteredChats.length === 0) {
+        container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>📁</i>
+                <div>이 폴더에는 채팅이 없습니다</div>
+            </div>
+        `;
+        return;
+    }
     
     let html = '';
     
-    for (const chat of sortedChats) {
+    for (const chat of filteredChats) {
         const fileName = chat.file_name || '';
-        // 파일명에서 날짜 부분 추출해서 보기 좋게 표시
         const displayName = formatGroupChatName(fileName);
         const lastMes = chat.last_mes ? formatDate(chat.last_mes) : '';
         const mesCount = chat.chat_items || 0;
         const preview = chat.mes || '';
         const safePreview = escapeHtml(truncateText(preview, 10000));
         
+        // 즐겨찾기/폴더 상태 (일반 채팅과 동일하게)
+        const isFav = storage.isFavorite(groupAvatar, fileName);
+        const folderId = storage.getChatFolder(groupAvatar, fileName);
+        const data = storage.load();
+        const folder = data.folders.find(f => f.id === folderId);
+        const folderName = folder?.name || '';
+        
         html += `
-        <div class="lobby-chat-item" 
+        <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''}" 
              data-group-id="${escapeHtml(group.id)}"
              data-chat-file="${escapeHtml(fileName)}"
+             data-folder-id="${folderId}"
              data-full-preview="${safePreview}">
+            <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '⭐' : '☆'}</button>
             <div class="chat-content">
                 <div class="chat-name">${escapeHtml(displayName)}</div>
                 <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
                 <div class="chat-meta">
                     ${mesCount > 0 ? `<span>💬 ${mesCount}개</span>` : ''}
                     ${lastMes ? `<span>🕐 ${lastMes}</span>` : ''}
+                    ${folderName && folderId !== 'uncategorized' ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ''}
                 </div>
             </div>
             <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
@@ -1116,12 +1157,24 @@ function formatGroupChatName(fileName) {
  * @param {Object} group
  */
 function bindGroupChatEvents(container, group) {
+    const groupAvatar = `group_${group.id}`;  // 저장소 키용
+    
     container.querySelectorAll('.lobby-chat-item').forEach((item, index) => {
         const chatContent = item.querySelector('.chat-content');
+        const favBtn = item.querySelector('.chat-fav-btn');
         const delBtn = item.querySelector('.chat-delete-btn');
         const chatFile = item.dataset.chatFile;
         
         if (!chatContent || !chatFile) return;
+        
+        // 즐겨찾기 토글 (일반 채팅과 동일)
+        if (favBtn) {
+            createTouchClickHandler(favBtn, () => {
+                const isNowFav = storage.toggleFavorite(groupAvatar, chatFile);
+                favBtn.textContent = isNowFav ? '⭐' : '☆';
+                item.classList.toggle('is-favorite', isNowFav);
+            }, { debugName: `group-fav-${index}` });
+        }
         
         // 채팅 열기 - 일반 캐릭터 채팅 열기와 동일한 플로우!
         createTouchClickHandler(chatContent, async () => {

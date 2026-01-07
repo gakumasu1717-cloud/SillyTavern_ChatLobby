@@ -157,6 +157,18 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         if (selectedTag) {
             groups = [];
         }
+        
+        // 그룹 정렬 (sortOption에 따라)
+        if (groups.length > 0 && sortOption === 'recent') {
+            // 최근 채팅 시간 기준 정렬 (last_mes 필드 사용)
+            groups = groups.sort((a, b) => {
+                const timeA = a.last_mes ? new Date(a.last_mes).getTime() : 0;
+                const timeB = b.last_mes ? new Date(b.last_mes).getTime() : 0;
+                return timeB - timeA;
+            });
+        } else if (groups.length > 0 && sortOption === 'name') {
+            groups = groups.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+        }
     } catch (e) {
         console.warn('[CharacterGrid] Failed to load groups:', e);
     }
@@ -809,6 +821,27 @@ function renderGroupCard(group) {
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
     const chatCount = Array.isArray(group.chats) ? group.chats.length : 0;
     
+    // 마지막 채팅 시간 (캐릭터와 동일하게 표시)
+    let lastChatTimeStr = '';
+    if (group.last_mes) {
+        const lastTime = new Date(group.last_mes);
+        const now = new Date();
+        const diffMs = now - lastTime;
+        const diffHours = diffMs / (1000 * 60 * 60);
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        
+        if (diffHours < 1) {
+            const mins = Math.floor(diffMs / (1000 * 60));
+            lastChatTimeStr = mins <= 0 ? '방금' : `${mins}분 전`;
+        } else if (diffHours < 24) {
+            lastChatTimeStr = `${Math.floor(diffHours)}시간 전`;
+        } else if (diffDays < 7) {
+            lastChatTimeStr = `${Math.floor(diffDays)}일 전`;
+        } else {
+            lastChatTimeStr = lastTime.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+        }
+    }
+    
     // 멤버 아바타 그리드 생성 (최대 4명)
     const members = group.members || [];
     const avatarGridHtml = renderMemberAvatarGrid(members.slice(0, 4), memberCount);
@@ -819,7 +852,7 @@ function renderGroupCard(group) {
             ${avatarGridHtml}
         </div>
         <div class="lobby-char-name">
-            <span class="char-name-text">${escapeHtml(name)}</span>
+            <span class="char-name-text">${escapeHtml(name)}${lastChatTimeStr ? ` <span class="char-last-time">${lastChatTimeStr}</span>` : ''}</span>
             <div class="char-hover-info">
                 <div class="info-row">
                     <span class="info-icon">👥</span>

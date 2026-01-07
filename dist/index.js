@@ -3205,7 +3205,7 @@ ${message}` : message;
     }
     chatsPanel.classList.add("visible");
     updateGroupChatHeader(group);
-    showFolderBar(false);
+    showFolderBar(true);
     chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
     try {
       const chats = await api.getGroupChats(group.id);
@@ -3258,32 +3258,63 @@ ${message}` : message;
     }
   }
   function renderGroupChats(container, chats, group) {
-    updateChatCount(chats.length);
-    updateHasChats(chats.length);
-    const sortedChats = chats.sort((a, b) => {
-      const dateA = a.last_mes ? new Date(a.last_mes).getTime() : 0;
-      const dateB = b.last_mes ? new Date(b.last_mes).getTime() : 0;
-      return dateB - dateA;
-    });
+    const groupAvatar = `group_${group.id}`;
+    const totalChatCount = chats.length;
+    updateHasChats(totalChatCount);
+    if (chats.length === 0) {
+      updateChatCount(0);
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F4AC}</i>
+                <div>\uADF8\uB8F9 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+            </div>
+        `;
+      return;
+    }
+    const filterFolder = storage.getFilterFolder();
+    let filteredChats = [...chats];
+    if (filterFolder !== "all") {
+      filteredChats = filterByFolder(filteredChats, groupAvatar, filterFolder);
+    }
+    const sortOption = storage.getSortOption();
+    filteredChats = sortChats(filteredChats, groupAvatar, sortOption);
+    updateChatCount(filteredChats.length);
+    if (filteredChats.length === 0) {
+      container.innerHTML = `
+            <div class="lobby-empty-state">
+                <i>\u{1F4C1}</i>
+                <div>\uC774 \uD3F4\uB354\uC5D0\uB294 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
+            </div>
+        `;
+      return;
+    }
     let html = "";
-    for (const chat of sortedChats) {
+    for (const chat of filteredChats) {
       const fileName = chat.file_name || "";
       const displayName = formatGroupChatName(fileName);
       const lastMes = chat.last_mes ? formatDate(chat.last_mes) : "";
       const mesCount = chat.chat_items || 0;
       const preview = chat.mes || "";
       const safePreview = escapeHtml(truncateText(preview, 1e4));
+      const isFav = storage.isFavorite(groupAvatar, fileName);
+      const folderId = storage.getChatFolder(groupAvatar, fileName);
+      const data = storage.load();
+      const folder = data.folders.find((f) => f.id === folderId);
+      const folderName = folder?.name || "";
       html += `
-        <div class="lobby-chat-item" 
+        <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
              data-group-id="${escapeHtml(group.id)}"
              data-chat-file="${escapeHtml(fileName)}"
+             data-folder-id="${folderId}"
              data-full-preview="${safePreview}">
+            <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
             <div class="chat-content">
                 <div class="chat-name">${escapeHtml(displayName)}</div>
                 <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
                 <div class="chat-meta">
                     ${mesCount > 0 ? `<span>\u{1F4AC} ${mesCount}\uAC1C</span>` : ""}
                     ${lastMes ? `<span>\u{1F550} ${lastMes}</span>` : ""}
+                    ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
                 </div>
             </div>
             <button class="chat-delete-btn" title="\uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F</button>
@@ -3308,11 +3339,20 @@ ${message}` : message;
     return name;
   }
   function bindGroupChatEvents(container, group) {
+    const groupAvatar = `group_${group.id}`;
     container.querySelectorAll(".lobby-chat-item").forEach((item, index) => {
       const chatContent = item.querySelector(".chat-content");
+      const favBtn = item.querySelector(".chat-fav-btn");
       const delBtn = item.querySelector(".chat-delete-btn");
       const chatFile = item.dataset.chatFile;
       if (!chatContent || !chatFile) return;
+      if (favBtn) {
+        createTouchClickHandler(favBtn, () => {
+          const isNowFav = storage.toggleFavorite(groupAvatar, chatFile);
+          favBtn.textContent = isNowFav ? "\u2B50" : "\u2606";
+          item.classList.toggle("is-favorite", isNowFav);
+        }, { debugName: `group-fav-${index}` });
+      }
       createTouchClickHandler(chatContent, async () => {
         try {
           console.log("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
@@ -3520,6 +3560,15 @@ ${message}` : message;
       }
       if (selectedTag) {
         groups = [];
+      }
+      if (groups.length > 0 && sortOption === "recent") {
+        groups = groups.sort((a, b) => {
+          const timeA = a.last_mes ? new Date(a.last_mes).getTime() : 0;
+          const timeB = b.last_mes ? new Date(b.last_mes).getTime() : 0;
+          return timeB - timeA;
+        });
+      } else if (groups.length > 0 && sortOption === "name") {
+        groups = groups.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
       }
     } catch (e) {
       console.warn("[CharacterGrid] Failed to load groups:", e);
@@ -3927,6 +3976,24 @@ ${message}` : message;
     const name = group.name || "Unknown Group";
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
     const chatCount = Array.isArray(group.chats) ? group.chats.length : 0;
+    let lastChatTimeStr = "";
+    if (group.last_mes) {
+      const lastTime = new Date(group.last_mes);
+      const now = /* @__PURE__ */ new Date();
+      const diffMs = now - lastTime;
+      const diffHours = diffMs / (1e3 * 60 * 60);
+      const diffDays = diffMs / (1e3 * 60 * 60 * 24);
+      if (diffHours < 1) {
+        const mins = Math.floor(diffMs / (1e3 * 60));
+        lastChatTimeStr = mins <= 0 ? "\uBC29\uAE08" : `${mins}\uBD84 \uC804`;
+      } else if (diffHours < 24) {
+        lastChatTimeStr = `${Math.floor(diffHours)}\uC2DC\uAC04 \uC804`;
+      } else if (diffDays < 7) {
+        lastChatTimeStr = `${Math.floor(diffDays)}\uC77C \uC804`;
+      } else {
+        lastChatTimeStr = lastTime.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+      }
+    }
     const members = group.members || [];
     const avatarGridHtml = renderMemberAvatarGrid(members.slice(0, 4), memberCount);
     return `
@@ -3935,7 +4002,7 @@ ${message}` : message;
             ${avatarGridHtml}
         </div>
         <div class="lobby-char-name">
-            <span class="char-name-text">${escapeHtml(name)}</span>
+            <span class="char-name-text">${escapeHtml(name)}${lastChatTimeStr ? ` <span class="char-last-time">${lastChatTimeStr}</span>` : ""}</span>
             <div class="char-hover-info">
                 <div class="info-row">
                     <span class="info-icon">\u{1F465}</span>
