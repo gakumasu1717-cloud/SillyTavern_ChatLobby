@@ -262,6 +262,13 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             onChatChanged: onChatChanged,
             // 🔥 메시지 전송/수신 이벤트 - 로비 밖에서 채팅해도 lastChatCache 갱신
             onMessageSent: () => {
+                // 🔥 그룹 채팅은 통계에서 제외
+                const context = api.getContext();
+                if (context?.groupId) {
+                    console.log('[ChatLobby] Skipping group chat for lastChatCache');
+                    return;
+                }
+                
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
@@ -275,6 +282,13 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 // 실제 대화가 아니므로 lastChatCache를 갱신하지 않음
                 if (type === 'first_message') {
                     console.log('[ChatLobby] Skipping first_message for lastChatCache');
+                    return;
+                }
+                
+                // 🔥 그룹 채팅은 통계에서 제외
+                const context = api.getContext();
+                if (context?.groupId) {
+                    console.log('[ChatLobby] Skipping group chat for lastChatCache');
                     return;
                 }
                 

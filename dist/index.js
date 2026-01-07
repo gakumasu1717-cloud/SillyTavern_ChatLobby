@@ -1620,24 +1620,59 @@ ${message}` : message;
       try {
         const context = this.getContext();
         const chatFileName = chatId.replace(".jsonl", "");
+        console.log("[API] openGroupChat:", { groupId, chatFileName });
+        let groupSelected = false;
         if (typeof context?.selectGroupById === "function") {
-          await context.selectGroupById(groupId);
-        } else if (typeof context?.openGroupById === "function") {
-          await context.openGroupById(groupId, false);
+          try {
+            await context.selectGroupById(groupId);
+            groupSelected = true;
+            console.log("[API] Group selected via selectGroupById");
+          } catch (e) {
+            console.warn("[API] selectGroupById failed:", e);
+          }
         }
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        if (!groupSelected && typeof context?.openGroupById === "function") {
+          try {
+            await context.openGroupById(groupId, false);
+            groupSelected = true;
+            console.log("[API] Group selected via openGroupById");
+          } catch (e) {
+            console.warn("[API] openGroupById failed:", e);
+          }
+        }
+        if (!groupSelected) {
+          const groupCard = document.querySelector(
+            `.group_select[grid="${groupId}"], .group_select_container[grid="${groupId}"]`
+          );
+          if (groupCard) {
+            groupCard.click();
+            groupSelected = true;
+            console.log("[API] Group selected via UI click");
+          }
+        }
+        if (!groupSelected) {
+          console.error("[API] Failed to select group");
+          return false;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
         if (typeof context?.openGroupChat === "function") {
-          await context.openGroupChat(chatFileName);
-          return true;
+          try {
+            await context.openGroupChat(chatFileName);
+            console.log("[API] Chat opened via context.openGroupChat");
+            return true;
+          } catch (e) {
+            console.warn("[API] context.openGroupChat failed:", e);
+          }
         }
         try {
           const groupChatsModule = await import("../../../../group-chats.js");
           if (typeof groupChatsModule.openGroupChat === "function") {
             await groupChatsModule.openGroupChat(chatFileName);
+            console.log("[API] Chat opened via group-chats module");
             return true;
           }
         } catch (e) {
-          console.warn("[API] Could not import group-chats module:", e);
+          console.warn("[API] group-chats import failed:", e);
         }
         return await this.openGroupChatByUI(groupId, chatFileName);
       } catch (error) {
@@ -1653,24 +1688,35 @@ ${message}` : message;
      */
     async openGroupChatByUI(groupId, chatFileName) {
       try {
-        const groupCard = document.querySelector(`.group_select_container[grid="${groupId}"]`);
-        if (groupCard) {
-          groupCard.click();
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
+        console.log("[API] openGroupChatByUI:", { groupId, chatFileName });
         const manageChatsBtn = document.getElementById("option_select_chat");
-        if (manageChatsBtn) {
-          manageChatsBtn.click();
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          const chatItems = document.querySelectorAll(".select_chat_block");
-          for (const item of chatItems) {
-            const itemName = item.querySelector(".select_chat_block_filename")?.textContent || "";
-            if (itemName.includes(chatFileName)) {
+        if (!manageChatsBtn) {
+          console.error("[API] option_select_chat not found");
+          return false;
+        }
+        manageChatsBtn.click();
+        let attempts = 0;
+        while (attempts < 30) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          const chatItems2 = document.querySelectorAll(".select_chat_block");
+          if (chatItems2.length > 0) break;
+          attempts++;
+        }
+        const chatItems = document.querySelectorAll(".select_chat_block");
+        for (const item of chatItems) {
+          const itemFileName = item.getAttribute("file_name") || "";
+          const itemText = item.querySelector(".select_chat_block_filename")?.textContent || "";
+          if (itemFileName.includes(chatFileName) || itemText.includes(chatFileName)) {
+            if (window.$) {
+              window.$(item).trigger("click");
+            } else {
               item.click();
-              return true;
             }
+            console.log("[API] Chat opened via UI click");
+            return true;
           }
         }
+        console.warn("[API] Chat not found in list:", chatFileName);
         return false;
       } catch (e) {
         console.error("[API] openGroupChatByUI failed:", e);
@@ -3227,18 +3273,86 @@ ${message}` : message;
       if (!chatContent || !chatFile) return;
       createTouchClickHandler(chatContent, async () => {
         try {
-          const success = await api.openGroupChat(group.id, chatFile);
-          if (success) {
-            const overlay = document.getElementById("chat-lobby-overlay");
-            const lobbyContainer = document.getElementById("chat-lobby-container");
-            const fab = document.getElementById("chat-lobby-fab");
-            if (overlay) overlay.style.display = "none";
-            if (lobbyContainer) lobbyContainer.style.display = "none";
-            if (fab) fab.style.display = "flex";
-            store.setLobbyOpen(false);
-          } else {
-            showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+          console.log("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
+          const context = api.getContext();
+          const chatFileName = chatFile.replace(".jsonl", "");
+          console.log("[ChatList] Selecting group...");
+          let groupSelected = false;
+          if (typeof context?.openGroupById === "function") {
+            try {
+              await context.openGroupById(group.id, false);
+              groupSelected = true;
+            } catch (e) {
+              console.warn("[ChatList] openGroupById failed:", e);
+            }
           }
+          if (!groupSelected) {
+            const groupCard = document.querySelector(
+              `.group_select[grid="${group.id}"], .group_select_container[grid="${group.id}"]`
+            );
+            if (groupCard) {
+              groupCard.click();
+              groupSelected = true;
+            }
+          }
+          if (!groupSelected) {
+            showToast("\uADF8\uB8F9 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+            return;
+          }
+          console.log("[ChatList] Waiting for group selection...");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          console.log("[ChatList] Closing lobby...");
+          const overlay = document.getElementById("chat-lobby-overlay");
+          const lobbyContainer = document.getElementById("chat-lobby-container");
+          const fab = document.getElementById("chat-lobby-fab");
+          const chatsPanel = document.getElementById("chat-lobby-chats");
+          if (overlay) overlay.style.display = "none";
+          if (lobbyContainer) lobbyContainer.style.display = "none";
+          if (fab) fab.style.display = "flex";
+          if (chatsPanel) chatsPanel.classList.remove("visible");
+          store.setCurrentGroup(null);
+          store.setCurrentCharacter(null);
+          store.setLobbyOpen(false);
+          console.log("[ChatList] Opening chat:", chatFileName);
+          if (typeof context?.openGroupChat === "function") {
+            try {
+              await context.openGroupChat(chatFileName);
+              console.log("[ChatList] Group chat opened successfully");
+              return;
+            } catch (err) {
+              console.warn("[ChatList] context.openGroupChat failed:", err);
+            }
+          }
+          try {
+            const groupChatsModule = await import("../../../../group-chats.js");
+            if (typeof groupChatsModule.openGroupChat === "function") {
+              await groupChatsModule.openGroupChat(chatFileName);
+              console.log("[ChatList] Group chat opened via module");
+              return;
+            }
+          } catch (e) {
+            console.warn("[ChatList] group-chats import failed:", e);
+          }
+          console.log("[ChatList] Using UI fallback...");
+          const manageChatsBtn = document.getElementById("option_select_chat");
+          if (manageChatsBtn) {
+            manageChatsBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const chatItems = document.querySelectorAll(".select_chat_block");
+            for (const chatItem of chatItems) {
+              const itemFileName = chatItem.getAttribute("file_name") || "";
+              if (itemFileName.includes(chatFileName)) {
+                if (window.$) {
+                  window.$(chatItem).trigger("click");
+                } else {
+                  chatItem.click();
+                }
+                console.log("[ChatList] Group chat opened via UI click");
+                return;
+              }
+            }
+          }
+          showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
         } catch (error) {
           console.error("[ChatList] Failed to open group chat:", error);
           showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -5657,6 +5771,11 @@ ${message}` : message;
         onChatChanged,
         // 🔥 메시지 전송/수신 이벤트 - 로비 밖에서 채팅해도 lastChatCache 갱신
         onMessageSent: () => {
+          const context2 = api.getContext();
+          if (context2?.groupId) {
+            console.log("[ChatLobby] Skipping group chat for lastChatCache");
+            return;
+          }
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
@@ -5667,6 +5786,11 @@ ${message}` : message;
         onMessageReceived: (chatId, type) => {
           if (type === "first_message") {
             console.log("[ChatLobby] Skipping first_message for lastChatCache");
+            return;
+          }
+          const context2 = api.getContext();
+          if (context2?.groupId) {
+            console.log("[ChatLobby] Skipping group chat for lastChatCache");
             return;
           }
           const charAvatar = getCurrentCharacterAvatar();

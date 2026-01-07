@@ -737,38 +737,80 @@ class SillyTavernAPI {
     async openGroupChat(groupId, chatId) {
         try {
             const context = this.getContext();
-            
-            // 채팅 파일명에서 확장자 제거
             const chatFileName = chatId.replace('.jsonl', '');
             
-            // 1. 먼저 그룹 선택
+            console.log('[API] openGroupChat:', { groupId, chatFileName });
+            
+            // 1. 그룹 선택 - 여러 방법 시도
+            let groupSelected = false;
+            
+            // 방법 A: selectGroupById
             if (typeof context?.selectGroupById === 'function') {
-                await context.selectGroupById(groupId);
-            } else if (typeof context?.openGroupById === 'function') {
-                await context.openGroupById(groupId, false);  // 기본 채팅 안 열기
+                try {
+                    await context.selectGroupById(groupId);
+                    groupSelected = true;
+                    console.log('[API] Group selected via selectGroupById');
+                } catch (e) {
+                    console.warn('[API] selectGroupById failed:', e);
+                }
             }
             
-            // 잠시 대기 (그룹 선택 완료)
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // 방법 B: openGroupById (기본 채팅 안 열기)
+            if (!groupSelected && typeof context?.openGroupById === 'function') {
+                try {
+                    await context.openGroupById(groupId, false);
+                    groupSelected = true;
+                    console.log('[API] Group selected via openGroupById');
+                } catch (e) {
+                    console.warn('[API] openGroupById failed:', e);
+                }
+            }
+            
+            // 방법 C: UI 클릭
+            if (!groupSelected) {
+                const groupCard = document.querySelector(
+                    `.group_select[grid="${groupId}"], .group_select_container[grid="${groupId}"]`
+                );
+                if (groupCard) {
+                    groupCard.click();
+                    groupSelected = true;
+                    console.log('[API] Group selected via UI click');
+                }
+            }
+            
+            if (!groupSelected) {
+                console.error('[API] Failed to select group');
+                return false;
+            }
+            
+            // 그룹 선택 완료 대기
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             // 2. 그룹 채팅 열기
+            // 방법 A: context.openGroupChat
             if (typeof context?.openGroupChat === 'function') {
-                await context.openGroupChat(chatFileName);
-                return true;
+                try {
+                    await context.openGroupChat(chatFileName);
+                    console.log('[API] Chat opened via context.openGroupChat');
+                    return true;
+                } catch (e) {
+                    console.warn('[API] context.openGroupChat failed:', e);
+                }
             }
             
-            // 3. Fallback: group-chats 모듈 직접 사용
+            // 방법 B: group-chats 모듈
             try {
                 const groupChatsModule = await import('../../../../group-chats.js');
                 if (typeof groupChatsModule.openGroupChat === 'function') {
                     await groupChatsModule.openGroupChat(chatFileName);
+                    console.log('[API] Chat opened via group-chats module');
                     return true;
                 }
             } catch (e) {
-                console.warn('[API] Could not import group-chats module:', e);
+                console.warn('[API] group-chats import failed:', e);
             }
             
-            // 4. Fallback: UI 클릭 방식
+            // 방법 C: UI 클릭 방식
             return await this.openGroupChatByUI(groupId, chatFileName);
             
         } catch (error) {
@@ -785,30 +827,46 @@ class SillyTavernAPI {
      */
     async openGroupChatByUI(groupId, chatFileName) {
         try {
-            // 그룹 선택 버튼 찾기
-            const groupCard = document.querySelector(`.group_select_container[grid="${groupId}"]`);
-            if (groupCard) {
-                groupCard.click();
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
+            console.log('[API] openGroupChatByUI:', { groupId, chatFileName });
             
             // 채팅 관리 버튼 클릭
             const manageChatsBtn = document.getElementById('option_select_chat');
-            if (manageChatsBtn) {
-                manageChatsBtn.click();
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                // 채팅 목록에서 해당 채팅 찾기
+            if (!manageChatsBtn) {
+                console.error('[API] option_select_chat not found');
+                return false;
+            }
+            
+            manageChatsBtn.click();
+            
+            // 채팅 목록 로드 대기 (최대 3초)
+            let attempts = 0;
+            while (attempts < 30) {
+                await new Promise(resolve => setTimeout(resolve, 100));
                 const chatItems = document.querySelectorAll('.select_chat_block');
-                for (const item of chatItems) {
-                    const itemName = item.querySelector('.select_chat_block_filename')?.textContent || '';
-                    if (itemName.includes(chatFileName)) {
+                if (chatItems.length > 0) break;
+                attempts++;
+            }
+            
+            // 채팅 목록에서 해당 채팅 찾기
+            const chatItems = document.querySelectorAll('.select_chat_block');
+            for (const item of chatItems) {
+                const itemFileName = item.getAttribute('file_name') || '';
+                const itemText = item.querySelector('.select_chat_block_filename')?.textContent || '';
+                
+                // 파일명 또는 표시명으로 매칭
+                if (itemFileName.includes(chatFileName) || itemText.includes(chatFileName)) {
+                    // jQuery 클릭 시도 (SillyTavern 방식)
+                    if (window.$) {
+                        window.$(item).trigger('click');
+                    } else {
                         item.click();
-                        return true;
                     }
+                    console.log('[API] Chat opened via UI click');
+                    return true;
                 }
             }
             
+            console.warn('[API] Chat not found in list:', chatFileName);
             return false;
         } catch (e) {
             console.error('[API] openGroupChatByUI failed:', e);
