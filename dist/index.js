@@ -2389,6 +2389,12 @@ ${message}` : message;
       isTooltipHovered = false;
       hideTooltip();
     });
+    tooltipElement.addEventListener("wheel", (e) => {
+      const hasScroll = tooltipElement.scrollHeight > tooltipElement.clientHeight;
+      if (hasScroll) {
+        e.stopPropagation();
+      }
+    }, { passive: true });
     document.body.appendChild(tooltipElement);
     return tooltipElement;
   }
@@ -2396,8 +2402,21 @@ ${message}` : message;
     const tooltip = ensureTooltipElement();
     tooltip.textContent = content;
     tooltip.style.display = "block";
-    tooltip.style.left = `${e.clientX + 15}px`;
-    tooltip.style.top = `${e.clientY + 15}px`;
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let left = e.clientX + 15;
+    let top = e.clientY + 15;
+    if (left + tooltipRect.width > viewportWidth - 10) {
+      left = e.clientX - tooltipRect.width - 15;
+    }
+    if (top + tooltipRect.height > viewportHeight - 10) {
+      top = viewportHeight - tooltipRect.height - 10;
+    }
+    if (left < 10) left = 10;
+    if (top < 10) top = 10;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
   }
   function hideTooltip() {
     if (tooltipTimeout) {

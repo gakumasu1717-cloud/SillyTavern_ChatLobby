@@ -85,6 +85,16 @@ function ensureTooltipElement() {
         hideTooltip();
     });
     
+    // 휠 이벤트로 스크롤 가능하게
+    tooltipElement.addEventListener('wheel', (e) => {
+        // 스크롤이 필요한 경우에만 이벤트 처리
+        const hasScroll = tooltipElement.scrollHeight > tooltipElement.clientHeight;
+        if (hasScroll) {
+            e.stopPropagation();
+            // 기본 스크롤 동작 허용
+        }
+    }, { passive: true });
+    
     document.body.appendChild(tooltipElement);
     return tooltipElement;
 }
@@ -99,9 +109,31 @@ function showTooltip(content, e) {
     tooltip.textContent = content;
     tooltip.style.display = 'block';
     
-    // 항상 마우스 커서 우측 아래 (화면 밖 허용)
-    tooltip.style.left = `${e.clientX + 15}px`;
-    tooltip.style.top = `${e.clientY + 15}px`;
+    // 툴팁 크기 계산
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // 기본 위치: 마우스 커서 우측 아래
+    let left = e.clientX + 15;
+    let top = e.clientY + 15;
+    
+    // 화면 오른쪽 경계 체크
+    if (left + tooltipRect.width > viewportWidth - 10) {
+        left = e.clientX - tooltipRect.width - 15;
+    }
+    
+    // 화면 하단 경계 체크 - tooltip이 화면 안에 들어오도록
+    if (top + tooltipRect.height > viewportHeight - 10) {
+        top = viewportHeight - tooltipRect.height - 10;
+    }
+    
+    // 최소 위치 보장
+    if (left < 10) left = 10;
+    if (top < 10) top = 10;
+    
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
 }
 
 /**
