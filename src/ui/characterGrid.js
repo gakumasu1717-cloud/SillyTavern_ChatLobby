@@ -578,7 +578,8 @@ async function sortCharacters(characters, sortOption) {
  * @param {HTMLElement} container
  */
 function bindCharacterEvents(container) {
-    container.querySelectorAll('.lobby-char-card').forEach((card, index) => {
+    // 그룹 카드는 제외 (.lobby-group-card는 별도로 바인딩)
+    container.querySelectorAll('.lobby-char-card:not(.lobby-group-card)').forEach((card, index) => {
         // data-char-name 사용 (시간 span 포함 방지)
         const charName = card.dataset.charName || 'Unknown';
         const charAvatar = card.dataset.charAvatar;

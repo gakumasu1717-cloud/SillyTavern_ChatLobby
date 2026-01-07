@@ -3594,7 +3594,7 @@ ${message}` : message;
     return sorted;
   }
   function bindCharacterEvents(container) {
-    container.querySelectorAll(".lobby-char-card").forEach((card, index) => {
+    container.querySelectorAll(".lobby-char-card:not(.lobby-group-card)").forEach((card, index) => {
       const charName = card.dataset.charName || "Unknown";
       const charAvatar = card.dataset.charAvatar;
       const charIndex = card.dataset.charIndex;
