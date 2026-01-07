@@ -148,6 +148,17 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     let groups = [];
     try {
         groups = await api.getGroups();
+        
+        // 디버그: 그룹 데이터 확인
+        if (groups.length > 0) {
+            console.log('[CharacterGrid] Groups sample:', groups.slice(0, 2).map(g => ({
+                name: g.name,
+                id: g.id,
+                last_mes: g.last_mes,
+                date_last_chat: g.date_last_chat
+            })));
+        }
+        
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             groups = groups.filter(g => (g.name || '').toLowerCase().includes(term));

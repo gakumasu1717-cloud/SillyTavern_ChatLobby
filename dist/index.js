@@ -3523,6 +3523,14 @@ ${message}` : message;
     let groups = [];
     try {
       groups = await api.getGroups();
+      if (groups.length > 0) {
+        console.log("[CharacterGrid] Groups sample:", groups.slice(0, 2).map((g) => ({
+          name: g.name,
+          id: g.id,
+          last_mes: g.last_mes,
+          date_last_chat: g.date_last_chat
+        })));
+      }
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         groups = groups.filter((g) => (g.name || "").toLowerCase().includes(term));
