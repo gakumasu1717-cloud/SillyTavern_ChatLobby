@@ -2631,7 +2631,7 @@ ${message}` : message;
     const data = storage.load();
     const folder = data.folders.find((f) => f.id === folderId);
     const folderName = folder?.name || "";
-    const tooltipPreview = truncateText(preview, 500);
+    const tooltipPreview = truncateText(preview, 2e3);
     const safeAvatar = escapeHtml(charAvatar || "");
     const safeFileName = escapeHtml(fileName || "");
     const safeFullPreview = escapeHtml(tooltipPreview);
