@@ -3516,7 +3516,6 @@ ${message}` : message;
     }
     renderTagBar(characters);
     const sortOption = sortOverride || storage.getCharSortOption();
-    filtered = await sortCharacters(filtered, sortOption);
     const sortSelect = document.getElementById("chat-lobby-char-sort");
     if (sortSelect && sortSelect.value !== sortOption) {
       sortSelect.value = sortOption;
@@ -3530,15 +3529,6 @@ ${message}` : message;
       }
       if (selectedTag) {
         groups = [];
-      }
-      if (groups.length > 0 && sortOption === "recent") {
-        groups = groups.sort((a, b) => {
-          const timeA = a.last_mes ? new Date(a.last_mes).getTime() : 0;
-          const timeB = b.last_mes ? new Date(b.last_mes).getTime() : 0;
-          return timeB - timeA;
-        });
-      } else if (groups.length > 0 && sortOption === "name") {
-        groups = groups.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
       }
     } catch (e) {
       console.warn("[CharacterGrid] Failed to load groups:", e);
@@ -3554,12 +3544,18 @@ ${message}` : message;
     }
     const originalCharacters = api.getCharacters();
     const indexMap = new Map(originalCharacters.map((c, i) => [c.avatar, i]));
-    let html = filtered.map((char) => {
-      return renderCharacterCard(char, indexMap.get(char.avatar), sortOption);
+    const allItems = [
+      ...filtered.map((char) => ({ type: "character", data: char })),
+      ...groups.map((group) => ({ type: "group", data: group }))
+    ];
+    const sortedItems = await sortCharactersAndGroups(allItems, sortOption);
+    const html = sortedItems.map((item) => {
+      if (item.type === "character") {
+        return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
+      } else {
+        return renderGroupCard(item.data, sortOption);
+      }
     }).join("");
-    if (groups.length > 0) {
-      html += groups.map((group) => renderGroupCard(group)).join("");
-    }
     container.innerHTML = html;
     bindCharacterEvents(container);
     if (groups.length > 0) {
@@ -3771,50 +3767,70 @@ ${message}` : message;
   function isFavoriteChar(char) {
     return storage.isCharacterFavorite(char.avatar);
   }
-  async function sortCharacters(characters, sortOption) {
+  async function sortCharactersAndGroups(items, sortOption) {
     if (sortOption === "chats") {
       const BATCH_SIZE = 5;
       const results = [];
-      for (let i = 0; i < characters.length; i += BATCH_SIZE) {
-        const batch = characters.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        const batch = items.slice(i, i + BATCH_SIZE);
         const batchResults = await Promise.all(
-          batch.map(async (char) => {
+          batch.map(async (item) => {
+            if (item.type === "group") {
+              const chatCount = Array.isArray(item.data.chats) ? item.data.chats.length : 0;
+              return { item, count: chatCount, isFav: false };
+            }
+            const char = item.data;
             let count = cache.get("messageCounts", char.avatar);
             if (typeof count !== "number") {
               try {
-                const chats = await api.fetchChatsForCharacter(char.avatar);
+                await api.fetchChatsForCharacter(char.avatar);
                 count = cache.get("messageCounts", char.avatar) || 0;
               } catch (e) {
-                console.error("[CharacterGrid] Failed to get message count for:", char.name, e);
                 count = 0;
               }
             }
-            return { char, count };
+            return { item, count, isFav: isFavoriteChar(char) };
           })
         );
         results.push(...batchResults);
       }
       results.sort((a, b) => {
-        if (isFavoriteChar(a.char) !== isFavoriteChar(b.char)) {
-          return isFavoriteChar(a.char) ? -1 : 1;
+        if (a.isFav !== b.isFav) {
+          return a.isFav ? -1 : 1;
         }
         if (b.count !== a.count) {
           return b.count - a.count;
         }
-        return (a.char.name || "").localeCompare(b.char.name || "", "ko");
+        const nameA = a.item.data.name || "";
+        const nameB = b.item.data.name || "";
+        return nameA.localeCompare(nameB, "ko");
       });
-      return results.map((item) => item.char);
+      return results.map((r) => r.item);
     }
-    const sorted = [...characters];
+    const sorted = [...items];
     sorted.sort((a, b) => {
-      if (isFavoriteChar(a) !== isFavoriteChar(b)) {
-        return isFavoriteChar(a) ? -1 : 1;
+      const aFav = a.type === "character" && isFavoriteChar(a.data);
+      const bFav = b.type === "character" && isFavoriteChar(b.data);
+      if (aFav !== bFav) {
+        return aFav ? -1 : 1;
       }
       if (sortOption === "name") {
-        return (a.name || "").localeCompare(b.name || "", "ko");
+        const nameA = a.data.name || "";
+        const nameB = b.data.name || "";
+        return nameA.localeCompare(nameB, "ko");
       }
-      const aDate = lastChatCache.getForSort(a);
-      const bDate = lastChatCache.getForSort(b);
+      let aDate = 0;
+      let bDate = 0;
+      if (a.type === "character") {
+        aDate = lastChatCache.getForSort(a.data);
+      } else {
+        aDate = a.data.last_mes ? new Date(a.data.last_mes).getTime() : 0;
+      }
+      if (b.type === "character") {
+        bDate = lastChatCache.getForSort(b.data);
+      } else {
+        bDate = b.data.last_mes ? new Date(b.data.last_mes).getTime() : 0;
+      }
       return bDate - aDate;
     });
     return sorted;
@@ -3942,12 +3958,12 @@ ${message}` : message;
       }, { debugName: `tag-${item.dataset.tag}` });
     });
   }
-  function renderGroupCard(group) {
+  function renderGroupCard(group, sortOption = "recent") {
     const name = group.name || "Unknown Group";
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
     const chatCount = Array.isArray(group.chats) ? group.chats.length : 0;
     let lastChatTimeStr = "";
-    if (group.last_mes) {
+    if (sortOption === "recent" && group.last_mes) {
       const lastTime = new Date(group.last_mes);
       const now = /* @__PURE__ */ new Date();
       const diffMs = now - lastTime;

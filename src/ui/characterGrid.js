@@ -135,9 +135,8 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     // 태그바 렌더링 (필터 전 전체 캐릭터 기준으로 집계)
     renderTagBar(characters);
     
-    // 정렬
+    // 정렬 옵션
     const sortOption = sortOverride || storage.getCharSortOption();
-    filtered = await sortCharacters(filtered, sortOption);
     
     // 드롭다운 동기화
     const sortSelect = document.getElementById('chat-lobby-char-sort');
@@ -157,18 +156,6 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         if (selectedTag) {
             groups = [];
         }
-        
-        // 그룹 정렬 (sortOption에 따라)
-        if (groups.length > 0 && sortOption === 'recent') {
-            // 최근 채팅 시간 기준 정렬 (last_mes 필드 사용)
-            groups = groups.sort((a, b) => {
-                const timeA = a.last_mes ? new Date(a.last_mes).getTime() : 0;
-                const timeB = b.last_mes ? new Date(b.last_mes).getTime() : 0;
-                return timeB - timeA;
-            });
-        } else if (groups.length > 0 && sortOption === 'name') {
-            groups = groups.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
-        }
     } catch (e) {
         console.warn('[CharacterGrid] Failed to load groups:', e);
     }
@@ -187,15 +174,23 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     const originalCharacters = api.getCharacters();
     const indexMap = new Map(originalCharacters.map((c, i) => [c.avatar, i]));
     
-    // 캐릭터 카드 렌더링
-    let html = filtered.map(char => {
-        return renderCharacterCard(char, indexMap.get(char.avatar), sortOption);
-    }).join('');
+    // ★ 캐릭터와 그룹을 통합 배열로 만들어서 함께 정렬
+    const allItems = [
+        ...filtered.map(char => ({ type: 'character', data: char })),
+        ...groups.map(group => ({ type: 'group', data: group }))
+    ];
     
-    // 그룹 카드 렌더링 (캐릭터 뒤에 추가)
-    if (groups.length > 0) {
-        html += groups.map(group => renderGroupCard(group)).join('');
-    }
+    // 통합 정렬
+    const sortedItems = await sortCharactersAndGroups(allItems, sortOption);
+    
+    // 렌더링 (타입에 따라 다른 함수 사용)
+    const html = sortedItems.map(item => {
+        if (item.type === 'character') {
+            return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
+        } else {
+            return renderGroupCard(item.data, sortOption);
+        }
+    }).join('');
     
     container.innerHTML = html;
     
@@ -508,6 +503,107 @@ function isFavoriteChar(char) {
 }
 
 /**
+ * 캐릭터와 그룹 통합 정렬
+ * @param {Array} items - { type: 'character' | 'group', data: object }[]
+ * @param {string} sortOption - 정렬 옵션 ('recent', 'name', 'chats')
+ * @returns {Promise<Array>}
+ */
+async function sortCharactersAndGroups(items, sortOption) {
+    
+    if (sortOption === 'chats') {
+        // 메시지 수 정렬 - 캐릭터는 메시지 수, 그룹은 채팅 수로
+        const BATCH_SIZE = 5;
+        const results = [];
+        
+        for (let i = 0; i < items.length; i += BATCH_SIZE) {
+            const batch = items.slice(i, i + BATCH_SIZE);
+            const batchResults = await Promise.all(
+                batch.map(async (item) => {
+                    if (item.type === 'group') {
+                        // 그룹은 채팅 수 사용
+                        const chatCount = Array.isArray(item.data.chats) ? item.data.chats.length : 0;
+                        return { item, count: chatCount, isFav: false };
+                    }
+                    
+                    // 캐릭터는 메시지 수 사용
+                    const char = item.data;
+                    let count = cache.get('messageCounts', char.avatar);
+                    
+                    if (typeof count !== 'number') {
+                        try {
+                            await api.fetchChatsForCharacter(char.avatar);
+                            count = cache.get('messageCounts', char.avatar) || 0;
+                        } catch (e) {
+                            count = 0;
+                        }
+                    }
+                    
+                    return { item, count, isFav: isFavoriteChar(char) };
+                })
+            );
+            results.push(...batchResults);
+        }
+        
+        results.sort((a, b) => {
+            // 1. 즐겨찾기 우선 (캐릭터만)
+            if (a.isFav !== b.isFav) {
+                return a.isFav ? -1 : 1;
+            }
+            // 2. 메시지/채팅 수 내림차순
+            if (b.count !== a.count) {
+                return b.count - a.count;
+            }
+            // 3. 이름순
+            const nameA = a.item.data.name || '';
+            const nameB = b.item.data.name || '';
+            return nameA.localeCompare(nameB, 'ko');
+        });
+        
+        return results.map(r => r.item);
+    }
+    
+    // recent 또는 name 정렬
+    const sorted = [...items];
+    
+    sorted.sort((a, b) => {
+        // 즐겨찾기 우선 (캐릭터만)
+        const aFav = a.type === 'character' && isFavoriteChar(a.data);
+        const bFav = b.type === 'character' && isFavoriteChar(b.data);
+        if (aFav !== bFav) {
+            return aFav ? -1 : 1;
+        }
+        
+        if (sortOption === 'name') {
+            const nameA = a.data.name || '';
+            const nameB = b.data.name || '';
+            return nameA.localeCompare(nameB, 'ko');
+        }
+        
+        // 기본: 최근 채팅순
+        // 캐릭터: lastChatCache 사용
+        // 그룹: last_mes 필드 사용
+        let aDate = 0;
+        let bDate = 0;
+        
+        if (a.type === 'character') {
+            aDate = lastChatCache.getForSort(a.data);
+        } else {
+            aDate = a.data.last_mes ? new Date(a.data.last_mes).getTime() : 0;
+        }
+        
+        if (b.type === 'character') {
+            bDate = lastChatCache.getForSort(b.data);
+        } else {
+            bDate = b.data.last_mes ? new Date(b.data.last_mes).getTime() : 0;
+        }
+        
+        return bDate - aDate;
+    });
+    
+    return sorted;
+}
+
+/**
  * 캐릭터 정렬
  * @param {Array} characters - 캐릭터 배열
  * @param {string} sortOption - 정렬 옵션
@@ -814,16 +910,17 @@ function bindTagEvents(container) {
 /**
  * 그룹 카드 HTML 생성
  * @param {Object} group - 그룹 객체
+ * @param {string} sortOption - 정렬 옵션
  * @returns {string}
  */
-function renderGroupCard(group) {
+function renderGroupCard(group, sortOption = 'recent') {
     const name = group.name || 'Unknown Group';
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
     const chatCount = Array.isArray(group.chats) ? group.chats.length : 0;
     
-    // 마지막 채팅 시간 (캐릭터와 동일하게 표시)
+    // 마지막 채팅 시간 (최근순 정렬일 때만 표시)
     let lastChatTimeStr = '';
-    if (group.last_mes) {
+    if (sortOption === 'recent' && group.last_mes) {
         const lastTime = new Date(group.last_mes);
         const now = new Date();
         const diffMs = now - lastTime;
