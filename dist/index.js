@@ -3850,6 +3850,7 @@ ${message}` : message;
   // src/handlers/chatHandlers.js
   async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
+    console.log("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
     if (!charAvatar || !fileName) {
       console.error("[ChatHandlers] Missing chat data");
       showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
@@ -3859,27 +3860,33 @@ ${message}` : message;
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === charAvatar);
+      console.log("[ChatHandlers] Character index:", index);
       if (index === -1) {
         console.error("[ChatHandlers] Character not found");
         showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
       const chatFileName = fileName.replace(".jsonl", "");
+      console.log("[ChatHandlers] Selecting character...");
       await api.selectCharacterById(index);
       const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
+      console.log("[ChatHandlers] Character selected:", charSelected);
       if (!charSelected) {
         showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
         return;
       }
       closeLobbyKeepState();
+      console.log("[ChatHandlers] Opening chat:", chatFileName);
       if (typeof context?.openCharacterChat === "function") {
         try {
           await context.openCharacterChat(chatFileName);
+          console.log("[ChatHandlers] Chat opened successfully");
           return;
         } catch (err) {
           console.warn("[ChatHandlers] context.openCharacterChat failed:", err);
         }
       }
+      console.log("[ChatHandlers] Using fallback method...");
       await openChatByFileName(fileName);
     } catch (error) {
       console.error("[ChatHandlers] Failed to open chat:", error);

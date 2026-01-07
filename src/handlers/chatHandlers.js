@@ -25,6 +25,8 @@ import { isMobile } from '../utils/eventHelpers.js';
 export async function openChat(chatInfo) {
     const { fileName, charAvatar, charIndex } = chatInfo;
     
+    console.log('[ChatHandlers] openChat called:', { fileName, charAvatar, charIndex });
+    
     if (!charAvatar || !fileName) {
         console.error('[ChatHandlers] Missing chat data');
         showToast('채팅 정보가 올바르지 않습니다.', 'error');
@@ -36,6 +38,7 @@ export async function openChat(chatInfo) {
         const characters = context?.characters || [];
         const index = characters.findIndex(c => c.avatar === charAvatar);
         
+        console.log('[ChatHandlers] Character index:', index);
         
         if (index === -1) {
             console.error('[ChatHandlers] Character not found');
@@ -50,10 +53,12 @@ export async function openChat(chatInfo) {
         // 채팅 열기만으로는 갱신하지 않음 - "최근 채팅순"은 실제 대화한 순서를 의미
         
         // 1. 캐릭터 선택
+        console.log('[ChatHandlers] Selecting character...');
         await api.selectCharacterById(index);
         
         // 2. 캐릭터 선택 완료 대기 (조건 확인 방식)
         const charSelected = await waitForCharacterSelect(charAvatar, 2000);
+        console.log('[ChatHandlers] Character selected:', charSelected);
         if (!charSelected) {
             showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
             return;
@@ -63,9 +68,11 @@ export async function openChat(chatInfo) {
         closeLobbyKeepState();
         
         // 4. SillyTavern openCharacterChat 함수 사용
+        console.log('[ChatHandlers] Opening chat:', chatFileName);
         if (typeof context?.openCharacterChat === 'function') {
             try {
                 await context.openCharacterChat(chatFileName);
+                console.log('[ChatHandlers] Chat opened successfully');
                 return;
             } catch (err) {
                 console.warn('[ChatHandlers] context.openCharacterChat failed:', err);
@@ -73,6 +80,7 @@ export async function openChat(chatInfo) {
         }
         
         // 5. Fallback: 채팅 선택 UI 클릭
+        console.log('[ChatHandlers] Using fallback method...');
         await openChatByFileName(fileName);
         
     } catch (error) {
