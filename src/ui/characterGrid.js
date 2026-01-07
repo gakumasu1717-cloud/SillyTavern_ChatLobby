@@ -149,14 +149,6 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     try {
         groups = await api.getGroups();
         
-        // 디버그: 그룹 데이터 date_last_chat 확인
-        if (groups.length > 0) {
-            console.log('[CharacterGrid] Group date_last_chat:', groups.slice(0, 2).map(g => ({
-                name: g.name,
-                date_last_chat: g.date_last_chat
-            })));
-        }
-        
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             groups = groups.filter(g => (g.name || '').toLowerCase().includes(term));
@@ -606,11 +598,6 @@ async function sortCharactersAndGroups(items, sortOption) {
             bDate = lastChatCache.getForSort(b.data);
         } else {
             bDate = b.data.date_last_chat || 0;
-        }
-        
-        // 디버그: 정렬 비교 출력 (첫 몇개만)
-        if (Math.random() < 0.05) {
-            console.log('[Sort]', a.type, a.data.name, aDate, 'vs', b.type, b.data.name, bDate);
         }
         
         return bDate - aDate;

@@ -3562,12 +3562,6 @@ ${message}` : message;
     let groups = [];
     try {
       groups = await api.getGroups();
-      if (groups.length > 0) {
-        console.log("[CharacterGrid] Group date_last_chat:", groups.slice(0, 2).map((g) => ({
-          name: g.name,
-          date_last_chat: g.date_last_chat
-        })));
-      }
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         groups = groups.filter((g) => (g.name || "").toLowerCase().includes(term));
@@ -3876,9 +3870,6 @@ ${message}` : message;
         bDate = lastChatCache.getForSort(b.data);
       } else {
         bDate = b.data.date_last_chat || 0;
-      }
-      if (Math.random() < 0.05) {
-        console.log("[Sort]", a.type, a.data.name, aDate, "vs", b.type, b.data.name, bDate);
       }
       return bDate - aDate;
     });
