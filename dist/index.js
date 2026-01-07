@@ -3705,21 +3705,28 @@ ${message}` : message;
     }).join(", ");
     const moreMembers = memberCount > 3 ? ` \uC678 ${memberCount - 3}\uBA85` : "";
     return `
-        <div class="lobby-char-card lobby-group-card" data-group-id="${escapeHtml(group.id)}">
-            <div class="char-avatar-wrapper">
-                <img src="${avatarUrl}" alt="${escapeHtml(name)}" loading="lazy" onerror="this.src='/img/five.png'">
-                <div class="group-badge">\u{1F465} ${memberCount}</div>
-            </div>
-            <div class="char-info">
-                <div class="char-name">${escapeHtml(name)}</div>
-                <div class="char-meta group-meta">
-                    <span class="group-members" title="${escapeHtml(memberNames + moreMembers)}">
-                        ${escapeHtml(memberNames)}${moreMembers ? `<span class="more">${moreMembers}</span>` : ""}
-                    </span>
-                    <span class="chat-count">\u{1F4AC} ${chatCount}</span>
+    <div class="lobby-char-card lobby-group-card" data-group-id="${escapeHtml(group.id)}">
+        <img class="lobby-char-avatar" 
+             src="${avatarUrl}" 
+             alt="${escapeHtml(name)}" 
+             loading="lazy"
+             draggable="false"
+             onerror="this.src='/img/ai4.png'">
+        <div class="lobby-char-name">
+            <span class="char-name-text">${escapeHtml(name)}</span>
+            <div class="char-hover-info">
+                <div class="info-row">
+                    <span class="info-icon">\u{1F465}</span>
+                    <span class="info-value">${memberCount}\uBA85</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-icon">\u{1F4AC}</span>
+                    <span class="info-value">${chatCount}\uAC1C \uCC44\uD305</span>
                 </div>
             </div>
         </div>
+        <div class="group-member-badge">\u{1F465} ${memberCount}</div>
+    </div>
     `;
   }
   function bindGroupEvents(container) {

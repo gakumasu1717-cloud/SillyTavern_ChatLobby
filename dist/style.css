@@ -486,44 +486,20 @@
     position: relative;
 }
 
-.lobby-group-card .group-badge {
+.lobby-group-card .group-member-badge {
     position: absolute;
-    bottom: 4px;
-    right: 4px;
+    top: 8px;
+    right: 8px;
     background: rgba(0, 0, 0, 0.7);
     color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    backdrop-filter: blur(4px);
-}
-
-.lobby-group-card .group-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
     font-size: 11px;
-    color: var(--text-secondary, #aaa);
+    padding: 3px 8px;
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+    z-index: 5;
 }
 
-.lobby-group-card .group-members {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-}
-
-.lobby-group-card .group-members .more {
-    color: var(--accent-color, #6c5ce7);
-    font-weight: 500;
-}
-
-.lobby-group-card .chat-count {
-    font-size: 10px;
-    opacity: 0.8;
-}
-
-#chat-lobby-container.light-mode .lobby-group-card .group-badge {
+#chat-lobby-container.light-mode .lobby-group-card .group-member-badge {
     background: rgba(255, 255, 255, 0.9);
     color: #333;
 }

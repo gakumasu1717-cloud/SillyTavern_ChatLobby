@@ -895,21 +895,28 @@ function renderGroupCard(group) {
     const moreMembers = memberCount > 3 ? ` 외 ${memberCount - 3}명` : '';
     
     return `
-        <div class="lobby-char-card lobby-group-card" data-group-id="${escapeHtml(group.id)}">
-            <div class="char-avatar-wrapper">
-                <img src="${avatarUrl}" alt="${escapeHtml(name)}" loading="lazy" onerror="this.src='/img/five.png'">
-                <div class="group-badge">👥 ${memberCount}</div>
-            </div>
-            <div class="char-info">
-                <div class="char-name">${escapeHtml(name)}</div>
-                <div class="char-meta group-meta">
-                    <span class="group-members" title="${escapeHtml(memberNames + moreMembers)}">
-                        ${escapeHtml(memberNames)}${moreMembers ? `<span class="more">${moreMembers}</span>` : ''}
-                    </span>
-                    <span class="chat-count">💬 ${chatCount}</span>
+    <div class="lobby-char-card lobby-group-card" data-group-id="${escapeHtml(group.id)}">
+        <img class="lobby-char-avatar" 
+             src="${avatarUrl}" 
+             alt="${escapeHtml(name)}" 
+             loading="lazy"
+             draggable="false"
+             onerror="this.src='/img/ai4.png'">
+        <div class="lobby-char-name">
+            <span class="char-name-text">${escapeHtml(name)}</span>
+            <div class="char-hover-info">
+                <div class="info-row">
+                    <span class="info-icon">👥</span>
+                    <span class="info-value">${memberCount}명</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-icon">💬</span>
+                    <span class="info-value">${chatCount}개 채팅</span>
                 </div>
             </div>
         </div>
+        <div class="group-member-badge">👥 ${memberCount}</div>
+    </div>
     `;
 }
 
