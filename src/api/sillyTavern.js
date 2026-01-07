@@ -636,12 +636,6 @@ class SillyTavernAPI {
      * @returns {Promise<Array>}
      */
     async getGroupChats(groupId) {
-        const cacheKey = `groupChats_${groupId}`;
-        
-        if (cache.isValid('groupChats', groupId)) {
-            return cache.get('groupChats', groupId);
-        }
-        
         try {
             const groups = await this.getGroups();
             const group = groups.find(g => g.id === groupId);
@@ -687,7 +681,6 @@ class SillyTavernAPI {
                 }
             }
             
-            cache.set('groupChats', chats, groupId);
             return chats;
         } catch (error) {
             console.error('[API] Failed to load group chats:', error);
