@@ -54,16 +54,10 @@ export function createLobbyHTML() {
                         </div>
                     </div>
                     
-                    <!-- 캐릭터/그룹 탭 -->
-                    <div id="chat-lobby-view-tabs">
-                        <button class="view-tab active" data-view="characters">👤 캐릭터</button>
-                        <button class="view-tab" data-view="groups">👥 그룹</button>
-                    </div>
-                    
                     <!-- 검색 + 정렬 -->
                     <div id="chat-lobby-search">
-                        <input type="text" id="chat-lobby-search-input" placeholder="🔍 캐릭터 검색...">
-                        <select id="chat-lobby-char-sort" title="캐릭터 정렬">
+                        <input type="text" id="chat-lobby-search-input" placeholder="🔍 캐릭터/그룹 검색...">
+                        <select id="chat-lobby-char-sort" title="정렬">
                             <option value="recent">🕒 최근 채팅순</option>
                             <option value="name">🔤 이름순</option>
                             <option value="chats">💬 메시지 수</option>

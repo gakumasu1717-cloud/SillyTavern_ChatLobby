@@ -1705,16 +1705,10 @@ ${message}` : message;
                         </div>
                     </div>
                     
-                    <!-- \uCE90\uB9AD\uD130/\uADF8\uB8F9 \uD0ED -->
-                    <div id="chat-lobby-view-tabs">
-                        <button class="view-tab active" data-view="characters">\u{1F464} \uCE90\uB9AD\uD130</button>
-                        <button class="view-tab" data-view="groups">\u{1F465} \uADF8\uB8F9</button>
-                    </div>
-                    
                     <!-- \uAC80\uC0C9 + \uC815\uB82C -->
                     <div id="chat-lobby-search">
-                        <input type="text" id="chat-lobby-search-input" placeholder="\u{1F50D} \uCE90\uB9AD\uD130 \uAC80\uC0C9...">
-                        <select id="chat-lobby-char-sort" title="\uCE90\uB9AD\uD130 \uC815\uB82C">
+                        <input type="text" id="chat-lobby-search-input" placeholder="\u{1F50D} \uCE90\uB9AD\uD130/\uADF8\uB8F9 \uAC80\uC0C9...">
+                        <select id="chat-lobby-char-sort" title="\uC815\uB82C">
                             <option value="recent">\u{1F552} \uCD5C\uADFC \uCC44\uD305\uC21C</option>
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
                             <option value="chats">\u{1F4AC} \uBA54\uC2DC\uC9C0 \uC218</option>
@@ -3259,7 +3253,20 @@ ${message}` : message;
     if (sortSelect && sortSelect.value !== sortOption) {
       sortSelect.value = sortOption;
     }
-    if (filtered.length === 0) {
+    let groups = [];
+    try {
+      groups = await api.getGroups();
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        groups = groups.filter((g) => (g.name || "").toLowerCase().includes(term));
+      }
+      if (selectedTag) {
+        groups = [];
+      }
+    } catch (e) {
+      console.warn("[CharacterGrid] Failed to load groups:", e);
+    }
+    if (filtered.length === 0 && groups.length === 0) {
       container.innerHTML = `
             <div class="lobby-empty-state">
                 <i>\u{1F50D}</i>
@@ -3270,13 +3277,27 @@ ${message}` : message;
     }
     const originalCharacters = api.getCharacters();
     const indexMap = new Map(originalCharacters.map((c, i) => [c.avatar, i]));
-    container.innerHTML = filtered.map((char) => {
+    let html = filtered.map((char) => {
       return renderCharacterCard(char, indexMap.get(char.avatar), sortOption);
     }).join("");
+    if (groups.length > 0) {
+      html += groups.map((group) => renderGroupCard(group)).join("");
+    }
+    container.innerHTML = html;
     bindCharacterEvents(container);
+    if (groups.length > 0) {
+      bindGroupEvents(container);
+    }
     const currentChar = store.currentCharacter;
     if (currentChar?.avatar) {
       const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add("selected");
+      }
+    }
+    const currentGroup = store.currentGroup;
+    if (currentGroup?.id) {
+      const selectedCard = container.querySelector(`.lobby-group-card[data-group-id="${CSS.escape(currentGroup.id)}"]`);
       if (selectedCard) {
         selectedCard.classList.add("selected");
       }
@@ -3644,82 +3665,6 @@ ${message}` : message;
       }, { debugName: `tag-${item.dataset.tag}` });
     });
   }
-  var currentView = "characters";
-  function switchView(view) {
-    currentView = view;
-    closeChatPanel();
-    document.querySelectorAll("#chat-lobby-view-tabs .view-tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.view === view);
-    });
-    const searchInput = document.getElementById("chat-lobby-search-input");
-    if (searchInput) {
-      searchInput.placeholder = view === "groups" ? "\u{1F50D} \uADF8\uB8F9 \uAC80\uC0C9..." : "\u{1F50D} \uCE90\uB9AD\uD130 \uAC80\uC0C9...";
-      searchInput.value = "";
-    }
-    const tagBar = document.getElementById("chat-lobby-tag-bar");
-    if (tagBar) {
-      tagBar.style.display = view === "groups" ? "none" : "";
-    }
-    if (view === "groups") {
-      renderGroupGrid();
-    } else {
-      renderCharacterGrid("");
-    }
-  }
-  async function renderGroupGrid(searchTerm = "") {
-    const container = document.getElementById("chat-lobby-characters");
-    if (!container) return;
-    container.innerHTML = '<div class="lobby-loading">\uADF8\uB8F9 \uB85C\uB529 \uC911...</div>';
-    try {
-      const groups = await api.getGroups();
-      if (!groups || groups.length === 0) {
-        container.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>\u{1F465}</i>
-                    <div>\uADF8\uB8F9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
-                        SillyTavern\uC5D0\uC11C \uADF8\uB8F9\uC744 \uBA3C\uC800 \uC0DD\uC131\uD574\uC8FC\uC138\uC694
-                    </div>
-                </div>
-            `;
-        return;
-      }
-      let filtered = [...groups];
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        filtered = filtered.filter(
-          (group) => (group.name || "").toLowerCase().includes(term)
-        );
-      }
-      filtered.sort((a, b) => {
-        const aTime = a.date_last_chat || 0;
-        const bTime = b.date_last_chat || 0;
-        return bTime - aTime;
-      });
-      if (filtered.length === 0) {
-        container.innerHTML = `
-                <div class="lobby-empty-state">
-                    <i>\u{1F50D}</i>
-                    <div>\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div>
-                </div>
-            `;
-        return;
-      }
-      container.innerHTML = filtered.map((group) => renderGroupCard(group)).join("");
-      bindGroupEvents(container);
-    } catch (error) {
-      console.error("[GroupGrid] Failed to render:", error);
-      container.innerHTML = `
-            <div class="lobby-empty-state">
-                <i>\u26A0\uFE0F</i>
-                <div>\uADF8\uB8F9 \uB85C\uB529 \uC2E4\uD328</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
-                    ${escapeHtml(error.message)}
-                </div>
-            </div>
-        `;
-    }
-  }
   function renderGroupCard(group) {
     const name = group.name || "Unknown Group";
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
@@ -3785,30 +3730,40 @@ ${message}` : message;
   }
   function bindGroupEvents(container) {
     container.querySelectorAll(".lobby-group-card").forEach((card) => {
+      const groupId = card.dataset.groupId;
+      const groupName = card.querySelector(".char-name-text")?.textContent || "Group";
       createTouchClickHandler(card, async () => {
-        const groupId = card.dataset.groupId;
         if (!groupId) return;
-        const groups = await api.getGroups();
-        const group = groups.find((g) => g.id === groupId);
-        if (group) {
-          store.setCurrentGroup(group);
-          if (typeof store.onGroupSelect === "function") {
-            store.onGroupSelect(group);
+        store.setLobbyLocked(true);
+        try {
+          const chatsPanel = document.getElementById("chat-lobby-chats");
+          const isPanelVisible = chatsPanel?.classList.contains("visible");
+          const isSameGroup = store.currentGroup?.id === groupId;
+          if (isPanelVisible && isSameGroup) {
+            card.classList.remove("selected");
+            closeChatPanel();
+            return;
           }
+          container.querySelectorAll(".lobby-char-card.selected, .lobby-group-card.selected").forEach((el) => {
+            el.classList.remove("selected");
+          });
+          card.classList.add("selected");
+          const groups = await api.getGroups();
+          const group = groups.find((g) => g.id === groupId);
+          if (group) {
+            store.setCurrentCharacter(null);
+            store.setCurrentGroup(group);
+            const handler = store.onGroupSelect;
+            if (handler && typeof handler === "function") {
+              await handler(group);
+            }
+          }
+        } catch (error) {
+          console.error("[CharacterGrid] Group handler error:", error);
+        } finally {
+          store.setLobbyLocked(false);
         }
-      }, { debugName: `group-${card.dataset.groupId}` });
-    });
-  }
-  function initViewTabs() {
-    const tabContainer = document.getElementById("chat-lobby-view-tabs");
-    if (!tabContainer) return;
-    tabContainer.querySelectorAll(".view-tab").forEach((tab) => {
-      createTouchClickHandler(tab, () => {
-        const view = tab.dataset.view;
-        if (view && view !== currentView) {
-          switchView(view);
-        }
-      }, { debugName: `view-tab-${tab.dataset.view}` });
+      }, { preventDefault: true, stopPropagation: true, debugName: `group-${groupId}` });
     });
   }
 
@@ -5746,7 +5701,6 @@ ${message}` : message;
           toggleBatchMode();
         }
         closeChatPanel();
-        initViewTabs();
         const characters = api.getCharacters();
         await Promise.all([
           renderPersonaBar(),
