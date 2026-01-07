@@ -3148,6 +3148,12 @@ ${message}` : message;
     store.setCurrentGroup(null);
   }
   async function renderGroupChatList(group) {
+    console.log("[ChatList] renderGroupChatList called:", {
+      groupId: group?.id,
+      groupName: group?.name,
+      currentGroupId: store.currentGroup?.id,
+      isPanelVisible: document.getElementById("chat-lobby-chats")?.classList.contains("visible")
+    });
     if (!group || !group.id) {
       console.error("[ChatList] Invalid group data:", group);
       return;
@@ -3155,6 +3161,9 @@ ${message}` : message;
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
     if (store.currentGroup?.id === group.id && chatsPanel?.classList.contains("visible")) {
+      console.log("[ChatList] Same group already visible, toggling off");
+      chatsPanel.classList.remove("visible");
+      store.setCurrentGroup(null);
       return;
     }
     store.setCurrentCharacter(null);
@@ -3281,21 +3290,43 @@ ${message}` : message;
           if (typeof context?.openGroupById === "function") {
             try {
               await context.openGroupById(group.id, false);
-              groupSelected = true;
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              if (context.groupId === group.id) {
+                groupSelected = true;
+                console.log("[ChatList] Group selected via openGroupById");
+              }
             } catch (e) {
               console.warn("[ChatList] openGroupById failed:", e);
             }
           }
           if (!groupSelected) {
-            const groupCard = document.querySelector(
-              `.group_select[grid="${group.id}"], .group_select_container[grid="${group.id}"]`
-            );
+            console.log("[ChatList] Trying UI click fallback...");
+            const selectors = [
+              `.group_select[grid="${group.id}"]`,
+              `.group_select_container[grid="${group.id}"]`,
+              `[data-grid="${group.id}"]`,
+              `.group_select[data-id="${group.id}"]`,
+              `.group_select[grouid="${group.id}"]`
+            ];
+            let groupCard = null;
+            for (const selector of selectors) {
+              groupCard = document.querySelector(selector);
+              if (groupCard) {
+                console.log("[ChatList] Found groupCard with selector:", selector);
+                break;
+              }
+            }
             if (groupCard) {
               groupCard.click();
+              await new Promise((resolve) => setTimeout(resolve, 500));
               groupSelected = true;
+              console.log("[ChatList] Group selected via UI click");
+            } else {
+              console.error("[ChatList] No groupCard found for any selector");
             }
           }
           if (!groupSelected) {
+            console.error("[ChatList] All group selection methods failed");
             showToast("\uADF8\uB8F9 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
             return;
           }

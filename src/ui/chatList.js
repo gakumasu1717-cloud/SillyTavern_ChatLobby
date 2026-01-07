@@ -928,6 +928,13 @@ export function closeChatPanel() {
  * @returns {Promise<void>}
  */
 export async function renderGroupChatList(group) {
+    console.log('[ChatList] renderGroupChatList called:', { 
+        groupId: group?.id, 
+        groupName: group?.name,
+        currentGroupId: store.currentGroup?.id,
+        isPanelVisible: document.getElementById('chat-lobby-chats')?.classList.contains('visible')
+    });
+    
     if (!group || !group.id) {
         console.error('[ChatList] Invalid group data:', group);
         return;
@@ -936,8 +943,11 @@ export async function renderGroupChatList(group) {
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
     
-    // 이미 같은 그룹의 채팅 패널이 열려있으면 렌더 스킵
+    // 이미 같은 그룹의 채팅 패널이 열려있으면 렌더 스킵 (토글 동작)
     if (store.currentGroup?.id === group.id && chatsPanel?.classList.contains('visible')) {
+        console.log('[ChatList] Same group already visible, toggling off');
+        chatsPanel.classList.remove('visible');
+        store.setCurrentGroup(null);
         return;
     }
     
@@ -1123,27 +1133,54 @@ function bindGroupChatEvents(container, group) {
                 console.log('[ChatList] Selecting group...');
                 let groupSelected = false;
                 
+                // 방법 1: openGroupById 시도
                 if (typeof context?.openGroupById === 'function') {
                     try {
                         await context.openGroupById(group.id, false); // 기본 채팅 안 열기
-                        groupSelected = true;
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        // 실제로 선택됐는지 확인
+                        if (context.groupId === group.id) {
+                            groupSelected = true;
+                            console.log('[ChatList] Group selected via openGroupById');
+                        }
                     } catch (e) {
                         console.warn('[ChatList] openGroupById failed:', e);
                     }
                 }
                 
+                // 방법 2: UI 클릭 (항상 시도)
                 if (!groupSelected) {
-                    // Fallback: UI 클릭
-                    const groupCard = document.querySelector(
-                        `.group_select[grid="${group.id}"], .group_select_container[grid="${group.id}"]`
-                    );
+                    console.log('[ChatList] Trying UI click fallback...');
+                    // 다양한 선택자 시도
+                    const selectors = [
+                        `.group_select[grid="${group.id}"]`,
+                        `.group_select_container[grid="${group.id}"]`,
+                        `[data-grid="${group.id}"]`,
+                        `.group_select[data-id="${group.id}"]`,
+                        `.group_select[grouid="${group.id}"]`
+                    ];
+                    
+                    let groupCard = null;
+                    for (const selector of selectors) {
+                        groupCard = document.querySelector(selector);
+                        if (groupCard) {
+                            console.log('[ChatList] Found groupCard with selector:', selector);
+                            break;
+                        }
+                    }
+                    
                     if (groupCard) {
                         groupCard.click();
+                        await new Promise(resolve => setTimeout(resolve, 500));
                         groupSelected = true;
+                        console.log('[ChatList] Group selected via UI click');
+                    } else {
+                        console.error('[ChatList] No groupCard found for any selector');
                     }
                 }
                 
                 if (!groupSelected) {
+                    console.error('[ChatList] All group selection methods failed');
                     showToast('그룹 선택에 실패했습니다.', 'error');
                     return;
                 }
