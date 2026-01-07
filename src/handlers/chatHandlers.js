@@ -263,11 +263,28 @@ function updateChatCountAfterDelete() {
 // ============================================
 
 /**
- * 새 채팅 시작
+ * 새 채팅 시작 (캐릭터 또는 그룹)
  * @returns {Promise<void>}
  */
 export async function startNewChat() {
     const btn = document.getElementById('chat-lobby-new-chat');
+    
+    // 그룹인지 캐릭터인지 확인
+    const isGroup = btn?.dataset.isGroup === 'true';
+    
+    if (isGroup) {
+        await startNewGroupChat(btn);
+    } else {
+        await startNewCharacterChat(btn);
+    }
+}
+
+/**
+ * 캐릭터 새 채팅 시작
+ * @param {HTMLElement} btn - 새 채팅 버튼
+ * @returns {Promise<void>}
+ */
+async function startNewCharacterChat(btn) {
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
     
@@ -309,6 +326,58 @@ export async function startNewChat() {
     } catch (error) {
         console.error('[ChatHandlers] Failed to start new chat:', error);
         showToast('새 채팅을 시작하지 못했습니다.', 'error');
+    }
+}
+
+/**
+ * 그룹 새 채팅 시작
+ * @param {HTMLElement} btn - 새 채팅 버튼
+ * @returns {Promise<void>}
+ */
+async function startNewGroupChat(btn) {
+    const groupId = btn?.dataset.groupId;
+    const groupName = btn?.dataset.groupName;
+    
+    if (!groupId) {
+        console.error('[ChatHandlers] No group selected');
+        showToast('그룹이 선택되지 않았습니다.', 'error');
+        return;
+    }
+    
+    try {
+        // 로비 닫기 (상태 유지)
+        closeLobbyKeepState();
+        
+        const context = api.getContext();
+        
+        // 1. 그룹 선택
+        if (typeof context?.selectGroupById === 'function') {
+            await context.selectGroupById(groupId);
+        } else if (typeof context?.openGroupById === 'function') {
+            await context.openGroupById(groupId, false);
+        } else {
+            // Fallback: UI 클릭
+            const groupCard = document.querySelector(`.group_select_container[grid="${groupId}"]`);
+            if (groupCard) {
+                groupCard.click();
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        // 그룹 선택 완료 대기
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // 2. 새 채팅 시작 버튼 클릭
+        const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
+        if (newChatBtn) {
+            newChatBtn.click();
+        } else {
+            showToast('새 채팅 버튼을 찾을 수 없습니다.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('[ChatHandlers] Failed to start new group chat:', error);
+        showToast('그룹 새 채팅을 시작하지 못했습니다.', 'error');
     }
 }
 

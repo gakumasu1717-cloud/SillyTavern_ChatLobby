@@ -2949,6 +2949,9 @@ ${message}` : message;
       newChatBtn.style.display = "block";
       newChatBtn.dataset.charIndex = character.index;
       newChatBtn.dataset.charAvatar = character.avatar;
+      newChatBtn.dataset.isGroup = "false";
+      delete newChatBtn.dataset.groupId;
+      delete newChatBtn.dataset.groupName;
     }
     document.getElementById("chat-panel-count").textContent = "\uCC44\uD305 \uB85C\uB529 \uC911...";
     renderCharacterTags(character.avatar);
@@ -3150,7 +3153,12 @@ ${message}` : message;
       deleteBtn.style.display = "none";
     }
     if (newChatBtn) {
-      newChatBtn.style.display = "none";
+      newChatBtn.style.display = "block";
+      newChatBtn.dataset.groupId = group.id;
+      newChatBtn.dataset.groupName = group.name || "\uADF8\uB8F9";
+      newChatBtn.dataset.isGroup = "true";
+      delete newChatBtn.dataset.charIndex;
+      delete newChatBtn.dataset.charAvatar;
     }
   }
   function renderGroupChats(container, chats, group) {
@@ -3998,6 +4006,14 @@ ${message}` : message;
   }
   async function startNewChat() {
     const btn = document.getElementById("chat-lobby-new-chat");
+    const isGroup = btn?.dataset.isGroup === "true";
+    if (isGroup) {
+      await startNewGroupChat(btn);
+    } else {
+      await startNewCharacterChat(btn);
+    }
+  }
+  async function startNewCharacterChat(btn) {
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
     if (!charIndex || !charAvatar) {
@@ -4026,6 +4042,40 @@ ${message}` : message;
     } catch (error) {
       console.error("[ChatHandlers] Failed to start new chat:", error);
       showToast("\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    }
+  }
+  async function startNewGroupChat(btn) {
+    const groupId = btn?.dataset.groupId;
+    const groupName = btn?.dataset.groupName;
+    if (!groupId) {
+      console.error("[ChatHandlers] No group selected");
+      showToast("\uADF8\uB8F9\uC774 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    try {
+      closeLobbyKeepState();
+      const context = api.getContext();
+      if (typeof context?.selectGroupById === "function") {
+        await context.selectGroupById(groupId);
+      } else if (typeof context?.openGroupById === "function") {
+        await context.openGroupById(groupId, false);
+      } else {
+        const groupCard = document.querySelector(`.group_select_container[grid="${groupId}"]`);
+        if (groupCard) {
+          groupCard.click();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
+      if (newChatBtn) {
+        newChatBtn.click();
+      } else {
+        showToast("\uC0C8 \uCC44\uD305 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+      }
+    } catch (error) {
+      console.error("[ChatHandlers] Failed to start new group chat:", error);
+      showToast("\uADF8\uB8F9 \uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
     }
   }
   async function deleteCharacter() {
@@ -6251,6 +6301,11 @@ ${message}` : message;
     }
     async function handleGoToCharacter() {
       const character = store.currentCharacter;
+      const group = store.currentGroup;
+      if (group) {
+        await handleGoToGroup();
+        return;
+      }
       if (!character) {
         console.warn("[ChatLobby] No character selected");
         return;
@@ -6278,6 +6333,25 @@ ${message}` : message;
         } else {
           console.warn("[ChatLobby] Could not open character drawer");
         }
+      }
+    }
+    async function handleGoToGroup() {
+      const group = store.currentGroup;
+      if (!group) {
+        console.warn("[ChatLobby] No group selected");
+        return;
+      }
+      closeLobby();
+      const groupItem = document.querySelector(`.group_select[grid="${group.id}"]`);
+      if (groupItem) {
+        groupItem.click();
+      } else {
+        await api.openGroupChat(group.id);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      if (!openDrawerSafely("rightNavHolder")) {
+        const rightNavIcon = document.getElementById("rightNavDrawerIcon");
+        if (rightNavIcon) rightNavIcon.click();
       }
     }
     function handleOpenCharSettings() {

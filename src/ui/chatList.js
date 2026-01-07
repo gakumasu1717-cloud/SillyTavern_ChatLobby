@@ -646,6 +646,10 @@ function updateChatHeader(character) {
         newChatBtn.style.display = 'block';
         newChatBtn.dataset.charIndex = character.index;
         newChatBtn.dataset.charAvatar = character.avatar;
+        newChatBtn.dataset.isGroup = 'false';  // 캐릭터로 표시
+        // 그룹 데이터 초기화
+        delete newChatBtn.dataset.groupId;
+        delete newChatBtn.dataset.groupName;
     }
     
     document.getElementById('chat-panel-count').textContent = '채팅 로딩 중...';
@@ -995,9 +999,15 @@ function updateGroupChatHeader(group) {
         deleteBtn.style.display = 'none';
     }
     
-    // 새 채팅 버튼도 일단 숨기기 (그룹 채팅 생성은 별도 처리 필요)
+    // 새 채팅 버튼 활성화 (그룹용 데이터 저장)
     if (newChatBtn) {
-        newChatBtn.style.display = 'none';
+        newChatBtn.style.display = 'block';
+        newChatBtn.dataset.groupId = group.id;
+        newChatBtn.dataset.groupName = group.name || '그룹';
+        newChatBtn.dataset.isGroup = 'true';
+        // 캐릭터 데이터 초기화 (그룹으로 인식하도록)
+        delete newChatBtn.dataset.charIndex;
+        delete newChatBtn.dataset.charAvatar;
     }
 }
 

@@ -1283,15 +1283,22 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     }
     
     /**
-     * 선택된 캐릭터 편집 화면으로 이동 (봇카드 관리 화면)
+     * 선택된 캐릭터/그룹 편집 화면으로 이동 (봇카드 관리 화면)
      */
     async function handleGoToCharacter() {
         const character = store.currentCharacter;
+        const group = store.currentGroup;
+        
+        // 그룹인 경우
+        if (group) {
+            await handleGoToGroup();
+            return;
+        }
+        
         if (!character) {
             console.warn('[ChatLobby] No character selected');
             return;
         }
-        
         
         // 캐릭터 선택
         const context = api.getContext();
@@ -1329,6 +1336,36 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             } else {
                 console.warn('[ChatLobby] Could not open character drawer');
             }
+        }
+    }
+    
+    /**
+     * 선택된 그룹 편집 화면으로 이동
+     */
+    async function handleGoToGroup() {
+        const group = store.currentGroup;
+        if (!group) {
+            console.warn('[ChatLobby] No group selected');
+            return;
+        }
+        
+        // 로비 닫기
+        closeLobby();
+        
+        // 그룹 선택 (UI 클릭으로)
+        const groupItem = document.querySelector(`.group_select[grid="${group.id}"]`);
+        if (groupItem) {
+            groupItem.click();
+        } else {
+            // openGroupChat API 사용
+            await api.openGroupChat(group.id);
+        }
+        
+        // 우측 드로어 열기
+        await new Promise(resolve => setTimeout(resolve, 200));
+        if (!openDrawerSafely('rightNavHolder')) {
+            const rightNavIcon = document.getElementById('rightNavDrawerIcon');
+            if (rightNavIcon) rightNavIcon.click();
         }
     }
     
