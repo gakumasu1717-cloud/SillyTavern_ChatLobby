@@ -428,9 +428,9 @@ function filterValidChats(chats) {
     return chats.filter(chat => {
         const fileName = chat?.file_name || chat?.fileName || '';
         const hasJsonl = fileName.includes('.jsonl');
-        const hasDatePattern = /\d{4}-\d{2}-\d{2}/.test(fileName);
+        // 날짜 패턴 체크 제거 - 사용자가 채팅 이름을 변경해도 정상 인식되도록
         return fileName && 
-               (hasJsonl || hasDatePattern) &&
+               hasJsonl &&
                !fileName.startsWith('chat_') &&
                fileName.toLowerCase() !== 'error';
     });

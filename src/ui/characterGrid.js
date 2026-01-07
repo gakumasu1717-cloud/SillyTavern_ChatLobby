@@ -350,14 +350,14 @@ async function loadChatCountsAsync(characters, sortOption = 'recent') {
     }
     
     // 🔥 로비 로드 완료 후 오늘 스냅샷 저장 (캐시 재사용, API 호출 0)
-    saveTodaySnapshotFromCache();
+    await saveTodaySnapshotFromCache();
 }
 
 /**
- * 🔥 캐시에서 오늘 스냅샷 저장 (API 호출 없음)
+ * 🔥 캐시에서 오늘 스냅샷 저장 (필요시 API fallback)
  * loadChatCountsAsync 완료 후 호출됨
  */
-function saveTodaySnapshotFromCache() {
+async function saveTodaySnapshotFromCache() {
     try {
         const today = getLocalDateString();
         const characters = api.getCharacters();
@@ -382,12 +382,19 @@ function saveTodaySnapshotFromCache() {
         todayStart.setHours(0, 0, 0, 0);
         const todayStartMs = todayStart.getTime();
         
-        characters.forEach(char => {
-            const lastTime = lastChatCache.get(char.avatar);
+        // 타임스탬프 0인 캐릭터는 API fallback으로 가져오기
+        await Promise.all(characters.map(async (char) => {
+            let lastTime = lastChatCache.get(char.avatar);
+            
+            // 캐시에 없으면 refreshForCharacter로 API fallback 시도
+            if (lastTime === 0) {
+                lastTime = await lastChatCache.refreshForCharacter(char.avatar);
+            }
+            
             if (lastTime >= todayStartMs) {
                 lastChatTimes[char.avatar] = lastTime;
             }
-        });
+        }));
         
         // 가장 증가한 캐릭터 찾기 (이전 스냅샷과 비교)
         const snapshots = loadSnapshots();

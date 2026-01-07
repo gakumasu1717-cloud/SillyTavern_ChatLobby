@@ -362,6 +362,107 @@ class SillyTavernAPI {
     }
     
     /**
+     * 채팅 생성일 가져오기 (첫 메시지의 send_date)
+     * 파일명에 날짜가 없을 때 fallback으로 사용
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @param {string} fileName - 채팅 파일명
+     * @returns {Promise<Date|null>}
+     */
+    async getChatCreatedDate(characterAvatar, fileName) {
+        try {
+            const chatName = fileName.replace('.jsonl', '');
+            const charDir = characterAvatar.replace(/\.(png|jpg|webp)$/i, '');
+            
+            const response = await this.fetchWithRetry('/api/chats/get', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                    ch_name: charDir,
+                    file_name: chatName,
+                    avatar_url: characterAvatar
+                }),
+            });
+            
+            if (!response.ok) {
+                return null;
+            }
+            
+            const chatData = await response.json();
+            
+            // 첫 번째 메시지 (인덱스 0은 메타데이터, 1부터 실제 메시지)
+            if (Array.isArray(chatData) && chatData.length > 1) {
+                const firstMessage = chatData[1];
+                
+                if (firstMessage?.send_date) {
+                    // 숫자면 그대로 사용
+                    if (typeof firstMessage.send_date === 'number') {
+                        return new Date(firstMessage.send_date);
+                    }
+                    // 문자열이면 am/pm 앞에 공백 추가 후 파싱
+                    const fixedStr = String(firstMessage.send_date).replace(/(\d+)(am|pm)/i, '$1 $2');
+                    const date = new Date(fixedStr);
+                    if (!isNaN(date.getTime())) {
+                        return date;
+                    }
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            return null;
+        }
+    }
+    
+    /**
+     * 채팅의 마지막 메시지 시간 가져오기 (파일명 변경된 채팅용)
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @param {string} fileName - 채팅 파일명 (.jsonl)
+     * @returns {Promise<number>} - 마지막 메시지의 타임스탬프 (ms), 없으면 0
+     */
+    async getChatLastMessageDate(characterAvatar, fileName) {
+        try {
+            const charDir = characterAvatar.replace(/\.(png|jpg|webp)$/i, '');
+            
+            const response = await this.fetchWithRetry('/api/chats/get', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                    ch_name: charDir,
+                    file_name: fileName.replace('.jsonl', ''),
+                    avatar_url: characterAvatar
+                }),
+            });
+            
+            if (!response.ok) return 0;
+            
+            const data = await response.json();
+            
+            // 채팅 데이터가 배열인 경우 마지막 메시지 확인
+            if (Array.isArray(data) && data.length > 0) {
+                // 마지막 메시지 (배열의 끝)
+                const lastMessage = data[data.length - 1];
+                
+                if (lastMessage.send_date) {
+                    if (typeof lastMessage.send_date === 'number') {
+                        return lastMessage.send_date;
+                    }
+                    // 문자열이면 am/pm 앞에 공백 추가 후 파싱
+                    const fixedStr = String(lastMessage.send_date).replace(/(\d+)(am|pm)/i, '$1 $2');
+                    const date = new Date(fixedStr);
+                    if (!isNaN(date.getTime())) {
+                        return date.getTime();
+                    }
+                }
+            }
+            
+            return 0;
+        } catch (error) {
+            console.warn('[API] Failed to get chat last message date:', error);
+            return 0;
+        }
+    }
+
+    /**
      * 채팅 삭제
      * @param {string} fileName - 파일명
      * @param {string} charAvatar - 캐릭터 아바타

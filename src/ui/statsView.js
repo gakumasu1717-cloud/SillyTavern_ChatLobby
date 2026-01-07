@@ -148,16 +148,36 @@ async function fetchRankings(characters) {
                         messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
                         
                         // 첫 대화 날짜 파싱 (가장 오래된 채팅)
-                        chats.forEach(chat => {
+                        // statsView는 가끔 열리므로 정확성 우선 - 모든 채팅 확인
+                        for (const chat of chats) {
+                            let chatDate = null;
+                            
+                            // 1차: 파일명에서 날짜 패턴 추출 (빠름)
                             const fileName = chat.file_name || '';
                             const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                             if (dateMatch) {
-                                const chatDate = new Date(dateMatch[1]);
+                                chatDate = new Date(dateMatch[1]);
+                            }
+                            
+                            // 2차: 파일명에 날짜 없으면 첫 메시지 조회 (정확함)
+                            if (!chatDate) {
+                                try {
+                                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
+                                    if (createdDate) {
+                                        chatDate = createdDate;
+                                    }
+                                } catch (e) {
+                                    // 실패해도 무시
+                                }
+                            }
+                            
+                            // 유효한 날짜면 비교
+                            if (chatDate && !isNaN(chatDate.getTime())) {
                                 if (!firstChatDate || chatDate < firstChatDate) {
                                     firstChatDate = chatDate;
                                 }
                             }
-                        });
+                        }
                     }
                     
                     return { name: char.name, avatar: char.avatar, chatCount, messageCount, firstChatDate };

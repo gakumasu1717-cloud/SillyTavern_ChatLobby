@@ -1302,6 +1302,87 @@ ${message}` : message;
       });
     }
     /**
+     * 채팅 생성일 가져오기 (첫 메시지의 send_date)
+     * 파일명에 날짜가 없을 때 fallback으로 사용
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @param {string} fileName - 채팅 파일명
+     * @returns {Promise<Date|null>}
+     */
+    async getChatCreatedDate(characterAvatar, fileName) {
+      try {
+        const chatName = fileName.replace(".jsonl", "");
+        const charDir = characterAvatar.replace(/\.(png|jpg|webp)$/i, "");
+        const response = await this.fetchWithRetry("/api/chats/get", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body: JSON.stringify({
+            ch_name: charDir,
+            file_name: chatName,
+            avatar_url: characterAvatar
+          })
+        });
+        if (!response.ok) {
+          return null;
+        }
+        const chatData = await response.json();
+        if (Array.isArray(chatData) && chatData.length > 1) {
+          const firstMessage = chatData[1];
+          if (firstMessage?.send_date) {
+            if (typeof firstMessage.send_date === "number") {
+              return new Date(firstMessage.send_date);
+            }
+            const fixedStr = String(firstMessage.send_date).replace(/(\d+)(am|pm)/i, "$1 $2");
+            const date = new Date(fixedStr);
+            if (!isNaN(date.getTime())) {
+              return date;
+            }
+          }
+        }
+        return null;
+      } catch (error) {
+        return null;
+      }
+    }
+    /**
+     * 채팅의 마지막 메시지 시간 가져오기 (파일명 변경된 채팅용)
+     * @param {string} characterAvatar - 캐릭터 아바타
+     * @param {string} fileName - 채팅 파일명 (.jsonl)
+     * @returns {Promise<number>} - 마지막 메시지의 타임스탬프 (ms), 없으면 0
+     */
+    async getChatLastMessageDate(characterAvatar, fileName) {
+      try {
+        const charDir = characterAvatar.replace(/\.(png|jpg|webp)$/i, "");
+        const response = await this.fetchWithRetry("/api/chats/get", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body: JSON.stringify({
+            ch_name: charDir,
+            file_name: fileName.replace(".jsonl", ""),
+            avatar_url: characterAvatar
+          })
+        });
+        if (!response.ok) return 0;
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const lastMessage = data[data.length - 1];
+          if (lastMessage.send_date) {
+            if (typeof lastMessage.send_date === "number") {
+              return lastMessage.send_date;
+            }
+            const fixedStr = String(lastMessage.send_date).replace(/(\d+)(am|pm)/i, "$1 $2");
+            const date = new Date(fixedStr);
+            if (!isNaN(date.getTime())) {
+              return date.getTime();
+            }
+          }
+        }
+        return 0;
+      } catch (error) {
+        console.warn("[API] Failed to get chat last message date:", error);
+        return 0;
+      }
+    }
+    /**
      * 채팅 삭제
      * @param {string} fileName - 파일명
      * @param {string} charAvatar - 캐릭터 아바타
@@ -1948,8 +2029,9 @@ ${message}` : message;
     }
     /**
      * 캐릭터의 채팅 목록을 가져와서 마지막 시간 갱신
+     * 타임스탬프가 0인 채팅은 API fallback으로 send_date 가져오기
      */
-    async refreshForCharacter(charAvatar, chats = null) {
+    async refreshForCharacter(charAvatar, chats = null, forceRefresh = false) {
       try {
         if (!chats) {
           chats = cache.get("chats", charAvatar);
@@ -1957,7 +2039,32 @@ ${message}` : message;
             chats = await api.fetchChatsForCharacter(charAvatar);
           }
         }
-        const lastTime = this.extractLastTime(chats);
+        let lastTime = this.extractLastTime(chats);
+        if (lastTime === 0 && !forceRefresh) {
+          const cached = this.get(charAvatar);
+          if (cached > 0) {
+            return cached;
+          }
+        }
+        if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
+          const chatsToCheck = chats.slice(0, 3);
+          const fallbackPromises = chatsToCheck.map(async (chat) => {
+            const chatTime = this.getChatTimestamp(chat);
+            if (chatTime > 0) return chatTime;
+            if (chat.file_name) {
+              try {
+                const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
+                if (lastMsgDate > 0) {
+                  return lastMsgDate;
+                }
+              } catch (e) {
+              }
+            }
+            return 0;
+          });
+          const times = await Promise.all(fallbackPromises);
+          lastTime = Math.max(...times, 0);
+        }
         if (lastTime > 0) {
           this.set(charAvatar, lastTime);
         }
@@ -2476,8 +2583,7 @@ ${message}` : message;
     return chats.filter((chat) => {
       const fileName = chat?.file_name || chat?.fileName || "";
       const hasJsonl = fileName.includes(".jsonl");
-      const hasDatePattern = /\d{4}-\d{2}-\d{2}/.test(fileName);
-      return fileName && (hasJsonl || hasDatePattern) && !fileName.startsWith("chat_") && fileName.toLowerCase() !== "error";
+      return fileName && hasJsonl && !fileName.startsWith("chat_") && fileName.toLowerCase() !== "error";
     });
   }
   function filterByFolder(chats, charAvatar, filterFolder) {
@@ -2971,9 +3077,9 @@ ${message}` : message;
         await new Promise((r) => setTimeout(r, 10));
       }
     }
-    saveTodaySnapshotFromCache();
+    await saveTodaySnapshotFromCache();
   }
-  function saveTodaySnapshotFromCache() {
+  async function saveTodaySnapshotFromCache() {
     try {
       const today = getLocalDateString();
       const characters = api.getCharacters();
@@ -2991,12 +3097,15 @@ ${message}` : message;
       const todayStart = /* @__PURE__ */ new Date();
       todayStart.setHours(0, 0, 0, 0);
       const todayStartMs = todayStart.getTime();
-      characters.forEach((char) => {
-        const lastTime = lastChatCache.get(char.avatar);
+      await Promise.all(characters.map(async (char) => {
+        let lastTime = lastChatCache.get(char.avatar);
+        if (lastTime === 0) {
+          lastTime = await lastChatCache.refreshForCharacter(char.avatar);
+        }
         if (lastTime >= todayStartMs) {
           lastChatTimes[char.avatar] = lastTime;
         }
-      });
+      }));
       const snapshots = loadSnapshots();
       let topChar = "";
       let maxIncrease = -Infinity;
@@ -3755,16 +3864,28 @@ ${message}` : message;
             let firstChatDate = null;
             if (Array.isArray(chats)) {
               messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
-              chats.forEach((chat) => {
+              for (const chat of chats) {
+                let chatDate = null;
                 const fileName = chat.file_name || "";
                 const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
                 if (dateMatch) {
-                  const chatDate = new Date(dateMatch[1]);
+                  chatDate = new Date(dateMatch[1]);
+                }
+                if (!chatDate) {
+                  try {
+                    const createdDate = await api.getChatCreatedDate(char.avatar, chat.file_name);
+                    if (createdDate) {
+                      chatDate = createdDate;
+                    }
+                  } catch (e) {
+                  }
+                }
+                if (chatDate && !isNaN(chatDate.getTime())) {
                   if (!firstChatDate || chatDate < firstChatDate) {
                     firstChatDate = chatDate;
                   }
                 }
-              });
+              }
             }
             return { name: char.name, avatar: char.avatar, chatCount, messageCount, firstChatDate };
           } catch (e) {
