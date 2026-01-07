@@ -1151,31 +1151,22 @@ function bindGroupChatEvents(container, group) {
                 // 방법 2: UI 클릭 (항상 시도)
                 if (!groupSelected) {
                     console.log('[ChatList] Trying UI click fallback...');
-                    // 다양한 선택자 시도
-                    const selectors = [
-                        `.group_select[grid="${group.id}"]`,
-                        `.group_select_container[grid="${group.id}"]`,
-                        `[data-grid="${group.id}"]`,
-                        `.group_select[data-id="${group.id}"]`,
-                        `.group_select[grouid="${group.id}"]`
-                    ];
-                    
-                    let groupCard = null;
-                    for (const selector of selectors) {
-                        groupCard = document.querySelector(selector);
-                        if (groupCard) {
-                            console.log('[ChatList] Found groupCard with selector:', selector);
-                            break;
-                        }
-                    }
+                    // 정확한 선택자: .group_select[data-grid="${id}"]
+                    const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
                     
                     if (groupCard) {
-                        groupCard.click();
+                        console.log('[ChatList] Found group card:', groupCard);
+                        // jQuery 클릭 (SillyTavern 방식)
+                        if (window.$) {
+                            window.$(groupCard).trigger('click');
+                        } else {
+                            groupCard.click();
+                        }
                         await new Promise(resolve => setTimeout(resolve, 500));
                         groupSelected = true;
                         console.log('[ChatList] Group selected via UI click');
                     } else {
-                        console.error('[ChatList] No groupCard found for any selector');
+                        console.error('[ChatList] Group card not found. Looking for:', `.group_select[data-grid="${group.id}"]`);
                     }
                 }
                 

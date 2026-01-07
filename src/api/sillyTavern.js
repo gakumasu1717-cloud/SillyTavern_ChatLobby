@@ -768,11 +768,14 @@ class SillyTavernAPI {
             
             // 방법 C: UI 클릭
             if (!groupSelected) {
-                const groupCard = document.querySelector(
-                    `.group_select[grid="${groupId}"], .group_select_container[grid="${groupId}"]`
-                );
+                const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
                 if (groupCard) {
-                    groupCard.click();
+                    // jQuery 클릭 (SillyTavern 방식)
+                    if (window.$) {
+                        window.$(groupCard).trigger('click');
+                    } else {
+                        groupCard.click();
+                    }
                     groupSelected = true;
                     console.log('[API] Group selected via UI click');
                 }

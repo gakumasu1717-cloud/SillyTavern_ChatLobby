@@ -1641,11 +1641,13 @@ ${message}` : message;
           }
         }
         if (!groupSelected) {
-          const groupCard = document.querySelector(
-            `.group_select[grid="${groupId}"], .group_select_container[grid="${groupId}"]`
-          );
+          const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
           if (groupCard) {
-            groupCard.click();
+            if (window.$) {
+              window.$(groupCard).trigger("click");
+            } else {
+              groupCard.click();
+            }
             groupSelected = true;
             console.log("[API] Group selected via UI click");
           }
@@ -3301,28 +3303,19 @@ ${message}` : message;
           }
           if (!groupSelected) {
             console.log("[ChatList] Trying UI click fallback...");
-            const selectors = [
-              `.group_select[grid="${group.id}"]`,
-              `.group_select_container[grid="${group.id}"]`,
-              `[data-grid="${group.id}"]`,
-              `.group_select[data-id="${group.id}"]`,
-              `.group_select[grouid="${group.id}"]`
-            ];
-            let groupCard = null;
-            for (const selector of selectors) {
-              groupCard = document.querySelector(selector);
-              if (groupCard) {
-                console.log("[ChatList] Found groupCard with selector:", selector);
-                break;
-              }
-            }
+            const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
             if (groupCard) {
-              groupCard.click();
+              console.log("[ChatList] Found group card:", groupCard);
+              if (window.$) {
+                window.$(groupCard).trigger("click");
+              } else {
+                groupCard.click();
+              }
               await new Promise((resolve) => setTimeout(resolve, 500));
               groupSelected = true;
               console.log("[ChatList] Group selected via UI click");
             } else {
-              console.error("[ChatList] No groupCard found for any selector");
+              console.error("[ChatList] Group card not found. Looking for:", `.group_select[data-grid="${group.id}"]`);
             }
           }
           if (!groupSelected) {
