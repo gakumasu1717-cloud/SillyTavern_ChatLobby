@@ -437,6 +437,40 @@ class StorageManager {
     getCharacterFavorites() {
         return this.load().characterFavorites || [];
     }
+    
+    // ============================================
+    // 그룹 즐겨찾기 (로컬 전용)
+    // ============================================
+    
+    /**
+     * 그룹이 즐겨찾기인지 확인
+     * @param {string} groupId - 그룹 ID
+     * @returns {boolean}
+     */
+    isGroupFavorite(groupId) {
+        const data = this.load();
+        return (data.groupFavorites || []).includes(groupId);
+    }
+    
+    /**
+     * 그룹 즐겨찾기 토글
+     * @param {string} groupId - 그룹 ID
+     * @returns {boolean} 새로운 즐겨찾기 상태
+     */
+    toggleGroupFavorite(groupId) {
+        return this.update((data) => {
+            if (!data.groupFavorites) data.groupFavorites = [];
+            
+            const index = data.groupFavorites.indexOf(groupId);
+            if (index === -1) {
+                data.groupFavorites.push(groupId);
+                return true;
+            } else {
+                data.groupFavorites.splice(index, 1);
+                return false;
+            }
+        });
+    }
 }
 
 // 싱글톤 인스턴스

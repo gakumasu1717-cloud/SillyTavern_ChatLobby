@@ -149,12 +149,10 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     try {
         groups = await api.getGroups();
         
-        // 디버그: 그룹 데이터 확인
+        // 디버그: 그룹 데이터 date_last_chat 확인
         if (groups.length > 0) {
-            console.log('[CharacterGrid] Groups sample:', groups.slice(0, 2).map(g => ({
+            console.log('[CharacterGrid] Group date_last_chat:', groups.slice(0, 2).map(g => ({
                 name: g.name,
-                id: g.id,
-                last_mes: g.last_mes,
                 date_last_chat: g.date_last_chat
             })));
         }
@@ -531,9 +529,10 @@ async function sortCharactersAndGroups(items, sortOption) {
             const batchResults = await Promise.all(
                 batch.map(async (item) => {
                     if (item.type === 'group') {
-                        // 그룹은 채팅 수 사용
+                        // 그룹은 채팅 수 사용 + 즐겨찾기 지원
                         const chatCount = Array.isArray(item.data.chats) ? item.data.chats.length : 0;
-                        return { item, count: chatCount, isFav: false };
+                        const isFav = storage.isGroupFavorite(item.data.id);
+                        return { item, count: chatCount, isFav };
                     }
                     
                     // 캐릭터는 메시지 수 사용
@@ -577,9 +576,9 @@ async function sortCharactersAndGroups(items, sortOption) {
     const sorted = [...items];
     
     sorted.sort((a, b) => {
-        // 즐겨찾기 우선 (캐릭터만)
-        const aFav = a.type === 'character' && isFavoriteChar(a.data);
-        const bFav = b.type === 'character' && isFavoriteChar(b.data);
+        // 즐겨찾기 우선 (캐릭터 + 그룹 모두)
+        const aFav = a.type === 'character' ? isFavoriteChar(a.data) : storage.isGroupFavorite(a.data.id);
+        const bFav = b.type === 'character' ? isFavoriteChar(b.data) : storage.isGroupFavorite(b.data.id);
         if (aFav !== bFav) {
             return aFav ? -1 : 1;
         }
@@ -592,23 +591,21 @@ async function sortCharactersAndGroups(items, sortOption) {
         
         // 기본: 최근 채팅순
         // 캐릭터: lastChatCache 사용
-        // 그룹: last_mes 필드 사용
+        // 그룹: date_last_chat 필드 사용 (SillyTavern 서버에서 제공)
         let aDate = 0;
         let bDate = 0;
         
         if (a.type === 'character') {
             aDate = lastChatCache.getForSort(a.data);
         } else {
-            // last_mes가 숫자면 그대로, 문자열이면 파싱
-            const aLastMes = a.data.last_mes;
-            aDate = typeof aLastMes === 'number' ? aLastMes : (aLastMes ? new Date(aLastMes).getTime() : 0);
+            // date_last_chat은 밀리초 타임스탬프 (숫자)
+            aDate = a.data.date_last_chat || 0;
         }
         
         if (b.type === 'character') {
             bDate = lastChatCache.getForSort(b.data);
         } else {
-            const bLastMes = b.data.last_mes;
-            bDate = typeof bLastMes === 'number' ? bLastMes : (bLastMes ? new Date(bLastMes).getTime() : 0);
+            bDate = b.data.date_last_chat || 0;
         }
         
         // 디버그: 정렬 비교 출력 (첫 몇개만)
@@ -937,10 +934,13 @@ function renderGroupCard(group, sortOption = 'recent') {
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
     const chatCount = Array.isArray(group.chats) ? group.chats.length : 0;
     
+    // 즐겨찾기 상태
+    const isFav = storage.isGroupFavorite(group.id);
+    
     // 마지막 채팅 시간 (최근순 정렬일 때만 표시)
     let lastChatTimeStr = '';
-    if (sortOption === 'recent' && group.last_mes) {
-        const lastTime = new Date(group.last_mes);
+    if (sortOption === 'recent' && group.date_last_chat) {
+        const lastTime = new Date(group.date_last_chat);
         const now = new Date();
         const diffMs = now - lastTime;
         const diffHours = diffMs / (1000 * 60 * 60);
@@ -962,8 +962,12 @@ function renderGroupCard(group, sortOption = 'recent') {
     const members = group.members || [];
     const avatarGridHtml = renderMemberAvatarGrid(members.slice(0, 4), memberCount);
     
+    // 즐겨찾기 버튼
+    const favBtn = `<button class="char-fav-btn group-fav-btn" data-group-id="${escapeHtml(group.id)}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
+    
     return `
-    <div class="lobby-char-card lobby-group-card" data-group-id="${escapeHtml(group.id)}">
+    <div class="lobby-char-card lobby-group-card ${isFav ? 'is-char-fav' : ''}" data-group-id="${escapeHtml(group.id)}" data-is-fav="${isFav}">
+        ${favBtn}
         <div class="group-avatar-grid">
             ${avatarGridHtml}
         </div>
@@ -1042,9 +1046,28 @@ function renderMemberAvatarGrid(members, totalCount) {
  * @param {HTMLElement} container - 컨테이너
  */
 function bindGroupEvents(container) {
-    container.querySelectorAll('.lobby-group-card').forEach(card => {
+    container.querySelectorAll('.lobby-group-card').forEach((card, index) => {
         const groupId = card.dataset.groupId;
         const groupName = card.querySelector('.char-name-text')?.textContent || 'Group';
+        const favBtn = card.querySelector('.group-fav-btn');
+        
+        // 즐겨찾기 버튼 이벤트
+        if (favBtn) {
+            createTouchClickHandler(favBtn, (e) => {
+                e.stopPropagation();
+                
+                // 로컬 스토리지에 토글
+                const newFavState = storage.toggleGroupFavorite(groupId);
+                
+                // UI 업데이트
+                favBtn.textContent = newFavState ? '⭐' : '☆';
+                card.dataset.isFav = newFavState.toString();
+                card.classList.toggle('is-char-fav', newFavState);
+                
+                showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
+                
+            }, { preventDefault: true, stopPropagation: true, debugName: `group-fav-${index}` });
+        }
         
         createTouchClickHandler(card, async () => {
             if (!groupId) return;

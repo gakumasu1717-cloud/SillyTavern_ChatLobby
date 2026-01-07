@@ -880,6 +880,36 @@ ${message}` : message;
     getCharacterFavorites() {
       return this.load().characterFavorites || [];
     }
+    // ============================================
+    // 그룹 즐겨찾기 (로컬 전용)
+    // ============================================
+    /**
+     * 그룹이 즐겨찾기인지 확인
+     * @param {string} groupId - 그룹 ID
+     * @returns {boolean}
+     */
+    isGroupFavorite(groupId) {
+      const data = this.load();
+      return (data.groupFavorites || []).includes(groupId);
+    }
+    /**
+     * 그룹 즐겨찾기 토글
+     * @param {string} groupId - 그룹 ID
+     * @returns {boolean} 새로운 즐겨찾기 상태
+     */
+    toggleGroupFavorite(groupId) {
+      return this.update((data) => {
+        if (!data.groupFavorites) data.groupFavorites = [];
+        const index = data.groupFavorites.indexOf(groupId);
+        if (index === -1) {
+          data.groupFavorites.push(groupId);
+          return true;
+        } else {
+          data.groupFavorites.splice(index, 1);
+          return false;
+        }
+      });
+    }
   };
   var storage = new StorageManager();
 
@@ -3532,10 +3562,8 @@ ${message}` : message;
     try {
       groups = await api.getGroups();
       if (groups.length > 0) {
-        console.log("[CharacterGrid] Groups sample:", groups.slice(0, 2).map((g) => ({
+        console.log("[CharacterGrid] Group date_last_chat:", groups.slice(0, 2).map((g) => ({
           name: g.name,
-          id: g.id,
-          last_mes: g.last_mes,
           date_last_chat: g.date_last_chat
         })));
       }
@@ -3793,7 +3821,8 @@ ${message}` : message;
           batch.map(async (item) => {
             if (item.type === "group") {
               const chatCount = Array.isArray(item.data.chats) ? item.data.chats.length : 0;
-              return { item, count: chatCount, isFav: false };
+              const isFav = storage.isGroupFavorite(item.data.id);
+              return { item, count: chatCount, isFav };
             }
             const char = item.data;
             let count = cache.get("messageCounts", char.avatar);
@@ -3825,8 +3854,8 @@ ${message}` : message;
     }
     const sorted = [...items];
     sorted.sort((a, b) => {
-      const aFav = a.type === "character" && isFavoriteChar(a.data);
-      const bFav = b.type === "character" && isFavoriteChar(b.data);
+      const aFav = a.type === "character" ? isFavoriteChar(a.data) : storage.isGroupFavorite(a.data.id);
+      const bFav = b.type === "character" ? isFavoriteChar(b.data) : storage.isGroupFavorite(b.data.id);
       if (aFav !== bFav) {
         return aFav ? -1 : 1;
       }
@@ -3840,14 +3869,12 @@ ${message}` : message;
       if (a.type === "character") {
         aDate = lastChatCache.getForSort(a.data);
       } else {
-        const aLastMes = a.data.last_mes;
-        aDate = typeof aLastMes === "number" ? aLastMes : aLastMes ? new Date(aLastMes).getTime() : 0;
+        aDate = a.data.date_last_chat || 0;
       }
       if (b.type === "character") {
         bDate = lastChatCache.getForSort(b.data);
       } else {
-        const bLastMes = b.data.last_mes;
-        bDate = typeof bLastMes === "number" ? bLastMes : bLastMes ? new Date(bLastMes).getTime() : 0;
+        bDate = b.data.date_last_chat || 0;
       }
       if (Math.random() < 0.05) {
         console.log("[Sort]", a.type, a.data.name, aDate, "vs", b.type, b.data.name, bDate);
@@ -3983,9 +4010,10 @@ ${message}` : message;
     const name = group.name || "Unknown Group";
     const memberCount = Array.isArray(group.members) ? group.members.length : 0;
     const chatCount = Array.isArray(group.chats) ? group.chats.length : 0;
+    const isFav = storage.isGroupFavorite(group.id);
     let lastChatTimeStr = "";
-    if (sortOption === "recent" && group.last_mes) {
-      const lastTime = new Date(group.last_mes);
+    if (sortOption === "recent" && group.date_last_chat) {
+      const lastTime = new Date(group.date_last_chat);
       const now = /* @__PURE__ */ new Date();
       const diffMs = now - lastTime;
       const diffHours = diffMs / (1e3 * 60 * 60);
@@ -4003,8 +4031,10 @@ ${message}` : message;
     }
     const members = group.members || [];
     const avatarGridHtml = renderMemberAvatarGrid(members.slice(0, 4), memberCount);
+    const favBtn = `<button class="char-fav-btn group-fav-btn" data-group-id="${escapeHtml(group.id)}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
     return `
-    <div class="lobby-char-card lobby-group-card" data-group-id="${escapeHtml(group.id)}">
+    <div class="lobby-char-card lobby-group-card ${isFav ? "is-char-fav" : ""}" data-group-id="${escapeHtml(group.id)}" data-is-fav="${isFav}">
+        ${favBtn}
         <div class="group-avatar-grid">
             ${avatarGridHtml}
         </div>
@@ -4061,9 +4091,20 @@ ${message}` : message;
     }).join("")}</div>`;
   }
   function bindGroupEvents(container) {
-    container.querySelectorAll(".lobby-group-card").forEach((card) => {
+    container.querySelectorAll(".lobby-group-card").forEach((card, index) => {
       const groupId = card.dataset.groupId;
       const groupName = card.querySelector(".char-name-text")?.textContent || "Group";
+      const favBtn = card.querySelector(".group-fav-btn");
+      if (favBtn) {
+        createTouchClickHandler(favBtn, (e) => {
+          e.stopPropagation();
+          const newFavState = storage.toggleGroupFavorite(groupId);
+          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          card.dataset.isFav = newFavState.toString();
+          card.classList.toggle("is-char-fav", newFavState);
+          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
+        }, { preventDefault: true, stopPropagation: true, debugName: `group-fav-${index}` });
+      }
       createTouchClickHandler(card, async () => {
         if (!groupId) return;
         store.setLobbyLocked(true);
