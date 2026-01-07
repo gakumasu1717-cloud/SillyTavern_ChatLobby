@@ -3831,6 +3831,9 @@ ${message}` : message;
       } else {
         bDate = b.data.last_mes ? new Date(b.data.last_mes).getTime() : 0;
       }
+      if (Math.random() < 0.05) {
+        console.log("[Sort]", a.type, a.data.name, aDate, "vs", b.type, b.data.name, bDate);
+      }
       return bDate - aDate;
     });
     return sorted;

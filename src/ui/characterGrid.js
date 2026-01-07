@@ -597,6 +597,11 @@ async function sortCharactersAndGroups(items, sortOption) {
             bDate = b.data.last_mes ? new Date(b.data.last_mes).getTime() : 0;
         }
         
+        // 디버그: 정렬 비교 출력 (첫 몇개만)
+        if (Math.random() < 0.05) {
+            console.log('[Sort]', a.type, a.data.name, aDate, 'vs', b.type, b.data.name, bDate);
+        }
+        
         return bDate - aDate;
     });
     
