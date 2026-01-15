@@ -291,6 +291,10 @@ export async function renderChatList(character) {
     chatsPanel.classList.add('visible');
     updateChatHeader(character);
     showFolderBar(true);
+
+    // 페르소나 퀵버튼 업데이트
+    console.log('[ChatList] Updating persona quick button for:', character.avatar);
+    updatePersonaQuickButton(character.avatar);
     
     // 캐시된 데이터가 있고 유효하면 즉시 렌더링 (번첩임 방지)
     const cachedChats = cache.get('chats', character.avatar);
