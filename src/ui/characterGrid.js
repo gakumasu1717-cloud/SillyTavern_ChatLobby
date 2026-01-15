@@ -13,6 +13,7 @@ import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
 import { closeChatPanel } from './chatList.js';
 import { CONFIG } from '../config.js';
+import { VirtualScroller } from './virtualScroller.js';
 
 // 렌더링 중복 방지
 let isRendering = false;
@@ -20,6 +21,12 @@ let pendingRender = null;
 
 // 캐릭터 선택 중복 방지 (전역)
 let isSelectingCharacter = false;
+
+// 가상 스크롤러 인스턴스
+let virtualScroller = null;
+
+// 그룹 포함 여부 (이벤트 바인딩 시 필요)
+let hasGroups = false;
 
 /**
  * 캐릭터 선택 플래그 리셋 (로비 열 때 호출)
@@ -184,42 +191,40 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     // 통합 정렬
     const sortedItems = await sortCharactersAndGroups(allItems, sortOption);
     
-    // 렌더링 (타입에 따라 다른 함수 사용)
-    const html = sortedItems.map(item => {
-        if (item.type === 'character') {
-            return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
-        } else {
-            return renderGroupCard(item.data, sortOption);
-        }
-    }).join('');
+    // 그룹 포함 여부 저장 (이벤트 바인딩용)
+    hasGroups = groups.length > 0;
     
-    container.innerHTML = html;
-    
-    // 캐릭터 이벤트 바인딩
-    bindCharacterEvents(container);
-    
-    // 그룹 이벤트 바인딩
-    if (groups.length > 0) {
-        bindGroupEvents(container);
+    // ★ VirtualScroller 사용 (DOM 노드 수 대폭 감소)
+    if (virtualScroller) {
+        virtualScroller.destroy();
     }
     
-    // 현재 선택된 캐릭터가 있으면 .selected 클래스 복원
-    const currentChar = store.currentCharacter;
-    if (currentChar?.avatar) {
-        const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
-        if (selectedCard) {
-            selectedCard.classList.add('selected');
+    virtualScroller = new VirtualScroller({
+        container: container,
+        items: sortedItems,
+        renderItem: (item, index) => {
+            if (item.type === 'character') {
+                return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
+            } else {
+                return renderGroupCard(item.data, sortOption);
+            }
+        },
+        itemHeight: 180,  // CSS .lobby-char-card 높이와 맞춤
+        itemWidth: 140,   // CSS .lobby-char-card 너비와 맞춤
+        gap: 12,          // 그리드 gap
+        bufferSize: 2,
+        onRenderComplete: () => {
+            // 렌더링 후 이벤트 바인딩
+            const content = virtualScroller?.content || container;
+            bindCharacterEvents(content);
+            if (hasGroups) {
+                bindGroupEvents(content);
+            }
+            
+            // 현재 선택된 캐릭터/그룹 .selected 클래스 복원
+            restoreSelectedState(content);
         }
-    }
-    
-    // 현재 선택된 그룹이 있으면 .selected 클래스 복원
-    const currentGroup = store.currentGroup;
-    if (currentGroup?.id) {
-        const selectedCard = container.querySelector(`.lobby-group-card[data-group-id="${CSS.escape(currentGroup.id)}"]`);
-        if (selectedCard) {
-            selectedCard.classList.add('selected');
-        }
-    }
+    });
     
     // 백그라운드에서 채팅 수 로딩 후 UI 업데이트
     loadChatCountsAsync(filtered, sortOption);
@@ -501,6 +506,31 @@ async function saveTodaySnapshotFromCache() {
 function isFavoriteChar(char) {
     // 로컬 스토리지에서 확인 (SillyTavern API 안 쓰는 독립 방식)
     return storage.isCharacterFavorite(char.avatar);
+}
+
+/**
+ * 현재 선택된 캐릭터/그룹의 .selected 클래스 복원
+ * VirtualScroller 렌더링 후 호출됨
+ * @param {HTMLElement} container - 컨테이너 요소
+ */
+function restoreSelectedState(container) {
+    // 현재 선택된 캐릭터가 있으면 .selected 클래스 복원
+    const currentChar = store.currentCharacter;
+    if (currentChar?.avatar) {
+        const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+        }
+    }
+    
+    // 현재 선택된 그룹이 있으면 .selected 클래스 복원
+    const currentGroup = store.currentGroup;
+    if (currentGroup?.id) {
+        const selectedCard = container.querySelector(`.lobby-group-card[data-group-id="${CSS.escape(currentGroup.id)}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+        }
+    }
 }
 
 /**

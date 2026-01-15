@@ -970,6 +970,9 @@ export async function renderGroupChatList(group) {
     updateGroupChatHeader(group);
     showFolderBar(true);  // 그룹도 폴더 기능 활성화
     
+    // ★ 그룹 채팅에서는 페르소나 퀵버튼 숨기기
+    hidePersonaQuickButton();
+    
     // 로딩 표시
     chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
     

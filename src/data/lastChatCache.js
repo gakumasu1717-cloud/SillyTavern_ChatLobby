@@ -125,13 +125,29 @@ class LastChatCache {
     updateNow(charAvatar) {
         if (!charAvatar) return;
 
-        // 현재 페르소나 가져오기
+        // 현재 페르소나 가져오기 (여러 방법 시도)
         let currentPersona = null;
         try {
+            // 방법 1: window.SillyTavern.getContext()
             const context = window.SillyTavern?.getContext?.();
-            currentPersona = context?.user_avatar || null;
+            if (context?.user_avatar) {
+                currentPersona = context.user_avatar;
+            }
+            // 방법 2: 전역 user_avatar 변수 (SillyTavern이 직접 노출)
+            if (!currentPersona && typeof window.user_avatar === 'string' && window.user_avatar) {
+                currentPersona = window.user_avatar;
+            }
+            // 방법 3: personas 모듈에서 직접 가져오기 (동기적으로 가능한 경우)
+            if (!currentPersona && window.power_user?.persona_show_notifications !== undefined) {
+                // power_user가 있으면 SillyTavern 환경, 다른 전역 변수 체크
+                const personaElement = document.querySelector('#persona_avatar img');
+                if (personaElement?.src) {
+                    const match = personaElement.src.match(/User%20Avatars\/(.+)$/);
+                    if (match) currentPersona = decodeURIComponent(match[1]);
+                }
+            }
         } catch (e) {
-            console.warn('[LastChatCache] Could not get current persona');
+            console.warn('[LastChatCache] Could not get current persona:', e);
         }
 
         this.lastChatTimes.set(charAvatar, {
