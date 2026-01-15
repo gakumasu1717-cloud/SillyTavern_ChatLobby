@@ -1322,8 +1322,10 @@ function bindGroupChatEvents(container, group) {
  * @param {string} charAvatar - 캐릭터 아바타
  */
 export function updatePersonaQuickButton(charAvatar) {
+    console.log('[ChatList] updatePersonaQuickButton called:', charAvatar);
     const btn = document.getElementById('chat-lobby-persona-quick');
     const img = btn ? btn.querySelector('.persona-quick-avatar') : null;
+    console.log('[ChatList] Button found:', !!btn, 'Image found:', !!img);
     if (!btn || !img) return;
     
     // lastChatCache에서 마지막 페르소나 가져오기 (동적 import 방지를 위해 전역에서 가져옴)

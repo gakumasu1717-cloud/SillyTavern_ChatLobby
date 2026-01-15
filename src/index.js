@@ -1146,7 +1146,9 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
      * @param {HTMLElement} el - 클릭된 버튼 요소
      */
     async function handleSwitchPersona(el) {
+        console.log('[ChatLobby] handleSwitchPersona called:', el);
         const personaKey = el?.dataset?.persona;
+        console.log('[ChatLobby] Persona key:', personaKey);
         if (!personaKey) {
             console.warn('[ChatLobby] No persona key found');
             return;
