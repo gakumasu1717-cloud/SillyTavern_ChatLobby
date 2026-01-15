@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // 채팅 목록 UI
 // ============================================
 
@@ -12,6 +12,7 @@ import { createTouchClickHandler, isMobile } from '../utils/eventHelpers.js';
 import { showToast, showAlert, showConfirm } from './notifications.js';
 import { CONFIG } from '../config.js';
 import { getFoldersOptionsHTML } from './templates.js';
+import { lastChatCache } from '../data/lastChatCache.js';
 
 // ============================================
 // 툴팁 관련 변수
@@ -1306,4 +1307,44 @@ function bindGroupChatEvents(container, group) {
             }, { preventDefault: true, stopPropagation: true, debugName: `group-del-${index}` });
         }
     });
+}
+
+// ============================================
+// 페르소나 퀵버튼
+// ============================================
+
+// ============================================
+// 페르소나 퀵버튼
+// ============================================
+
+/**
+ * 페르소나 퀵버튼 업데이트
+ * @param {string} charAvatar - 캐릭터 아바타
+ */
+export function updatePersonaQuickButton(charAvatar) {
+    const btn = document.getElementById('chat-lobby-persona-quick');
+    const img = btn ? btn.querySelector('.persona-quick-avatar') : null;
+    if (!btn || !img) return;
+    
+    // lastChatCache에서 마지막 페르소나 가져오기 (동적 import 방지를 위해 전역에서 가져옴)
+    const lastPersona = window._chatLobbyLastChatCache ? window._chatLobbyLastChatCache.getPersona(charAvatar) : null;
+    
+    if (lastPersona) {
+        img.src = '/User Avatars/' + encodeURIComponent(lastPersona);
+        img.alt = lastPersona.replace(/\.[^/.]+$/, '');
+        btn.dataset.persona = lastPersona;
+        btn.dataset.charAvatar = charAvatar;
+        btn.title = '페르소나 전환: ' + img.alt;
+        btn.style.display = 'flex';
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+/**
+ * 페르소나 퀵버튼 숨기기 (그룹 채팅 등에서 사용)
+ */
+export function hidePersonaQuickButton() {
+    const btn = document.getElementById('chat-lobby-persona-quick');
+    if (btn) btn.style.display = 'none';
 }

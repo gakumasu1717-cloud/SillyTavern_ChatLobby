@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // ChatLobby 메인 진입점
 // ============================================
 
@@ -762,6 +762,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     
     // 전역 API (네임스페이스 정리)
     window.ChatLobby = window.ChatLobby || {};
+    window._chatLobbyLastChatCache = lastChatCache;
     
     /**
      * 전역 정리 함수 (확장 재로드 시 호출)
@@ -1042,6 +1043,9 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             case 'close-debug':
                 closeDebugModal();
                 break;
+            case 'switch-persona':
+                handleSwitchPersona(el);
+                break;
         }
     }
     
@@ -1137,6 +1141,27 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
     /**
      * 랜덤 캐릭터 선택 - 오늘은 누구랑 할까?
      */
+    /**
+     * 페르소나 퀵 스위치 처리
+     * @param {HTMLElement} el - 클릭된 버튼 요소
+     */
+    async function handleSwitchPersona(el) {
+        const personaKey = el?.dataset?.persona;
+        if (!personaKey) {
+            console.warn('[ChatLobby] No persona key found');
+            return;
+        }
+
+        const success = await api.setPersona(personaKey);
+        if (success) {
+            // 페르소나 바 UI 업데이트
+            await renderPersonaBar();
+            showToast('페르소나 변경됨', 'success');
+        } else {
+            showToast('페르소나 변경 실패', 'error');
+        }
+    }
+
     async function handleRandomCharacter() {
         const characters = api.getCharacters();
         
