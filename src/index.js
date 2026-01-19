@@ -649,10 +649,14 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         // lastChatCache 데이터
         const lastChatData = {};
         if (lastChatCache.lastChatTimes) {
-            lastChatCache.lastChatTimes.forEach((timestamp, avatar) => {
+            lastChatCache.lastChatTimes.forEach((entry, avatar) => {
+                // entry는 { time, persona } 객체 또는 숫자(하위 호환)
+                const time = (typeof entry === 'number') ? entry : (entry?.time || 0);
+                const persona = (typeof entry === 'object') ? (entry?.persona || null) : null;
                 lastChatData[avatar] = {
-                    timestamp,
-                    date: new Date(timestamp).toLocaleString('ko-KR')
+                    time,
+                    persona,
+                    date: time > 0 ? new Date(time).toLocaleString('ko-KR') : 'N/A'
                 };
             });
         }

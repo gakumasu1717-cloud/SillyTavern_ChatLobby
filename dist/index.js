@@ -6426,10 +6426,13 @@ ${message}` : message;
       }
       const lastChatData = {};
       if (lastChatCache.lastChatTimes) {
-        lastChatCache.lastChatTimes.forEach((timestamp, avatar) => {
+        lastChatCache.lastChatTimes.forEach((entry, avatar) => {
+          const time = typeof entry === "number" ? entry : entry?.time || 0;
+          const persona = typeof entry === "object" ? entry?.persona || null : null;
           lastChatData[avatar] = {
-            timestamp,
-            date: new Date(timestamp).toLocaleString("ko-KR")
+            time,
+            persona,
+            date: time > 0 ? new Date(time).toLocaleString("ko-KR") : "N/A"
           };
         });
       }
