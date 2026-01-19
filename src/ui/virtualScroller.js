@@ -78,23 +78,44 @@ export class VirtualScroller {
 
     setupObserver() {
         const scrollContainer = this.findScrollContainer();
-        this.intersectionObserver = new IntersectionObserver(
-            (entries) => {
-                if (this.isDestroyed) return;
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        if (entry.target === this.topSentinel) {
-                            this.loadPrevious();
-                        } else if (entry.target === this.bottomSentinel) {
-                            this.loadNext();
-                        }
-                    }
-                });
-            },
-            { root: scrollContainer, rootMargin: '200px 0px', threshold: 0 }
-        );
-        this.intersectionObserver.observe(this.topSentinel);
-        this.intersectionObserver.observe(this.bottomSentinel);
+        this._scrollContainer = scrollContainer;
+        
+        // 스크롤 이벤트로 직접 처리 (Intersection Observer 대신 더 안정적)
+        if (scrollContainer) {
+            this._onScroll = this._handleScroll.bind(this);
+            scrollContainer.addEventListener('scroll', this._onScroll, { passive: true });
+        }
+    }
+    
+    _handleScroll() {
+        if (this.isDestroyed || !this._scrollContainer) return;
+        
+        // 디바운스
+        if (this._scrollTimeout) return;
+        this._scrollTimeout = requestAnimationFrame(() => {
+            this._scrollTimeout = null;
+            this._updateVisibleRange();
+        });
+    }
+    
+    _updateVisibleRange() {
+        if (this.isDestroyed || !this._scrollContainer || this.items.length === 0) return;
+        
+        const scrollTop = this._scrollContainer.scrollTop;
+        const containerHeight = this._scrollContainer.clientHeight || 600;
+        
+        // 현재 스크롤 위치에서 보여야 할 첫 번째 row 계산
+        const firstVisibleRow = Math.floor(scrollTop / this.itemHeight);
+        const newStartRow = Math.max(0, firstVisibleRow - this.bufferSize);
+        const newStartIndex = newStartRow * this.columns;
+        
+        // startIndex가 변경되었을 때만 렌더링
+        if (newStartIndex !== this.startIndex) {
+            console.log('[VirtualScroller] _updateVisibleRange: scrollTop=', scrollTop, 
+                        'firstRow=', firstVisibleRow, 'newStartIndex=', newStartIndex);
+            this.startIndex = newStartIndex;
+            this.render();
+        }
     }
 
     setupResizeObserver() {
@@ -161,15 +182,32 @@ export class VirtualScroller {
 
     loadNext() {
         if (this.isDestroyed) return;
-        const maxStart = Math.max(0, this.items.length - this.columns * 3);
-        if (this.startIndex >= maxStart) return;
-        this.startIndex = Math.min(this.startIndex + this.columns, maxStart);
+        
+        // 현재 보이는 아이템 수 계산
+        const containerHeight = this.container.clientHeight || 600;
+        const visibleRows = Math.ceil(containerHeight / this.itemHeight) + this.bufferSize * 2;
+        const visibleItems = visibleRows * this.columns;
+        
+        // 마지막까지 렌더링 되었는지 확인
+        const endIndex = this.startIndex + visibleItems;
+        if (endIndex >= this.items.length) return;
+        
+        // 한 줄씩 아래로
+        this.startIndex = this.startIndex + this.columns;
+        console.log('[VirtualScroller] loadNext: startIndex =', this.startIndex);
         this.render();
     }
 
     loadPrevious() {
-        if (this.isDestroyed || this.startIndex <= 0) return;
+        if (this.isDestroyed) return;
+        if (this.startIndex <= 0) {
+            // 이미 맨 위인데 render가 안됐을 수 있으니 강제 렌더
+            console.log('[VirtualScroller] loadPrevious: already at top, force render');
+            this.render();
+            return;
+        }
         this.startIndex = Math.max(0, this.startIndex - this.columns);
+        console.log('[VirtualScroller] loadPrevious: startIndex =', this.startIndex);
         this.render();
     }
 
@@ -197,7 +235,10 @@ export class VirtualScroller {
     destroy() {
         this.isDestroyed = true;
         if (this._renderTimeout) clearTimeout(this._renderTimeout);
-        this.intersectionObserver?.disconnect();
+        if (this._scrollTimeout) cancelAnimationFrame(this._scrollTimeout);
+        if (this._scrollContainer && this._onScroll) {
+            this._scrollContainer.removeEventListener('scroll', this._onScroll);
+        }
         this.resizeObserver?.disconnect();
         if (this.container) this.container.innerHTML = '';
         this._scrollContainer = null;

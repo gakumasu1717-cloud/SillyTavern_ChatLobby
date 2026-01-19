@@ -3590,23 +3590,39 @@ ${message}` : message;
     }
     setupObserver() {
       const scrollContainer = this.findScrollContainer();
-      this.intersectionObserver = new IntersectionObserver(
-        (entries) => {
-          if (this.isDestroyed) return;
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              if (entry.target === this.topSentinel) {
-                this.loadPrevious();
-              } else if (entry.target === this.bottomSentinel) {
-                this.loadNext();
-              }
-            }
-          });
-        },
-        { root: scrollContainer, rootMargin: "200px 0px", threshold: 0 }
-      );
-      this.intersectionObserver.observe(this.topSentinel);
-      this.intersectionObserver.observe(this.bottomSentinel);
+      this._scrollContainer = scrollContainer;
+      if (scrollContainer) {
+        this._onScroll = this._handleScroll.bind(this);
+        scrollContainer.addEventListener("scroll", this._onScroll, { passive: true });
+      }
+    }
+    _handleScroll() {
+      if (this.isDestroyed || !this._scrollContainer) return;
+      if (this._scrollTimeout) return;
+      this._scrollTimeout = requestAnimationFrame(() => {
+        this._scrollTimeout = null;
+        this._updateVisibleRange();
+      });
+    }
+    _updateVisibleRange() {
+      if (this.isDestroyed || !this._scrollContainer || this.items.length === 0) return;
+      const scrollTop = this._scrollContainer.scrollTop;
+      const containerHeight = this._scrollContainer.clientHeight || 600;
+      const firstVisibleRow = Math.floor(scrollTop / this.itemHeight);
+      const newStartRow = Math.max(0, firstVisibleRow - this.bufferSize);
+      const newStartIndex = newStartRow * this.columns;
+      if (newStartIndex !== this.startIndex) {
+        console.log(
+          "[VirtualScroller] _updateVisibleRange: scrollTop=",
+          scrollTop,
+          "firstRow=",
+          firstVisibleRow,
+          "newStartIndex=",
+          newStartIndex
+        );
+        this.startIndex = newStartIndex;
+        this.render();
+      }
     }
     setupResizeObserver() {
       this.resizeObserver = new ResizeObserver(() => {
@@ -3661,14 +3677,24 @@ ${message}` : message;
     }
     loadNext() {
       if (this.isDestroyed) return;
-      const maxStart = Math.max(0, this.items.length - this.columns * 3);
-      if (this.startIndex >= maxStart) return;
-      this.startIndex = Math.min(this.startIndex + this.columns, maxStart);
+      const containerHeight = this.container.clientHeight || 600;
+      const visibleRows = Math.ceil(containerHeight / this.itemHeight) + this.bufferSize * 2;
+      const visibleItems = visibleRows * this.columns;
+      const endIndex = this.startIndex + visibleItems;
+      if (endIndex >= this.items.length) return;
+      this.startIndex = this.startIndex + this.columns;
+      console.log("[VirtualScroller] loadNext: startIndex =", this.startIndex);
       this.render();
     }
     loadPrevious() {
-      if (this.isDestroyed || this.startIndex <= 0) return;
+      if (this.isDestroyed) return;
+      if (this.startIndex <= 0) {
+        console.log("[VirtualScroller] loadPrevious: already at top, force render");
+        this.render();
+        return;
+      }
       this.startIndex = Math.max(0, this.startIndex - this.columns);
+      console.log("[VirtualScroller] loadPrevious: startIndex =", this.startIndex);
       this.render();
     }
     updateItems(newItems) {
@@ -3692,7 +3718,10 @@ ${message}` : message;
     destroy() {
       this.isDestroyed = true;
       if (this._renderTimeout) clearTimeout(this._renderTimeout);
-      this.intersectionObserver?.disconnect();
+      if (this._scrollTimeout) cancelAnimationFrame(this._scrollTimeout);
+      if (this._scrollContainer && this._onScroll) {
+        this._scrollContainer.removeEventListener("scroll", this._onScroll);
+      }
       this.resizeObserver?.disconnect();
       if (this.container) this.container.innerHTML = "";
       this._scrollContainer = null;
