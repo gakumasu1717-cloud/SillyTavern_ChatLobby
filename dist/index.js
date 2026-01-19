@@ -3647,7 +3647,7 @@ ${message}` : message;
         return renderGroupCard(item.data, sortOption);
       }
     }).join("");
-    container.innerHTML = `<div class="virtual-scroll-content">${html}</div>`;
+    container.innerHTML = html;
     bindCharacterEvents(container);
     if (hasGroups) {
       bindGroupEvents(container);

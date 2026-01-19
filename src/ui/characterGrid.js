@@ -218,8 +218,7 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         }
     }).join('');
     
-    // virtual-scroll-content 클래스 재사용 (기존 CSS 스타일 활용)
-    container.innerHTML = `<div class="virtual-scroll-content">${html}</div>`;
+    container.innerHTML = html;
     
     // 이벤트 바인딩
     bindCharacterEvents(container);
