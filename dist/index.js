@@ -3736,6 +3736,7 @@ ${message}` : message;
   var isRendering = false;
   var pendingRender = null;
   var renderDebounceTimer = null;
+  var bindEventsTimer = null;
   var isSelectingCharacter = false;
   var virtualScroller = null;
   var hasGroups = false;
@@ -3866,13 +3867,18 @@ ${message}` : message;
       // CSS var(--card-gap)
       bufferSize: 2,
       onRenderComplete: () => {
-        console.log("[CharacterGrid] onRenderComplete called, binding events");
-        const content = virtualScroller?.content || container;
-        bindCharacterEvents(content);
-        if (hasGroups) {
-          bindGroupEvents(content);
+        if (bindEventsTimer) {
+          clearTimeout(bindEventsTimer);
         }
-        restoreSelectedState(content);
+        bindEventsTimer = setTimeout(() => {
+          console.log("[CharacterGrid] onRenderComplete: binding events (debounced)");
+          const content = virtualScroller?.content || container;
+          bindCharacterEvents(content);
+          if (hasGroups) {
+            bindGroupEvents(content);
+          }
+          restoreSelectedState(content);
+        }, 50);
       }
     });
     loadChatCountsAsync(filtered, sortOption);

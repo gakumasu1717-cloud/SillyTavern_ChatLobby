@@ -19,6 +19,7 @@ import { VirtualScroller } from './virtualScroller.js';
 let isRendering = false;
 let pendingRender = null;
 let renderDebounceTimer = null;
+let bindEventsTimer = null;
 
 // 캐릭터 선택 중복 방지 (전역)
 let isSelectingCharacter = false;
@@ -237,16 +238,21 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         gap: 9,           // CSS var(--card-gap)
         bufferSize: 2,
         onRenderComplete: () => {
-            // 렌더링 후 이벤트 바인딩
-            console.log('[CharacterGrid] onRenderComplete called, binding events');
-            const content = virtualScroller?.content || container;
-            bindCharacterEvents(content);
-            if (hasGroups) {
-                bindGroupEvents(content);
+            // 이벤트 바인딩 debounce (50ms) - 스크롤 시 여러 번 호출 방지
+            if (bindEventsTimer) {
+                clearTimeout(bindEventsTimer);
             }
-            
-            // 현재 선택된 캐릭터/그룹 .selected 클래스 복원
-            restoreSelectedState(content);
+            bindEventsTimer = setTimeout(() => {
+                console.log('[CharacterGrid] onRenderComplete: binding events (debounced)');
+                const content = virtualScroller?.content || container;
+                bindCharacterEvents(content);
+                if (hasGroups) {
+                    bindGroupEvents(content);
+                }
+                
+                // 현재 선택된 캐릭터/그룹 .selected 클래스 복원
+                restoreSelectedState(content);
+            }, 50);
         }
     });
     
