@@ -1104,7 +1104,7 @@ function renderGroupChats(container, chats, group) {
         const displayName = formatGroupChatName(fileName);
         const lastMes = chat.last_mes ? formatDate(chat.last_mes) : '';
         const mesCount = chat.chat_items || 0;
-        const preview = chat.mes || '';
+        const preview = chat.mes || chat.preview || chat.last_message || '채팅 기록';
         const safePreview = escapeHtml(preview);  // 전체 표시
         
         // 즐겨찾기/폴더 상태 (일반 채팅과 동일하게)

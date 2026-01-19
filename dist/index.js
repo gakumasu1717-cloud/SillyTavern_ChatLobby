@@ -3407,7 +3407,7 @@ ${message}` : message;
       const displayName = formatGroupChatName(fileName);
       const lastMes = chat.last_mes ? formatDate(chat.last_mes) : "";
       const mesCount = chat.chat_items || 0;
-      const preview = chat.mes || "";
+      const preview = chat.mes || chat.preview || chat.last_message || "\uCC44\uD305 \uAE30\uB85D";
       const safePreview = escapeHtml(preview);
       const isFav = storage.isFavorite(groupAvatar, fileName);
       const folderId = storage.getChatFolder(groupAvatar, fileName);
