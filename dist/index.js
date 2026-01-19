@@ -6199,9 +6199,6 @@ ${message}` : message;
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
-            cache.invalidate("chats", charAvatar);
-            cache.invalidate("chatCounts", charAvatar);
-            cache.invalidate("messageCounts", charAvatar);
             console.log("[ChatLobby] Message sent, updated lastChatCache:", charAvatar);
             updateFabPreview();
           }
@@ -6219,9 +6216,6 @@ ${message}` : message;
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
-            cache.invalidate("chats", charAvatar);
-            cache.invalidate("chatCounts", charAvatar);
-            cache.invalidate("messageCounts", charAvatar);
             console.log("[ChatLobby] Message received, updated lastChatCache:", charAvatar);
             updateFabPreview();
           }
@@ -6346,6 +6340,13 @@ ${message}` : message;
           console.warn("[ChatLobby] Handler not set, re-running setupHandlers");
           setupHandlers();
         }
+        const currentChar = getCurrentCharacterAvatar();
+        if (currentChar) {
+          cache.invalidate("chats", currentChar);
+          cache.invalidate("chatCounts", currentChar);
+          cache.invalidate("messageCounts", currentChar);
+          console.log("[ChatLobby] Invalidated cache for current character:", currentChar);
+        }
         store.reset();
         resetCharacterSelectLock();
         try {
@@ -6370,11 +6371,11 @@ ${message}` : message;
         updateFolderDropdowns();
         const currentContext = api.getContext();
         if (currentContext?.characterId !== void 0 && currentContext.characterId >= 0) {
-          const currentChar = currentContext.characters?.[currentContext.characterId];
-          if (currentChar) {
+          const currentChar2 = currentContext.characters?.[currentContext.characterId];
+          if (currentChar2) {
             setTimeout(() => {
               const charCard = document.querySelector(
-                `.lobby-char-card[data-char-avatar="${currentChar.avatar}"]`
+                `.lobby-char-card[data-char-avatar="${currentChar2.avatar}"]`
               );
               if (charCard) {
                 charCard.classList.add("selected");

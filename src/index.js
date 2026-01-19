@@ -272,10 +272,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
-                    // 🔥 채팅목록 캐시 무효화 (로비로 돌아왔을 때 최신 목록 표시)
-                    cache.invalidate('chats', charAvatar);
-                    cache.invalidate('chatCounts', charAvatar);
-                    cache.invalidate('messageCounts', charAvatar);
                     console.log('[ChatLobby] Message sent, updated lastChatCache:', charAvatar);
                     // FAB 프리뷰 갱신
                     updateFabPreview();
@@ -299,10 +295,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
-                    // 🔥 채팅목록 캐시 무효화 (로비로 돌아왔을 때 최신 목록 표시)
-                    cache.invalidate('chats', charAvatar);
-                    cache.invalidate('chatCounts', charAvatar);
-                    cache.invalidate('messageCounts', charAvatar);
                     console.log('[ChatLobby] Message received, updated lastChatCache:', charAvatar);
                     // FAB 프리뷰 갱신
                     updateFabPreview();
@@ -506,6 +498,15 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             if (!store.onCharacterSelect) {
                 console.warn('[ChatLobby] Handler not set, re-running setupHandlers');
                 setupHandlers();
+            }
+            
+            // 🔥 현재 채팅 중이던 캐릭터 캐시 무효화 (최신 채팅목록 표시)
+            const currentChar = getCurrentCharacterAvatar();
+            if (currentChar) {
+                cache.invalidate('chats', currentChar);
+                cache.invalidate('chatCounts', currentChar);
+                cache.invalidate('messageCounts', currentChar);
+                console.log('[ChatLobby] Invalidated cache for current character:', currentChar);
             }
             
             // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지, isLobbyOpen 유지)
