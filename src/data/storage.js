@@ -471,6 +471,48 @@ class StorageManager {
             }
         });
     }
+    
+    // ============================================
+    // 페르소나 즐겨찾기 (로컬 전용)
+    // ============================================
+    
+    /**
+     * 페르소나가 즐겨찾기인지 확인
+     * @param {string} personaKey - 페르소나 키
+     * @returns {boolean}
+     */
+    isPersonaFavorite(personaKey) {
+        const data = this.load();
+        return (data.personaFavorites || []).includes(personaKey);
+    }
+    
+    /**
+     * 페르소나 즐겨찾기 토글
+     * @param {string} personaKey - 페르소나 키
+     * @returns {boolean} 새로운 즐겨찾기 상태
+     */
+    togglePersonaFavorite(personaKey) {
+        return this.update((data) => {
+            if (!data.personaFavorites) data.personaFavorites = [];
+            
+            const index = data.personaFavorites.indexOf(personaKey);
+            if (index === -1) {
+                data.personaFavorites.push(personaKey);
+                return true;
+            } else {
+                data.personaFavorites.splice(index, 1);
+                return false;
+            }
+        });
+    }
+    
+    /**
+     * 모든 페르소나 즐겨찾기 목록
+     * @returns {string[]}
+     */
+    getPersonaFavorites() {
+        return this.load().personaFavorites || [];
+    }
 }
 
 // 싱글톤 인스턴스

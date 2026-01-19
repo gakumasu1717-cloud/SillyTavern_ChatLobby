@@ -910,6 +910,43 @@ ${message}` : message;
         }
       });
     }
+    // ============================================
+    // 페르소나 즐겨찾기 (로컬 전용)
+    // ============================================
+    /**
+     * 페르소나가 즐겨찾기인지 확인
+     * @param {string} personaKey - 페르소나 키
+     * @returns {boolean}
+     */
+    isPersonaFavorite(personaKey) {
+      const data = this.load();
+      return (data.personaFavorites || []).includes(personaKey);
+    }
+    /**
+     * 페르소나 즐겨찾기 토글
+     * @param {string} personaKey - 페르소나 키
+     * @returns {boolean} 새로운 즐겨찾기 상태
+     */
+    togglePersonaFavorite(personaKey) {
+      return this.update((data) => {
+        if (!data.personaFavorites) data.personaFavorites = [];
+        const index = data.personaFavorites.indexOf(personaKey);
+        if (index === -1) {
+          data.personaFavorites.push(personaKey);
+          return true;
+        } else {
+          data.personaFavorites.splice(index, 1);
+          return false;
+        }
+      });
+    }
+    /**
+     * 모든 페르소나 즐겨찾기 목록
+     * @returns {string[]}
+     */
+    getPersonaFavorites() {
+      return this.load().personaFavorites || [];
+    }
   };
   var storage = new StorageManager();
 
@@ -2129,12 +2166,22 @@ ${message}` : message;
     } catch (e) {
       console.warn("[PersonaBar] Could not get current persona");
     }
+    const sortedPersonas = [...personas].sort((a, b) => {
+      const aFav = storage.isPersonaFavorite(a.key);
+      const bFav = storage.isPersonaFavorite(b.key);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+      return 0;
+    });
     let html = "";
-    personas.forEach((persona) => {
+    sortedPersonas.forEach((persona) => {
       const isSelected = persona.key === currentPersona ? "selected" : "";
+      const isFav = storage.isPersonaFavorite(persona.key);
+      const favClass = isFav ? "is-persona-fav" : "";
       const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
       html += `
-        <div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
+        <div class="persona-item ${isSelected} ${favClass}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
+            <button class="persona-fav-btn" data-persona="${escapeHtml(persona.key)}" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
             <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>\u{1F464}</div>'">
             <span class="persona-name">${escapeHtml(persona.name)}</span>
             <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
@@ -2146,9 +2193,21 @@ ${message}` : message;
   function bindPersonaEvents(container) {
     container.querySelectorAll(".persona-item").forEach((item, index) => {
       const deleteBtn = item.querySelector(".persona-delete-btn");
+      const favBtn = item.querySelector(".persona-fav-btn");
       const personaKey = item.dataset.persona;
+      if (favBtn) {
+        createTouchClickHandler(favBtn, (e) => {
+          e.stopPropagation();
+          const newFavState = storage.togglePersonaFavorite(personaKey);
+          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          item.classList.toggle("is-persona-fav", newFavState);
+          showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
+          setTimeout(() => renderPersonaBar(), 300);
+        }, { preventDefault: true, stopPropagation: true, debugName: `persona-fav-${index}` });
+      }
       const handleItemClick = async (e) => {
         if (e.target.closest(".persona-delete-btn")) return;
+        if (e.target.closest(".persona-fav-btn")) return;
         if (store.isProcessingPersona) return;
         if (item.classList.contains("selected")) {
           openPersonaManagement();

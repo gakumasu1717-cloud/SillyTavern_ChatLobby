@@ -4,6 +4,7 @@
 
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
+import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { createTouchClickHandler } from '../utils/eventHelpers.js';
@@ -62,12 +63,24 @@ async function renderPersonaList(container, personas) {
         console.warn('[PersonaBar] Could not get current persona');
     }
     
+    // 즐겨찾기 정렬: 즐겨찾기 먼저, 그 안에서는 원래 순서 유지
+    const sortedPersonas = [...personas].sort((a, b) => {
+        const aFav = storage.isPersonaFavorite(a.key);
+        const bFav = storage.isPersonaFavorite(b.key);
+        if (aFav && !bFav) return -1;
+        if (!aFav && bFav) return 1;
+        return 0;
+    });
+    
     let html = '';
-    personas.forEach(persona => {
+    sortedPersonas.forEach(persona => {
         const isSelected = persona.key === currentPersona ? 'selected' : '';
+        const isFav = storage.isPersonaFavorite(persona.key);
+        const favClass = isFav ? 'is-persona-fav' : '';
         const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
         html += `
-        <div class="persona-item ${isSelected}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
+        <div class="persona-item ${isSelected} ${favClass}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
+            <button class="persona-fav-btn" data-persona="${escapeHtml(persona.key)}" title="즐겨찾기">${isFav ? '⭐' : '☆'}</button>
             <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>👤</div>'">
             <span class="persona-name">${escapeHtml(persona.name)}</span>
             <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="페르소나 삭제">×</button>
@@ -85,11 +98,32 @@ async function renderPersonaList(container, personas) {
 function bindPersonaEvents(container) {
     container.querySelectorAll('.persona-item').forEach((item, index) => {
         const deleteBtn = item.querySelector('.persona-delete-btn');
+        const favBtn = item.querySelector('.persona-fav-btn');
         const personaKey = item.dataset.persona;
+        
+        // 즐겨찾기 버튼 이벤트
+        if (favBtn) {
+            createTouchClickHandler(favBtn, (e) => {
+                e.stopPropagation();
+                
+                const newFavState = storage.togglePersonaFavorite(personaKey);
+                
+                // UI 업데이트
+                favBtn.textContent = newFavState ? '⭐' : '☆';
+                item.classList.toggle('is-persona-fav', newFavState);
+                
+                showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
+                
+                // 정렬 반영을 위해 리렌더 (약간의 딜레이)
+                setTimeout(() => renderPersonaBar(), 300);
+                
+            }, { preventDefault: true, stopPropagation: true, debugName: `persona-fav-${index}` });
+        }
         
         // 클릭 핸들러 - 바로 선택, 이미 선택됐으면 관리화면
         const handleItemClick = async (e) => {
             if (e.target.closest('.persona-delete-btn')) return;
+            if (e.target.closest('.persona-fav-btn')) return;
             if (store.isProcessingPersona) return;
             
             if (item.classList.contains('selected')) {
