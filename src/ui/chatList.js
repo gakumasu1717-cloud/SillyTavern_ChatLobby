@@ -267,6 +267,8 @@ export function getCurrentCharacter() {
  * @returns {Promise<void>}
  */
 export async function renderChatList(character) {
+    console.log('[ChatList] renderChatList called:', character?.avatar);
+    
     if (!character || !character.avatar) {
         console.error('[ChatList] Invalid character data:', character);
         return;
@@ -275,8 +277,13 @@ export async function renderChatList(character) {
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
     
+    console.log('[ChatList] chatsPanel:', !!chatsPanel, 'chatsList:', !!chatsList);
+    console.log('[ChatList] currentCharacter:', store.currentCharacter?.avatar);
+    console.log('[ChatList] panelVisible:', chatsPanel?.classList.contains('visible'));
+    
     // 이미 같은 캐릭터의 채팅 패널이 열려있으면 렌더 스킵
     if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains('visible')) {
+        console.log('[ChatList] Skipping - same character already visible');
         return;
     }
     

@@ -2827,13 +2827,18 @@ ${message}` : message;
     store.setChatHandlers(handlers);
   }
   async function renderChatList(character) {
+    console.log("[ChatList] renderChatList called:", character?.avatar);
     if (!character || !character.avatar) {
       console.error("[ChatList] Invalid character data:", character);
       return;
     }
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
+    console.log("[ChatList] chatsPanel:", !!chatsPanel, "chatsList:", !!chatsList);
+    console.log("[ChatList] currentCharacter:", store.currentCharacter?.avatar);
+    console.log("[ChatList] panelVisible:", chatsPanel?.classList.contains("visible"));
     if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains("visible")) {
+      console.log("[ChatList] Skipping - same character already visible");
       return;
     }
     store.setCurrentCharacter(character);
@@ -6070,7 +6075,8 @@ ${message}` : message;
       today.setHours(0, 0, 0, 0);
       const todayStart = today.getTime();
       const result = [];
-      lastChatCache.lastChatTimes.forEach((time, avatar) => {
+      lastChatCache.lastChatTimes.forEach((entry, avatar) => {
+        const time = typeof entry === "number" ? entry : entry?.time || 0;
         if (time >= todayStart) {
           result.push({ avatar, time });
         }

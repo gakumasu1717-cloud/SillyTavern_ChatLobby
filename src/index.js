@@ -67,7 +67,9 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         const todayStart = today.getTime();
         
         const result = [];
-        lastChatCache.lastChatTimes.forEach((time, avatar) => {
+        lastChatCache.lastChatTimes.forEach((entry, avatar) => {
+            // entry는 { time, persona } 객체 또는 숫자(하위 호환)
+            const time = (typeof entry === 'number') ? entry : (entry?.time || 0);
             if (time >= todayStart) {
                 result.push({ avatar, time });
             }
