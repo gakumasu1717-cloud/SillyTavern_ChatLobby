@@ -1915,6 +1915,7 @@ ${message}` : message;
                                 </select>
                             </div>
                             <div class="filter-group-buttons">
+                                <button id="chat-lobby-persona-quick" class="icon-btn persona-quick-btn" data-action="switch-persona" title="\uD035 \uD398\uB974\uC18C\uB098" style="display:none;"><img class="persona-quick-avatar" src="" alt="persona" /></button>
                                 <button id="chat-lobby-batch-mode" class="icon-btn" data-action="toggle-batch" title="\uB2E4\uC911 \uC120\uD0DD"><span class="icon">\u2611\uFE0F</span></button>
                                 <button id="chat-lobby-folder-manage" class="icon-btn" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC"><span class="icon">\u{1F4C1}</span></button>
                             </div>
@@ -2238,7 +2239,7 @@ ${message}` : message;
       this._loadFromStorage();
     }
     /**
-     * localStorage에서 캐시 복원
+     * localStorage에서 캐시 복원 (하위 호환성 지원)
      */
     _loadFromStorage() {
       try {
@@ -2246,9 +2247,15 @@ ${message}` : message;
         if (stored) {
           const data = JSON.parse(stored);
           if (data && typeof data === "object") {
-            Object.entries(data).forEach(([avatar, timestamp]) => {
-              if (typeof timestamp === "number" && timestamp > 0) {
-                this.lastChatTimes.set(avatar, timestamp);
+            Object.entries(data).forEach(([avatar, value]) => {
+              if (typeof value === "number") {
+                this.lastChatTimes.set(avatar, { time: value, persona: null });
+              } else if (value && typeof value === "object") {
+                this.lastChatTimes.set(avatar, {
+                  time: value.time || value.timestamp || 0,
+                  // timestamp 하위 호환
+                  persona: value.persona || null
+                });
               }
             });
             console.log("[LastChatCache] Restored", this.lastChatTimes.size, "entries from storage");
@@ -2265,8 +2272,8 @@ ${message}` : message;
       if (!this._dirty) return;
       try {
         const data = {};
-        this.lastChatTimes.forEach((timestamp, avatar) => {
-          data[avatar] = timestamp;
+        this.lastChatTimes.forEach((value, avatar) => {
+          data[avatar] = value;
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         this._dirty = false;
@@ -2286,28 +2293,52 @@ ${message}` : message;
      * 특정 캐릭터의 마지막 채팅 시간 가져오기
      */
     get(charAvatar) {
-      return this.lastChatTimes.get(charAvatar) || 0;
+      const entry = this.lastChatTimes.get(charAvatar);
+      if (!entry) return 0;
+      if (typeof entry === "number") return entry;
+      return entry.time || 0;
     }
     /**
-     * 특정 캐릭터의 마지막 채팅 시간 설정
+     * 특정 캐릭터의 마지막 페르소나 가져오기
+     */
+    getPersona(charAvatar) {
+      const entry = this.lastChatTimes.get(charAvatar);
+      if (!entry || typeof entry === "number") return null;
+      return entry.persona || null;
+    }
+    /**
+     * 특정 캐릭터의 마지막 채팅 시간 설정 (기존 페르소나 유지)
      */
     set(charAvatar, timestamp) {
-      if (timestamp > 0) {
-        const current = this.lastChatTimes.get(charAvatar) || 0;
-        if (timestamp > current) {
-          this.lastChatTimes.set(charAvatar, timestamp);
-          this._scheduleSave();
-        }
+      if (timestamp <= 0) return;
+      const existing = this.lastChatTimes.get(charAvatar);
+      const currentTime = typeof existing === "number" ? existing : existing?.time || 0;
+      const currentPersona = typeof existing === "object" ? existing.persona : null;
+      if (timestamp > currentTime) {
+        this.lastChatTimes.set(charAvatar, {
+          time: timestamp,
+          persona: currentPersona
+        });
+        this._scheduleSave();
       }
     }
     /**
-     * 현재 시간으로 마지막 채팅 시간 업데이트 (메시지 전송 시)
+     * 현재 시간 + 현재 페르소나로 업데이트 (메시지 송신 시)
      */
-    updateNow(charAvatar) {
+    async updateNow(charAvatar) {
       if (!charAvatar) return;
-      this.lastChatTimes.set(charAvatar, Date.now());
+      let currentPersona = null;
+      try {
+        currentPersona = await api.getCurrentPersona();
+      } catch (e) {
+        console.warn("[LastChatCache] Could not get current persona:", e);
+      }
+      this.lastChatTimes.set(charAvatar, {
+        time: Date.now(),
+        persona: currentPersona || null
+      });
       this._scheduleSave();
-      console.log("[LastChatCache] Updated to now:", charAvatar);
+      console.log("[LastChatCache] Updated to now:", charAvatar, "persona:", currentPersona);
     }
     /**
      * 채팅 목록에서 마지막 채팅 시간 추출
@@ -2317,9 +2348,7 @@ ${message}` : message;
       let maxTime = 0;
       for (const chat of chats) {
         const chatTime = this.getChatTimestamp(chat);
-        if (chatTime > maxTime) {
-          maxTime = chatTime;
-        }
+        if (chatTime > maxTime) maxTime = chatTime;
       }
       return maxTime;
     }
@@ -2341,7 +2370,6 @@ ${message}` : message;
     }
     /**
      * 파일명에서 날짜 파싱
-     * 형식: "2024-12-30@15h30m45s.jsonl" 또는 "캐릭터명 - 2024-12-30@15h30m45s.jsonl"
      */
     parseFileNameDate(fileName) {
       const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
@@ -2358,7 +2386,6 @@ ${message}` : message;
     }
     /**
      * 캐릭터의 채팅 목록을 가져와서 마지막 시간 갱신
-     * 타임스탬프가 0인 채팅은 API fallback으로 send_date 가져오기
      */
     async refreshForCharacter(charAvatar, chats = null, forceRefresh = false) {
       try {
@@ -2371,9 +2398,7 @@ ${message}` : message;
         let lastTime = this.extractLastTime(chats);
         if (lastTime === 0 && !forceRefresh) {
           const cached = this.get(charAvatar);
-          if (cached > 0) {
-            return cached;
-          }
+          if (cached > 0) return cached;
         }
         if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
           const chatsToCheck = chats.slice(0, 3);
@@ -2383,9 +2408,7 @@ ${message}` : message;
             if (chat.file_name) {
               try {
                 const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
-                if (lastMsgDate > 0) {
-                  return lastMsgDate;
-                }
+                if (lastMsgDate > 0) return lastMsgDate;
               } catch (e) {
               }
             }
@@ -2394,9 +2417,7 @@ ${message}` : message;
           const times = await Promise.all(fallbackPromises);
           lastTime = Math.max(...times, 0);
         }
-        if (lastTime > 0) {
-          this.set(charAvatar, lastTime);
-        }
+        if (lastTime > 0) this.set(charAvatar, lastTime);
         return lastTime;
       } catch (e) {
         console.error("[LastChatCache] Failed to refresh:", charAvatar, e);
@@ -2404,11 +2425,7 @@ ${message}` : message;
       }
     }
     /**
-     * 모든 캐릭터의 마지막 채팅 시간 초기화 (배치 처리)
-     * 재접속 시 정확한 정렬을 위해 실제 채팅 목록에서 last_mes 확인
-     * @param {Array} characters - 캐릭터 목록
-     * @param {number} batchSize - 배치 크기
-     * @returns {Promise<void>}
+     * 모든 캐릭터의 마지막 채팅 시간 초기화
      */
     async initializeAll(characters, batchSize = 5) {
       if (this._initPromise) {
@@ -2420,9 +2437,6 @@ ${message}` : message;
       });
       return this._initPromise;
     }
-    /**
-     * 실제 초기화 로직 (내부용)
-     */
     async _doInitializeAll(characters, batchSize) {
       console.log("[LastChatCache] Initializing for", characters.length, "characters");
       try {
@@ -2450,9 +2464,6 @@ ${message}` : message;
     }
     /**
      * 캐릭터 정렬용 마지막 채팅 시간 가져오기
-     * 1. localStorage에서 복원된 캐시값 (재접속 시에도 유지)
-     * 2. context의 date_last_chat (SillyTavern이 관리, 파일 mtime 기준)
-     * 3. 0 (채팅 없음)
      */
     getForSort(char) {
       const cached = this.get(char.avatar);
@@ -2460,15 +2471,14 @@ ${message}` : message;
       return char.date_last_chat || 0;
     }
     /**
-     * 채팅 열기 시 마지막 시간 갱신 (새 채팅 또는 이전 채팅 재진입)
-     * 메시지를 보내지 않아도 채팅을 열면 해당 시간으로 기록
+     * 채팅 열기 시 마지막 시간 갱신
      */
     markOpened(charAvatar) {
       if (!charAvatar) return;
       this.updateNow(charAvatar);
     }
     /**
-     * 채팅 열기만으로는 캐시를 갱신하지 않음 (하위 호환성)
+     * 채팅 열기만으로는 캐시를 갱신하지 않음
      */
     markViewed(charAvatar) {
       console.log("[LastChatCache] markViewed (no update):", charAvatar);
@@ -2490,7 +2500,6 @@ ${message}` : message;
     }
     /**
      * 특정 캐릭터 삭제
-     * @param {string} charAvatar - 삭제할 캐릭터 아바타
      */
     remove(charAvatar) {
       if (!charAvatar) return;
@@ -2502,8 +2511,6 @@ ${message}` : message;
     }
     /**
      * 삭제된 캐릭터들 정리
-     * 현재 존재하는 캐릭터 목록과 비교하여 없는 캐릭터 제거
-     * @param {Array} existingCharacters - 현재 존재하는 캐릭터 목록
      */
     cleanupDeleted(existingCharacters) {
       if (!existingCharacters || !Array.isArray(existingCharacters)) return;
@@ -2837,6 +2844,8 @@ ${message}` : message;
     chatsPanel.classList.add("visible");
     updateChatHeader(character);
     showFolderBar(true);
+    console.log("[ChatList] Updating persona quick button for:", character.avatar);
+    updatePersonaQuickButton(character.avatar);
     const cachedChats = cache.get("chats", character.avatar);
     if (cachedChats && cachedChats.length > 0 && cache.isValid("chats", character.avatar)) {
       renderChats(chatsList, cachedChats, character.avatar);
@@ -3245,6 +3254,7 @@ ${message}` : message;
     chatsPanel.classList.add("visible");
     updateGroupChatHeader(group);
     showFolderBar(true);
+    hidePersonaQuickButton();
     chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
     try {
       const chats = await api.getGroupChats(group.id);
@@ -3492,12 +3502,205 @@ ${message}` : message;
       }
     });
   }
+  function updatePersonaQuickButton(charAvatar) {
+    console.log("[ChatList] updatePersonaQuickButton called:", charAvatar);
+    const btn = document.getElementById("chat-lobby-persona-quick");
+    const img = btn ? btn.querySelector(".persona-quick-avatar") : null;
+    console.log("[ChatList] Button found:", !!btn, "Image found:", !!img);
+    if (!btn || !img) return;
+    const lastPersona = window._chatLobbyLastChatCache ? window._chatLobbyLastChatCache.getPersona(charAvatar) : null;
+    if (lastPersona) {
+      img.src = "/User Avatars/" + encodeURIComponent(lastPersona);
+      img.alt = lastPersona.replace(/\.[^/.]+$/, "");
+      btn.dataset.persona = lastPersona;
+      btn.dataset.charAvatar = charAvatar;
+      btn.title = "\uD398\uB974\uC18C\uB098 \uC804\uD658: " + img.alt;
+      btn.style.display = "flex";
+    } else {
+      btn.style.display = "none";
+    }
+  }
+  function hidePersonaQuickButton() {
+    const btn = document.getElementById("chat-lobby-persona-quick");
+    if (btn) btn.style.display = "none";
+  }
 
   // src/ui/characterGrid.js
   init_config();
+
+  // src/ui/virtualScroller.js
+  var VirtualScroller = class {
+    constructor(options) {
+      this.container = options.container;
+      this.items = options.items || [];
+      this.renderItem = options.renderItem;
+      this.itemHeight = options.itemHeight || 180;
+      this.itemWidth = options.itemWidth || 140;
+      this.gap = options.gap || 12;
+      this.bufferSize = options.bufferSize || 2;
+      this.onRenderComplete = options.onRenderComplete || null;
+      this.startIndex = 0;
+      this.columns = 1;
+      this.isDestroyed = false;
+      this.wrapper = null;
+      this.content = null;
+      this.topSentinel = null;
+      this.bottomSentinel = null;
+      this.intersectionObserver = null;
+      this.resizeObserver = null;
+      this._scrollContainer = null;
+      this._renderTimeout = null;
+      this.init();
+    }
+    init() {
+      if (!this.container) {
+        console.error("[VirtualScroller] Container not found");
+        return;
+      }
+      this.calculateColumns();
+      this.createStructure();
+      this.setupObserver();
+      this.render();
+      this.setupResizeObserver();
+      console.log("[VirtualScroller] Initialized with", this.items.length, "items,", this.columns, "columns");
+    }
+    calculateColumns() {
+      const containerWidth = this.container.clientWidth || 300;
+      this.columns = Math.max(1, Math.floor((containerWidth + this.gap) / (this.itemWidth + this.gap)));
+    }
+    createStructure() {
+      this.container.innerHTML = "";
+      this.wrapper = document.createElement("div");
+      this.wrapper.className = "virtual-scroll-wrapper";
+      this.topSentinel = document.createElement("div");
+      this.topSentinel.className = "virtual-sentinel virtual-sentinel-top";
+      this.content = document.createElement("div");
+      this.content.className = "virtual-scroll-content lobby-char-grid";
+      this.bottomSentinel = document.createElement("div");
+      this.bottomSentinel.className = "virtual-sentinel virtual-sentinel-bottom";
+      this.wrapper.appendChild(this.topSentinel);
+      this.wrapper.appendChild(this.content);
+      this.wrapper.appendChild(this.bottomSentinel);
+      this.container.appendChild(this.wrapper);
+    }
+    setupObserver() {
+      const scrollContainer = this.findScrollContainer();
+      this.intersectionObserver = new IntersectionObserver(
+        (entries) => {
+          if (this.isDestroyed) return;
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              if (entry.target === this.topSentinel) {
+                this.loadPrevious();
+              } else if (entry.target === this.bottomSentinel) {
+                this.loadNext();
+              }
+            }
+          });
+        },
+        { root: scrollContainer, rootMargin: "200px 0px", threshold: 0 }
+      );
+      this.intersectionObserver.observe(this.topSentinel);
+      this.intersectionObserver.observe(this.bottomSentinel);
+    }
+    setupResizeObserver() {
+      this.resizeObserver = new ResizeObserver(() => {
+        if (this.isDestroyed) return;
+        if (this._renderTimeout) clearTimeout(this._renderTimeout);
+        this._renderTimeout = setTimeout(() => {
+          const oldColumns = this.columns;
+          this.calculateColumns();
+          if (oldColumns !== this.columns) this.render();
+        }, 100);
+      });
+      this.resizeObserver.observe(this.container);
+    }
+    findScrollContainer() {
+      if (this._scrollContainer) return this._scrollContainer;
+      let el = this.container.parentElement;
+      while (el) {
+        const style = getComputedStyle(el);
+        if (style.overflow === "auto" || style.overflowY === "auto" || style.overflow === "scroll" || style.overflowY === "scroll") {
+          this._scrollContainer = el;
+          return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    }
+    render() {
+      if (this.isDestroyed || !this.content) return;
+      if (this.items.length === 0) {
+        this.content.innerHTML = '<div class="lobby-empty-state"><i></i><div>\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div></div>';
+        this.wrapper.style.paddingBottom = "0px";
+        this.content.style.marginTop = "0px";
+        return;
+      }
+      const containerHeight = this.container.clientHeight || 600;
+      const visibleRows = Math.ceil(containerHeight / this.itemHeight) + this.bufferSize * 2;
+      const visibleItems = visibleRows * this.columns;
+      const totalRows = Math.ceil(this.items.length / this.columns);
+      const totalHeight = totalRows * this.itemHeight;
+      const endIndex = Math.min(this.startIndex + visibleItems, this.items.length);
+      const itemsToRender = this.items.slice(this.startIndex, endIndex);
+      const html = itemsToRender.map((item, i) => this.renderItem(item, this.startIndex + i)).join("");
+      this.content.innerHTML = html;
+      const startRow = Math.floor(this.startIndex / this.columns);
+      const topPadding = startRow * this.itemHeight;
+      const renderedHeight = Math.ceil(itemsToRender.length / this.columns) * this.itemHeight;
+      const bottomPadding = Math.max(0, totalHeight - topPadding - renderedHeight);
+      this.content.style.marginTop = topPadding + "px";
+      this.wrapper.style.paddingBottom = bottomPadding + "px";
+      if (this.onRenderComplete) this.onRenderComplete();
+      console.log("[VirtualScroller] Rendered items", this.startIndex, "-", endIndex, "of", this.items.length);
+    }
+    loadNext() {
+      if (this.isDestroyed) return;
+      const maxStart = Math.max(0, this.items.length - this.columns * 3);
+      if (this.startIndex >= maxStart) return;
+      this.startIndex = Math.min(this.startIndex + this.columns, maxStart);
+      this.render();
+    }
+    loadPrevious() {
+      if (this.isDestroyed || this.startIndex <= 0) return;
+      this.startIndex = Math.max(0, this.startIndex - this.columns);
+      this.render();
+    }
+    updateItems(newItems) {
+      this.items = newItems || [];
+      this.startIndex = 0;
+      this.render();
+    }
+    scrollToIndex(index) {
+      const row = Math.floor(index / this.columns);
+      this.startIndex = Math.max(0, (row - this.bufferSize) * this.columns);
+      this.render();
+      const scrollContainer = this.findScrollContainer();
+      if (scrollContainer) scrollContainer.scrollTop = row * this.itemHeight;
+    }
+    scrollToTop() {
+      this.startIndex = 0;
+      this.render();
+      const scrollContainer = this.findScrollContainer();
+      if (scrollContainer) scrollContainer.scrollTop = 0;
+    }
+    destroy() {
+      this.isDestroyed = true;
+      if (this._renderTimeout) clearTimeout(this._renderTimeout);
+      this.intersectionObserver?.disconnect();
+      this.resizeObserver?.disconnect();
+      if (this.container) this.container.innerHTML = "";
+      this._scrollContainer = null;
+      console.log("[VirtualScroller] Destroyed");
+    }
+  };
+
+  // src/ui/characterGrid.js
   var isRendering = false;
   var pendingRender = null;
   var isSelectingCharacter = false;
+  var virtualScroller = null;
+  var hasGroups = false;
   function resetCharacterSelectLock() {
     isSelectingCharacter = false;
   }
@@ -3588,32 +3791,36 @@ ${message}` : message;
       ...groups.map((group) => ({ type: "group", data: group }))
     ];
     const sortedItems = await sortCharactersAndGroups(allItems, sortOption);
-    const html = sortedItems.map((item) => {
-      if (item.type === "character") {
-        return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
-      } else {
-        return renderGroupCard(item.data, sortOption);
-      }
-    }).join("");
-    container.innerHTML = html;
-    bindCharacterEvents(container);
-    if (groups.length > 0) {
-      bindGroupEvents(container);
+    hasGroups = groups.length > 0;
+    if (virtualScroller) {
+      virtualScroller.destroy();
     }
-    const currentChar = store.currentCharacter;
-    if (currentChar?.avatar) {
-      const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
-      if (selectedCard) {
-        selectedCard.classList.add("selected");
+    virtualScroller = new VirtualScroller({
+      container,
+      items: sortedItems,
+      renderItem: (item, index) => {
+        if (item.type === "character") {
+          return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
+        } else {
+          return renderGroupCard(item.data, sortOption);
+        }
+      },
+      itemHeight: 180,
+      // CSS .lobby-char-card 높이와 맞춤
+      itemWidth: 140,
+      // CSS .lobby-char-card 너비와 맞춤
+      gap: 12,
+      // 그리드 gap
+      bufferSize: 2,
+      onRenderComplete: () => {
+        const content = virtualScroller?.content || container;
+        bindCharacterEvents(content);
+        if (hasGroups) {
+          bindGroupEvents(content);
+        }
+        restoreSelectedState(content);
       }
-    }
-    const currentGroup = store.currentGroup;
-    if (currentGroup?.id) {
-      const selectedCard = container.querySelector(`.lobby-group-card[data-group-id="${CSS.escape(currentGroup.id)}"]`);
-      if (selectedCard) {
-        selectedCard.classList.add("selected");
-      }
-    }
+    });
     loadChatCountsAsync(filtered, sortOption);
   }
   function renderCharacterCard(char, index, sortOption = "recent") {
@@ -3805,6 +4012,22 @@ ${message}` : message;
   }
   function isFavoriteChar(char) {
     return storage.isCharacterFavorite(char.avatar);
+  }
+  function restoreSelectedState(container) {
+    const currentChar = store.currentCharacter;
+    if (currentChar?.avatar) {
+      const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add("selected");
+      }
+    }
+    const currentGroup = store.currentGroup;
+    if (currentGroup?.id) {
+      const selectedCard = container.querySelector(`.lobby-group-card[data-group-id="${CSS.escape(currentGroup.id)}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add("selected");
+      }
+    }
   }
   async function sortCharactersAndGroups(items, sortOption) {
     if (sortOption === "chats") {
@@ -6292,6 +6515,7 @@ ${message}` : message;
       isDebugPanelOpen = false;
     }
     window.ChatLobby = window.ChatLobby || {};
+    window._chatLobbyLastChatCache = lastChatCache;
     function cleanup() {
       console.log("[ChatLobby] \u{1F9F9} Cleanup started");
       cleanupSillyTavernEvents();
@@ -6480,6 +6704,9 @@ ${message}` : message;
         case "close-debug":
           closeDebugModal();
           break;
+        case "switch-persona":
+          handleSwitchPersona(el);
+          break;
       }
     }
     function toggleHeaderMenu() {
@@ -6532,6 +6759,22 @@ ${message}` : message;
       await renderPersonaBar();
       await renderCharacterGrid();
       showToast("\uC0C8\uB85C\uACE0\uCE68 \uC644\uB8CC", "success");
+    }
+    async function handleSwitchPersona(el) {
+      console.log("[ChatLobby] handleSwitchPersona called:", el);
+      const personaKey = el?.dataset?.persona;
+      console.log("[ChatLobby] Persona key:", personaKey);
+      if (!personaKey) {
+        console.warn("[ChatLobby] No persona key found");
+        return;
+      }
+      const success = await api.setPersona(personaKey);
+      if (success) {
+        await renderPersonaBar();
+        showToast("\uD398\uB974\uC18C\uB098 \uBCC0\uACBD\uB428", "success");
+      } else {
+        showToast("\uD398\uB974\uC18C\uB098 \uBCC0\uACBD \uC2E4\uD328", "error");
+      }
     }
     async function handleRandomCharacter() {
       const characters = api.getCharacters();

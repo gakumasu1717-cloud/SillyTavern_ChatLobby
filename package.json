@@ -1,6 +1,6 @@
 {
   "name": "sillytavern-chatlobby",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "캐릭터 기반 채팅방 선택 UI를 제공하는 SillyTavern 확장 프로그램입니다.",
   "main": "dist/index.js",
   "scripts": {

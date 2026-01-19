@@ -42,7 +42,7 @@ class LastChatCache {
                             this.lastChatTimes.set(avatar, { time: value, persona: null });
                         } else if (value && typeof value === 'object') {
                             this.lastChatTimes.set(avatar, {
-                                time: value.time || 0,
+                                time: value.time || value.timestamp || 0,  // timestamp 하위 호환
                                 persona: value.persona || null
                             });
                         }
@@ -122,37 +122,20 @@ class LastChatCache {
     /**
      * 현재 시간 + 현재 페르소나로 업데이트 (메시지 송신 시)
      */
-    updateNow(charAvatar) {
+    async updateNow(charAvatar) {
         if (!charAvatar) return;
 
-        // 현재 페르소나 가져오기 (여러 방법 시도)
+        // api.getCurrentPersona() 사용
         let currentPersona = null;
         try {
-            // 방법 1: window.SillyTavern.getContext()
-            const context = window.SillyTavern?.getContext?.();
-            if (context?.user_avatar) {
-                currentPersona = context.user_avatar;
-            }
-            // 방법 2: 전역 user_avatar 변수 (SillyTavern이 직접 노출)
-            if (!currentPersona && typeof window.user_avatar === 'string' && window.user_avatar) {
-                currentPersona = window.user_avatar;
-            }
-            // 방법 3: personas 모듈에서 직접 가져오기 (동기적으로 가능한 경우)
-            if (!currentPersona && window.power_user?.persona_show_notifications !== undefined) {
-                // power_user가 있으면 SillyTavern 환경, 다른 전역 변수 체크
-                const personaElement = document.querySelector('#persona_avatar img');
-                if (personaElement?.src) {
-                    const match = personaElement.src.match(/User%20Avatars\/(.+)$/);
-                    if (match) currentPersona = decodeURIComponent(match[1]);
-                }
-            }
+            currentPersona = await api.getCurrentPersona();
         } catch (e) {
             console.warn('[LastChatCache] Could not get current persona:', e);
         }
 
         this.lastChatTimes.set(charAvatar, {
             time: Date.now(),
-            persona: currentPersona
+            persona: currentPersona || null
         });
         this._scheduleSave();
         console.log('[LastChatCache] Updated to now:', charAvatar, 'persona:', currentPersona);
