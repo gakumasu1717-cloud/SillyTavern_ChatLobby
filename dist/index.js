@@ -2181,7 +2181,7 @@ ${message}` : message;
       const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
       html += `
         <div class="persona-item ${isSelected} ${favClass}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
-            <button class="persona-fav-btn" data-persona="${escapeHtml(persona.key)}" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
+            <button class="persona-fav-btn" data-persona="${escapeHtml(persona.key)}" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
             <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>\u{1F464}</div>'">
             <span class="persona-name">${escapeHtml(persona.name)}</span>
             <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="\uD398\uB974\uC18C\uB098 \uC0AD\uC81C">\xD7</button>
@@ -2199,7 +2199,7 @@ ${message}` : message;
         createTouchClickHandler(favBtn, (e) => {
           e.stopPropagation();
           const newFavState = storage.togglePersonaFavorite(personaKey);
-          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          favBtn.textContent = newFavState ? "\u2605" : "\u2606";
           item.classList.toggle("is-persona-fav", newFavState);
           showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
           setTimeout(() => renderPersonaBar(), 300);
@@ -3738,7 +3738,7 @@ ${message}` : message;
     const hasMessageCount = typeof cachedMessageCount === "number";
     const chatCountText = hasCount ? cachedChatCount > 0 ? `${cachedChatCount}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C" : "\uB85C\uB529 \uC911...";
     const messageCountText = hasMessageCount ? cachedMessageCount > 0 ? `${cachedMessageCount}\uAC1C \uBA54\uC2DC\uC9C0` : "" : "";
-    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
+    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2605" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
          data-char-index="${index}" 
@@ -3984,7 +3984,7 @@ ${message}` : message;
         createTouchClickHandler(favBtn, (e) => {
           e.stopPropagation();
           const newFavState = storage.toggleCharacterFavorite(charAvatar);
-          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          favBtn.textContent = newFavState ? "\u2605" : "\u2606";
           card.dataset.isFav = newFavState.toString();
           card.classList.toggle("is-char-fav", newFavState);
           showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
@@ -4122,7 +4122,7 @@ ${message}` : message;
     }
     const members = group.members || [];
     const avatarGridHtml = renderMemberAvatarGrid(members.slice(0, 4), memberCount);
-    const favBtn = `<button class="char-fav-btn group-fav-btn" data-group-id="${escapeHtml(group.id)}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2B50" : "\u2606"}</button>`;
+    const favBtn = `<button class="char-fav-btn group-fav-btn" data-group-id="${escapeHtml(group.id)}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2605" : "\u2606"}</button>`;
     return `
     <div class="lobby-char-card lobby-group-card ${isFav ? "is-char-fav" : ""}" data-group-id="${escapeHtml(group.id)}" data-is-fav="${isFav}">
         ${favBtn}
@@ -4190,7 +4190,7 @@ ${message}` : message;
         createTouchClickHandler(favBtn, (e) => {
           e.stopPropagation();
           const newFavState = storage.toggleGroupFavorite(groupId);
-          favBtn.textContent = newFavState ? "\u2B50" : "\u2606";
+          favBtn.textContent = newFavState ? "\u2605" : "\u2606";
           card.dataset.isFav = newFavState.toString();
           card.classList.toggle("is-char-fav", newFavState);
           showToast(newFavState ? "\uC990\uACA8\uCC3E\uAE30\uC5D0 \uCD94\uAC00\uB428" : "\uC990\uACA8\uCC3E\uAE30\uC5D0\uC11C \uC81C\uAC70\uB428", "success");

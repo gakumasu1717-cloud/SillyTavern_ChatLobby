@@ -278,7 +278,7 @@ function renderCharacterCard(char, index, sortOption = 'recent') {
         : '';
     
     // 즐겨찾기 버튼
-    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
+    const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '★' : '☆'}</button>`;
     
     return `
     <div class="lobby-char-card ${isFav ? 'is-char-fav' : ''}" 
@@ -739,7 +739,7 @@ function bindCharacterEvents(container) {
                 const newFavState = storage.toggleCharacterFavorite(charAvatar);
                 
                 // UI 업데이트
-                favBtn.textContent = newFavState ? '⭐' : '☆';
+                favBtn.textContent = newFavState ? '★' : '☆';
                 card.dataset.isFav = newFavState.toString();
                 card.classList.toggle('is-char-fav', newFavState);
                 
@@ -983,7 +983,7 @@ function renderGroupCard(group, sortOption = 'recent') {
     const avatarGridHtml = renderMemberAvatarGrid(members.slice(0, 4), memberCount);
     
     // 즐겨찾기 버튼
-    const favBtn = `<button class="char-fav-btn group-fav-btn" data-group-id="${escapeHtml(group.id)}" title="즐겨찾기 토글">${isFav ? '⭐' : '☆'}</button>`;
+    const favBtn = `<button class="char-fav-btn group-fav-btn" data-group-id="${escapeHtml(group.id)}" title="즐겨찾기 토글">${isFav ? '★' : '☆'}</button>`;
     
     return `
     <div class="lobby-char-card lobby-group-card ${isFav ? 'is-char-fav' : ''}" data-group-id="${escapeHtml(group.id)}" data-is-fav="${isFav}">
@@ -1080,7 +1080,7 @@ function bindGroupEvents(container) {
                 const newFavState = storage.toggleGroupFavorite(groupId);
                 
                 // UI 업데이트
-                favBtn.textContent = newFavState ? '⭐' : '☆';
+                favBtn.textContent = newFavState ? '★' : '☆';
                 card.dataset.isFav = newFavState.toString();
                 card.classList.toggle('is-char-fav', newFavState);
                 

@@ -80,7 +80,7 @@ async function renderPersonaList(container, personas) {
         const avatarUrl = `/User Avatars/${encodeURIComponent(persona.key)}`;
         html += `
         <div class="persona-item ${isSelected} ${favClass}" data-persona="${escapeHtml(persona.key)}" title="${escapeHtml(persona.name)}">
-            <button class="persona-fav-btn" data-persona="${escapeHtml(persona.key)}" title="즐겨찾기">${isFav ? '⭐' : '☆'}</button>
+            <button class="persona-fav-btn" data-persona="${escapeHtml(persona.key)}" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
             <img class="persona-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=persona-avatar>👤</div>'">
             <span class="persona-name">${escapeHtml(persona.name)}</span>
             <button class="persona-delete-btn" data-persona="${escapeHtml(persona.key)}" title="페르소나 삭제">×</button>
@@ -109,7 +109,7 @@ function bindPersonaEvents(container) {
                 const newFavState = storage.togglePersonaFavorite(personaKey);
                 
                 // UI 업데이트
-                favBtn.textContent = newFavState ? '⭐' : '☆';
+                favBtn.textContent = newFavState ? '★' : '☆';
                 item.classList.toggle('is-persona-fav', newFavState);
                 
                 showToast(newFavState ? '즐겨찾기에 추가됨' : '즐겨찾기에서 제거됨', 'success');
