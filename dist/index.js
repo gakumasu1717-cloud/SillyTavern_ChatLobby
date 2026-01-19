@@ -3805,12 +3805,12 @@ ${message}` : message;
           return renderGroupCard(item.data, sortOption);
         }
       },
-      itemHeight: 180,
-      // CSS .lobby-char-card 높이와 맞춤
-      itemWidth: 140,
-      // CSS .lobby-char-card 너비와 맞춤
-      gap: 12,
-      // 그리드 gap
+      itemHeight: 300,
+      // CSS .lobby-char-card aspect-ratio 2/3 → 200*1.5=300
+      itemWidth: 200,
+      // CSS grid-template-columns: repeat(auto-fit, 200px)
+      gap: 9,
+      // CSS var(--card-gap)
       bufferSize: 2,
       onRenderComplete: () => {
         const content = virtualScroller?.content || container;
