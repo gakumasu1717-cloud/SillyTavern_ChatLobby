@@ -13,19 +13,14 @@ import { createTouchClickHandler, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
 import { closeChatPanel } from './chatList.js';
 import { CONFIG } from '../config.js';
-import { VirtualScroller } from './virtualScroller.js';
 
 // 렌더링 중복 방지
 let isRendering = false;
 let pendingRender = null;
 let renderDebounceTimer = null;
-let bindEventsTimer = null;
 
 // 캐릭터 선택 중복 방지 (전역)
 let isSelectingCharacter = false;
-
-// 가상 스크롤러 인스턴스
-let virtualScroller = null;
 
 // 그룹 포함 여부 (이벤트 바인딩 시 필요)
 let hasGroups = false;
@@ -214,47 +209,22 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     // 그룹 포함 여부 저장 (이벤트 바인딩용)
     hasGroups = groups.length > 0;
     
-    // ★ VirtualScroller 사용 (DOM 노드 수 대폭 감소)
-    if (virtualScroller) {
-        console.log('[CharacterGrid] Destroying old VirtualScroller');
-        virtualScroller.destroy();
-        virtualScroller = null;
-    }
-    
-    console.log('[CharacterGrid] Creating new VirtualScroller with', sortedItems.length, 'items');
-    
-    virtualScroller = new VirtualScroller({
-        container: container,
-        items: sortedItems,
-        renderItem: (item, index) => {
-            if (item.type === 'character') {
-                return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
-            } else {
-                return renderGroupCard(item.data, sortOption);
-            }
-        },
-        itemHeight: 300,  // CSS .lobby-char-card aspect-ratio 2/3 → 200*1.5=300
-        itemWidth: 200,   // CSS grid-template-columns: repeat(auto-fit, 200px)
-        gap: 9,           // CSS var(--card-gap)
-        bufferSize: 2,
-        onRenderComplete: () => {
-            // 이벤트 바인딩 debounce (50ms) - 스크롤 시 여러 번 호출 방지
-            if (bindEventsTimer) {
-                clearTimeout(bindEventsTimer);
-            }
-            bindEventsTimer = setTimeout(() => {
-                console.log('[CharacterGrid] onRenderComplete: binding events (debounced)');
-                const content = virtualScroller?.content || container;
-                bindCharacterEvents(content);
-                if (hasGroups) {
-                    bindGroupEvents(content);
-                }
-                
-                // 현재 선택된 캐릭터/그룹 .selected 클래스 복원
-                restoreSelectedState(content);
-            }, 50);
+    // ★ 일반 렌더링 (VirtualScroller 제거)
+    const html = sortedItems.map((item, index) => {
+        if (item.type === 'character') {
+            return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
+        } else {
+            return renderGroupCard(item.data, sortOption);
         }
-    });
+    }).join('');
+    
+    container.innerHTML = `<div class="lobby-char-grid">${html}</div>`;
+    
+    // 이벤트 바인딩
+    bindCharacterEvents(container);
+    if (hasGroups) {
+        bindGroupEvents(container);
+    }
     
     // 백그라운드에서 채팅 수 로딩 후 UI 업데이트
     loadChatCountsAsync(filtered, sortOption);

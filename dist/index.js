@@ -3532,213 +3532,10 @@ ${message}` : message;
 
   // src/ui/characterGrid.js
   init_config();
-
-  // src/ui/virtualScroller.js
-  var VirtualScroller = class {
-    constructor(options) {
-      this.container = options.container;
-      this.items = options.items || [];
-      this.renderItem = options.renderItem;
-      this.itemHeight = options.itemHeight || 180;
-      this.itemWidth = options.itemWidth || 140;
-      this.gap = options.gap || 12;
-      this.bufferSize = options.bufferSize || 2;
-      this.onRenderComplete = options.onRenderComplete || null;
-      this.startIndex = 0;
-      this.columns = 1;
-      this.isDestroyed = false;
-      this.wrapper = null;
-      this.content = null;
-      this.topSentinel = null;
-      this.bottomSentinel = null;
-      this.intersectionObserver = null;
-      this.resizeObserver = null;
-      this._scrollContainer = null;
-      this._renderTimeout = null;
-      this.init();
-    }
-    init() {
-      if (!this.container) {
-        console.error("[VirtualScroller] Container not found");
-        return;
-      }
-      this.calculateColumns();
-      this.createStructure();
-      this.setupObserver();
-      this.render();
-      this.setupResizeObserver();
-      console.log("[VirtualScroller] Initialized with", this.items.length, "items,", this.columns, "columns");
-    }
-    calculateColumns() {
-      const containerWidth = this.container.clientWidth || 300;
-      this.columns = Math.max(1, Math.floor((containerWidth + this.gap) / (this.itemWidth + this.gap)));
-    }
-    createStructure() {
-      this.container.innerHTML = "";
-      this.wrapper = document.createElement("div");
-      this.wrapper.className = "virtual-scroll-wrapper";
-      this.topSentinel = document.createElement("div");
-      this.topSentinel.className = "virtual-sentinel virtual-sentinel-top";
-      this.content = document.createElement("div");
-      this.content.className = "virtual-scroll-content lobby-char-grid";
-      this.bottomSentinel = document.createElement("div");
-      this.bottomSentinel.className = "virtual-sentinel virtual-sentinel-bottom";
-      this.wrapper.appendChild(this.topSentinel);
-      this.wrapper.appendChild(this.content);
-      this.wrapper.appendChild(this.bottomSentinel);
-      this.container.appendChild(this.wrapper);
-    }
-    setupObserver() {
-      const scrollContainer = this.findScrollContainer();
-      this._scrollContainer = scrollContainer;
-      if (scrollContainer) {
-        this._onScroll = this._handleScroll.bind(this);
-        scrollContainer.addEventListener("scroll", this._onScroll, { passive: true });
-      }
-    }
-    _handleScroll() {
-      if (this.isDestroyed || !this._scrollContainer) return;
-      if (this._scrollTimeout) return;
-      this._scrollTimeout = requestAnimationFrame(() => {
-        this._scrollTimeout = null;
-        this._updateVisibleRange();
-      });
-    }
-    _updateVisibleRange() {
-      if (this.isDestroyed || !this._scrollContainer || this.items.length === 0) return;
-      const scrollTop = this._scrollContainer.scrollTop;
-      const containerHeight = this._scrollContainer.clientHeight || 600;
-      const firstVisibleRow = Math.floor(scrollTop / this.itemHeight);
-      const newStartRow = Math.max(0, firstVisibleRow - this.bufferSize);
-      const newStartIndex = newStartRow * this.columns;
-      if (newStartIndex !== this.startIndex) {
-        console.log(
-          "[VirtualScroller] _updateVisibleRange: scrollTop=",
-          scrollTop,
-          "firstRow=",
-          firstVisibleRow,
-          "newStartIndex=",
-          newStartIndex
-        );
-        this.startIndex = newStartIndex;
-        this.render();
-      }
-    }
-    setupResizeObserver() {
-      this.resizeObserver = new ResizeObserver(() => {
-        if (this.isDestroyed) return;
-        if (this._renderTimeout) clearTimeout(this._renderTimeout);
-        this._renderTimeout = setTimeout(() => {
-          const oldColumns = this.columns;
-          this.calculateColumns();
-          if (oldColumns !== this.columns) this.render();
-        }, 100);
-      });
-      this.resizeObserver.observe(this.container);
-    }
-    findScrollContainer() {
-      if (this._scrollContainer && this._scrollContainer.isConnected) {
-        return this._scrollContainer;
-      }
-      this._scrollContainer = null;
-      let el = this.container.parentElement;
-      while (el) {
-        const style = getComputedStyle(el);
-        if (style.overflow === "auto" || style.overflowY === "auto" || style.overflow === "scroll" || style.overflowY === "scroll") {
-          this._scrollContainer = el;
-          return el;
-        }
-        el = el.parentElement;
-      }
-      return null;
-    }
-    render() {
-      if (this.isDestroyed || !this.content) return;
-      if (this.items.length === 0) {
-        this.content.innerHTML = '<div class="lobby-empty-state"><i></i><div>\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4</div></div>';
-        this.wrapper.style.paddingBottom = "0px";
-        this.content.style.marginTop = "0px";
-        return;
-      }
-      const containerHeight = this.container.clientHeight || 600;
-      const visibleRows = Math.ceil(containerHeight / this.itemHeight) + this.bufferSize * 2;
-      const visibleItems = visibleRows * this.columns;
-      const totalRows = Math.ceil(this.items.length / this.columns);
-      const totalHeight = totalRows * this.itemHeight;
-      const endIndex = Math.min(this.startIndex + visibleItems, this.items.length);
-      const itemsToRender = this.items.slice(this.startIndex, endIndex);
-      const html = itemsToRender.map((item, i) => this.renderItem(item, this.startIndex + i)).join("");
-      this.content.innerHTML = html;
-      const startRow = Math.floor(this.startIndex / this.columns);
-      const topPadding = startRow * this.itemHeight;
-      const renderedHeight = Math.ceil(itemsToRender.length / this.columns) * this.itemHeight;
-      const bottomPadding = Math.max(0, totalHeight - topPadding - renderedHeight);
-      this.content.style.marginTop = topPadding + "px";
-      this.wrapper.style.paddingBottom = bottomPadding + "px";
-      if (this.onRenderComplete) this.onRenderComplete();
-      console.log("[VirtualScroller] Rendered items", this.startIndex, "-", endIndex, "of", this.items.length);
-    }
-    loadNext() {
-      if (this.isDestroyed) return;
-      const containerHeight = this.container.clientHeight || 600;
-      const visibleRows = Math.ceil(containerHeight / this.itemHeight) + this.bufferSize * 2;
-      const visibleItems = visibleRows * this.columns;
-      const endIndex = this.startIndex + visibleItems;
-      if (endIndex >= this.items.length) return;
-      this.startIndex = this.startIndex + this.columns;
-      console.log("[VirtualScroller] loadNext: startIndex =", this.startIndex);
-      this.render();
-    }
-    loadPrevious() {
-      if (this.isDestroyed) return;
-      if (this.startIndex <= 0) {
-        console.log("[VirtualScroller] loadPrevious: already at top, force render");
-        this.render();
-        return;
-      }
-      this.startIndex = Math.max(0, this.startIndex - this.columns);
-      console.log("[VirtualScroller] loadPrevious: startIndex =", this.startIndex);
-      this.render();
-    }
-    updateItems(newItems) {
-      this.items = newItems || [];
-      this.startIndex = 0;
-      this.render();
-    }
-    scrollToIndex(index) {
-      const row = Math.floor(index / this.columns);
-      this.startIndex = Math.max(0, (row - this.bufferSize) * this.columns);
-      this.render();
-      const scrollContainer = this.findScrollContainer();
-      if (scrollContainer) scrollContainer.scrollTop = row * this.itemHeight;
-    }
-    scrollToTop() {
-      this.startIndex = 0;
-      this.render();
-      const scrollContainer = this.findScrollContainer();
-      if (scrollContainer) scrollContainer.scrollTop = 0;
-    }
-    destroy() {
-      this.isDestroyed = true;
-      if (this._renderTimeout) clearTimeout(this._renderTimeout);
-      if (this._scrollTimeout) cancelAnimationFrame(this._scrollTimeout);
-      if (this._scrollContainer && this._onScroll) {
-        this._scrollContainer.removeEventListener("scroll", this._onScroll);
-      }
-      this.resizeObserver?.disconnect();
-      if (this.container) this.container.innerHTML = "";
-      this._scrollContainer = null;
-      console.log("[VirtualScroller] Destroyed");
-    }
-  };
-
-  // src/ui/characterGrid.js
   var isRendering = false;
   var pendingRender = null;
   var renderDebounceTimer = null;
-  var bindEventsTimer = null;
   var isSelectingCharacter = false;
-  var virtualScroller = null;
   var hasGroups = false;
   function resetCharacterSelectLock() {
     isSelectingCharacter = false;
@@ -3843,44 +3640,18 @@ ${message}` : message;
     ];
     const sortedItems = await sortCharactersAndGroups(allItems, sortOption);
     hasGroups = groups.length > 0;
-    if (virtualScroller) {
-      console.log("[CharacterGrid] Destroying old VirtualScroller");
-      virtualScroller.destroy();
-      virtualScroller = null;
-    }
-    console.log("[CharacterGrid] Creating new VirtualScroller with", sortedItems.length, "items");
-    virtualScroller = new VirtualScroller({
-      container,
-      items: sortedItems,
-      renderItem: (item, index) => {
-        if (item.type === "character") {
-          return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
-        } else {
-          return renderGroupCard(item.data, sortOption);
-        }
-      },
-      itemHeight: 300,
-      // CSS .lobby-char-card aspect-ratio 2/3 → 200*1.5=300
-      itemWidth: 200,
-      // CSS grid-template-columns: repeat(auto-fit, 200px)
-      gap: 9,
-      // CSS var(--card-gap)
-      bufferSize: 2,
-      onRenderComplete: () => {
-        if (bindEventsTimer) {
-          clearTimeout(bindEventsTimer);
-        }
-        bindEventsTimer = setTimeout(() => {
-          console.log("[CharacterGrid] onRenderComplete: binding events (debounced)");
-          const content = virtualScroller?.content || container;
-          bindCharacterEvents(content);
-          if (hasGroups) {
-            bindGroupEvents(content);
-          }
-          restoreSelectedState(content);
-        }, 50);
+    const html = sortedItems.map((item, index) => {
+      if (item.type === "character") {
+        return renderCharacterCard(item.data, indexMap.get(item.data.avatar), sortOption);
+      } else {
+        return renderGroupCard(item.data, sortOption);
       }
-    });
+    }).join("");
+    container.innerHTML = `<div class="lobby-char-grid">${html}</div>`;
+    bindCharacterEvents(container);
+    if (hasGroups) {
+      bindGroupEvents(container);
+    }
     loadChatCountsAsync(filtered, sortOption);
   }
   function renderCharacterCard(char, index, sortOption = "recent") {
@@ -4072,22 +3843,6 @@ ${message}` : message;
   }
   function isFavoriteChar(char) {
     return storage.isCharacterFavorite(char.avatar);
-  }
-  function restoreSelectedState(container) {
-    const currentChar = store.currentCharacter;
-    if (currentChar?.avatar) {
-      const selectedCard = container.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(currentChar.avatar)}"]`);
-      if (selectedCard) {
-        selectedCard.classList.add("selected");
-      }
-    }
-    const currentGroup = store.currentGroup;
-    if (currentGroup?.id) {
-      const selectedCard = container.querySelector(`.lobby-group-card[data-group-id="${CSS.escape(currentGroup.id)}"]`);
-      if (selectedCard) {
-        selectedCard.classList.add("selected");
-      }
-    }
   }
   async function sortCharactersAndGroups(items, sortOption) {
     if (sortOption === "chats") {
