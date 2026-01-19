@@ -18,6 +18,7 @@ import { VirtualScroller } from './virtualScroller.js';
 // 렌더링 중복 방지
 let isRendering = false;
 let pendingRender = null;
+let renderDebounceTimer = null;
 
 // 캐릭터 선택 중복 방지 (전역)
 let isSelectingCharacter = false;
@@ -67,6 +68,24 @@ export function setGroupSelectHandler(handler) {
  * @returns {Promise<void>}
  */
 export async function renderCharacterGrid(searchTerm = '', sortOverride = null) {
+    // Debounce: 100ms 내 중복 호출 무시
+    if (renderDebounceTimer) {
+        clearTimeout(renderDebounceTimer);
+    }
+    
+    return new Promise((resolve) => {
+        renderDebounceTimer = setTimeout(async () => {
+            renderDebounceTimer = null;
+            await _doRenderCharacterGrid(searchTerm, sortOverride);
+            resolve();
+        }, 100);
+    });
+}
+
+/**
+ * 실제 캐릭터 그리드 렌더링 (debounce 후 호출)
+ */
+async function _doRenderCharacterGrid(searchTerm = '', sortOverride = null) {
     // 렌더링 중복 방지
     if (isRendering) {
         pendingRender = { searchTerm, sortOverride };

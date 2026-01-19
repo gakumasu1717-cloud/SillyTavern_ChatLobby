@@ -3735,6 +3735,7 @@ ${message}` : message;
   // src/ui/characterGrid.js
   var isRendering = false;
   var pendingRender = null;
+  var renderDebounceTimer = null;
   var isSelectingCharacter = false;
   var virtualScroller = null;
   var hasGroups = false;
@@ -3748,6 +3749,18 @@ ${message}` : message;
     store.setGroupSelectHandler(handler);
   }
   async function renderCharacterGrid(searchTerm = "", sortOverride = null) {
+    if (renderDebounceTimer) {
+      clearTimeout(renderDebounceTimer);
+    }
+    return new Promise((resolve) => {
+      renderDebounceTimer = setTimeout(async () => {
+        renderDebounceTimer = null;
+        await _doRenderCharacterGrid(searchTerm, sortOverride);
+        resolve();
+      }, 100);
+    });
+  }
+  async function _doRenderCharacterGrid(searchTerm = "", sortOverride = null) {
     if (isRendering) {
       pendingRender = { searchTerm, sortOverride };
       return;
