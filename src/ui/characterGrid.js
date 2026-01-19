@@ -196,8 +196,12 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
     
     // ★ VirtualScroller 사용 (DOM 노드 수 대폭 감소)
     if (virtualScroller) {
+        console.log('[CharacterGrid] Destroying old VirtualScroller');
         virtualScroller.destroy();
+        virtualScroller = null;
     }
+    
+    console.log('[CharacterGrid] Creating new VirtualScroller with', sortedItems.length, 'items');
     
     virtualScroller = new VirtualScroller({
         container: container,
@@ -215,6 +219,7 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         bufferSize: 2,
         onRenderComplete: () => {
             // 렌더링 후 이벤트 바인딩
+            console.log('[CharacterGrid] onRenderComplete called, binding events');
             const content = virtualScroller?.content || container;
             bindCharacterEvents(content);
             if (hasGroups) {
@@ -720,7 +725,10 @@ async function sortCharacters(characters, sortOption) {
  */
 function bindCharacterEvents(container) {
     // 그룹 카드는 제외 (.lobby-group-card는 별도로 바인딩)
-    container.querySelectorAll('.lobby-char-card:not(.lobby-group-card)').forEach((card, index) => {
+    const cards = container.querySelectorAll('.lobby-char-card:not(.lobby-group-card)');
+    console.log('[CharacterGrid] bindCharacterEvents: found', cards.length, 'cards');
+    
+    cards.forEach((card, index) => {
         // data-char-name 사용 (시간 span 포함 방지)
         const charName = card.dataset.charName || 'Unknown';
         const charAvatar = card.dataset.charAvatar;

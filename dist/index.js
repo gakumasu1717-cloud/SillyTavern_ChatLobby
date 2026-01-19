@@ -3637,7 +3637,10 @@ ${message}` : message;
       this.resizeObserver.observe(this.container);
     }
     findScrollContainer() {
-      if (this._scrollContainer) return this._scrollContainer;
+      if (this._scrollContainer && this._scrollContainer.isConnected) {
+        return this._scrollContainer;
+      }
+      this._scrollContainer = null;
       let el = this.container.parentElement;
       while (el) {
         const style = getComputedStyle(el);
@@ -3827,8 +3830,11 @@ ${message}` : message;
     const sortedItems = await sortCharactersAndGroups(allItems, sortOption);
     hasGroups = groups.length > 0;
     if (virtualScroller) {
+      console.log("[CharacterGrid] Destroying old VirtualScroller");
       virtualScroller.destroy();
+      virtualScroller = null;
     }
+    console.log("[CharacterGrid] Creating new VirtualScroller with", sortedItems.length, "items");
     virtualScroller = new VirtualScroller({
       container,
       items: sortedItems,
@@ -3847,6 +3853,7 @@ ${message}` : message;
       // CSS var(--card-gap)
       bufferSize: 2,
       onRenderComplete: () => {
+        console.log("[CharacterGrid] onRenderComplete called, binding events");
         const content = virtualScroller?.content || container;
         bindCharacterEvents(content);
         if (hasGroups) {
@@ -4133,7 +4140,9 @@ ${message}` : message;
     return sorted;
   }
   function bindCharacterEvents(container) {
-    container.querySelectorAll(".lobby-char-card:not(.lobby-group-card)").forEach((card, index) => {
+    const cards = container.querySelectorAll(".lobby-char-card:not(.lobby-group-card)");
+    console.log("[CharacterGrid] bindCharacterEvents: found", cards.length, "cards");
+    cards.forEach((card, index) => {
       const charName = card.dataset.charName || "Unknown";
       const charAvatar = card.dataset.charAvatar;
       const charIndex = card.dataset.charIndex;

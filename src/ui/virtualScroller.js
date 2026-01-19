@@ -132,7 +132,13 @@ export class VirtualScroller {
     }
 
     findScrollContainer() {
-        if (this._scrollContainer) return this._scrollContainer;
+        // 캐시된 컨테이너가 DOM에서 분리됐는지 확인
+        if (this._scrollContainer && this._scrollContainer.isConnected) {
+            return this._scrollContainer;
+        }
+        
+        // 캐시 무효화 후 다시 찾기
+        this._scrollContainer = null;
         let el = this.container.parentElement;
         while (el) {
             const style = getComputedStyle(el);
