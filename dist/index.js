@@ -6199,6 +6199,9 @@ ${message}` : message;
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
+            cache.invalidate("chats", charAvatar);
+            cache.invalidate("chatCounts", charAvatar);
+            cache.invalidate("messageCounts", charAvatar);
             console.log("[ChatLobby] Message sent, updated lastChatCache:", charAvatar);
             updateFabPreview();
           }
@@ -6216,6 +6219,9 @@ ${message}` : message;
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
+            cache.invalidate("chats", charAvatar);
+            cache.invalidate("chatCounts", charAvatar);
+            cache.invalidate("messageCounts", charAvatar);
             console.log("[ChatLobby] Message received, updated lastChatCache:", charAvatar);
             updateFabPreview();
           }

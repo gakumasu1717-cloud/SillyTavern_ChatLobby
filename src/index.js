@@ -272,6 +272,10 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
+                    // 🔥 채팅목록 캐시 무효화 (로비로 돌아왔을 때 최신 목록 표시)
+                    cache.invalidate('chats', charAvatar);
+                    cache.invalidate('chatCounts', charAvatar);
+                    cache.invalidate('messageCounts', charAvatar);
                     console.log('[ChatLobby] Message sent, updated lastChatCache:', charAvatar);
                     // FAB 프리뷰 갱신
                     updateFabPreview();
@@ -295,6 +299,10 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
+                    // 🔥 채팅목록 캐시 무효화 (로비로 돌아왔을 때 최신 목록 표시)
+                    cache.invalidate('chats', charAvatar);
+                    cache.invalidate('chatCounts', charAvatar);
+                    cache.invalidate('messageCounts', charAvatar);
                     console.log('[ChatLobby] Message received, updated lastChatCache:', charAvatar);
                     // FAB 프리뷰 갱신
                     updateFabPreview();
