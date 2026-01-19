@@ -102,6 +102,7 @@ export function createLobbyHTML() {
                                     <option value="recent">🕐 최신순</option>
                                     <option value="name">🔤 이름순</option>
                                     <option value="messages">💬 메시지수</option>
+                                    <option value="branch">🌳 분기로 보기</option>
                                 </select>
                                 <select id="chat-lobby-folder-filter">
                                     <option value="all">📁 전체</option>

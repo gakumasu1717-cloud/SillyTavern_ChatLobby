@@ -1566,6 +1566,37 @@
     text-shadow: 0 0 8px var(--star-glow);
 }
 
+/* 브랜치 모드 스타일 */
+.lobby-chat-item.branch-mode {
+    transition: all var(--transition-fast), padding-left 0.15s ease;
+}
+
+.lobby-chat-item .branch-icon {
+    font-size: 0.9em;
+    flex-shrink: 0;
+    opacity: 0.8;
+    margin-right: -4px;
+}
+
+/* 분기 깊이별 시각적 표시 */
+.lobby-chat-item[data-branch-depth="1"] {
+    border-left: 2px solid rgba(100, 150, 255, 0.4);
+}
+
+.lobby-chat-item[data-branch-depth="2"] {
+    border-left: 2px solid rgba(150, 100, 255, 0.4);
+}
+
+.lobby-chat-item[data-branch-depth="3"] {
+    border-left: 2px solid rgba(200, 100, 200, 0.4);
+}
+
+.lobby-chat-item[data-branch-depth="4"],
+.lobby-chat-item[data-branch-depth="5"],
+.lobby-chat-item[data-branch-depth="6"] {
+    border-left: 2px solid rgba(255, 150, 100, 0.4);
+}
+
 .chat-folder-tag {
     display: inline-flex;
     align-items: center;

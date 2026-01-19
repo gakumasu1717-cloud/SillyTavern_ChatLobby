@@ -484,6 +484,11 @@ function filterByFolder(chats, charAvatar, filterFolder) {
 function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
     
+    // 분기로 보기 모드
+    if (sortOption === 'branch') {
+        return sortByBranchTree(chats, charAvatar, data);
+    }
+    
     return [...chats].sort((a, b) => {
         const fnA = a.file_name || '';
         const fnB = b.file_name || '';
@@ -508,6 +513,91 @@ function sortChats(chats, charAvatar, sortOption) {
         // 기본: 날짜순
         return getTimestamp(b) - getTimestamp(a);
     });
+}
+
+/**
+ * 채팅 파일명에서 브랜치 정보 파싱
+ * 패턴 예시:
+ * - "캐릭터 - 2024-1-7@12h34m56s.jsonl" -> base: "캐릭터 - 2024-1-7@12h34m56s", branch: null
+ * - "캐릭터 - 2024-1-7@12h34m56s #21.jsonl" -> base: "캐릭터 - 2024-1-7@12h34m56s", branch: "21"
+ * - "캐릭터 - 2024-1-7@12h34m56s #99-1.jsonl" -> base: "캐릭터 - 2024-1-7@12h34m56s #99", branch: "99-1"
+ * @param {string} fileName
+ * @returns {{ base: string, branch: string|null, depth: number, sortKey: string }}
+ */
+function parseBranchInfo(fileName) {
+    const cleanName = fileName.replace('.jsonl', '');
+    
+    // #숫자 또는 #숫자-숫자... 패턴 찾기
+    const branchMatch = cleanName.match(/^(.+?)\s*#(\d+(?:-\d+)*)$/);
+    
+    if (!branchMatch) {
+        // 브랜치 없음 - 원본 채팅
+        return {
+            base: cleanName,
+            branch: null,
+            depth: 0,
+            sortKey: cleanName + '\x00' // null 문자로 원본이 먼저 오도록
+        };
+    }
+    
+    const basePart = branchMatch[1].trim();
+    const branchPart = branchMatch[2];
+    const branchSegments = branchPart.split('-');
+    const depth = branchSegments.length;
+    
+    // 부모 찾기: #99-1 -> 부모는 #99
+    let parent = basePart;
+    if (branchSegments.length > 1) {
+        parent = basePart + ' #' + branchSegments.slice(0, -1).join('-');
+    }
+    
+    // 정렬 키: base + 브랜치 숫자들 (각 숫자를 0-패딩해서 자연 정렬)
+    const paddedBranch = branchSegments.map(s => s.padStart(6, '0')).join('-');
+    const sortKey = basePart + '\x01#' + paddedBranch;
+    
+    return {
+        base: basePart,
+        branch: branchPart,
+        parent,
+        depth,
+        sortKey
+    };
+}
+
+/**
+ * 브랜치 트리 구조로 정렬
+ * @param {Array} chats
+ * @param {string} charAvatar
+ * @param {Object} data - storage 데이터
+ * @returns {Array}
+ */
+function sortByBranchTree(chats, charAvatar, data) {
+    // 1. 각 채팅에 브랜치 정보 추가
+    const chatsWithBranch = chats.map(chat => {
+        const fileName = chat.file_name || '';
+        const branchInfo = parseBranchInfo(fileName);
+        return { ...chat, _branchInfo: branchInfo };
+    });
+    
+    // 2. sortKey로 정렬 (같은 base 아래 브랜치들이 자연스럽게 그룹핑됨)
+    chatsWithBranch.sort((a, b) => {
+        const infoA = a._branchInfo;
+        const infoB = b._branchInfo;
+        
+        // 즐겨찾기 우선
+        const fnA = a.file_name || '';
+        const fnB = b.file_name || '';
+        const keyA = storage.getChatKey(charAvatar, fnA);
+        const keyB = storage.getChatKey(charAvatar, fnB);
+        const favA = data.favorites.includes(keyA) ? 0 : 1;
+        const favB = data.favorites.includes(keyB) ? 0 : 1;
+        if (favA !== favB) return favA - favB;
+        
+        // sortKey로 비교
+        return infoA.sortKey.localeCompare(infoB.sortKey, 'ko');
+    });
+    
+    return chatsWithBranch;
 }
 
 /**
@@ -541,17 +631,27 @@ function renderChatItem(chat, charAvatar, index) {
     // 툴팁용 전문 (HTML 이스케이프)
     const safeFullPreview = escapeHtml(tooltipPreview);
     
+    // 브랜치 정보 (분기로 보기 모드일 때 _branchInfo가 있음)
+    const branchInfo = chat._branchInfo;
+    const branchDepth = branchInfo?.depth || 0;
+    const branchIcon = branchDepth > 0 ? '🔀' : '📄';
+    const indentStyle = branchDepth > 0 ? `padding-left: ${branchDepth * 16}px;` : '';
+    const branchClass = branchInfo ? 'branch-mode' : '';
+    
     return `
-    <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''}" 
+    <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''} ${branchClass}" 
          data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
          data-folder-id="${folderId}"
-         data-full-preview="${safeFullPreview}">
+         data-branch-depth="${branchDepth}"
+         data-full-preview="${safeFullPreview}"
+         style="${indentStyle}">
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
         <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
+        ${branchInfo ? `<span class="branch-icon">${branchIcon}</span>` : ''}
         <div class="chat-content">
             <div class="chat-name">${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>

@@ -1945,6 +1945,7 @@ ${message}` : message;
                                     <option value="recent">\u{1F550} \uCD5C\uC2E0\uC21C</option>
                                     <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
                                     <option value="messages">\u{1F4AC} \uBA54\uC2DC\uC9C0\uC218</option>
+                                    <option value="branch">\u{1F333} \uBD84\uAE30\uB85C \uBCF4\uAE30</option>
                                 </select>
                                 <select id="chat-lobby-folder-filter">
                                     <option value="all">\u{1F4C1} \uC804\uCCB4</option>
@@ -3017,6 +3018,9 @@ ${message}` : message;
   }
   function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
+    if (sortOption === "branch") {
+      return sortByBranchTree(chats, charAvatar, data);
+    }
     return [...chats].sort((a, b) => {
       const fnA = a.file_name || "";
       const fnB = b.file_name || "";
@@ -3036,6 +3040,56 @@ ${message}` : message;
       return getTimestamp(b) - getTimestamp(a);
     });
   }
+  function parseBranchInfo(fileName) {
+    const cleanName = fileName.replace(".jsonl", "");
+    const branchMatch = cleanName.match(/^(.+?)\s*#(\d+(?:-\d+)*)$/);
+    if (!branchMatch) {
+      return {
+        base: cleanName,
+        branch: null,
+        depth: 0,
+        sortKey: cleanName + "\0"
+        // null 문자로 원본이 먼저 오도록
+      };
+    }
+    const basePart = branchMatch[1].trim();
+    const branchPart = branchMatch[2];
+    const branchSegments = branchPart.split("-");
+    const depth = branchSegments.length;
+    let parent = basePart;
+    if (branchSegments.length > 1) {
+      parent = basePart + " #" + branchSegments.slice(0, -1).join("-");
+    }
+    const paddedBranch = branchSegments.map((s) => s.padStart(6, "0")).join("-");
+    const sortKey = basePart + "#" + paddedBranch;
+    return {
+      base: basePart,
+      branch: branchPart,
+      parent,
+      depth,
+      sortKey
+    };
+  }
+  function sortByBranchTree(chats, charAvatar, data) {
+    const chatsWithBranch = chats.map((chat) => {
+      const fileName = chat.file_name || "";
+      const branchInfo = parseBranchInfo(fileName);
+      return { ...chat, _branchInfo: branchInfo };
+    });
+    chatsWithBranch.sort((a, b) => {
+      const infoA = a._branchInfo;
+      const infoB = b._branchInfo;
+      const fnA = a.file_name || "";
+      const fnB = b.file_name || "";
+      const keyA = storage.getChatKey(charAvatar, fnA);
+      const keyB = storage.getChatKey(charAvatar, fnB);
+      const favA = data.favorites.includes(keyA) ? 0 : 1;
+      const favB = data.favorites.includes(keyB) ? 0 : 1;
+      if (favA !== favB) return favA - favB;
+      return infoA.sortKey.localeCompare(infoB.sortKey, "ko");
+    });
+    return chatsWithBranch;
+  }
   function renderChatItem(chat, charAvatar, index) {
     const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
     const displayName = fileName.replace(".jsonl", "");
@@ -3050,17 +3104,25 @@ ${message}` : message;
     const safeAvatar = escapeHtml(charAvatar || "");
     const safeFileName = escapeHtml(fileName || "");
     const safeFullPreview = escapeHtml(tooltipPreview);
+    const branchInfo = chat._branchInfo;
+    const branchDepth = branchInfo?.depth || 0;
+    const branchIcon = branchDepth > 0 ? "\u{1F500}" : "\u{1F4C4}";
+    const indentStyle = branchDepth > 0 ? `padding-left: ${branchDepth * 16}px;` : "";
+    const branchClass = branchInfo ? "branch-mode" : "";
     return `
-    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
+    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""} ${branchClass}" 
          data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
          data-folder-id="${folderId}"
-         data-full-preview="${safeFullPreview}">
+         data-branch-depth="${branchDepth}"
+         data-full-preview="${safeFullPreview}"
+         style="${indentStyle}">
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
         <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
+        ${branchInfo ? `<span class="branch-icon">${branchIcon}</span>` : ""}
         <div class="chat-content">
             <div class="chat-name">${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
