@@ -534,8 +534,8 @@ function renderChatItem(chat, charAvatar, index) {
     const folder = data.folders.find(f => f.id === folderId);
     const folderName = folder?.name || '';
     
-    // 툴팁용 미리보기 (10000자까지)
-    const tooltipPreview = truncateText(preview, 10000);
+    // 툴팁용 미리보기 (전체 표시)
+    const tooltipPreview = preview;
     const safeAvatar = escapeHtml(charAvatar || '');
     const safeFileName = escapeHtml(fileName || '');
     // 툴팁용 전문 (HTML 이스케이프)
@@ -551,7 +551,7 @@ function renderChatItem(chat, charAvatar, index) {
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
-        <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '⭐' : '☆'}</button>
+        <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
         <div class="chat-content">
             <div class="chat-name">${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
@@ -624,7 +624,7 @@ function bindChatEvents(container, charAvatar) {
         createTouchClickHandler(favBtn, () => {
             const fn = item.dataset.fileName;
             const isNowFav = storage.toggleFavorite(charAvatar, fn);
-            favBtn.textContent = isNowFav ? '⭐' : '☆';
+            favBtn.textContent = isNowFav ? '★' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
         }, { debugName: `fav-${index}` });
         
@@ -1105,7 +1105,7 @@ function renderGroupChats(container, chats, group) {
         const lastMes = chat.last_mes ? formatDate(chat.last_mes) : '';
         const mesCount = chat.chat_items || 0;
         const preview = chat.mes || '';
-        const safePreview = escapeHtml(truncateText(preview, 10000));
+        const safePreview = escapeHtml(preview);  // 전체 표시
         
         // 즐겨찾기/폴더 상태 (일반 채팅과 동일하게)
         const isFav = storage.isFavorite(groupAvatar, fileName);
@@ -1120,7 +1120,7 @@ function renderGroupChats(container, chats, group) {
              data-chat-file="${escapeHtml(fileName)}"
              data-folder-id="${folderId}"
              data-full-preview="${safePreview}">
-            <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '⭐' : '☆'}</button>
+            <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
             <div class="chat-content">
                 <div class="chat-name">${escapeHtml(displayName)}</div>
                 <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
@@ -1186,7 +1186,7 @@ function bindGroupChatEvents(container, group) {
         if (favBtn) {
             createTouchClickHandler(favBtn, () => {
                 const isNowFav = storage.toggleFavorite(groupAvatar, chatFile);
-                favBtn.textContent = isNowFav ? '⭐' : '☆';
+                favBtn.textContent = isNowFav ? '★' : '☆';
                 item.classList.toggle('is-favorite', isNowFav);
             }, { debugName: `group-fav-${index}` });
         }

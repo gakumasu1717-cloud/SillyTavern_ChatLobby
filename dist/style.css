@@ -43,9 +43,9 @@
     --text-muted: #666666;
     --text-dim: #999999;
     
-    /* Favorite Star - ?�마 ?�센??컬러 */
-    --star-color: #333333;
-    --star-glow: rgba(51, 51, 51, 0.4);
+    /* Favorite Star - 라이트 테마: 골드 */
+    --star-color: #D4AF37;
+    --star-glow: rgba(212, 175, 55, 0.5);
 }
 
 /* 공통 변??*/

@@ -3046,7 +3046,7 @@ ${message}` : message;
     const data = storage.load();
     const folder = data.folders.find((f) => f.id === folderId);
     const folderName = folder?.name || "";
-    const tooltipPreview = truncateText(preview, 1e4);
+    const tooltipPreview = preview;
     const safeAvatar = escapeHtml(charAvatar || "");
     const safeFileName = escapeHtml(fileName || "");
     const safeFullPreview = escapeHtml(tooltipPreview);
@@ -3060,7 +3060,7 @@ ${message}` : message;
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
-        <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
+        <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
         <div class="chat-content">
             <div class="chat-name">${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
@@ -3114,7 +3114,7 @@ ${message}` : message;
       createTouchClickHandler(favBtn, () => {
         const fn = item.dataset.fileName;
         const isNowFav = storage.toggleFavorite(charAvatar, fn);
-        favBtn.textContent = isNowFav ? "\u2B50" : "\u2606";
+        favBtn.textContent = isNowFav ? "\u2605" : "\u2606";
         item.classList.toggle("is-favorite", isNowFav);
       }, { debugName: `fav-${index}` });
       createTouchClickHandler(delBtn, () => {
@@ -3408,7 +3408,7 @@ ${message}` : message;
       const lastMes = chat.last_mes ? formatDate(chat.last_mes) : "";
       const mesCount = chat.chat_items || 0;
       const preview = chat.mes || "";
-      const safePreview = escapeHtml(truncateText(preview, 1e4));
+      const safePreview = escapeHtml(preview);
       const isFav = storage.isFavorite(groupAvatar, fileName);
       const folderId = storage.getChatFolder(groupAvatar, fileName);
       const data = storage.load();
@@ -3420,7 +3420,7 @@ ${message}` : message;
              data-chat-file="${escapeHtml(fileName)}"
              data-folder-id="${folderId}"
              data-full-preview="${safePreview}">
-            <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2B50" : "\u2606"}</button>
+            <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
             <div class="chat-content">
                 <div class="chat-name">${escapeHtml(displayName)}</div>
                 <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
@@ -3462,7 +3462,7 @@ ${message}` : message;
       if (favBtn) {
         createTouchClickHandler(favBtn, () => {
           const isNowFav = storage.toggleFavorite(groupAvatar, chatFile);
-          favBtn.textContent = isNowFav ? "\u2B50" : "\u2606";
+          favBtn.textContent = isNowFav ? "\u2605" : "\u2606";
           item.classList.toggle("is-favorite", isNowFav);
         }, { debugName: `group-fav-${index}` });
       }
