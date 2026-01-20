@@ -131,14 +131,11 @@ function groupByFingerprint(fingerprints) {
 async function analyzeGroup(charAvatar, group) {
     if (group.length < 2) return {};
     
-    // 길이순 정렬 (긴 것 = 원본일 가능성 높음)
-    const sorted = [...group].sort((a, b) => b.length - a.length);
-    
     const result = {};
     const chatContents = {};
     
     // 모든 채팅 내용 로드
-    await Promise.all(sorted.map(async (item) => {
+    await Promise.all(group.map(async (item) => {
         const content = await loadChatContent(charAvatar, item.fileName);
         if (content) {
             chatContents[item.fileName] = content;
@@ -146,38 +143,43 @@ async function analyzeGroup(charAvatar, group) {
     }));
     
     // 각 채팅에 대해 부모 찾기
-    for (let i = 1; i < sorted.length; i++) {
-        const current = sorted[i];
+    for (const current of group) {
         const currentContent = chatContents[current.fileName];
         if (!currentContent) continue;
         
         let bestParent = null;
         let bestCommonLen = 0;
         
-        // 더 긴 채팅들 중에서 가장 공통 부분이 긴 것 찾기
-        for (let j = 0; j < i; j++) {
-            const candidate = sorted[j];
+        // 모든 다른 채팅과 비교
+        for (const candidate of group) {
+            if (candidate.fileName === current.fileName) continue;
+            
             const candidateContent = chatContents[candidate.fileName];
             if (!candidateContent) continue;
             
             const commonLen = findCommonPrefixLength(candidateContent, currentContent);
             
-            if (commonLen > bestCommonLen) {
+            // 부모 조건:
+            // 1. 후보가 현재보다 짧거나 같아야 함 (부모가 자식보다 길 수 없음)
+            // 2. 공통 부분이 후보의 거의 전체여야 함 (후보가 현재의 prefix)
+            // 3. 가장 긴 공통을 가진 것이 직접 부모
+            const candidateLen = candidateContent.length;
+            const currentLen = currentContent.length;
+            
+            if (candidateLen <= currentLen && commonLen > bestCommonLen) {
                 bestCommonLen = commonLen;
                 bestParent = candidate.fileName;
             }
         }
         
         // 최소 2개 이상 메시지가 같아야 진짜 분기 (그리팅만 같은 건 제외)
-        // 그리팅(1) + 최소 1개 대화 = 2개 이상
         const MIN_COMMON_FOR_BRANCH = 2;
         
         if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
-            // 분기점 = 공통 부분 끝 다음
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommonLen,
-                depth: 1 // 일단 1로, 나중에 계산
+                depth: 1
             };
         }
     }

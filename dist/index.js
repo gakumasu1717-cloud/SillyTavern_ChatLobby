@@ -2907,27 +2907,27 @@ ${message}` : message;
   }
   async function analyzeGroup(charAvatar, group) {
     if (group.length < 2) return {};
-    const sorted = [...group].sort((a, b) => b.length - a.length);
     const result = {};
     const chatContents = {};
-    await Promise.all(sorted.map(async (item) => {
+    await Promise.all(group.map(async (item) => {
       const content = await loadChatContent(charAvatar, item.fileName);
       if (content) {
         chatContents[item.fileName] = content;
       }
     }));
-    for (let i = 1; i < sorted.length; i++) {
-      const current = sorted[i];
+    for (const current of group) {
       const currentContent = chatContents[current.fileName];
       if (!currentContent) continue;
       let bestParent = null;
       let bestCommonLen = 0;
-      for (let j = 0; j < i; j++) {
-        const candidate = sorted[j];
+      for (const candidate of group) {
+        if (candidate.fileName === current.fileName) continue;
         const candidateContent = chatContents[candidate.fileName];
         if (!candidateContent) continue;
         const commonLen = findCommonPrefixLength(candidateContent, currentContent);
-        if (commonLen > bestCommonLen) {
+        const candidateLen = candidateContent.length;
+        const currentLen = currentContent.length;
+        if (candidateLen <= currentLen && commonLen > bestCommonLen) {
           bestCommonLen = commonLen;
           bestParent = candidate.fileName;
         }
@@ -2938,7 +2938,6 @@ ${message}` : message;
           parentChat: bestParent,
           branchPoint: bestCommonLen,
           depth: 1
-          // 일단 1로, 나중에 계산
         };
       }
     }
