@@ -145,7 +145,7 @@ async function analyzeGroup(charAvatar, group) {
     // 각 채팅에 대해 부모 찾기
     for (const current of group) {
         const currentContent = chatContents[current.fileName];
-        if (!currentContent) continue;
+        if (!currentContent || currentContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
         
         let bestParent = null;
         let bestCommonLen = 0;
@@ -155,7 +155,7 @@ async function analyzeGroup(charAvatar, group) {
             if (candidate.fileName === current.fileName) continue;
             
             const candidateContent = chatContents[candidate.fileName];
-            if (!candidateContent) continue;
+            if (!candidateContent || candidateContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
             
             const commonLen = findCommonPrefixLength(candidateContent, currentContent);
             

@@ -2917,13 +2917,13 @@ ${message}` : message;
     }));
     for (const current of group) {
       const currentContent = chatContents[current.fileName];
-      if (!currentContent) continue;
+      if (!currentContent || currentContent.length < 2) continue;
       let bestParent = null;
       let bestCommonLen = 0;
       for (const candidate of group) {
         if (candidate.fileName === current.fileName) continue;
         const candidateContent = chatContents[candidate.fileName];
-        if (!candidateContent) continue;
+        if (!candidateContent || candidateContent.length < 2) continue;
         const commonLen = findCommonPrefixLength(candidateContent, currentContent);
         const candidateLen = candidateContent.length;
         const currentLen = currentContent.length;
