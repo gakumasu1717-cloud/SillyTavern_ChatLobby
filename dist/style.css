@@ -1571,11 +1571,66 @@
     transition: all var(--transition-fast), padding-left 0.15s ease;
 }
 
+.lobby-chat-item.is-branch {
+    background: rgba(100, 150, 255, 0.03);
+}
+
 .lobby-chat-item .branch-icon {
     font-size: 0.9em;
     flex-shrink: 0;
     opacity: 0.8;
     margin-right: -4px;
+}
+
+/* 분기 배지 */
+.branch-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    color: rgba(100, 180, 255, 0.9);
+    background: rgba(100, 150, 255, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 6px;
+    font-weight: 500;
+}
+
+/* 분기 분석 바 */
+.branch-analyze-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(100, 150, 255, 0.08);
+    border: 1px dashed rgba(100, 150, 255, 0.3);
+    border-radius: 8px;
+}
+
+.branch-analyze-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: rgba(100, 150, 255, 0.2);
+    border: 1px solid rgba(100, 150, 255, 0.4);
+    border-radius: 6px;
+    color: rgba(200, 220, 255, 0.95);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.branch-analyze-btn:hover:not(:disabled) {
+    background: rgba(100, 150, 255, 0.35);
+    border-color: rgba(100, 150, 255, 0.6);
+}
+
+.branch-analyze-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.branch-analyze-status {
+    font-size: 11px;
+    color: rgba(180, 200, 255, 0.8);
 }
 
 /* 분기 깊이별 시각적 표시 */

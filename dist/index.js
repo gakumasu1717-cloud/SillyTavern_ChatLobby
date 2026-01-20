@@ -2742,6 +2742,250 @@ ${message}` : message;
   // src/ui/chatList.js
   init_notifications();
   init_config();
+
+  // src/data/branchCache.js
+  var STORAGE_KEY3 = "chatLobby_branchCache";
+  var FINGERPRINT_MESSAGE_COUNT = 10;
+  var cacheData = null;
+  function loadCache() {
+    if (cacheData) return cacheData;
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY3);
+      if (stored) {
+        cacheData = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn("[BranchCache] Failed to load cache:", e);
+    }
+    if (!cacheData || cacheData.version !== 1) {
+      cacheData = { version: 1, characters: {} };
+    }
+    return cacheData;
+  }
+  function saveCache() {
+    try {
+      localStorage.setItem(STORAGE_KEY3, JSON.stringify(cacheData));
+    } catch (e) {
+      console.warn("[BranchCache] Failed to save cache:", e);
+    }
+  }
+  function hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) + hash + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return hash.toString(36);
+  }
+  function createFingerprint(messages) {
+    const parts = [];
+    const count = Math.min(FINGERPRINT_MESSAGE_COUNT, messages.length);
+    for (let i = 0; i < count; i++) {
+      const msg = messages[i];
+      if (msg && msg.mes) {
+        parts.push((msg.is_user ? "U" : "A") + ":" + msg.mes.substring(0, 100));
+      }
+    }
+    return hashString(parts.join("|"));
+  }
+  function findCommonPrefixLength(chat1, chat2) {
+    const minLen = Math.min(chat1.length, chat2.length);
+    let commonLen = 0;
+    for (let i = 0; i < minLen; i++) {
+      const msg1 = chat1[i]?.mes || "";
+      const msg2 = chat2[i]?.mes || "";
+      if (msg1 === msg2) {
+        commonLen++;
+      } else {
+        break;
+      }
+    }
+    return commonLen;
+  }
+  function setFingerprint(charAvatar, chatFileName, hash, length) {
+    const cache2 = loadCache();
+    if (!cache2.characters[charAvatar]) {
+      cache2.characters[charAvatar] = { fingerprints: {}, branches: {} };
+    }
+    cache2.characters[charAvatar].fingerprints[chatFileName] = {
+      hash,
+      length,
+      lastUpdated: Date.now()
+    };
+    saveCache();
+  }
+  function setBranchInfo(charAvatar, chatFileName, parentChat, branchPoint, depth) {
+    const cache2 = loadCache();
+    if (!cache2.characters[charAvatar]) {
+      cache2.characters[charAvatar] = { fingerprints: {}, branches: {} };
+    }
+    cache2.characters[charAvatar].branches[chatFileName] = {
+      parentChat,
+      branchPoint,
+      depth
+    };
+    saveCache();
+  }
+  function getAllBranches(charAvatar) {
+    const cache2 = loadCache();
+    return cache2.characters[charAvatar]?.branches || {};
+  }
+  function getAllFingerprints(charAvatar) {
+    const cache2 = loadCache();
+    return cache2.characters[charAvatar]?.fingerprints || {};
+  }
+
+  // src/utils/branchAnalyzer.js
+  async function loadChatContent(charAvatar, fileName) {
+    try {
+      const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
+      const chatName = fileName.replace(".jsonl", "");
+      const response = await fetch("/api/chats/get", {
+        method: "POST",
+        headers: api.getRequestHeaders(),
+        body: JSON.stringify({
+          ch_name: charDir,
+          file_name: chatName,
+          avatar_url: charAvatar
+        })
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 1) {
+        return data.slice(1);
+      }
+      return data;
+    } catch (e) {
+      console.error("[BranchAnalyzer] Failed to load chat:", fileName, e);
+      return null;
+    }
+  }
+  async function ensureFingerprints(charAvatar, chats, onProgress = null) {
+    const existing = getAllFingerprints(charAvatar);
+    const result = { ...existing };
+    const needsUpdate = chats.filter((chat) => {
+      const fn = chat.file_name || "";
+      const cached = existing[fn];
+      const chatLength = chat.chat_items || chat.message_count || 0;
+      return !cached || cached.length !== chatLength;
+    });
+    console.log(`[BranchAnalyzer] Need fingerprint for ${needsUpdate.length}/${chats.length} chats`);
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
+      const batch = needsUpdate.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (chat) => {
+        const fn = chat.file_name || "";
+        const content = await loadChatContent(charAvatar, fn);
+        if (content && content.length > 0) {
+          const hash = createFingerprint(content);
+          const length = content.length;
+          setFingerprint(charAvatar, fn, hash, length);
+          result[fn] = { hash, length };
+        }
+      }));
+      if (onProgress) {
+        onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
+      }
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    return result;
+  }
+  function groupByFingerprint(fingerprints) {
+    const groups = {};
+    for (const [fileName, data] of Object.entries(fingerprints)) {
+      const hash = data.hash;
+      if (!groups[hash]) {
+        groups[hash] = [];
+      }
+      groups[hash].push({ fileName, length: data.length });
+    }
+    return groups;
+  }
+  async function analyzeGroup(charAvatar, group) {
+    if (group.length < 2) return {};
+    const sorted = [...group].sort((a, b) => b.length - a.length);
+    const result = {};
+    const chatContents = {};
+    await Promise.all(sorted.map(async (item) => {
+      const content = await loadChatContent(charAvatar, item.fileName);
+      if (content) {
+        chatContents[item.fileName] = content;
+      }
+    }));
+    for (let i = 1; i < sorted.length; i++) {
+      const current = sorted[i];
+      const currentContent = chatContents[current.fileName];
+      if (!currentContent) continue;
+      let bestParent = null;
+      let bestCommonLen = 0;
+      for (let j = 0; j < i; j++) {
+        const candidate = sorted[j];
+        const candidateContent = chatContents[candidate.fileName];
+        if (!candidateContent) continue;
+        const commonLen = findCommonPrefixLength(candidateContent, currentContent);
+        if (commonLen > bestCommonLen) {
+          bestCommonLen = commonLen;
+          bestParent = candidate.fileName;
+        }
+      }
+      if (bestParent && bestCommonLen > 0) {
+        result[current.fileName] = {
+          parentChat: bestParent,
+          branchPoint: bestCommonLen,
+          depth: 1
+          // 일단 1로, 나중에 계산
+        };
+      }
+    }
+    const calculateDepth = (fileName, visited = /* @__PURE__ */ new Set()) => {
+      if (visited.has(fileName)) return 0;
+      visited.add(fileName);
+      const info = result[fileName];
+      if (!info || !info.parentChat) return 0;
+      const parentDepth = calculateDepth(info.parentChat, visited);
+      info.depth = parentDepth + 1;
+      return info.depth;
+    };
+    for (const fileName of Object.keys(result)) {
+      calculateDepth(fileName);
+    }
+    return result;
+  }
+  async function analyzeBranches(charAvatar, chats, onProgress = null) {
+    console.log("[BranchAnalyzer] Starting analysis for", charAvatar);
+    const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
+      if (onProgress) onProgress(p * 0.5);
+    });
+    const groups = groupByFingerprint(fingerprints);
+    const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
+    console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
+    const allBranches = {};
+    for (let i = 0; i < multiGroups.length; i++) {
+      const group = multiGroups[i];
+      const groupResult = await analyzeGroup(charAvatar, group);
+      for (const [fileName, info] of Object.entries(groupResult)) {
+        allBranches[fileName] = info;
+        setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+      }
+      if (onProgress) {
+        onProgress(0.5 + (i + 1) / multiGroups.length * 0.5);
+      }
+    }
+    console.log("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");
+    return allBranches;
+  }
+  function needsBranchAnalysis(charAvatar, chats) {
+    const fingerprints = getAllFingerprints(charAvatar);
+    for (const chat of chats) {
+      const fn = chat.file_name || "";
+      if (!fingerprints[fn]) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // src/ui/chatList.js
   var tooltipElement = null;
   var tooltipTimeout = null;
   var currentTooltipTarget = null;
@@ -2975,12 +3219,95 @@ ${message}` : message;
         `;
       return;
     }
-    container.innerHTML = chatArray.map(
+    let branchAnalyzeBtn = "";
+    if (sortOption === "branch") {
+      const needsAnalysis = needsBranchAnalysis(charAvatar, chatArray);
+      if (needsAnalysis) {
+        const newCount = countNewChatsForAnalysis(charAvatar, chatArray);
+        if (newCount > 0 && newCount <= 3) {
+          setTimeout(() => {
+            autoAnalyzeBranches(container, charAvatar, chatArray);
+          }, 100);
+          branchAnalyzeBtn = `
+                    <div class="branch-analyze-bar" data-char-avatar="${escapeHtml(charAvatar)}">
+                        <span class="branch-analyze-status">\u23F3 \uC0C8 \uCC44\uD305 ${newCount}\uAC1C \uC790\uB3D9 \uBD84\uC11D \uC911...</span>
+                    </div>
+                `;
+        } else if (newCount > 3) {
+          branchAnalyzeBtn = `
+                    <div class="branch-analyze-bar" data-char-avatar="${escapeHtml(charAvatar)}">
+                        <button class="branch-analyze-btn" title="\uCC44\uD305 \uB0B4\uC6A9\uC744 \uBD84\uC11D\uD558\uC5EC \uBD84\uAE30 \uAD00\uACC4\uB97C \uD30C\uC545\uD569\uB2C8\uB2E4">
+                            \u{1F50D} \uBD84\uAE30 \uBD84\uC11D\uD558\uAE30 (${newCount}\uAC1C)
+                        </button>
+                        <span class="branch-analyze-status"></span>
+                    </div>
+                `;
+        }
+      }
+    }
+    container.innerHTML = branchAnalyzeBtn + chatArray.map(
       (chat, idx) => renderChatItem(chat, charAvatar, idx)
     ).join("");
+    bindBranchAnalyzeEvents(container, charAvatar, chatArray);
     bindChatEvents(container, charAvatar);
     bindTooltipEvents(container);
     syncDropdowns(filterFolder, sortOption);
+  }
+  function bindBranchAnalyzeEvents(container, charAvatar, chats) {
+    const btn = container.querySelector(".branch-analyze-btn");
+    const statusEl = container.querySelector(".branch-analyze-status");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "\u23F3 \uBD84\uC11D \uC911...";
+      try {
+        await analyzeBranches(charAvatar, chats, (progress) => {
+          const percent = Math.round(progress * 100);
+          if (statusEl) {
+            statusEl.textContent = `${percent}%`;
+          }
+        });
+        showToast("\uBD84\uAE30 \uBD84\uC11D \uC644\uB8CC! \uBAA9\uB85D\uC744 \uC0C8\uB85C\uACE0\uCE68\uD569\uB2C8\uB2E4.", "success");
+        const analyzeBar = container.querySelector(".branch-analyze-bar");
+        if (analyzeBar) analyzeBar.remove();
+        const cachedChats = cache.get("chats", charAvatar);
+        if (cachedChats) {
+          renderChats(container, cachedChats, charAvatar);
+        }
+      } catch (e) {
+        console.error("[BranchAnalyze] Error:", e);
+        showToast("\uBD84\uAE30 \uBD84\uC11D \uC2E4\uD328", "error");
+        btn.disabled = false;
+        btn.textContent = "\u{1F50D} \uBD84\uAE30 \uBD84\uC11D\uD558\uAE30";
+      }
+    });
+  }
+  function countNewChatsForAnalysis(charAvatar, chats) {
+    const fingerprints = getAllFingerprints(charAvatar);
+    let count = 0;
+    for (const chat of chats) {
+      const fn = chat.file_name || "";
+      if (!fingerprints[fn]) {
+        count++;
+      }
+    }
+    return count;
+  }
+  async function autoAnalyzeBranches(container, charAvatar, chats) {
+    try {
+      await analyzeBranches(charAvatar, chats);
+      const cachedChats = cache.get("chats", charAvatar);
+      if (cachedChats) {
+        renderChats(container, cachedChats, charAvatar);
+      }
+    } catch (e) {
+      console.error("[AutoBranchAnalyze] Error:", e);
+      const statusEl = container.querySelector(".branch-analyze-status");
+      if (statusEl) {
+        statusEl.innerHTML = `<button class="branch-analyze-btn">\u{1F50D} \uBD84\uAE30 \uBD84\uC11D\uD558\uAE30</button>`;
+        bindBranchAnalyzeEvents(container, charAvatar, chats);
+      }
+    }
   }
   function normalizeChats(chats) {
     if (Array.isArray(chats)) return chats;
@@ -3019,7 +3346,7 @@ ${message}` : message;
   function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
     if (sortOption === "branch") {
-      return sortByBranchTree(chats, charAvatar, data);
+      return sortByBranchTreeCached(chats, charAvatar, data);
     }
     return [...chats].sort((a, b) => {
       const fnA = a.file_name || "";
@@ -3040,45 +3367,51 @@ ${message}` : message;
       return getTimestamp(b) - getTimestamp(a);
     });
   }
-  function parseBranchInfo(fileName) {
+  function parseBranchInfoFromName(fileName) {
     const cleanName = fileName.replace(".jsonl", "");
-    const branchMatch = cleanName.match(/^(.+?)\s*#(\d+(?:-\d+)*)$/);
+    const branchMatch = cleanName.match(/^Branch\s*#(\d+(?:-\d+)*)\s*-/i);
     if (!branchMatch) {
-      return {
-        base: cleanName,
-        branch: null,
-        depth: 0,
-        sortKey: cleanName + "\0"
-        // null 문자로 원본이 먼저 오도록
-      };
+      return { branch: null, depth: 0, isOriginal: true };
     }
-    const basePart = branchMatch[1].trim();
-    const branchPart = branchMatch[2];
+    const branchPart = branchMatch[1];
     const branchSegments = branchPart.split("-");
-    const depth = branchSegments.length;
-    let parent = basePart;
-    if (branchSegments.length > 1) {
-      parent = basePart + " #" + branchSegments.slice(0, -1).join("-");
-    }
-    const paddedBranch = branchSegments.map((s) => s.padStart(6, "0")).join("-");
-    const sortKey = basePart + "#" + paddedBranch;
     return {
-      base: basePart,
       branch: branchPart,
-      parent,
-      depth,
-      sortKey
+      depth: branchSegments.length,
+      isOriginal: false
     };
   }
-  function sortByBranchTree(chats, charAvatar, data) {
+  function sortByBranchTreeCached(chats, charAvatar, data) {
+    const branches = getAllBranches(charAvatar);
     const chatsWithBranch = chats.map((chat) => {
       const fileName = chat.file_name || "";
-      const branchInfo = parseBranchInfo(fileName);
-      return { ...chat, _branchInfo: branchInfo };
+      const branchInfo = branches[fileName];
+      if (branchInfo) {
+        return {
+          ...chat,
+          _branchInfo: {
+            parentChat: branchInfo.parentChat,
+            branchPoint: branchInfo.branchPoint,
+            depth: branchInfo.depth,
+            isOriginal: false
+          }
+        };
+      } else {
+        const nameInfo = parseBranchInfoFromName(fileName);
+        return {
+          ...chat,
+          _branchInfo: {
+            parentChat: null,
+            branchPoint: 0,
+            depth: nameInfo.depth,
+            isOriginal: nameInfo.isOriginal
+          }
+        };
+      }
     });
-    chatsWithBranch.sort((a, b) => {
-      const infoA = a._branchInfo;
-      const infoB = b._branchInfo;
+    const originals = chatsWithBranch.filter((c) => c._branchInfo.isOriginal);
+    const branchList = chatsWithBranch.filter((c) => !c._branchInfo.isOriginal);
+    originals.sort((a, b) => {
       const fnA = a.file_name || "";
       const fnB = b.file_name || "";
       const keyA = storage.getChatKey(charAvatar, fnA);
@@ -3086,9 +3419,31 @@ ${message}` : message;
       const favA = data.favorites.includes(keyA) ? 0 : 1;
       const favB = data.favorites.includes(keyB) ? 0 : 1;
       if (favA !== favB) return favA - favB;
-      return infoA.sortKey.localeCompare(infoB.sortKey, "ko");
+      return getTimestamp(b) - getTimestamp(a);
     });
-    return chatsWithBranch;
+    branchList.sort((a, b) => {
+      const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+      if (depthDiff !== 0) return depthDiff;
+      return getTimestamp(b) - getTimestamp(a);
+    });
+    const result = [];
+    const usedBranches = /* @__PURE__ */ new Set();
+    for (const original of originals) {
+      result.push(original);
+      const childBranches = branchList.filter(
+        (b) => b._branchInfo.parentChat === original.file_name && !usedBranches.has(b.file_name)
+      );
+      for (const branch of childBranches) {
+        result.push(branch);
+        usedBranches.add(branch.file_name);
+      }
+    }
+    for (const branch of branchList) {
+      if (!usedBranches.has(branch.file_name)) {
+        result.push(branch);
+      }
+    }
+    return result;
   }
   function renderChatItem(chat, charAvatar, index) {
     const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
@@ -3106,25 +3461,28 @@ ${message}` : message;
     const safeFullPreview = escapeHtml(tooltipPreview);
     const branchInfo = chat._branchInfo;
     const branchDepth = branchInfo?.depth || 0;
-    const branchIcon = branchDepth > 0 ? "\u{1F500}" : "\u{1F4C4}";
-    const indentStyle = branchDepth > 0 ? `padding-left: ${branchDepth * 16}px;` : "";
+    const isBranch = branchInfo && !branchInfo.isOriginal;
+    const branchPoint = branchInfo?.branchPoint || 0;
+    const depthIndent = isBranch ? Math.min(branchDepth, 5) * 16 : 0;
+    const indentStyle = isBranch ? `margin-left: ${depthIndent}px;` : "";
     const branchClass = branchInfo ? "branch-mode" : "";
+    const branchBadge = isBranch ? `<span class="branch-badge" title="\uBD84\uAE30\uC810: ${branchPoint}\uBC88\uC9F8 \uBA54\uC2DC\uC9C0">\u21B3 \uBD84\uAE30${branchPoint > 0 ? ` @${branchPoint}` : ""}</span>` : "";
     return `
-    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""} ${branchClass}" 
+    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""} ${branchClass} ${isBranch ? "is-branch" : ""}" 
          data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
          data-folder-id="${folderId}"
          data-branch-depth="${branchDepth}"
+         data-branch-point="${branchPoint}"
          data-full-preview="${safeFullPreview}"
          style="${indentStyle}">
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
         <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
-        ${branchInfo ? `<span class="branch-icon">${branchIcon}</span>` : ""}
         <div class="chat-content">
-            <div class="chat-name">${escapeHtml(displayName)}</div>
+            <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
             <div class="chat-meta">
                 ${messageCount > 0 ? `<span>\u{1F4AC} ${messageCount}\uAC1C</span>` : ""}

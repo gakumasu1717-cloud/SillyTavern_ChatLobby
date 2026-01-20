@@ -13,6 +13,12 @@ import { showToast, showAlert, showConfirm } from './notifications.js';
 import { CONFIG } from '../config.js';
 import { getFoldersOptionsHTML } from './templates.js';
 import { lastChatCache } from '../data/lastChatCache.js';
+import { 
+    analyzeBranches, 
+    sortChatsByBranchTree, 
+    needsBranchAnalysis 
+} from '../utils/branchAnalyzer.js';
+import { getAllBranches, getAllFingerprints } from '../data/branchCache.js';
 
 // ============================================
 // 툴팁 관련 변수
@@ -396,9 +402,43 @@ function renderChats(container, rawChats, charAvatar) {
         return;
     }
     
-    container.innerHTML = chatArray.map((chat, idx) => 
+    // 브랜치 모드면 분석 버튼 추가 또는 자동 분석
+    let branchAnalyzeBtn = '';
+    if (sortOption === 'branch') {
+        const needsAnalysis = needsBranchAnalysis(charAvatar, chatArray);
+        if (needsAnalysis) {
+            // 새 채팅이 적으면 자동 분석, 많으면 버튼 표시
+            const newCount = countNewChatsForAnalysis(charAvatar, chatArray);
+            
+            if (newCount > 0 && newCount <= 3) {
+                // 자동 백그라운드 분석 (3개 이하)
+                setTimeout(() => {
+                    autoAnalyzeBranches(container, charAvatar, chatArray);
+                }, 100);
+                branchAnalyzeBtn = `
+                    <div class="branch-analyze-bar" data-char-avatar="${escapeHtml(charAvatar)}">
+                        <span class="branch-analyze-status">⏳ 새 채팅 ${newCount}개 자동 분석 중...</span>
+                    </div>
+                `;
+            } else if (newCount > 3) {
+                branchAnalyzeBtn = `
+                    <div class="branch-analyze-bar" data-char-avatar="${escapeHtml(charAvatar)}">
+                        <button class="branch-analyze-btn" title="채팅 내용을 분석하여 분기 관계를 파악합니다">
+                            🔍 분기 분석하기 (${newCount}개)
+                        </button>
+                        <span class="branch-analyze-status"></span>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    container.innerHTML = branchAnalyzeBtn + chatArray.map((chat, idx) => 
         renderChatItem(chat, charAvatar, idx)
     ).join('');
+    
+    // 브랜치 분석 버튼 이벤트
+    bindBranchAnalyzeEvents(container, charAvatar, chatArray);
     
     bindChatEvents(container, charAvatar);
     
@@ -407,6 +447,96 @@ function renderChats(container, rawChats, charAvatar) {
     
     // 드롭다운 동기화
     syncDropdowns(filterFolder, sortOption);
+}
+
+/**
+ * 브랜치 분석 버튼 이벤트 바인딩
+ * @param {HTMLElement} container
+ * @param {string} charAvatar
+ * @param {Array} chats
+ */
+function bindBranchAnalyzeEvents(container, charAvatar, chats) {
+    const btn = container.querySelector('.branch-analyze-btn');
+    const statusEl = container.querySelector('.branch-analyze-status');
+    
+    if (!btn) return;
+    
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = '⏳ 분석 중...';
+        
+        try {
+            await analyzeBranches(charAvatar, chats, (progress) => {
+                const percent = Math.round(progress * 100);
+                if (statusEl) {
+                    statusEl.textContent = `${percent}%`;
+                }
+            });
+            
+            showToast('분기 분석 완료! 목록을 새로고침합니다.', 'success');
+            
+            // 분석 완료 후 다시 렌더링
+            const analyzeBar = container.querySelector('.branch-analyze-bar');
+            if (analyzeBar) analyzeBar.remove();
+            
+            // 현재 캐릭터 채팅 목록 다시 렌더링
+            const cachedChats = cache.get('chats', charAvatar);
+            if (cachedChats) {
+                renderChats(container, cachedChats, charAvatar);
+            }
+        } catch (e) {
+            console.error('[BranchAnalyze] Error:', e);
+            showToast('분기 분석 실패', 'error');
+            btn.disabled = false;
+            btn.textContent = '🔍 분기 분석하기';
+        }
+    });
+}
+
+/**
+ * 분석이 필요한 새 채팅 수 카운트
+ * @param {string} charAvatar
+ * @param {Array} chats
+ * @returns {number}
+ */
+function countNewChatsForAnalysis(charAvatar, chats) {
+    const fingerprints = getAllFingerprints(charAvatar);
+    let count = 0;
+    
+    for (const chat of chats) {
+        const fn = chat.file_name || '';
+        if (!fingerprints[fn]) {
+            count++;
+        }
+    }
+    
+    return count;
+}
+
+/**
+ * 자동 백그라운드 분석 (새 채팅이 적을 때)
+ * @param {HTMLElement} container
+ * @param {string} charAvatar
+ * @param {Array} chats
+ */
+async function autoAnalyzeBranches(container, charAvatar, chats) {
+    try {
+        await analyzeBranches(charAvatar, chats);
+        
+        // 분석 완료 후 다시 렌더링
+        const cachedChats = cache.get('chats', charAvatar);
+        if (cachedChats) {
+            renderChats(container, cachedChats, charAvatar);
+        }
+    } catch (e) {
+        console.error('[AutoBranchAnalyze] Error:', e);
+        // 자동 분석 실패 시 버튼으로 전환
+        const statusEl = container.querySelector('.branch-analyze-status');
+        if (statusEl) {
+            statusEl.innerHTML = `<button class="branch-analyze-btn">🔍 분기 분석하기</button>`;
+            bindBranchAnalyzeEvents(container, charAvatar, chats);
+        }
+    }
 }
 
 /**
@@ -484,9 +614,9 @@ function filterByFolder(chats, charAvatar, filterFolder) {
 function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
     
-    // 분기로 보기 모드
+    // 분기로 보기 모드 - 캐시된 브랜치 정보 사용
     if (sortOption === 'branch') {
-        return sortByBranchTree(chats, charAvatar, data);
+        return sortByBranchTreeCached(chats, charAvatar, data);
     }
     
     return [...chats].sort((a, b) => {
@@ -516,75 +646,81 @@ function sortChats(chats, charAvatar, sortOption) {
 }
 
 /**
- * 채팅 파일명에서 브랜치 정보 파싱
- * 패턴 예시:
- * - "캐릭터 - 2024-1-7@12h34m56s.jsonl" -> base: "캐릭터 - 2024-1-7@12h34m56s", branch: null
- * - "캐릭터 - 2024-1-7@12h34m56s #21.jsonl" -> base: "캐릭터 - 2024-1-7@12h34m56s", branch: "21"
- * - "캐릭터 - 2024-1-7@12h34m56s #99-1.jsonl" -> base: "캐릭터 - 2024-1-7@12h34m56s #99", branch: "99-1"
+ * 채팅 파일명에서 브랜치 정보 파싱 (파일명 기반 - 백업용)
+ * 패턴:
+ * - 원본: "해루 - 2026-01-07@23h38m10s.jsonl"
+ * - 브랜치: "Branch #5 - 2026-01-20@01h10m03s.jsonl"
+ * 
  * @param {string} fileName
- * @returns {{ base: string, branch: string|null, depth: number, sortKey: string }}
+ * @returns {{ branch: string|null, depth: number, isOriginal: boolean }}
  */
-function parseBranchInfo(fileName) {
+function parseBranchInfoFromName(fileName) {
     const cleanName = fileName.replace('.jsonl', '');
     
-    // #숫자 또는 #숫자-숫자... 패턴 찾기
-    const branchMatch = cleanName.match(/^(.+?)\s*#(\d+(?:-\d+)*)$/);
+    // Branch #숫자 또는 Branch #숫자-숫자 패턴 찾기
+    const branchMatch = cleanName.match(/^Branch\s*#(\d+(?:-\d+)*)\s*-/i);
     
     if (!branchMatch) {
-        // 브랜치 없음 - 원본 채팅
-        return {
-            base: cleanName,
-            branch: null,
-            depth: 0,
-            sortKey: cleanName + '\x00' // null 문자로 원본이 먼저 오도록
-        };
+        return { branch: null, depth: 0, isOriginal: true };
     }
     
-    const basePart = branchMatch[1].trim();
-    const branchPart = branchMatch[2];
+    const branchPart = branchMatch[1];
     const branchSegments = branchPart.split('-');
-    const depth = branchSegments.length;
-    
-    // 부모 찾기: #99-1 -> 부모는 #99
-    let parent = basePart;
-    if (branchSegments.length > 1) {
-        parent = basePart + ' #' + branchSegments.slice(0, -1).join('-');
-    }
-    
-    // 정렬 키: base + 브랜치 숫자들 (각 숫자를 0-패딩해서 자연 정렬)
-    const paddedBranch = branchSegments.map(s => s.padStart(6, '0')).join('-');
-    const sortKey = basePart + '\x01#' + paddedBranch;
     
     return {
-        base: basePart,
         branch: branchPart,
-        parent,
-        depth,
-        sortKey
+        depth: branchSegments.length,
+        isOriginal: false
     };
 }
 
 /**
- * 브랜치 트리 구조로 정렬
+ * 캐시된 브랜치 정보 사용하여 트리 구조로 정렬
  * @param {Array} chats
  * @param {string} charAvatar
  * @param {Object} data - storage 데이터
  * @returns {Array}
  */
-function sortByBranchTree(chats, charAvatar, data) {
-    // 1. 각 채팅에 브랜치 정보 추가
+function sortByBranchTreeCached(chats, charAvatar, data) {
+    const branches = getAllBranches(charAvatar);
+    
+    // 각 채팅에 브랜치 정보 추가
     const chatsWithBranch = chats.map(chat => {
         const fileName = chat.file_name || '';
-        const branchInfo = parseBranchInfo(fileName);
-        return { ...chat, _branchInfo: branchInfo };
+        const branchInfo = branches[fileName];
+        
+        // 캐시에 있으면 사용, 없으면 파일명으로 판단
+        if (branchInfo) {
+            return {
+                ...chat,
+                _branchInfo: {
+                    parentChat: branchInfo.parentChat,
+                    branchPoint: branchInfo.branchPoint,
+                    depth: branchInfo.depth,
+                    isOriginal: false
+                }
+            };
+        } else {
+            // 캐시 없음 - 파일명 기반 판단
+            const nameInfo = parseBranchInfoFromName(fileName);
+            return {
+                ...chat,
+                _branchInfo: {
+                    parentChat: null,
+                    branchPoint: 0,
+                    depth: nameInfo.depth,
+                    isOriginal: nameInfo.isOriginal
+                }
+            };
+        }
     });
     
-    // 2. sortKey로 정렬 (같은 base 아래 브랜치들이 자연스럽게 그룹핑됨)
-    chatsWithBranch.sort((a, b) => {
-        const infoA = a._branchInfo;
-        const infoB = b._branchInfo;
-        
-        // 즐겨찾기 우선
+    // 원본과 브랜치 분리
+    const originals = chatsWithBranch.filter(c => c._branchInfo.isOriginal);
+    const branchList = chatsWithBranch.filter(c => !c._branchInfo.isOriginal);
+    
+    // 원본: 즐겨찾기 우선, 날짜순
+    originals.sort((a, b) => {
         const fnA = a.file_name || '';
         const fnB = b.file_name || '';
         const keyA = storage.getChatKey(charAvatar, fnA);
@@ -592,12 +728,42 @@ function sortByBranchTree(chats, charAvatar, data) {
         const favA = data.favorites.includes(keyA) ? 0 : 1;
         const favB = data.favorites.includes(keyB) ? 0 : 1;
         if (favA !== favB) return favA - favB;
-        
-        // sortKey로 비교
-        return infoA.sortKey.localeCompare(infoB.sortKey, 'ko');
+        return getTimestamp(b) - getTimestamp(a);
     });
     
-    return chatsWithBranch;
+    // 브랜치: depth 순 → 날짜순
+    branchList.sort((a, b) => {
+        const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+        if (depthDiff !== 0) return depthDiff;
+        return getTimestamp(b) - getTimestamp(a);
+    });
+    
+    // 트리 구조로 재배치: 원본 뒤에 해당 브랜치들
+    const result = [];
+    const usedBranches = new Set();
+    
+    for (const original of originals) {
+        result.push(original);
+        
+        // 이 원본에서 파생된 브랜치 찾기
+        const childBranches = branchList.filter(b => 
+            b._branchInfo.parentChat === original.file_name && !usedBranches.has(b.file_name)
+        );
+        
+        for (const branch of childBranches) {
+            result.push(branch);
+            usedBranches.add(branch.file_name);
+        }
+    }
+    
+    // 남은 브랜치 (부모를 못 찾은 경우)
+    for (const branch of branchList) {
+        if (!usedBranches.has(branch.file_name)) {
+            result.push(branch);
+        }
+    }
+    
+    return result;
 }
 
 /**
@@ -634,26 +800,33 @@ function renderChatItem(chat, charAvatar, index) {
     // 브랜치 정보 (분기로 보기 모드일 때 _branchInfo가 있음)
     const branchInfo = chat._branchInfo;
     const branchDepth = branchInfo?.depth || 0;
-    const branchIcon = branchDepth > 0 ? '🔀' : '📄';
-    const indentStyle = branchDepth > 0 ? `padding-left: ${branchDepth * 16}px;` : '';
+    const isBranch = branchInfo && !branchInfo.isOriginal;
+    const branchPoint = branchInfo?.branchPoint || 0;
+    
+    // 브랜치면 왼쪽에 갭(margin) 추가 + 색상 변경
+    const depthIndent = isBranch ? Math.min(branchDepth, 5) * 16 : 0;
+    const indentStyle = isBranch ? `margin-left: ${depthIndent}px;` : '';
     const branchClass = branchInfo ? 'branch-mode' : '';
+    const branchBadge = isBranch 
+        ? `<span class="branch-badge" title="분기점: ${branchPoint}번째 메시지">↳ 분기${branchPoint > 0 ? ` @${branchPoint}` : ''}</span>`
+        : '';
     
     return `
-    <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''} ${branchClass}" 
+    <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''} ${branchClass} ${isBranch ? 'is-branch' : ''}" 
          data-file-name="${safeFileName}" 
          data-char-avatar="${safeAvatar}" 
          data-chat-index="${index}" 
          data-folder-id="${folderId}"
          data-branch-depth="${branchDepth}"
+         data-branch-point="${branchPoint}"
          data-full-preview="${safeFullPreview}"
          style="${indentStyle}">
         <div class="chat-checkbox" style="display:none;">
             <input type="checkbox" class="chat-select-cb">
         </div>
         <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
-        ${branchInfo ? `<span class="branch-icon">${branchIcon}</span>` : ''}
         <div class="chat-content">
-            <div class="chat-name">${escapeHtml(displayName)}</div>
+            <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
             <div class="chat-meta">
                 ${messageCount > 0 ? `<span>💬 ${messageCount}개</span>` : ''}
