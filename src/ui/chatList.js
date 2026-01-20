@@ -15,7 +15,6 @@ import { getFoldersOptionsHTML } from './templates.js';
 import { lastChatCache } from '../data/lastChatCache.js';
 import { 
     analyzeBranches, 
-    sortChatsByBranchTree, 
     needsBranchAnalysis 
 } from '../utils/branchAnalyzer.js';
 import { getAllBranches, getAllFingerprints } from '../data/branchCache.js';
