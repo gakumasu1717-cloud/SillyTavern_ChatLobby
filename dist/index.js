@@ -3433,19 +3433,30 @@ ${message}` : message;
     });
     const result = [];
     const usedBranches = /* @__PURE__ */ new Set();
+    function addChildBranches(parentFileName) {
+      const children = branchList.filter(
+        (b) => b._branchInfo.parentChat === parentFileName && !usedBranches.has(b.file_name)
+      );
+      children.sort((a, b) => {
+        const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+        if (depthDiff !== 0) return depthDiff;
+        return getTimestamp(b) - getTimestamp(a);
+      });
+      for (const child of children) {
+        result.push(child);
+        usedBranches.add(child.file_name);
+        addChildBranches(child.file_name);
+      }
+    }
     for (const original of originals) {
       result.push(original);
-      const childBranches = branchList.filter(
-        (b) => b._branchInfo.parentChat === original.file_name && !usedBranches.has(b.file_name)
-      );
-      for (const branch of childBranches) {
-        result.push(branch);
-        usedBranches.add(branch.file_name);
-      }
+      addChildBranches(original.file_name);
     }
     for (const branch of branchList) {
       if (!usedBranches.has(branch.file_name)) {
         result.push(branch);
+        usedBranches.add(branch.file_name);
+        addChildBranches(branch.file_name);
       }
     }
     return result;

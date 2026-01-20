@@ -738,28 +738,49 @@ function sortByBranchTreeCached(chats, charAvatar, data) {
         return getTimestamp(b) - getTimestamp(a);
     });
     
-    // 트리 구조로 재배치: 원본 뒤에 해당 브랜치들
+    // 트리 구조로 재배치: 재귀적으로 부모-자식 체인 따라가기
     const result = [];
     const usedBranches = new Set();
     
-    for (const original of originals) {
-        result.push(original);
-        
-        // 이 원본에서 파생된 브랜치 찾기
-        const childBranches = branchList.filter(b => 
-            b._branchInfo.parentChat === original.file_name && !usedBranches.has(b.file_name)
+    /**
+     * 재귀적으로 자식 브랜치 추가
+     * @param {string} parentFileName
+     */
+    function addChildBranches(parentFileName) {
+        // 이 부모의 직접 자식들 찾기
+        const children = branchList.filter(b => 
+            b._branchInfo.parentChat === parentFileName && !usedBranches.has(b.file_name)
         );
         
-        for (const branch of childBranches) {
-            result.push(branch);
-            usedBranches.add(branch.file_name);
+        // depth 순, 날짜순 정렬
+        children.sort((a, b) => {
+            const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+            if (depthDiff !== 0) return depthDiff;
+            return getTimestamp(b) - getTimestamp(a);
+        });
+        
+        for (const child of children) {
+            result.push(child);
+            usedBranches.add(child.file_name);
+            
+            // 이 자식의 자식도 재귀적으로 추가
+            addChildBranches(child.file_name);
         }
     }
     
-    // 남은 브랜치 (부모를 못 찾은 경우)
+    // 각 원본에 대해 트리 구성
+    for (const original of originals) {
+        result.push(original);
+        addChildBranches(original.file_name);
+    }
+    
+    // 남은 브랜치 (부모를 못 찾은 경우 - 원본이 삭제됐거나)
     for (const branch of branchList) {
         if (!usedBranches.has(branch.file_name)) {
             result.push(branch);
+            usedBranches.add(branch.file_name);
+            // 이 고아 브랜치의 자식들도 추가
+            addChildBranches(branch.file_name);
         }
     }
     
