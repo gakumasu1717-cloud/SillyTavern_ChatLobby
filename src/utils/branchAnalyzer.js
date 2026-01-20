@@ -168,7 +168,11 @@ async function analyzeGroup(charAvatar, group) {
             }
         }
         
-        if (bestParent && bestCommonLen > 0) {
+        // 최소 2개 이상 메시지가 같아야 진짜 분기 (그리팅만 같은 건 제외)
+        // 그리팅(1) + 최소 1개 대화 = 2개 이상
+        const MIN_COMMON_FOR_BRANCH = 2;
+        
+        if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
             // 분기점 = 공통 부분 끝 다음
             result[current.fileName] = {
                 parentChat: bestParent,

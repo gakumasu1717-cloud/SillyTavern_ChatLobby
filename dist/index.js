@@ -2779,12 +2779,16 @@ ${message}` : message;
   }
   function createFingerprint(messages) {
     const parts = [];
-    const count = Math.min(FINGERPRINT_MESSAGE_COUNT, messages.length);
-    for (let i = 0; i < count; i++) {
+    const startIdx = 1;
+    const count = Math.min(FINGERPRINT_MESSAGE_COUNT + startIdx, messages.length);
+    for (let i = startIdx; i < count; i++) {
       const msg = messages[i];
       if (msg && msg.mes) {
         parts.push((msg.is_user ? "U" : "A") + ":" + msg.mes.substring(0, 100));
       }
+    }
+    if (parts.length === 0) {
+      return "empty_" + messages.length;
     }
     return hashString(parts.join("|"));
   }
@@ -2928,7 +2932,8 @@ ${message}` : message;
           bestParent = candidate.fileName;
         }
       }
-      if (bestParent && bestCommonLen > 0) {
+      const MIN_COMMON_FOR_BRANCH = 2;
+      if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommonLen,

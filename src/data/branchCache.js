@@ -82,20 +82,27 @@ function hashString(str) {
 
 /**
  * 채팅 메시지들로 fingerprint 생성
+ * 첫 번째 메시지(그리팅)는 모든 채팅이 같으므로 2번째부터 시작
  * @param {Array} messages - 채팅 메시지 배열
  * @returns {string}
  */
 function createFingerprint(messages) {
-    // 앞 N개 메시지 내용으로 해시 생성
+    // 그리팅(index 0) 건너뛰고 2번째부터 N개 메시지로 해시 생성
     const parts = [];
-    const count = Math.min(FINGERPRINT_MESSAGE_COUNT, messages.length);
+    const startIdx = 1; // 그리팅 건너뛰기
+    const count = Math.min(FINGERPRINT_MESSAGE_COUNT + startIdx, messages.length);
     
-    for (let i = 0; i < count; i++) {
+    for (let i = startIdx; i < count; i++) {
         const msg = messages[i];
         if (msg && msg.mes) {
             // role + content 조합
             parts.push((msg.is_user ? 'U' : 'A') + ':' + msg.mes.substring(0, 100));
         }
+    }
+    
+    // 메시지가 그리팅밖에 없으면 빈 fingerprint
+    if (parts.length === 0) {
+        return 'empty_' + messages.length;
     }
     
     return hashString(parts.join('|'));
