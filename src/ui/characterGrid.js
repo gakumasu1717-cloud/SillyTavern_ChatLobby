@@ -957,24 +957,18 @@ function renderGroupCard(group, sortOption = 'recent') {
     // 즐겨찾기 상태
     const isFav = storage.isGroupFavorite(group.id);
     
-    // 마지막 채팅 시간 (최근순 정렬일 때만 표시)
+    // 마지막 채팅 시간 (최근순 정렬 + 오늘인 경우에만 표시)
     let lastChatTimeStr = '';
     if (sortOption === 'recent' && group.date_last_chat) {
         const lastTime = new Date(group.date_last_chat);
         const now = new Date();
-        const diffMs = now - lastTime;
-        const diffHours = diffMs / (1000 * 60 * 60);
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        const isToday = now.toDateString() === lastTime.toDateString();
         
-        if (diffHours < 1) {
-            const mins = Math.floor(diffMs / (1000 * 60));
-            lastChatTimeStr = mins <= 0 ? '방금' : `${mins}분 전`;
-        } else if (diffHours < 24) {
-            lastChatTimeStr = `${Math.floor(diffHours)}시간 전`;
-        } else if (diffDays < 7) {
-            lastChatTimeStr = `${Math.floor(diffDays)}일 전`;
-        } else {
-            lastChatTimeStr = lastTime.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+        // 오늘 채팅한 경우에만 시간 표시
+        if (isToday) {
+            const hours = lastTime.getHours();
+            const minutes = String(lastTime.getMinutes()).padStart(2, '0');
+            lastChatTimeStr = `${hours}:${minutes}`;
         }
     }
     

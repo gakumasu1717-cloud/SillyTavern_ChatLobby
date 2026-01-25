@@ -3,6 +3,7 @@
 // ============================================
 
 import { storage } from '../data/storage.js';
+import { createTabBarHTML } from './tabView.js';
 
 // 메인 로비 HTML - 넷플릭스 스타일
 export function createLobbyHTML() {
@@ -22,11 +23,12 @@ export function createLobbyHTML() {
     </div>
     <div id="chat-lobby-overlay" style="display: none;">
         <div id="chat-lobby-container" class="${themeClass}">
-            <!-- 헤더 - 넷플릭스 스타일 -->
+            <!-- 헤더 - 탭 통합 -->
             <header id="chat-lobby-header">
                 <div class="header-left">
                     <button id="chat-lobby-menu-toggle" class="mobile-only" data-action="toggle-header-menu" title="메뉴">☰</button>
-                    <h2>Chat Lobby</h2>
+                    <h2 id="chat-lobby-title" data-action="go-to-characters" style="cursor: pointer;">Chat Lobby</h2>
+                    ${createTabBarHTML()}
                 </div>
                 <div class="header-right">
                     <div class="header-actions">
@@ -36,7 +38,6 @@ export function createLobbyHTML() {
                         <button id="chat-lobby-import-char" data-action="import-char" title="캐릭터 가져오기">📥</button>
                         <button id="chat-lobby-add-persona" data-action="add-persona" title="페르소나 추가">👤</button>
                         <button id="chat-lobby-refresh" data-action="refresh" title="새로고침">🔄</button>
-                        <button id="chat-lobby-debug" data-action="open-debug" title="디버그 데이터">🔧</button>
                         <button id="chat-lobby-theme-toggle" data-action="toggle-theme" title="테마 전환">${savedTheme === 'light' ? '🌙' : '☀️'}</button>
                     </div>
                     <button id="chat-lobby-close" data-action="close-lobby" title="닫기">✕</button>
@@ -102,7 +103,7 @@ export function createLobbyHTML() {
                                     <option value="recent">🕐 최신순</option>
                                     <option value="name">🔤 이름순</option>
                                     <option value="messages">💬 메시지수</option>
-                                    <option value="branch">🌳 분기로 보기</option>
+                                    <option value="branch">🌳 분기</option>
                                 </select>
                                 <select id="chat-lobby-folder-filter">
                                     <option value="all">📁 전체</option>
@@ -111,18 +112,10 @@ export function createLobbyHTML() {
                             </div>
                             <div class="filter-group-buttons">
                                 <button id="chat-lobby-persona-quick" class="icon-btn persona-quick-btn" data-action="switch-persona" title="퀵 페르소나" style="display:none;"><img class="persona-quick-avatar" src="" alt="persona" /></button>
-                                <button id="chat-lobby-batch-mode" class="icon-btn" data-action="toggle-batch" title="다중 선택"><span class="icon">☑️</span></button>
                                 <button id="chat-lobby-folder-manage" class="icon-btn" data-action="open-folder-modal" title="폴더 관리"><span class="icon">📁</span></button>
                             </div>
                         </div>
                     </section>
-                    
-                    <!-- 배치 모드 툴바 -->
-                    <div id="chat-lobby-batch-toolbar" style="display:none;">
-                        <span id="batch-selected-count">0개 선택</span>
-                        <span id="batch-help-text">📁 클릭으로 이동</span>
-                        <button id="batch-cancel-btn" data-action="batch-cancel" title="배치 모드 종료">✕</button>
-                    </div>
                     
                     <!-- 채팅 목록 -->
                     <div id="chat-lobby-chats-list">

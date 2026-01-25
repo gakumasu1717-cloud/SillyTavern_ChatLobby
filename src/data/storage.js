@@ -262,8 +262,19 @@ class StorageManager {
     assignChatToFolder(charAvatar, chatFileName, folderId) {
         this.update((data) => {
             const key = this.getChatKey(charAvatar, chatFileName);
-            data.chatAssignments[key] = folderId;
+            if (folderId) {
+                data.chatAssignments[key] = folderId;
+            } else {
+                delete data.chatAssignments[key];
+            }
         });
+    }
+    
+    /**
+     * 채팅을 폴더에 할당 (alias)
+     */
+    setChatFolder(charAvatar, chatFileName, folderId) {
+        this.assignChatToFolder(charAvatar, chatFileName, folderId);
     }
     
     /**

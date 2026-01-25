@@ -9,6 +9,7 @@ import { store } from './data/store.js';
 import { api } from './api/sillyTavern.js';
 import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
+import { initPersonaRadialMenu, refreshPersonaRadialMenu, cleanupPersonaRadialMenu } from './ui/personaRadialMenu.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange, resetCharacterSelectLock, setGroupSelectHandler } from './ui/characterGrid.js';
 import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel, cleanupTooltip } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
@@ -16,18 +17,17 @@ import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } f
 import { showToast } from './ui/notifications.js';
 import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
 import { openCalendarView, closeCalendarView } from './ui/calendarView.js';
+import { bindTabEvents, switchTab, getCurrentTab, refreshCurrentTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen } from './ui/tabView.js';
 import { lastChatCache } from './data/lastChatCache.js';
 import { loadSnapshots as loadCalendarSnapshots, getLocalDateString } from './data/calendarStorage.js';
 import { debounce, isMobile } from './utils/eventHelpers.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor.js';
 import { intervalManager } from './utils/intervalManager.js';
 import { openDrawerSafely } from './utils/drawerHelper.js';
+import { initCustomThemeIntegration, cleanupCustomThemeIntegration } from './integration/customTheme.js';
 
 (function() {
     'use strict';
-    
-    // MutationObserver 참조 (cleanup용)
-    let hamburgerObserver = null;
     
     // CHAT_CHANGED cooldown 타이머 (모듈 스코프)
     let chatChangedCooldownTimer = null;
@@ -180,7 +180,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         addLobbyToOptionsMenu();
         
         // CustomTheme 사이드바에 버튼 추가 (있으면)
-        setTimeout(() => addToCustomThemeSidebar(), CONFIG.timing.initDelay);
+        setTimeout(() => initCustomThemeIntegration(openLobby), CONFIG.timing.initDelay);
         
         // FAB 프리뷰 초기화
         updateFabPreview();
@@ -479,6 +479,9 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             return;
         }
         
+        // 🔥 최근 채팅 DOM 캐싱 (로비가 열리기 전에!)
+        cacheRecentChatsBeforeOpen();
+        
         // 열기 시작 - 즉시 락 (CHAT_CHANGED settle까지 유지)
         isOpeningLobby = true;
         store.setLobbyOpen(true);  // 다른 호출 차단을 위해 즉시 설정
@@ -544,8 +547,13 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             // 페르소나 바와 캐릭터 그리드를 동시에 렌더링 (한 번에 같이)
             await Promise.all([
                 renderPersonaBar(),
-                renderCharacterGrid()
+                renderCharacterGrid(),
+                initPersonaRadialMenu()
             ]);
+            
+            // 탭 이벤트 바인딩 및 컨텍스트 메뉴 스타일 주입
+            bindTabEvents();
+            injectContextMenuStyles();
             
             // 페르소나 바 휠 스크롤 설정
             setupPersonaWheelScroll();
@@ -791,6 +799,7 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         cleanupEventDelegation();
         cleanupIntegration();
         cleanupTooltip();
+        cleanupPersonaRadialMenu();
         intervalManager.clearAll();
         
         // 타이머 정리
@@ -866,6 +875,26 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
             renderCharacterGrid(store.searchTerm);
         };
         window.addEventListener('chatlobby:refresh-grid', refreshGridHandler);
+        
+        // 탭 뷰에서 캐릭터 선택 이벤트
+        document.addEventListener('lobby:select-character', async (e) => {
+            const { avatar } = e.detail;
+            if (!avatar) return;
+            
+            // 캐릭터 탭으로 전환
+            switchTab('characters');
+            
+            // 캐릭터 선택 시뮬레이션
+            const charCard = document.querySelector(`.lobby-char-card[data-char-avatar="${avatar}"]`);
+            if (charCard) {
+                charCard.click();
+            }
+        });
+        
+        // 탭 뷰에서 폴더 관리 모달 열기 이벤트
+        document.addEventListener('lobby:open-folder-modal', (e) => {
+            openFolderModal();
+        });
     }
     
     /**
@@ -1051,6 +1080,9 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
                 break;
             case 'close-calendar':
                 closeCalendarView();
+                break;
+            case 'go-to-characters':
+                switchTab('characters');
                 break;
             case 'open-debug':
                 openDebugModal();
@@ -1472,131 +1504,6 @@ import { openDrawerSafely } from './utils/drawerHelper.js';
         });
         
         optionsMenu.insertBefore(lobbyOption, optionsMenu.firstChild);
-    }
-    
-    /**
-     * CustomTheme 사이드바/햄버거 메뉴에 Chat Lobby 버튼 추가
-     * - 사이드바(PC): 컨테이너 나타날 때까지 대기 후 한 번만 추가
-     * - 햄버거(모바일): MutationObserver로 드롭다운 변화 감지, CustomTheme이 empty() 후 다시 추가
-     */
-    function addToCustomThemeSidebar() {
-        // 중복 초기화 방지 플래그
-        if (window._chatLobbyCustomThemeInit) return true;
-        window._chatLobbyCustomThemeInit = true;
-        
-        // Custom Tavern 이벤트 위임 (document에서 캡처)
-        document.addEventListener('click', (e) => {
-            const customTavernBtn = e.target.closest('[data-drawer-id="st-chatlobby-sidebar-btn"]');
-            if (customTavernBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                openLobby();
-                return;
-            }
-        }, true); // capture phase
-        
-        // 1. 사이드바 버튼 추가 (PC) - CustomTheme drawer 구조 사용
-        const addSidebarButton = () => {
-            const container = document.getElementById('st-sidebar-top-container');
-            if (!container) return false;
-            if (document.getElementById('st-chatlobby-sidebar-btn')) return true; // 이미 있음
-            
-            const btn = document.createElement('div');
-            btn.id = 'st-chatlobby-sidebar-btn';
-            btn.className = 'drawer st-moved-drawer';
-            btn.innerHTML = `
-                <div class="drawer-toggle">
-                    <div class="drawer-icon fa-solid fa-comments closedIcon" title="Chat Lobby"></div>
-                    <span class="st-sidebar-label">Chat Lobby</span>
-                </div>
-            `;
-            btn.querySelector('.drawer-toggle').addEventListener('click', () => openLobby());
-            container.appendChild(btn);
-            return true;
-        };
-        
-        // 2. 햄버거 버튼 추가 (모바일)
-        const addHamburgerButton = () => {
-            const dropdown = document.getElementById('st-hamburger-dropdown-content');
-            if (!dropdown) return false;
-            if (document.getElementById('st-chatlobby-hamburger-btn')) return true; // 이미 있음
-            
-            const btn = document.createElement('div');
-            btn.id = 'st-chatlobby-hamburger-btn';
-            btn.className = 'st-dropdown-item';
-            btn.innerHTML = `
-                <i class="fa-solid fa-comments"></i>
-                <span>Chat Lobby</span>
-            `;
-            btn.addEventListener('click', () => {
-                openLobby();
-                // 드롭다운 닫기
-                document.getElementById('st-hamburger-dropdown')?.classList.remove('st-dropdown-open');
-            });
-            dropdown.appendChild(btn);
-            return true;
-        };
-        
-        // 3. 햄버거 MutationObserver 설정 (CustomTheme이 empty() 호출 시 다시 추가)
-        const setupHamburgerObserver = () => {
-            const dropdown = document.getElementById('st-hamburger-dropdown-content');
-            if (!dropdown) {
-                // 드롭다운 없으면 500ms 후 재시도 (최대 20회)
-                if (!setupHamburgerObserver._attempts) setupHamburgerObserver._attempts = 0;
-                if (++setupHamburgerObserver._attempts < 20) {
-                    setTimeout(setupHamburgerObserver, 500);
-                }
-                return;
-            }
-            
-            // 초기 추가
-            addHamburgerButton();
-            
-            // 기존 observer 정리
-            if (hamburgerObserver) {
-                hamburgerObserver.disconnect();
-                hamburgerObserver = null;
-            }
-            
-            // DOM 변화 감지 (CustomTheme이 empty() 후 다시 채울 때)
-            hamburgerObserver = new MutationObserver(() => {
-                // 버튼이 없으면 다시 추가
-                if (!document.getElementById('st-chatlobby-hamburger-btn')) {
-                    addHamburgerButton();
-                }
-            });
-            hamburgerObserver.observe(dropdown, { childList: true });
-        };
-        
-        // 4. 사이드바: 즉시 시도 → 실패 시 polling (최대 20회, 10초)
-        if (!addSidebarButton()) {
-            let attempts = 0;
-            const interval = intervalManager.set(() => {
-                attempts++;
-                if (addSidebarButton() || attempts >= 20) {
-                    intervalManager.clear(interval);
-                }
-            }, 500);
-        }
-        
-        // 5. 햄버거 Observer 설정
-        setupHamburgerObserver();
-        
-        return true;
-    }
-    
-    /**
-     * 통합 UI 정리 (MutationObserver 등)
-     */
-    function cleanupIntegration() {
-        // MutationObserver 정리
-        if (hamburgerObserver) {
-            hamburgerObserver.disconnect();
-            hamburgerObserver = null;
-        }
-        
-        // 플래그 초기화 (확장 재로드 대비)
-        window._chatLobbyCustomThemeInit = false;
     }
 
     // ============================================

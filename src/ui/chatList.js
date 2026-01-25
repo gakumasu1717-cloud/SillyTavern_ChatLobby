@@ -27,6 +27,8 @@ let tooltipElement = null;
 let tooltipTimeout = null;
 let currentTooltipTarget = null;
 let tooltipEventsInitialized = false;  // 이벤트 위임 등록 여부
+let lastMouseX = 0;  // 마지막 마우스 X 좌표
+let lastMouseY = 0;  // 마지막 마우스 Y 좌표
 
 /**
  * 툴팁 요소 생성 (한 번만)
@@ -86,16 +88,15 @@ function ensureTooltipElement() {
 /**
  * 툴팁 표시
  * @param {string} content - 표시할 내용
- * @param {MouseEvent} e - 마우스 이벤트
  */
-function showTooltip(content, e) {
+function showTooltip(content) {
     const tooltip = ensureTooltipElement();
     tooltip.textContent = content;
     tooltip.style.display = 'block';
     
-    // 마우스 커서 우측 아래에 고정
-    tooltip.style.left = `${e.clientX + 15}px`;
-    tooltip.style.top = `${e.clientY + 15}px`;
+    // 마지막 마우스 좌표 사용 (타이머 지연 후에도 정확한 위치)
+    tooltip.style.left = `${lastMouseX + 15}px`;
+    tooltip.style.top = `${lastMouseY + 15}px`;
 }
 
 /**
@@ -114,6 +115,7 @@ function hideTooltip() {
 
 /**
  * 채팅 아이템에 툴팁 이벤트 바인딩 (PC 전용) - 이벤트 위임 방식
+ * 로비 전체 컨테이너에 등록하여 탭 뷰에서도 동작
  * @param {HTMLElement} container
  */
 function bindTooltipEvents(container) {
@@ -127,14 +129,15 @@ function bindTooltipEvents(container) {
         return;
     }
     
-    const chatsList = document.getElementById('chat-lobby-chats-list');
-    if (!chatsList) return;
+    // 로비 전체 컨테이너에 이벤트 등록 (chatList + tabView 모두 커버)
+    const lobbyContainer = document.getElementById('chat-lobby-container');
+    if (!lobbyContainer) return;
     
-    // 이벤트 위임: container에 한 번만 등록
-    chatsList.addEventListener('mouseover', handleTooltipMouseOver);
-    chatsList.addEventListener('mouseout', handleTooltipMouseOut);
-    chatsList.addEventListener('mousemove', handleTooltipMouseMove);
-    chatsList.addEventListener('wheel', handleTooltipWheel, { passive: false });
+    // 이벤트 위임: 로비 컨테이너에 한 번만 등록
+    lobbyContainer.addEventListener('mouseover', handleTooltipMouseOver);
+    lobbyContainer.addEventListener('mouseout', handleTooltipMouseOut);
+    lobbyContainer.addEventListener('mousemove', handleTooltipMouseMove);
+    lobbyContainer.addEventListener('wheel', handleTooltipWheel, { passive: false });
     
     tooltipEventsInitialized = true;
 }
@@ -143,13 +146,27 @@ function bindTooltipEvents(container) {
  * 툴팁 mouseover 핸들러 (이벤트 위임)
  */
 function handleTooltipMouseOver(e) {
+    // 마우스 좌표 즉시 저장
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    
     const item = e.target.closest('.lobby-chat-item');
     if (!item) return;
     
     // 같은 아이템이면 스킵
     if (currentTooltipTarget === item) return;
     
-    const fullPreview = item.dataset.fullPreview || '';
+    // Base64 인코딩된 preview 디코딩 (없으면 일반 fullPreview 사용)
+    let fullPreview = '';
+    if (item.dataset.fullPreviewEncoded) {
+        try {
+            fullPreview = decodeURIComponent(escape(atob(item.dataset.fullPreviewEncoded)));
+        } catch (e) {
+            fullPreview = '';
+        }
+    } else if (item.dataset.fullPreview) {
+        fullPreview = item.dataset.fullPreview;
+    }
     if (!fullPreview) return;
     
     // 이전 타이머 취소
@@ -159,7 +176,7 @@ function handleTooltipMouseOver(e) {
     // 딜레이 후 툴팁 표시 (300ms)
     tooltipTimeout = setTimeout(() => {
         if (currentTooltipTarget === item && fullPreview) {
-            showTooltip(fullPreview, e);
+            showTooltip(fullPreview);
         }
     }, 300);
 }
@@ -204,6 +221,10 @@ function handleTooltipWheel(e) {
  * 툴팁 mousemove 핸들러 (이벤트 위임)
  */
 function handleTooltipMouseMove(e) {
+    // 마지막 마우스 좌표 항상 저장 (타이머 지연 후에도 사용)
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    
     const item = e.target.closest('.lobby-chat-item');
     if (!item) return;
     
@@ -225,13 +246,13 @@ function handleTooltipMouseMove(e) {
 export function cleanupTooltip() {
     hideTooltip();
     
-    // 이벤트 위임 리스너 제거
-    const chatsList = document.getElementById('chat-lobby-chats-list');
-    if (chatsList && tooltipEventsInitialized) {
-        chatsList.removeEventListener('mouseover', handleTooltipMouseOver);
-        chatsList.removeEventListener('mouseout', handleTooltipMouseOut);
-        chatsList.removeEventListener('mousemove', handleTooltipMouseMove);
-        chatsList.removeEventListener('wheel', handleTooltipWheel);
+    // 이벤트 위임 리스너 제거 (로비 컨테이너에서)
+    const lobbyContainer = document.getElementById('chat-lobby-container');
+    if (lobbyContainer && tooltipEventsInitialized) {
+        lobbyContainer.removeEventListener('mouseover', handleTooltipMouseOver);
+        lobbyContainer.removeEventListener('mouseout', handleTooltipMouseOut);
+        lobbyContainer.removeEventListener('mousemove', handleTooltipMouseMove);
+        lobbyContainer.removeEventListener('wheel', handleTooltipWheel);
     }
     tooltipEventsInitialized = false;
     
@@ -613,178 +634,178 @@ function filterByFolder(chats, charAvatar, filterFolder) {
 function sortChats(chats, charAvatar, sortOption) {
     const data = storage.load();
     
-    // 분기로 보기 모드 - 캐시된 브랜치 정보 사용
-    if (sortOption === 'branch') {
-        return sortByBranchTreeCached(chats, charAvatar, data);
+        // 분기로 보기 모드 - 캐시된 브랜치 정보 사용
+        if (sortOption === 'branch') {
+            return sortByBranchTreeCached(chats, charAvatar, data);
+        }
+        
+        return [...chats].sort((a, b) => {
+            const fnA = a.file_name || '';
+            const fnB = b.file_name || '';
+            
+            // 즐겨찾기 우선
+            const keyA = storage.getChatKey(charAvatar, fnA);
+            const keyB = storage.getChatKey(charAvatar, fnB);
+            const favA = data.favorites.includes(keyA) ? 0 : 1;
+            const favB = data.favorites.includes(keyB) ? 0 : 1;
+            if (favA !== favB) return favA - favB;
+            
+            if (sortOption === 'name') {
+                return fnA.localeCompare(fnB, 'ko');
+            }
+            
+            if (sortOption === 'messages') {
+                const msgA = a.message_count || a.mes_count || a.chat_items || 0;
+                const msgB = b.message_count || b.mes_count || b.chat_items || 0;
+                return msgB - msgA;
+            }
+            
+            // 기본: 날짜순
+            return getTimestamp(b) - getTimestamp(a);
+        });
     }
-    
-    return [...chats].sort((a, b) => {
-        const fnA = a.file_name || '';
-        const fnB = b.file_name || '';
-        
-        // 즐겨찾기 우선
-        const keyA = storage.getChatKey(charAvatar, fnA);
-        const keyB = storage.getChatKey(charAvatar, fnB);
-        const favA = data.favorites.includes(keyA) ? 0 : 1;
-        const favB = data.favorites.includes(keyB) ? 0 : 1;
-        if (favA !== favB) return favA - favB;
-        
-        if (sortOption === 'name') {
-            return fnA.localeCompare(fnB, 'ko');
-        }
-        
-        if (sortOption === 'messages') {
-            const msgA = a.message_count || a.mes_count || a.chat_items || 0;
-            const msgB = b.message_count || b.mes_count || b.chat_items || 0;
-            return msgB - msgA;
-        }
-        
-        // 기본: 날짜순
-        return getTimestamp(b) - getTimestamp(a);
-    });
-}
 
-/**
- * 채팅 파일명에서 브랜치 정보 파싱 (파일명 기반 - 백업용)
- * 패턴:
- * - 원본: "해루 - 2026-01-07@23h38m10s.jsonl"
- * - 브랜치: "Branch #5 - 2026-01-20@01h10m03s.jsonl"
- * 
- * @param {string} fileName
- * @returns {{ branch: string|null, depth: number, isOriginal: boolean }}
- */
-function parseBranchInfoFromName(fileName) {
-    const cleanName = fileName.replace('.jsonl', '');
-    
-    // Branch #숫자 또는 Branch #숫자-숫자 패턴 찾기
-    const branchMatch = cleanName.match(/^Branch\s*#(\d+(?:-\d+)*)\s*-/i);
-    
-    if (!branchMatch) {
-        return { branch: null, depth: 0, isOriginal: true };
-    }
-    
-    const branchPart = branchMatch[1];
-    const branchSegments = branchPart.split('-');
-    
-    return {
-        branch: branchPart,
-        depth: branchSegments.length,
-        isOriginal: false
-    };
-}
-
-/**
- * 캐시된 브랜치 정보 사용하여 트리 구조로 정렬
- * @param {Array} chats
- * @param {string} charAvatar
- * @param {Object} data - storage 데이터
- * @returns {Array}
- */
-function sortByBranchTreeCached(chats, charAvatar, data) {
-    const branches = getAllBranches(charAvatar);
-    
-    // 각 채팅에 브랜치 정보 추가
-    const chatsWithBranch = chats.map(chat => {
-        const fileName = chat.file_name || '';
-        const branchInfo = branches[fileName];
-        
-        // 캐시에 있으면 사용, 없으면 파일명으로 판단
-        if (branchInfo) {
-            return {
-                ...chat,
-                _branchInfo: {
-                    parentChat: branchInfo.parentChat,
-                    branchPoint: branchInfo.branchPoint,
-                    depth: branchInfo.depth,
-                    isOriginal: false
-                }
-            };
-        } else {
-            // 캐시 없음 - 파일명 기반 판단
-            const nameInfo = parseBranchInfoFromName(fileName);
-            return {
-                ...chat,
-                _branchInfo: {
-                    parentChat: null,
-                    branchPoint: 0,
-                    depth: nameInfo.depth,
-                    isOriginal: nameInfo.isOriginal
-                }
-            };
-        }
-    });
-    
-    // 원본과 브랜치 분리
-    const originals = chatsWithBranch.filter(c => c._branchInfo.isOriginal);
-    const branchList = chatsWithBranch.filter(c => !c._branchInfo.isOriginal);
-    
-    // 원본: 즐겨찾기 우선, 날짜순
-    originals.sort((a, b) => {
-        const fnA = a.file_name || '';
-        const fnB = b.file_name || '';
-        const keyA = storage.getChatKey(charAvatar, fnA);
-        const keyB = storage.getChatKey(charAvatar, fnB);
-        const favA = data.favorites.includes(keyA) ? 0 : 1;
-        const favB = data.favorites.includes(keyB) ? 0 : 1;
-        if (favA !== favB) return favA - favB;
-        return getTimestamp(b) - getTimestamp(a);
-    });
-    
-    // 브랜치: depth 순 → 날짜순
-    branchList.sort((a, b) => {
-        const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
-        if (depthDiff !== 0) return depthDiff;
-        return getTimestamp(b) - getTimestamp(a);
-    });
-    
-    // 트리 구조로 재배치: 재귀적으로 부모-자식 체인 따라가기
-    const result = [];
-    const usedBranches = new Set();
-    
     /**
-     * 재귀적으로 자식 브랜치 추가
-     * @param {string} parentFileName
+     * 채팅 파일명에서 브랜치 정보 파싱 (파일명 기반 - 백업용)
+     * 패턴:
+     * - 원본: "해루 - 2026-01-07@23h38m10s.jsonl"
+     * - 브랜치: "Branch #5 - 2026-01-20@01h10m03s.jsonl"
+     * 
+     * @param {string} fileName
+     * @returns {{ branch: string|null, depth: number, isOriginal: boolean }}
      */
-    function addChildBranches(parentFileName) {
-        // 이 부모의 직접 자식들 찾기
-        const children = branchList.filter(b => 
-            b._branchInfo.parentChat === parentFileName && !usedBranches.has(b.file_name)
-        );
+    function parseBranchInfoFromName(fileName) {
+        const cleanName = fileName.replace('.jsonl', '');
         
-        // depth 순, 날짜순 정렬
-        children.sort((a, b) => {
+        // Branch #숫자 또는 Branch #숫자-숫자 패턴 찾기
+        const branchMatch = cleanName.match(/^Branch\s*#(\d+(?:-\d+)*)\s*-/i);
+        
+        if (!branchMatch) {
+            return { branch: null, depth: 0, isOriginal: true };
+        }
+        
+        const branchPart = branchMatch[1];
+        const branchSegments = branchPart.split('-');
+        
+        return {
+            branch: branchPart,
+            depth: branchSegments.length,
+            isOriginal: false
+        };
+    }
+
+    /**
+     * 캐시된 브랜치 정보 사용하여 트리 구조로 정렬
+     * @param {Array} chats
+     * @param {string} charAvatar
+     * @param {Object} data - storage 데이터
+     * @returns {Array}
+     */
+    function sortByBranchTreeCached(chats, charAvatar, data) {
+        const branches = getAllBranches(charAvatar);
+        
+        // 각 채팅에 브랜치 정보 추가
+        const chatsWithBranch = chats.map(chat => {
+            const fileName = chat.file_name || '';
+            const branchInfo = branches[fileName];
+            
+            // 캐시에 있으면 사용, 없으면 파일명으로 판단
+            if (branchInfo) {
+                return {
+                    ...chat,
+                    _branchInfo: {
+                        parentChat: branchInfo.parentChat,
+                        branchPoint: branchInfo.branchPoint,
+                        depth: branchInfo.depth,
+                        isOriginal: false
+                    }
+                };
+            } else {
+                // 캐시 없음 - 파일명 기반 판단
+                const nameInfo = parseBranchInfoFromName(fileName);
+                return {
+                    ...chat,
+                    _branchInfo: {
+                        parentChat: null,
+                        branchPoint: 0,
+                        depth: nameInfo.depth,
+                        isOriginal: nameInfo.isOriginal
+                    }
+                };
+            }
+        });
+        
+        // 원본과 브랜치 분리
+        const originals = chatsWithBranch.filter(c => c._branchInfo.isOriginal);
+        const branchList = chatsWithBranch.filter(c => !c._branchInfo.isOriginal);
+        
+        // 원본: 즐겨찾기 우선, 날짜순
+        originals.sort((a, b) => {
+            const fnA = a.file_name || '';
+            const fnB = b.file_name || '';
+            const keyA = storage.getChatKey(charAvatar, fnA);
+            const keyB = storage.getChatKey(charAvatar, fnB);
+            const favA = data.favorites.includes(keyA) ? 0 : 1;
+            const favB = data.favorites.includes(keyB) ? 0 : 1;
+            if (favA !== favB) return favA - favB;
+            return getTimestamp(b) - getTimestamp(a);
+        });
+        
+        // 브랜치: depth 순 → 날짜순
+        branchList.sort((a, b) => {
             const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
             if (depthDiff !== 0) return depthDiff;
             return getTimestamp(b) - getTimestamp(a);
         });
         
-        for (const child of children) {
-            result.push(child);
-            usedBranches.add(child.file_name);
+        // 트리 구조로 재배치: 재귀적으로 부모-자식 체인 따라가기
+        const result = [];
+        const usedBranches = new Set();
+        
+        /**
+         * 재귀적으로 자식 브랜치 추가
+         * @param {string} parentFileName
+         */
+        function addChildBranches(parentFileName) {
+            // 이 부모의 직접 자식들 찾기
+            const children = branchList.filter(b => 
+                b._branchInfo.parentChat === parentFileName && !usedBranches.has(b.file_name)
+            );
             
-            // 이 자식의 자식도 재귀적으로 추가
-            addChildBranches(child.file_name);
+            // depth 순, 날짜순 정렬
+            children.sort((a, b) => {
+                const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+                if (depthDiff !== 0) return depthDiff;
+                return getTimestamp(b) - getTimestamp(a);
+            });
+            
+            for (const child of children) {
+                result.push(child);
+                usedBranches.add(child.file_name);
+                
+                // 이 자식의 자식도 재귀적으로 추가
+                addChildBranches(child.file_name);
+            }
         }
-    }
-    
-    // 각 원본에 대해 트리 구성
-    for (const original of originals) {
-        result.push(original);
-        addChildBranches(original.file_name);
-    }
-    
-    // 남은 브랜치 (부모를 못 찾은 경우 - 원본이 삭제됐거나)
-    for (const branch of branchList) {
-        if (!usedBranches.has(branch.file_name)) {
-            result.push(branch);
-            usedBranches.add(branch.file_name);
-            // 이 고아 브랜치의 자식들도 추가
-            addChildBranches(branch.file_name);
+        
+        // 각 원본에 대해 트리 구성
+        for (const original of originals) {
+            result.push(original);
+            addChildBranches(original.file_name);
         }
+        
+        // 남은 브랜치 (부모를 못 찾은 경우 - 원본이 삭제됐거나)
+        for (const branch of branchList) {
+            if (!usedBranches.has(branch.file_name)) {
+                result.push(branch);
+                usedBranches.add(branch.file_name);
+                // 이 고아 브랜치의 자식들도 추가
+                addChildBranches(branch.file_name);
+            }
+        }
+        
+        return result;
     }
-    
-    return result;
-}
 
 /**
  * 채팅 아이템 HTML 생성
@@ -814,8 +835,8 @@ function renderChatItem(chat, charAvatar, index) {
     const tooltipPreview = preview;
     const safeAvatar = escapeHtml(charAvatar || '');
     const safeFileName = escapeHtml(fileName || '');
-    // 툴팁용 전문 (HTML 이스케이프)
-    const safeFullPreview = escapeHtml(tooltipPreview);
+    // 툴팁용 전문 - Base64 인코딩 (따옴표 문제 방지)
+    const safeFullPreview = tooltipPreview ? btoa(unescape(encodeURIComponent(tooltipPreview))) : '';
     
     // 브랜치 정보 (분기로 보기 모드일 때 _branchInfo가 있음)
     const branchInfo = chat._branchInfo;
@@ -839,11 +860,8 @@ function renderChatItem(chat, charAvatar, index) {
          data-folder-id="${folderId}"
          data-branch-depth="${branchDepth}"
          data-branch-point="${branchPoint}"
-         data-full-preview="${safeFullPreview}"
+         data-full-preview-encoded="${safeFullPreview}"
          style="${indentStyle}">
-        <div class="chat-checkbox" style="display:none;">
-            <input type="checkbox" class="chat-select-cb">
-        </div>
         <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
         <div class="chat-content">
             <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
@@ -853,7 +871,10 @@ function renderChatItem(chat, charAvatar, index) {
                 ${folderName && folderId !== 'uncategorized' ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ''}
             </div>
         </div>
-        <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
+        <div class="chat-actions">
+            <button class="chat-folder-btn" title="폴더 이동">⋮</button>
+            <button class="chat-delete-btn" title="채팅 삭제">🗑️</button>
+        </div>
     </div>
     `;
 }
@@ -920,6 +941,15 @@ function bindChatEvents(container, charAvatar) {
             favBtn.textContent = isNowFav ? '★' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
         }, { debugName: `fav-${index}` });
+        
+        // 폴더 이동 버튼
+        const folderBtn = item.querySelector('.chat-folder-btn');
+        if (folderBtn) {
+            createTouchClickHandler(folderBtn, (e) => {
+                e.stopPropagation();
+                showChatFolderMenu(folderBtn, charAvatar, fileName);
+            }, { debugName: `folder-${index}` });
+        }
         
         // 삭제
         createTouchClickHandler(delBtn, () => {
@@ -1069,6 +1099,95 @@ function syncDropdowns(filterValue, sortValue) {
 export function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
     refreshCurrentChatList();
+}
+
+// ============================================
+// 폴더 이동 메뉴
+// ============================================
+
+let activeFolderMenu = null;
+
+/**
+ * 채팅 폴더 이동 메뉴 표시
+ */
+function showChatFolderMenu(targetBtn, charAvatar, fileName) {
+    // 기존 메뉴 닫기
+    if (activeFolderMenu) {
+        activeFolderMenu.remove();
+        activeFolderMenu = null;
+    }
+    
+    const data = storage.load();
+    const folders = (data.folders || []).filter(f => f.id !== 'favorites' && f.id !== 'uncategorized');
+    const currentFolderId = storage.getChatFolder(charAvatar, fileName);
+    
+    const menu = document.createElement('div');
+    menu.className = 'chat-folder-menu';
+    menu.innerHTML = `
+        <div class="folder-menu-title">폴더 이동</div>
+        <div class="folder-menu-item ${!currentFolderId ? 'active' : ''}" data-folder-id="">
+            📤 폴더에서 제거
+        </div>
+        ${folders.map(f => `
+            <div class="folder-menu-item ${f.id === currentFolderId ? 'active' : ''}" data-folder-id="${f.id}">
+                📁 ${escapeHtml(f.name)}
+            </div>
+        `).join('')}
+    `;
+    
+    // 위치 설정
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.cssText = `
+        position: fixed;
+        top: ${rect.bottom + 4}px;
+        right: ${window.innerWidth - rect.right}px;
+        z-index: 10001;
+        background: var(--lobby-bg-card, #1a1a2e);
+        border: 1px solid var(--lobby-border, #333);
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        min-width: 150px;
+        overflow: hidden;
+    `;
+    
+    document.body.appendChild(menu);
+    activeFolderMenu = menu;
+    
+    // 이벤트
+    menu.querySelectorAll('.folder-menu-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const folderId = item.dataset.folderId;
+            if (folderId) {
+                storage.setChatFolder(charAvatar, fileName, folderId);
+                const folder = folders.find(f => f.id === folderId);
+                showToast(`📁 ${folder?.name || '폴더'}로 이동`, 'success');
+            } else {
+                storage.setChatFolder(charAvatar, fileName, null);
+                showToast('폴더에서 제거됨', 'success');
+            }
+            closeChatFolderMenu();
+            await refreshCurrentChatList();
+        });
+    });
+    
+    // 외부 클릭 시 닫기
+    setTimeout(() => {
+        document.addEventListener('click', closeFolderMenuOnClickOutside);
+    }, 10);
+}
+
+function closeFolderMenuOnClickOutside(e) {
+    if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
+        closeChatFolderMenu();
+    }
+}
+
+function closeChatFolderMenu() {
+    if (activeFolderMenu) {
+        activeFolderMenu.remove();
+        activeFolderMenu = null;
+    }
+    document.removeEventListener('click', closeFolderMenuOnClickOutside);
 }
 
 /**
@@ -1398,7 +1517,7 @@ function renderGroupChats(container, chats, group) {
         const lastMes = chat.last_mes ? formatDate(chat.last_mes) : '';
         const mesCount = chat.chat_items || 0;
         const preview = chat.mes || chat.preview || chat.last_message || '채팅 기록';
-        const safePreview = escapeHtml(preview);  // 전체 표시
+        const safePreview = preview ? btoa(unescape(encodeURIComponent(preview))) : '';  // Base64 인코딩
         
         // 즐겨찾기/폴더 상태 (일반 채팅과 동일하게)
         const isFav = storage.isFavorite(groupAvatar, fileName);
@@ -1412,7 +1531,7 @@ function renderGroupChats(container, chats, group) {
              data-group-id="${escapeHtml(group.id)}"
              data-chat-file="${escapeHtml(fileName)}"
              data-folder-id="${folderId}"
-             data-full-preview="${safePreview}">
+             data-full-preview-encoded="${safePreview}">
             <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
             <div class="chat-content">
                 <div class="chat-name">${escapeHtml(displayName)}</div>
