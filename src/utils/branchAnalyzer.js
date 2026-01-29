@@ -169,7 +169,7 @@ async function analyzeGroup(charAvatar, group) {
             if (msgIdx >= content.length) continue;  // 이 채팅은 여기서 끝
             
             const msg = content[msgIdx];
-            const hash = getMessageHash(msg);
+            const hash = getMessageContent(msg);
             
             if (!msgByContent[hash]) {
                 msgByContent[hash] = [];
@@ -262,15 +262,26 @@ async function analyzeGroup(charAvatar, group) {
 }
 
 /**
- * 메시지 해시 생성 (Timelines 방식 비교용)
+ * 메시지 콘텐츠 추출 (비교용)
+ * 짧으면 그대로, 길면 해시로 메모리 절약
  * @param {Object} message
  * @returns {string}
  */
-function getMessageHash(message) {
+function getMessageContent(message) {
     if (!message) return '';
-    // mes 필드의 개행 정규화 후 비교
+    // mes 필드의 개행 정규화
     const mes = (message.mes || '').replace(/\r\n/g, '\n');
-    return mes;
+    
+    // 200자 이하면 그대로 반환 (정확도 우선)
+    if (mes.length < 200) return mes;
+    
+    // 길면 해시로 변환 (메모리 절약)
+    let hash = 5381;
+    for (let i = 0; i < mes.length; i++) {
+        hash = ((hash << 5) + hash) + mes.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return `__hash__${hash.toString(36)}_${mes.length}`;
 }
 
 /**

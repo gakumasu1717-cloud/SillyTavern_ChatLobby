@@ -1220,9 +1220,22 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 
         const success = await api.setPersona(personaKey);
         if (success) {
+            // 🔥 FAB 아바타 직접 업데이트 (타이밍 문제 해결)
+            const fabAvatar = document.getElementById('persona-fab-avatar');
+            const fabIcon = document.getElementById('persona-fab-icon');
+            if (fabAvatar && fabIcon) {
+                fabAvatar.src = `/User Avatars/${encodeURIComponent(personaKey)}`;
+                fabAvatar.style.display = 'block';
+                fabIcon.style.display = 'none';
+                fabAvatar.onerror = () => {
+                    fabAvatar.style.display = 'none';
+                    fabIcon.style.display = 'flex';
+                };
+            }
+            
             // 페르소나 바 UI 업데이트
             await renderPersonaBar();
-            // FAB 아바타도 업데이트
+            // 레이디얼 메뉴도 새로고침
             await refreshPersonaRadialMenu();
             showToast('페르소나 변경됨', 'success');
         } else {

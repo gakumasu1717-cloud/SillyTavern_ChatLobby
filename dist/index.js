@@ -2472,7 +2472,7 @@ ${message}` : message;
         const content = chatContents[fn];
         if (msgIdx >= content.length) continue;
         const msg = content[msgIdx];
-        const hash = getMessageHash(msg);
+        const hash = getMessageContent(msg);
         if (!msgByContent[hash]) {
           msgByContent[hash] = [];
         }
@@ -2538,10 +2538,16 @@ ${message}` : message;
     }
     return result;
   }
-  function getMessageHash(message) {
+  function getMessageContent(message) {
     if (!message) return "";
     const mes = (message.mes || "").replace(/\r\n/g, "\n");
-    return mes;
+    if (mes.length < 200) return mes;
+    let hash = 5381;
+    for (let i = 0; i < mes.length; i++) {
+      hash = (hash << 5) + hash + mes.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return `__hash__${hash.toString(36)}_${mes.length}`;
   }
   async function analyzeBranches(charAvatar, chats, onProgress = null) {
     console.log("[BranchAnalyzer] Starting analysis for", charAvatar);
@@ -8878,6 +8884,17 @@ ${message}` : message;
       }
       const success = await api.setPersona(personaKey);
       if (success) {
+        const fabAvatar = document.getElementById("persona-fab-avatar");
+        const fabIcon = document.getElementById("persona-fab-icon");
+        if (fabAvatar && fabIcon) {
+          fabAvatar.src = `/User Avatars/${encodeURIComponent(personaKey)}`;
+          fabAvatar.style.display = "block";
+          fabIcon.style.display = "none";
+          fabAvatar.onerror = () => {
+            fabAvatar.style.display = "none";
+            fabIcon.style.display = "flex";
+          };
+        }
         await renderPersonaBar();
         await refreshPersonaRadialMenu();
         showToast("\uD398\uB974\uC18C\uB098 \uBCC0\uACBD\uB428", "success");
