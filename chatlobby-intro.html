@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Lobby - SillyTavern Extension</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #18181b;
+            --bg-card: #1c1c1f;
+            --border: #27272a;
+            --accent: #e11d48;
+            --accent-soft: rgba(225, 29, 72, 0.1);
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            padding: 80px 0 60px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+
+        .logo span {
+            color: var(--accent);
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.125rem;
+        }
+
+        .badge-row {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* Section */
+        section {
+            padding: 80px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        section:last-of-type {
+            border-bottom: none;
+        }
+
+        .section-header {
+            margin-bottom: 48px;
+        }
+
+        .section-header h2 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+        }
+
+        /* Feature Block - 이미지 + 설명 */
+        .feature-block {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: center;
+            margin-bottom: 64px;
+        }
+
+        .feature-block:last-child {
+            margin-bottom: 0;
+        }
+
+        .feature-block.reverse {
+            direction: rtl;
+        }
+
+        .feature-block.reverse > * {
+            direction: ltr;
+        }
+
+        .feature-image {
+            position: relative;
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+        }
+
+        .feature-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* 이미지 없을 때 placeholder */
+        .feature-image.placeholder {
+            aspect-ratio: 16/10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .feature-content h3 {
+            font-size: 1.375rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-content p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .feature-list {
+            list-style: none;
+        }
+
+        .feature-list li {
+            color: var(--text-secondary);
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 0.9375rem;
+        }
+
+        .feature-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+        }
+
+        /* Small Feature Grid - 이미지 없는 기능들 */
+        .small-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 32px;
+        }
+
+        .small-feature {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+        }
+
+        .small-feature h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .small-feature p {
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+        }
+
+        /* Card Grid - 이미지 있는 작은 기능들 */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .card-image {
+            aspect-ratio: 16/10;
+            background: var(--bg-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .card-image.placeholder::after {
+            content: '이미지';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .card-body h4 {
+            font-size: 1.0625rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .card-body p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* Tech Section */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .tech-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tech-item .icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-soft);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .tech-item h4 {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .tech-item p {
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+        }
+
+        /* Install Section */
+        .install-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px;
+        }
+
+        .install-step {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .install-step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .step-content h4 {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+        }
+
+        .step-content code {
+            background: var(--bg-primary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-family: 'SF Mono', Consolas, monospace;
+        }
+
+        /* CTA */
+        .cta-section {
+            text-align: center;
+            padding: 100px 0;
+        }
+
+        .cta-section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent);
+            color: white;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: opacity 0.2s;
+        }
+
+        .cta-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            border-top: 1px solid var(--border);
+        }
+
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--text-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header {
+                padding: 60px 0 40px;
+            }
+
+            .logo {
+                font-size: 2rem;
+            }
+
+            section {
+                padding: 60px 0;
+            }
+
+            .feature-block {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+
+            .feature-block.reverse {
+                direction: ltr;
+            }
+
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .small-features {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .footer-license {
+            text-align: left;
+            max-width: 500px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+        }
+
+        .footer-license h4 {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .footer-license ul {
+            list-style: none;
+        }
+
+        .footer-license li {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            padding: 4px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+
+        .footer-license li::before {
+            content: '·';
+            position: absolute;
+            left: 0;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <h1 class="logo">Chat <span>Lobby</span></h1>
+            <p>SillyTavern을 위한 캐릭터 & 채팅 관리 확장</p>
+            <div class="badge-row">
+                <span class="badge">SillyTavern Extension</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 봇 그리드 -->
+    <section>
+        <div class="container">
+            <div class="feature-block">
+                <div class="feature-image">
+                    <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/%EB%B4%87%20%EA%B7%B8%EB%A6%AC%EB%93%9C.png" alt="캐릭터 그리드">
+                </div>
+                <div class="feature-content">
+                    <h3>캐릭터 그리드</h3>
+                    <p>모든 캐릭터를 한눈에 확인하고 관리할 수 있는 그리드 뷰입니다.</p>
+                    <ul class="feature-list">
+                        <li>썸네일 카드로 캐릭터 탐색</li>
+                        <li>호버 시 채팅 수, 메시지 수 표시</li>
+                        <li>이름순, 최근순, 메시지순 정렬</li>
+                        <li>태그 필터로 빠른 검색</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 모바일 UI + 즐겨찾기 -->
+    <section>
+        <div class="container">
+            <div class="feature-block reverse">
+                <div class="feature-image">
+                    <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/%EB%AA%A8%EB%B0%94%EC%9D%BC%20ui.png" alt="모바일 UI">
+                </div>
+                <div class="feature-content">
+                    <h3>모바일 UI & 즐겨찾기</h3>
+                    <p>모바일 환경에서도 쾌적하게 사용할 수 있도록 최적화했습니다.</p>
+                    <ul class="feature-list">
+                        <li>터치 친화적인 인터페이스</li>
+                        <li>반응형 레이아웃</li>
+                        <li>캐릭터 즐겨찾기 - 자주 쓰는 캐릭터 상단 고정</li>
+                        <li>채팅 즐겨찾기 - 중요한 대화 따로 관리</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 채팅 목록 + 폴더 -->
+    <section>
+        <div class="container">
+            <div class="feature-block">
+                <div class="feature-image">
+                    <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/%EC%B1%84%ED%8C%85%20%EB%AA%A9%EB%A1%9D%20.png" alt="채팅 목록">
+                </div>
+                <div class="feature-content">
+                    <h3>채팅 목록 & 폴더 관리</h3>
+                    <p>캐릭터별 채팅 기록을 체계적으로 관리하세요.</p>
+                    <ul class="feature-list">
+                        <li>캐릭터 클릭 시 채팅 목록 슬라이드</li>
+                        <li>채팅 미리보기 (마지막 메시지)</li>
+                        <li>폴더로 채팅 분류</li>
+                        <li>배치 선택으로 여러 채팅 한번에 이동</li>
+                        <li>채팅 삭제, 새 채팅 시작</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 페르소나 + 검색 -->
+    <section>
+        <div class="container">
+            <div class="feature-block reverse">
+                <div class="feature-image">
+                    <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/%ED%8E%98%EB%A5%B4%EC%86%8C%EB%82%98%20.png" alt="페르소나 선택">
+                </div>
+                <div class="feature-content">
+                    <h3>페르소나 전환 & 검색</h3>
+                    <p>상단 바에서 빠르게 페르소나를 전환하고 캐릭터를 검색하세요.</p>
+                    <ul class="feature-list">
+                        <li>페르소나 바 - 휠 스크롤 지원</li>
+                        <li>원클릭 페르소나 전환</li>
+                        <li>실시간 캐릭터 검색</li>
+                        <li>태그 클릭으로 필터링</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 헤더 메뉴 기능들 (이미지 없음) -->
+    <section>
+        <div class="container">
+            <div class="section-header">
+                <h2>헤더 메뉴</h2>
+                <p>자주 쓰는 기능에 빠르게 접근할 수 있습니다.</p>
+            </div>
+            <div class="small-features">
+                <div class="small-feature">
+                    <h4>📥 빠른 봇 임포트</h4>
+                    <p>SillyTavern의 캐릭터 가져오기 메뉴를 바로 열어 새 캐릭터를 추가합니다.</p>
+                </div>
+                <div class="small-feature">
+                    <h4>👤 페르소나 생성</h4>
+                    <p>페르소나 관리 화면으로 이동해 새 페르소나를 만들 수 있습니다.</p>
+                </div>
+                <div class="small-feature">
+                    <h4>🔄 새로고침</h4>
+                    <p>캐릭터 목록과 채팅 캐시를 새로고침합니다.</p>
+                </div>
+                <div class="small-feature">
+                    <h4>🔧 디버그</h4>
+                    <p>캐시 상태, 저장 데이터 등 내부 정보를 확인할 수 있습니다.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Wrapped, 캘린더, 랜덤 -->
+    <section>
+        <div class="container">
+            <div class="section-header">
+                <h2>추가 기능</h2>
+            </div>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-image">
+                        <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/wrapped.png" alt="Wrapped">
+                    </div>
+                    <div class="card-body">
+                        <h4>📊 Chat Wrapped</h4>
+                        <p>대화 통계를 확인하세요. 가장 많이 대화한 캐릭터, 총 메시지 수 등 다양한 통계를 제공합니다.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-image">
+                        <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/%EC%BA%98%EB%A6%B0%EB%8D%94.png" alt="캘린더">
+                    </div>
+                    <div class="card-body">
+                        <h4>📅 캘린더 히트맵</h4>
+                        <p>GitHub 스타일 히트맵으로 대화 활동을 시각화합니다. 언제 얼마나 대화했는지 한눈에 확인하세요.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-image">
+                        <img src="https://raw.githubusercontent.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1/main/images/%EC%A3%BC%EC%82%AC%EC%9C%84.png" alt="랜덤 봇">
+                    </div>
+                    <div class="card-body">
+                        <h4>🎲 랜덤 캐릭터</h4>
+                        <p>주사위 버튼을 누르면 랜덤으로 캐릭터를 선택합니다. 누구와 대화할지 고민될 때 사용하세요.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 기술 스택 -->
+    <section>
+        <div class="container">
+            <div class="section-header">
+                <h2>기술</h2>
+            </div>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <div class="icon">🌓</div>
+                    <div>
+                        <h4>다크 / 라이트 테마</h4>
+                        <p>환경에 맞게 테마를 전환할 수 있습니다</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="icon">⚡</div>
+                    <div>
+                        <h4>스마트 캐싱</h4>
+                        <p>메모리 캐시와 프리로딩으로 빠른 응답</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="icon">🗂️</div>
+                    <div>
+                        <h4>로컬 데이터 매핑</h4>
+                        <p>폴더, 즐겨찾기 등을 localStorage에 저장</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="icon">📱</div>
+                    <div>
+                        <h4>반응형 UI</h4>
+                        <p>데스크톱과 모바일 모두 지원</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 설치 -->
+    <section>
+        <div class="container">
+            <div class="section-header">
+                <h2>설치 방법</h2>
+            </div>
+            <div class="install-box">
+                <div class="install-step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>SillyTavern 확장 메뉴 열기</h4>
+                        <p>SillyTavern 상단의 <strong>확장(Extensions)</strong> 메뉴로 이동합니다.</p>
+                    </div>
+                </div>
+                <div class="install-step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>확장 URL 입력</h4>
+                        <p>Install Extension 입력란에 아래 주소를 붙여넣습니다.</p>
+                        <p style="margin-top: 8px;"><code>https://github.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1</code></p>
+                    </div>
+                </div>
+                <div class="install-step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Install 클릭</h4>
+                        <p><strong>Install</strong> 버튼을 클릭하면 자동으로 설치됩니다. 설치 후 새로고침하세요.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>GitHub에서 다운로드</h2>
+            <a href="https://github.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1" class="cta-btn" target="_blank">
+                GitHub으로 이동 →
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-license">
+                <h4>이용 안내</h4>
+                <ul>
+                    <li>본 확장은 깡통사이트 내에서 자유롭게 사용할 수 있습니다.</li>
+                    <li>원작자의 허락 없이 재배포 및 2차 공유는 금지됩니다.</li>
+                    <li>외부 사이트에서의 재배포는 허용되지 않습니다.</li>
+                    <li>상업적 이용은 금지됩니다.</li>
+                </ul>
+            </div>
+            <p style="margin-top: 24px;"><a href="https://github.com/gakumasu1717-cloud/SillyTavern_ChatLobby-dev-1" target="_blank">GitHub</a></p>
+        </div>
+    </footer>
+
+</body>
+</html>

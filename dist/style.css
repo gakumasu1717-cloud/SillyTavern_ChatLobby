@@ -1,0 +1,5357 @@
+﻿/* ============================================
+   ?�� Chat Lobby - Netflix Style with Dark/Light Mode
+   Pretendard ?�트 + ?�크/?�이???�마 지??
+   ============================================ */
+
+/* Pretendard ?�트 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* ?�� ?�크 모드 (기본) - ?�플�?�� ?��???*/
+:root,
+#chat-lobby-container.dark-mode {
+    /* Netflix Colors */
+    --lobby-bg: #141414;
+    --lobby-bg-light: #181818;
+    --lobby-bg-card: #2f2f2f;
+    --lobby-bg-hover: #404040;
+    --lobby-accent: #E50914;
+    --lobby-accent-hover: #f40612;
+    
+    /* Text Colors */
+    --text-primary: #FFFFFF;
+    --text-secondary: #E5E5E5;
+    --text-muted: #A3A3A3;
+    --text-dim: #808080;
+    --lobby-text: #FFFFFF;
+    --lobby-text-secondary: #A3A3A3;
+    
+    /* Favorite Star - ?�마 ?�센??컬러 */
+    --star-color: #E50914;
+    --star-glow: rgba(229, 9, 20, 0.6);
+}
+
+/* ?��??�이??모드 - 모노??*/
+#chat-lobby-container.light-mode {
+    --lobby-bg: #F5F5F5;
+    --lobby-bg-light: #FFFFFF;
+    --lobby-bg-card: #E8E8E8;
+    --lobby-bg-hover: #D0D0D0;
+    --lobby-accent: #333333;
+    --lobby-accent-hover: #1A1A1A;
+    
+    /* Text Colors */
+    --text-primary: #1A1A1A;
+    --text-secondary: #333333;
+    --text-muted: #666666;
+    --text-dim: #999999;
+    --lobby-text: #1A1A1A;
+    --lobby-text-secondary: #666666;
+    
+    /* Favorite Star - 라이트 테마: 골드 */
+    --star-color: #D4AF37;
+    --star-glow: rgba(212, 175, 55, 0.5);
+}
+
+/* 공통 변??*/
+:root {
+    /* Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 40px;
+    
+    /* Card Sizes */
+    --card-width: 200px;
+    --card-height: 300px;
+    --card-gap: 9px;
+    --card-hover-scale: 1.3;
+    
+    /* Transitions */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+    --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* Z-Index */
+    --z-header: 100;
+    --z-panel: 500;
+    --z-modal: 60000;
+    --z-wrapped: 70000;
+    
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-full: 50%;
+    
+    /* Font */
+    --font-primary: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+}
+
+/* ?�체 ?�트 ?�용 */
+#chat-lobby-container,
+#chat-lobby-container *,
+#chat-lobby-overlay,
+#chat-lobby-overlay * {
+    font-family: var(--font-primary) !important;
+}
+
+/* ============================================
+   FAB 버튼 (?�로??버튼)
+   ============================================ */
+#chat-lobby-fab {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-full);
+    background: var(--lobby-accent);
+    color: #fff;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: 50000;
+    pointer-events: auto;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    border: none;
+}
+
+#chat-lobby-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.6);
+}
+
+#chat-lobby-fab:active {
+    transform: scale(0.95);
+}
+
+/* FAB 아이콘 */
+.fab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* FAB 프리뷰 (PC only) */
+.fab-preview {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    background: rgba(30, 30, 40, 0.95);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    min-width: 60px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.fab-preview-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.2);
+}
+
+.fab-streak {
+    font-size: 12px;
+    color: #fff;
+    white-space: nowrap;
+}
+
+/* PC 호버 시 표시 */
+@media (min-width: 769px) {
+    #chat-lobby-fab:hover .fab-preview {
+        display: flex;
+        opacity: 1;
+    }
+}
+
+/* 모바일 숨김 */
+@media (max-width: 768px) {
+    .fab-preview {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   ?�버?�이 & 컨테?�너
+   ============================================ */
+#chat-lobby-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    z-index: 50000;
+    display: flex;
+    pointer-events: none;
+}
+
+#chat-lobby-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: var(--lobby-bg);
+    z-index: 50001;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    pointer-events: auto;
+}
+
+/* ============================================
+   ?�더 - ?�플�?�� ?��???
+   ============================================ */
+#chat-lobby-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 30px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: var(--z-header);
+    transition: background var(--transition-normal);
+}
+
+#chat-lobby-header.scrolled {
+    background: var(--lobby-bg);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#chat-lobby-header h2 {
+    margin: 0;
+    color: var(--lobby-accent);
+    font-size: 1.8em;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.5px;
+}
+
+/* 모바??메뉴 ?��? 버튼 - PC?�서 ?��? */
+#chat-lobby-menu-toggle {
+    display: none;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.header-actions button {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--text-primary);
+    font-size: 1em;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.header-actions button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* X ?�기 버튼 - header-actions 밖에 ?�립 배치 */
+#chat-lobby-close {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+#chat-lobby-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   메인 ?�이?�웃
+   ============================================ */
+#chat-lobby-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 50px; /* 헤더 높이 */
+}
+
+#chat-lobby-left {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* ============================================
+   ?�르?�나 �?- ?�플�?�� ?�로???��???
+   ============================================ */
+#chat-lobby-persona-bar {
+    display: flex;
+    align-items: center;
+    padding: 8px 30px;
+    margin-top: 8px;
+    background: transparent;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+#chat-lobby-persona-list {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    flex: 1;
+    padding: 4px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--lobby-bg-hover) transparent;
+}
+
+#chat-lobby-persona-list::-webkit-scrollbar {
+    height: 6px;
+}
+
+#chat-lobby-persona-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chat-lobby-persona-list::-webkit-scrollbar-thumb {
+    background: var(--lobby-bg-hover);
+    border-radius: 3px;
+}
+
+.persona-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 2px solid transparent;
+    flex-shrink: 0;
+    gap: 5px;
+    min-width: 65px;
+    position: relative;
+}
+
+.persona-item:hover {
+    transform: scale(1.05);
+}
+
+.persona-item.selected {
+    border-color: var(--text-primary);
+}
+
+.persona-avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    background: var(--lobby-bg-card);
+    transition: all var(--transition-fast);
+}
+
+.persona-item:hover .persona-avatar {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.persona-name {
+    font-size: 0.74em;
+    color: var(--text-muted);
+    max-width: 63px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    transition: color var(--transition-fast);
+}
+
+.persona-item:hover .persona-name,
+.persona-item.selected .persona-name {
+    color: var(--text-primary);
+}
+
+.persona-delete-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-full);
+    background: var(--lobby-accent);
+    color: #fff;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.persona-item:hover .persona-delete-btn {
+    display: flex;
+}
+
+/* 페르소나 즐겨찾기 버튼 - 좌측 상단 */
+.persona-fav-btn {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background: rgba(0, 0, 0, 0.6);
+    color: #888;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    opacity: 0;
+    transition: all var(--transition-fast);
+}
+
+.persona-item:hover .persona-fav-btn {
+    opacity: 1;
+}
+
+.persona-fav-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.15);
+}
+
+.persona-item.is-persona-fav .persona-fav-btn {
+    opacity: 1;
+    color: var(--star-color);
+    text-shadow: 0 0 6px var(--star-glow);
+}
+
+/* ============================================
+   캐릭터/그룹 탭
+   ============================================ */
+#chat-lobby-view-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 6px 30px;
+    background: transparent;
+}
+
+#chat-lobby-view-tabs .view-tab {
+    flex: 1;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+#chat-lobby-view-tabs .view-tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+#chat-lobby-view-tabs .view-tab.active {
+    background: var(--accent-gradient);
+    border-color: var(--accent-color);
+    color: white;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-view-tabs .view-tab {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #666;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-view-tabs .view-tab:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-view-tabs .view-tab.active {
+    background: var(--accent-gradient);
+    color: white;
+}
+
+/* ============================================
+   그룹 카드 스타일
+   ============================================ */
+.lobby-group-card {
+    position: relative;
+}
+
+.lobby-group-card .group-member-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+    z-index: 5;
+}
+
+#chat-lobby-container.light-mode .lobby-group-card .group-member-badge {
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+}
+
+/* 그룹 아바타 그리드 (카카오톡 스타일) */
+.group-avatar-grid {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--lobby-bg-light);
+}
+
+.group-avatar-grid img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 1명: 단독 표시 */
+.group-avatar-grid .grid-single {
+    width: 100%;
+    height: 100%;
+}
+
+.group-avatar-grid .grid-single img {
+    width: 100%;
+    height: 100%;
+}
+
+/* 2명: 가로 2분할 */
+.group-avatar-grid .grid-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    height: 100%;
+    gap: 2px;
+}
+
+.group-avatar-grid .grid-two img {
+    width: 100%;
+    height: 100%;
+}
+
+/* 3명: 위 1 + 아래 2 */
+.group-avatar-grid .grid-three {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    gap: 2px;
+}
+
+.group-avatar-grid .grid-three .grid-top {
+    flex: 1;
+    overflow: hidden;
+}
+
+.group-avatar-grid .grid-three .grid-top img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.group-avatar-grid .grid-three .grid-bottom {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+}
+
+.group-avatar-grid .grid-three .grid-bottom img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 4명: 2x2 그리드 */
+.group-avatar-grid .grid-four {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    width: 100%;
+    height: 100%;
+    gap: 2px;
+}
+
+.group-avatar-grid .grid-four img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ============================================
+   검색 + 정렬 (접기 가능)
+   ============================================ */
+#chat-lobby-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 30px;
+    background: transparent;
+    transition: all var(--transition-normal);
+}
+
+#chat-lobby-search input {
+    flex: 1;
+    padding: 8px 14px;
+    border: 1px solid var(--lobby-bg-hover);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    font-size: 13px;
+    transition: all var(--transition-fast);
+}
+
+#chat-lobby-search input::placeholder {
+    color: var(--text-muted);
+}
+
+#chat-lobby-search input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--text-muted);
+}
+
+#chat-lobby-search select {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--lobby-bg-hover);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 12px;
+    margin-bottom: 0;
+    width: 90px;
+    height: 33.5px;
+}
+
+#chat-lobby-search select option {
+    background: var(--lobby-bg-light);
+    color: var(--text-primary);
+}
+
+/* ============================================
+   ?�그 �?(?�기 가??
+   ============================================ */
+#chat-lobby-tag-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 30px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    transition: all var(--transition-normal);
+}
+
+#chat-lobby-tag-bar::-webkit-scrollbar {
+    display: none;
+}
+
+#chat-lobby-tag-list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+}
+
+.lobby-tag-item {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.lobby-tag-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: var(--text-primary);
+}
+
+.lobby-tag-item.active {
+    background: var(--text-primary);
+    color: var(--lobby-bg);
+    font-weight: var(--font-weight-semibold);
+}
+
+.lobby-tag-count {
+    margin-left: 5px;
+    opacity: 0.7;
+    font-size: 10px;
+}
+
+/* ============================================
+   ?�단 ?�역 ?�기/?�치�?기능
+   ============================================ */
+#chat-lobby-collapse-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 12px 30px;
+    border-radius: 0;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 2px auto 4px;
+    width: auto;
+}
+
+#chat-lobby-collapse-btn:hover {
+    background: transparent;
+    color: var(--text-primary);
+}
+
+/* ?�힌 ?�태???�단 ?�역 - ?�무?�한 ?�라?�드 */
+#chat-lobby-persona-bar,
+#chat-lobby-search,
+#chat-lobby-tag-bar {
+    max-height: 200px;
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+}
+
+#chat-lobby-left.collapsed #chat-lobby-persona-bar,
+#chat-lobby-left.collapsed #chat-lobby-search,
+#chat-lobby-left.collapsed #chat-lobby-tag-bar {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* ?�마 ?��? 버튼 */
+#chat-lobby-theme-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+#chat-lobby-theme-toggle:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ?�이??모드??추�? ?��???*/
+#chat-lobby-container.light-mode #chat-lobby-header {
+    background: transparent;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-header h2 {
+    color: #1A1A1A;
+}
+
+#chat-lobby-container.light-mode .header-actions button {
+    color: #1A1A1A;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+#chat-lobby-container.light-mode #chat-lobby-fab,
+#chat-lobby-container.light-mode #chat-lobby-collapse-btn:hover,
+#chat-lobby-container.light-mode .header-actions button:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* FAB 프리뷰 라이트모드 */
+.light-mode .fab-preview,
+#chat-lobby-container.light-mode ~ #chat-lobby-fab .fab-preview {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0,0,0,0.1);
+}
+
+.light-mode .fab-streak,
+#chat-lobby-container.light-mode ~ #chat-lobby-fab .fab-streak {
+    color: #333;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-search input {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .lobby-tag-item {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .lobby-tag-item:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode .lobby-tag-item.active {
+    background: var(--lobby-accent);
+    color: #fff;
+}
+
+/* ============================================
+   ?�이??모드 추�? ?��???- 가?�성 개선
+   ============================================ */
+
+/* 채팅 ?�널 */
+#chat-lobby-container.light-mode #chat-lobby-chats {
+    border-left: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode #chat-lobby-chats-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode #chat-lobby-chats-back:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* ?�터 ?�션 */
+#chat-lobby-container.light-mode #chat-lobby-filters {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode .filters-row select {
+    background: rgba(0, 0, 0, 0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23333' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 6px center !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+    color: var(--text-primary) !important;
+}
+
+#chat-lobby-container.light-mode .filters-row button {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .filters-row button:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode .lobby-char-tag {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* 채팅 ?�이??*/
+#chat-lobby-container.light-mode .lobby-chat-item {
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+#chat-lobby-container.light-mode .lobby-chat-item:hover {
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .lobby-chat-item .chat-meta span {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+#chat-lobby-container.light-mode .chat-folder-tag {
+    background: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #333333;
+}
+
+/* 라이트모드 폴더 메뉴 및 버튼 색상 */
+#chat-lobby-container.light-mode .chat-folder-btn,
+#chat-lobby-container.light-mode .chat-delete-btn,
+#chat-lobby-container.light-mode .chat-fav-btn {
+    color: var(--text-muted);
+}
+
+/* 폴더 컨텍스트 메뉴는 항상 다크 테마 유지 (body에 추가되므로) */
+.chat-folder-menu,
+.folder-context-menu {
+    background: #1a1a2e !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.chat-folder-menu .folder-menu-item,
+.folder-context-menu .folder-menu-item {
+    color: #ffffff !important;
+}
+
+.chat-folder-menu .folder-menu-title,
+.folder-context-menu .folder-menu-title {
+    color: #aaaaaa !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.chat-folder-menu .folder-menu-item:hover,
+.folder-context-menu .folder-menu-item:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.chat-folder-menu .folder-menu-item.active,
+.folder-context-menu .folder-menu-item.active {
+    background: #E50914 !important;
+    color: #ffffff !important;
+}
+
+/* 배치 모드 ?�바 */
+#chat-lobby-container.light-mode #chat-lobby-batch-toolbar {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* ?�더 모달 */
+#chat-lobby-container.light-mode ~ #chat-lobby-folder-modal .folder-modal-content {
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-folder-modal .folder-modal-header {
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-folder-modal .folder-add-row input {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-folder-modal .folder-item {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* ?�기 버튼 */
+#chat-lobby-container.light-mode #chat-lobby-collapse-btn {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* ?�르?�나 ??�� 버튼 */
+#chat-lobby-container.light-mode .persona-delete-btn {
+    background: #dc3545;
+}
+
+/* �??�태 */
+#chat-lobby-container.light-mode .lobby-empty-state {
+    color: var(--text-muted);
+}
+
+/* ??채팅 버튼 (?�이??모드?�서???�에 ?�게) */
+#chat-lobby-container.light-mode #chat-lobby-new-chat {
+    background: #333333;
+    color: #ffffff;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-new-chat:hover {
+    background: #1a1a1a;
+}
+
+/* 검?�창 ?�이??모드 */
+#chat-lobby-container.light-mode #chat-lobby-search select {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode #chat-lobby-search select option {
+    background: #ffffff;
+    color: #1a1a1a;
+}
+
+#chat-lobby-container.light-mode #chat-lobby-search input:focus {
+    background: rgba(0, 0, 0, 0.08);
+    border-color: #333333;
+}
+
+/* ?�크롤바 ?�이??모드 */
+#chat-lobby-container.light-mode #chat-lobby-characters::-webkit-scrollbar-thumb,
+#chat-lobby-container.light-mode #chat-lobby-chats-list::-webkit-scrollbar-thumb,
+#chat-lobby-container.light-mode #chat-lobby-persona-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+#chat-lobby-container.light-mode #chat-lobby-characters,
+#chat-lobby-container.light-mode #chat-lobby-chats-list,
+#chat-lobby-container.light-mode #chat-lobby-persona-list {
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+/* 캐릭????�� 버튼 */
+#chat-lobby-container.light-mode #chat-lobby-delete-char {
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+/* 채팅 ?�널 ?�터 select option */
+#chat-lobby-container.light-mode .filters-row select option {
+    background: #ffffff;
+    color: #1a1a1a;
+}
+
+/* ============================================
+   캐릭터 그리드 - 고정 카드 크기 + 중앙 정렬
+   ============================================ */
+#chat-lobby-characters {
+    flex: 1;
+    padding: 30px 24px;
+    overflow-y: auto;
+    overflow-x: clip;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 200px);
+    justify-content: center;
+    gap: var(--card-gap);
+    align-content: start;
+    scrollbar-width: thin;
+    scrollbar-color: var(--lobby-bg-hover) transparent;
+    position: relative;
+}
+
+#chat-lobby-characters::-webkit-scrollbar {
+    width: 8px;
+}
+
+#chat-lobby-characters::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chat-lobby-characters::-webkit-scrollbar-thumb {
+    background: var(--lobby-bg-hover);
+    border-radius: 4px;
+}
+
+/* ============================================
+   캐릭??카드 - ?�플�?�� ?��???+ ?�버 ?�보 ?�시
+   ============================================ */
+.lobby-char-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: var(--radius-sm);
+    overflow: visible;
+    cursor: pointer;
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+    background: var(--lobby-bg-light);
+}
+
+.lobby-char-card:hover {
+    transform: scale(var(--card-hover-scale));
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+.lobby-char-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-normal);
+}
+
+/* 캐릭???�름 - 기본 ?��?, ?�버 ??그라?�이?�과 ?�께 ?�시 */
+.lobby-char-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 80px 12px 12px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.95) 70%);
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all var(--transition-normal);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* ?�버 ???�보 ?�시 */
+.lobby-char-card:hover .lobby-char-name {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 카드 ?�버 ???�시?�는 추�? ?�보 */
+.char-hover-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+}
+
+.char-hover-info .info-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: var(--font-weight-normal);
+}
+
+.char-hover-info .info-icon {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
+.char-hover-info .info-value {
+    color: #FFFFFF;
+}
+
+/* 최근 채팅 ?�간 ?�시 (최근???�렬 ?�만 ?�시) */
+.char-last-time {
+    font-size: 0.8em;
+    font-weight: 500;
+    opacity: 0.85;
+    color: rgba(255, 255, 255, 0.9);
+    margin-left: 4px;
+}
+
+/* 즐겨찾기 버튼 - 좌측 상단 */
+.char-fav-btn {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 1.2em;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: var(--radius-full);
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+}
+
+.lobby-char-card:hover .char-fav-btn {
+    opacity: 1;
+}
+
+.char-fav-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.15);
+}
+
+.lobby-char-card.is-char-fav .char-fav-btn {
+    opacity: 1;
+    color: var(--star-color);
+    text-shadow: 0 0 8px var(--star-glow);
+}
+
+/* 채팅 관리 버튼 - 우측 상단으로 이동 */
+.char-manage-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.1em;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: var(--radius-full);
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    color: var(--text-primary);
+}
+
+.lobby-char-card:hover .char-manage-btn {
+    opacity: 1;
+}
+
+.char-manage-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.15);
+    color: var(--lobby-accent);
+}
+
+.lobby-char-card.selected {
+    outline: 3px solid var(--text-primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   채팅 ?�널 - ?�이???�라?�드 (PC ?�백 축소)
+   ============================================ */
+#chat-lobby-chats {
+    width: 420px;
+    min-width: 380px;
+    max-width: 480px;
+    background: var(--lobby-bg-light);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    display: none; /* 기본�? ?��? */
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: transform var(--transition-smooth);
+}
+
+#chat-lobby-chats.visible {
+    display: flex; /* 보일 ?�만 ?�시 */
+    transform: translateX(0);
+    box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+}
+
+/* 채팅 ?�널 ?�더 */
+#chat-lobby-chats-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+    background: var(--lobby-bg-light);
+}
+
+#chat-lobby-chats-back {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.4em;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    transition: background var(--transition-fast);
+}
+
+#chat-lobby-chats-back:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#chat-panel-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    cursor: pointer;
+    transition: transform var(--transition-fast);
+}
+
+#chat-panel-avatar:hover {
+    transform: scale(1.05);
+}
+
+#chat-lobby-chats-header .char-info {
+    flex: 1;
+}
+
+#chat-lobby-chats-header .char-name {
+    color: var(--text-primary);
+    font-weight: var(--font-weight-semibold);
+    font-size: 1.2em;
+}
+
+#chat-lobby-chats-header .chat-count {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-top: 2px;
+}
+
+#chat-lobby-new-chat {
+    background: var(--lobby-accent);
+    border: none;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: var(--font-weight-semibold);
+    transition: all var(--transition-fast);
+}
+
+#chat-lobby-new-chat:hover {
+    background: var(--lobby-accent-hover);
+    transform: scale(1.02);
+}
+
+#chat-lobby-delete-char {
+    background: transparent;
+    border: 1px solid rgba(255, 80, 80, 0.5);
+    color: #ff5050;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 1em;
+    transition: all var(--transition-fast);
+}
+
+#chat-lobby-delete-char:hover {
+    background: rgba(255, 80, 80, 0.2);
+    border-color: #ff5050;
+}
+
+/* ============================================
+   ?�터 ?�션
+   ============================================ */
+#chat-lobby-filters {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 8px;
+    background: var(--lobby-bg-light);
+}
+
+#chat-lobby-char-tags {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+#chat-lobby-char-tags::-webkit-scrollbar {
+    display: none;
+}
+
+.lobby-char-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted, #888);
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.filters-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-group-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.filters-row select,
+.filters-row button {
+    height: 28px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    margin: 0;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+#chat-lobby-container .filters-row select {
+    padding: 7px !important;
+    background: rgba(255, 255, 255, 0.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 6px center !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px !important;
+    font-size: 11px !important;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow: none !important;
+}
+
+#chat-lobby-chat-sort {
+    width: 90px;
+}
+
+#chat-lobby-folder-filter {
+    width: 140px;
+    min-width: 140px;
+    max-width: 140px;
+}
+
+.filters-row button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    padding: 0;
+    width: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+/* ?�이�?버튼 ?��? ?�모지 ?�렬 */
+.filters-row button .icon {
+    display: inline-block;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.filters-row button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.filters-row button.active {
+    background: var(--lobby-accent);
+    border-color: var(--lobby-accent);
+}
+
+/* ============================================
+   배치 모드 ?�바
+   ============================================ */
+#chat-lobby-batch-toolbar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: rgba(var(--lobby-accent), 0.15);
+    border-bottom: 1px solid var(--lobby-accent);
+}
+
+#chat-lobby-batch-toolbar.visible {
+    display: flex;
+}
+
+#chat-lobby-batch-toolbar span {
+    color: var(--text-primary);
+    font-size: 0.9em;
+    font-weight: var(--font-weight-semibold);
+}
+
+#batch-help-text {
+    flex: 1;
+    color: var(--text-muted) !important;
+    font-weight: var(--font-weight-normal) !important;
+}
+
+#batch-cancel-btn {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: var(--text-primary) !important;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+/* ============================================
+   채팅 목록
+   ============================================ */
+#chat-lobby-chats-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--lobby-bg-hover) transparent;
+}
+
+#chat-lobby-chats-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chat-lobby-chats-list::-webkit-scrollbar-thumb {
+    background: var(--lobby-bg-hover);
+    border-radius: 3px;
+}
+
+/* 채팅 ?�이??- ?�백 최적??*/
+.lobby-chat-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.lobby-chat-item:hover {
+    background: var(--lobby-bg-hover);
+    transform: translateX(4px);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.lobby-chat-item .chat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.lobby-chat-item .chat-name {
+    color: var(--text-primary);
+    font-weight: var(--font-weight-medium);
+    font-size: 0.95em;
+    margin-bottom: 6px;
+}
+
+.lobby-chat-item .chat-preview {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    line-height: 1.5;
+    /* 전체 표시 - line-clamp 제거 */
+}
+
+.lobby-chat-item .chat-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    color: var(--text-dim);
+    font-size: 0.75em;
+}
+
+.lobby-chat-item .chat-meta span {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+}
+
+/* 채팅 액션 버튼 */
+.chat-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.chat-fav-btn,
+.chat-folder-btn,
+.chat-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    opacity: 0.6;
+    transition: all var(--transition-fast);
+}
+
+.chat-fav-btn:hover,
+.chat-folder-btn:hover,
+.chat-delete-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-folder-btn:hover {
+    color: var(--lobby-accent);
+}
+
+.chat-delete-btn:hover {
+    color: #ff5050;
+    background: rgba(255, 80, 80, 0.15);
+}
+
+.lobby-chat-item.is-favorite .chat-fav-btn {
+    opacity: 1;
+    color: var(--star-color);
+    text-shadow: 0 0 8px var(--star-glow);
+}
+
+/* 폴더 이동 메뉴 */
+.chat-folder-menu {
+    background: var(--lobby-bg-card);
+    border: 1px solid var(--lobby-border, rgba(255,255,255,0.1));
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    min-width: 150px;
+    overflow: hidden;
+}
+
+.chat-folder-menu .folder-menu-title {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.chat-folder-menu .folder-menu-item {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.chat-folder-menu .folder-menu-item:hover {
+    background: var(--lobby-bg-hover);
+}
+
+.chat-folder-menu .folder-menu-item.active {
+    background: var(--lobby-accent);
+    color: white;
+}
+
+/* 텍스트 버튼 */
+.text-btn {
+    background: transparent;
+    border: 1px solid var(--lobby-border, rgba(255,255,255,0.2));
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.text-btn:hover {
+    background: var(--lobby-bg-hover);
+    border-color: var(--lobby-accent);
+    color: var(--text-primary);
+}
+
+/* 브랜치 모드 스타일 */
+.lobby-chat-item.branch-mode {
+    transition: all var(--transition-fast), padding-left 0.15s ease;
+}
+
+.lobby-chat-item.is-branch {
+    background: rgba(100, 150, 255, 0.03);
+}
+
+.lobby-chat-item .branch-icon {
+    font-size: 0.9em;
+    flex-shrink: 0;
+    opacity: 0.8;
+    margin-right: -4px;
+}
+
+/* 분기 배지 */
+.branch-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    color: rgba(100, 180, 255, 0.9);
+    background: rgba(100, 150, 255, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 6px;
+    font-weight: 500;
+}
+
+/* 분기 분석 바 */
+.branch-analyze-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(100, 150, 255, 0.08);
+    border: 1px dashed rgba(100, 150, 255, 0.3);
+    border-radius: 8px;
+}
+
+.branch-analyze-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: rgba(100, 150, 255, 0.2);
+    border: 1px solid rgba(100, 150, 255, 0.4);
+    border-radius: 6px;
+    color: rgba(200, 220, 255, 0.95);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.branch-analyze-btn:hover:not(:disabled) {
+    background: rgba(100, 150, 255, 0.35);
+    border-color: rgba(100, 150, 255, 0.6);
+}
+
+.branch-analyze-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.branch-analyze-status {
+    font-size: 11px;
+    color: rgba(180, 200, 255, 0.8);
+}
+
+/* 분기 깊이별 시각적 표시 */
+.lobby-chat-item[data-branch-depth="1"] {
+    border-left: 2px solid rgba(100, 150, 255, 0.4);
+}
+
+.lobby-chat-item[data-branch-depth="2"] {
+    border-left: 2px solid rgba(150, 100, 255, 0.4);
+}
+
+.lobby-chat-item[data-branch-depth="3"] {
+    border-left: 2px solid rgba(200, 100, 200, 0.4);
+}
+
+.lobby-chat-item[data-branch-depth="4"],
+.lobby-chat-item[data-branch-depth="5"],
+.lobby-chat-item[data-branch-depth="6"] {
+    border-left: 2px solid rgba(255, 150, 100, 0.4);
+}
+
+.chat-folder-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 8px;
+    margin-left: 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted, #888);
+    font-size: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* 체크박스 */
+.chat-checkbox input {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--lobby-accent);
+}
+
+/* ============================================
+   �??�태 & 로딩
+   ============================================ */
+.lobby-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 40px;
+}
+
+.lobby-empty-state i {
+    font-size: 4em;
+    margin-bottom: 20px;
+    opacity: 0.3;
+}
+
+.lobby-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+}
+
+/* ============================================
+   ?�더 모달
+   ============================================ */
+#chat-lobby-folder-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.folder-modal-content {
+    background: var(--lobby-bg-light);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 450px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.folder-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.folder-modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.2em;
+}
+
+#folder-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 0;
+    transition: color var(--transition-fast);
+}
+
+#folder-modal-close:hover {
+    color: var(--text-primary);
+}
+
+.folder-modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.folder-add-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.folder-add-row input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    font-size: 0.95em;
+}
+
+.folder-add-row input::placeholder {
+    color: var(--text-dim);
+}
+
+.folder-add-row button {
+    background: var(--lobby-accent);
+    border: none;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: var(--font-weight-semibold);
+    transition: background var(--transition-fast);
+}
+
+.folder-add-row button:hover {
+    background: var(--lobby-accent-hover);
+}
+
+#folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    transition: background var(--transition-fast);
+}
+
+.folder-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.folder-item.system {
+    opacity: 0.6;
+}
+
+.folder-item .folder-name {
+    flex: 1;
+    color: var(--text-primary);
+    font-size: 0.95em;
+}
+
+.folder-item .folder-count {
+    color: var(--text-muted);
+    font-size: 0.8em;
+}
+
+.folder-item button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1em;
+    cursor: pointer;
+    padding: 6px;
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+}
+
+.folder-item button:hover {
+    opacity: 1;
+}
+
+.folder-delete-btn:hover {
+    color: #ff5050 !important;
+}
+
+/* ============================================
+   ?�� Wrapped ?�계 ?�면 - PC ?�이?�웃 개선
+   ============================================ */
+#chat-lobby-stats-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+}
+
+.wrapped-view {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg, 
+        var(--lobby-bg) 0%, 
+        rgba(20, 10, 10, 0.95) 50%,
+        var(--lobby-bg) 100%);
+    color: var(--text-primary);
+}
+
+.wrapped-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 30px;
+}
+
+.wrapped-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    color: var(--text-muted);
+}
+
+.stats-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--lobby-accent);
+    border-radius: var(--radius-full);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.wrapped-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 700px;
+    width: 100%;
+    padding: 50px 40px;
+    animation: fadeSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeSlideIn {
+    from { 
+        opacity: 0; 
+        transform: translateY(30px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+.wrapped-emoji {
+    font-size: 4em;
+    margin-bottom: 30px;
+    margin-top: -20px;
+    animation: pulse 2s ease infinite;
+    line-height: 1;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.wrapped-step h2 {
+    font-size: 2em;
+    color: var(--text-primary);
+    margin: 0 0 20px 0;
+    line-height: 1.4;
+    font-weight: var(--font-weight-bold);
+}
+
+.wrapped-subtitle {
+    font-size: 1.2em;
+    color: var(--text-secondary);
+    margin: 0 0 30px 0;
+    line-height: 1.8;
+}
+
+.wrapped-btn {
+    padding: 16px 50px;
+    border-radius: var(--radius-md);
+    font-size: 1.1em;
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    margin: 10px 0;
+    border: none;
+}
+
+.wrapped-btn.primary {
+    background: var(--lobby-accent);
+    color: #fff;
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+}
+
+.wrapped-btn.primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.5);
+}
+
+.wrapped-btn.secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--lobby-bg-hover);
+}
+
+.wrapped-btn.secondary:hover {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+}
+
+/* ?�즈 ?�션 */
+.quiz-options {
+    display: flex;
+    gap: 20px;
+    margin: 35px 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.quiz-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 25px;
+    background: var(--lobby-bg-card);
+    border: 2px solid transparent;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    min-width: 130px;
+}
+
+.quiz-option:hover {
+    border-color: var(--lobby-accent);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
+}
+
+.quiz-option img {
+    width: 90px;
+    height: 90px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    border: 3px solid var(--lobby-bg-hover);
+    transition: border-color var(--transition-fast);
+}
+
+.quiz-option:hover img {
+    border-color: var(--lobby-accent);
+}
+
+.quiz-option span {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spin-animation {
+    animation: spinIn 0.7s ease backwards;
+}
+
+@keyframes spinIn {
+    from { 
+        opacity: 0; 
+        transform: rotateY(180deg) scale(0.5); 
+    }
+    to { 
+        opacity: 1; 
+        transform: rotateY(0deg) scale(1); 
+    }
+}
+
+/* 결과 ?�바?� */
+.result-avatar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin: 25px 0 35px;
+}
+
+.result-avatar img {
+    width: 140px;
+    height: 140px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    border: 4px solid var(--lobby-accent);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.4);
+}
+
+.result-avatar span {
+    font-size: 1.4em;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+}
+
+.sparkle-animation img {
+    animation: sparkle 1.5s ease infinite;
+}
+
+@keyframes sparkle {
+    0%, 100% { box-shadow: 0 0 20px gold, 0 0 40px gold; border-color: gold; }
+    50% { box-shadow: 0 0 40px gold, 0 0 80px gold; }
+}
+
+/* 메시지 ?�력 */
+.message-input-wrap {
+    margin: 35px 0;
+}
+
+.message-input-wrap input {
+    width: 220px;
+    padding: 18px 25px;
+    font-size: 1.4em;
+    text-align: center;
+    border: 2px solid var(--lobby-bg-hover);
+    border-radius: var(--radius-lg);
+    background: var(--lobby-bg-card);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.message-input-wrap input:focus {
+    border-color: var(--lobby-accent);
+}
+
+.message-input-wrap input::placeholder {
+    color: var(--text-dim);
+}
+
+/* ?�짜 ?�즈 */
+.date-select-wrap {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin: 30px 0;
+}
+
+.date-select {
+    padding: 12px 20px;
+    font-size: 1.1em;
+    background: var(--lobby-bg-card);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    cursor: pointer;
+    min-width: 100px;
+}
+
+.date-select:focus {
+    border-color: var(--lobby-accent);
+    outline: none;
+}
+
+/* ?�짜 결과 */
+.date-reveal {
+    margin: 25px 0;
+    padding: 20px 40px;
+    background: linear-gradient(135deg, rgba(229, 9, 20, 0.2), rgba(255, 100, 100, 0.1));
+    border-radius: 12px;
+    border: 1px solid rgba(229, 9, 20, 0.3);
+}
+
+.date-value {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--lobby-accent);
+}
+
+.period-comment {
+    font-size: 1.1em;
+    color: var(--text-secondary);
+    margin: 15px 0;
+}
+
+.daily-stats {
+    margin-top: 30px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.daily-stats p {
+    color: var(--text-muted);
+    margin: 5px 0;
+}
+
+.daily-value {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: var(--lobby-accent);
+    display: block;
+    margin: 10px 0;
+}
+
+/* 메시지 비교 */
+.message-compare {
+    display: flex;
+    gap: 40px;
+    margin: 30px 0;
+}
+
+.compare-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px 35px;
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-lg);
+}
+
+.compare-label {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.compare-value {
+    font-size: 1.8em;
+    font-weight: var(--font-weight-bold);
+    color: var(--lobby-accent);
+}
+
+.compare-value.count-up {
+    animation: countUp 0.6s ease;
+}
+
+@keyframes countUp {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.compare-value.accurate { color: #4ade80 !important; }
+.compare-value.too-high { color: #f87171 !important; }
+.compare-value.too-low { color: #60a5fa !important; }
+
+/* 최종 ?�계 */
+.final-step {
+    max-width: 650px;
+    align-items: stretch;
+}
+
+.final-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.final-header h2 {
+    margin: 0;
+    font-size: 1.4em;
+    text-align: left;
+}
+
+.wrapped-back {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+    font-size: 1.2em;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.wrapped-back:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.final-content {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+.stats-section {
+    margin-bottom: 30px;
+}
+
+.stats-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.1em;
+    color: var(--lobby-accent);
+}
+
+.stats-ranking {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stats-rank-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    transition: all var(--transition-fast);
+}
+
+.stats-rank-item.top-3 {
+    background: rgba(var(--lobby-accent), 0.1);
+    border-color: rgba(var(--lobby-accent), 0.3);
+}
+
+.stats-rank-item:hover {
+    transform: translateX(8px);
+}
+
+.rank-medal {
+    font-size: 1.4em;
+    min-width: 40px;
+    text-align: center;
+}
+
+.rank-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    border: 2px solid var(--lobby-bg-hover);
+}
+
+.stats-rank-item.top-3 .rank-avatar {
+    width: 55px;
+    height: 55px;
+    border-color: var(--lobby-accent);
+}
+
+.rank-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.rank-name {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rank-stats {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* ?�계 그리??*/
+.stats-total {
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-lg);
+    padding: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    text-align: center;
+}
+
+.stats-item {
+    padding: 20px 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+}
+
+.stats-value {
+    font-size: 2em;
+    font-weight: var(--font-weight-bold);
+    color: var(--lobby-accent);
+}
+
+.stats-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+.encouragement {
+    text-align: center;
+    font-size: 1.15em;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 25px;
+    margin-top: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+}
+
+/* Fun Facts 그리??- PC ?�이?�웃 개선 */
+.stats-fun-facts {
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fun-facts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.fun-fact-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 15px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+}
+
+.fun-fact-value {
+    font-size: 1.8em;
+    font-weight: var(--font-weight-bold);
+    color: var(--lobby-accent);
+    margin-bottom: 8px;
+}
+
+.fun-fact-label {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* �??�???�짜 ?�션 */
+.first-chat-section {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.first-chat-header {
+    font-size: 0.95em;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.first-chat-header strong {
+    color: var(--lobby-accent);
+}
+
+.top3-first-chats {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.top3-title {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.first-chat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.first-chat-item:last-child {
+    border-bottom: none;
+}
+
+.first-chat-item .char-name {
+    font-size: 0.9em;
+    color: var(--text-primary);
+}
+
+.first-chat-item .chat-date {
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+/* 1??캐릭???�계 ?�션 */
+.stats-top-char {
+    background: var(--lobby-bg-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 15px;
+}
+
+.stats-top-char h4 {
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    color: var(--text-primary);
+}
+
+.top-char-card {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.top-char-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    border: 2px solid var(--lobby-accent);
+    flex-shrink: 0;
+}
+
+.top-char-stats {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.top-char-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-sm);
+}
+
+.top-char-stat-item .stat-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.top-char-stat-item .stat-value {
+    font-size: 0.95em;
+    font-weight: var(--font-weight-semibold);
+    color: var(--lobby-accent);
+}
+
+@media (max-width: 768px) {
+    .top-char-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .top-char-avatar {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .top-char-stats {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .fun-facts-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .fun-fact-value {
+        font-size: 1.5em;
+    }
+}
+
+.result-correct .result-avatar img {
+    border-color: #4ade80;
+    box-shadow: 0 0 30px rgba(74, 222, 128, 0.5);
+}
+
+.result-wrong .result-avatar img {
+    border-color: #f87171;
+    box-shadow: 0 0 30px rgba(248, 113, 113, 0.4);
+}
+
+/* Confetti */
+.confetti-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: var(--z-wrapped);
+}
+
+.confetti {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    top: -20px;
+    animation: confetti-fall 3s ease-out forwards;
+}
+
+.confetti:nth-child(odd) { background: gold; }
+.confetti:nth-child(even) { background: var(--lobby-accent); }
+.confetti:nth-child(3n) { background: #4ade80; }
+.confetti:nth-child(4n) { background: #60a5fa; }
+
+@keyframes confetti-fall {
+    0% { 
+        transform: translateY(0) rotate(0deg); 
+        opacity: 1;
+    }
+    100% { 
+        transform: translateY(100vh) rotate(720deg); 
+        opacity: 0;
+    }
+}
+
+/* ============================================
+   ?�니메이??
+   ============================================ */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.lobby-char-card,
+.lobby-chat-item,
+.persona-item {
+    animation: fadeIn 0.25s ease-out;
+}
+
+#chat-lobby-overlay {
+    animation: fadeIn 0.2s ease-out;
+}
+
+/* ============================================
+   반응??- 모바??
+   ============================================ */
+@media (max-width: 850px) {
+    #chat-lobby-main {
+        flex-direction: column;
+        padding-top: 60px;
+    }
+    
+    #chat-lobby-chats {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100vh !important;
+        z-index: 10000;
+        transform: translateX(100%);
+        transition: transform var(--transition-smooth);
+        border-left: none;
+        display: none;
+    }
+    
+    #chat-lobby-chats.visible {
+        display: flex;
+        transform: translateX(0);
+    }
+    
+    #chat-lobby-chats-back {
+        display: block !important;
+    }
+}
+
+@media (max-width: 768px) {
+    :root {
+        --card-width: 130px;
+        --card-height: 195px;
+        --card-hover-scale: 1;
+    }
+    
+    #chat-lobby-fab {
+        bottom: 70px;
+        right: 15px;
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+    
+    #chat-lobby-header {
+        padding: 8px 15px;
+    }
+    
+    #chat-lobby-header h2 {
+        font-size: 1.2em;
+    }
+    
+    /* 모바???�더 - ?��? 메뉴 */
+    #chat-lobby-menu-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        font-size: 1.4em;
+        padding: 8px;
+        cursor: pointer;
+        border-radius: var(--radius-md);
+        transition: all var(--transition-fast);
+    }
+    
+    #chat-lobby-menu-toggle:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+/* 메뉴 ?��? - ?�버�??�모지 ?��? */
+    
+/* 모바???�더 ?�션 - ?�롭?�운 ?�랍 */
+    .header-actions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--lobby-bg);
+        padding: 10px 15px;
+        gap: 6px;
+        justify-content: center;
+        flex-wrap: wrap;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        transform: translateY(-100%);
+        opacity: 0;
+        pointer-events: none;
+        transition: all var(--transition-smooth);
+        z-index: -1;
+    }
+    
+    /* 메뉴 ?�림 ?�태 - 버튼???�시 */
+    #chat-lobby-header.menu-open .header-actions {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+        z-index: 1;
+    }
+    
+    /* ?�션 버튼???�게 */
+    .header-actions button {
+        padding: 8px 12px;
+        font-size: 1.1em;
+    }
+    
+    #chat-lobby-persona-bar,
+    #chat-lobby-search,
+    #chat-lobby-tag-bar,
+    #chat-lobby-characters {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    
+    /* 모바??검???�역 - ?�로 배치 ?�는 축소 */
+    #chat-lobby-search {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 15px;
+    }
+    
+    #chat-lobby-search input {
+        flex: 1;
+        min-width: 0; /* flex 축소 ?�용 */
+    }
+    
+    #chat-lobby-search select {
+        flex-shrink: 0;
+        max-width: 120px;
+        font-size: 11px;
+        padding: 8px 8px;
+    }
+    
+    .persona-avatar {
+        width: 55px;
+        height: 55px;
+    }
+    
+    .persona-name {
+        max-width: 60px;
+        font-size: 0.7em;
+    }
+    
+    #chat-lobby-characters {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 20px 12px;
+    }
+    
+    .lobby-char-card {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 2 / 3;
+    }
+    
+    .lobby-char-card .lobby-char-name {
+        opacity: 1;
+        transform: none;
+        padding: 30px 8px 8px;
+        font-size: 12px;
+    }
+    
+    /* 모바?�에???�세?�보 ?��? - ?�름�??�시 */
+    .lobby-char-card .char-hover-info {
+        display: none;
+    }
+    
+    .char-fav-btn {
+        opacity: 1;
+        width: 28px;
+        height: 28px;
+        font-size: 1em;
+    }
+    
+    /* Wrapped 모바??*/
+    .wrapped-step {
+        padding: 25px 20px;
+    }
+    
+    .wrapped-emoji {
+        font-size: 3.5em;
+    }
+    
+    .wrapped-step h2 {
+        font-size: 1.5em;
+    }
+    
+    .wrapped-subtitle {
+        font-size: 1em;
+    }
+    
+    .quiz-options {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .quiz-option {
+        flex-direction: row;
+        width: 100%;
+        padding: 16px;
+        min-width: auto;
+    }
+    
+    .quiz-option img {
+        width: 55px;
+        height: 55px;
+    }
+    
+    .result-avatar img {
+        width: 110px;
+        height: 110px;
+    }
+    
+    .message-compare {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .final-content {
+        max-height: 55vh;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --card-width: 100px;
+        --card-height: 150px;
+    }
+    
+    #chat-lobby-fab {
+        bottom: 60px;
+        right: 10px;
+        width: 46px;
+        height: 46px;
+    }
+    
+    #chat-lobby-header h2 {
+        font-size: 1.2em;
+    }
+    
+    .header-actions button {
+        padding: 8px 10px;
+        font-size: 0.9em;
+    }
+    
+    /* ?�주 ?��? ?�면 검???�역 */
+    #chat-lobby-search {
+        padding: 8px 12px;
+    }
+    
+    #chat-lobby-search select {
+        max-width: 100px;
+        padding: 6px 6px;
+        font-size: 10px;
+    }
+    
+    .persona-avatar {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .lobby-char-card .lobby-char-name {
+        font-size: 11px;
+        padding: 25px 6px 6px;
+    }
+}
+
+/* ============================================
+   호버 불가 디바이스 (터치)
+   ============================================ */
+@media (hover: none) {
+    .persona-item:hover {
+        transform: none;
+    }
+    
+    .persona-item:hover .persona-delete-btn {
+        display: none;
+    }
+    
+    .persona-item.selected .persona-delete-btn {
+        display: flex;
+    }
+    
+    /* 모바일: 페르소나 즐겨찾기 항상 표시 */
+    .persona-fav-btn {
+        opacity: 1;
+    }
+    
+    .persona-item.is-persona-fav .persona-fav-btn {
+        opacity: 1;
+    }
+    
+    /* 모바일: 캐릭터 즐겨찾기 항상 표시 */
+    .char-fav-btn {
+        opacity: 1;
+    }
+    
+    .lobby-chat-item:hover {
+        transform: none;
+    }
+}
+
+/* ============================================
+   CustomTheme ?�환??
+   ============================================ */
+body.st-custom-theme-active #chat-lobby-overlay,
+body.st-menu-layout-hamburger #chat-lobby-overlay {
+    z-index: 10000 !important;
+}
+
+body.st-custom-theme-active #chat-lobby-container,
+body.st-menu-layout-hamburger #chat-lobby-container {
+    z-index: 10000 !important;
+}
+
+body.st-custom-theme-active #chat-lobby-fab,
+body.st-menu-layout-hamburger #chat-lobby-fab {
+    z-index: 9999 !important;
+}
+
+#st-chatlobby-sidebar-btn .drawer-icon.openIcon,
+#st-chatlobby-sidebar-btn .drawer-icon {
+    color: inherit !important;
+    background: none !important;
+}
+
+/* ?�션 메뉴 버튼 */
+#option_chat_lobby {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    color: #e0e0e0;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    margin: 5px;
+    font-weight: var(--font-weight-medium);
+}
+
+#option_chat_lobby:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ?�단�?버튼 ?��? */
+#chat-lobby-btn {
+    display: none !important;
+}
+
+/* ?�팁 */
+#chat-preview-tooltip {
+    position: fixed;
+    display: none;
+    max-width: 400px;
+    max-height: 250px;
+    padding: 14px 18px;
+    background: var(--lobby-bg-light);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+    z-index: 100000;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    pointer-events: none;
+    white-space: pre-wrap;
+    word-break: break-word;
+    backdrop-filter: blur(10px);
+}
+
+/* 모바?�에???�팁 ?��? */
+@media (max-width: 768px) {
+    #chat-preview-tooltip {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   캘린??�?- iOS Modern Grid Style
+   ============================================ */
+#calendar-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: #000;
+    display: none;
+    z-index: 999999;
+    transform: none !important;
+    overflow: scroll;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation !important;
+}
+
+#calendar-overlay * {
+    touch-action: manipulation !important;
+}
+
+.calendar-fullscreen {
+    width: 100%;
+    max-width: 1200px;
+    height: auto;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 40px;
+    box-sizing: border-box;
+    background: #000;
+    margin: 0 auto;
+}
+
+/* ?�더 - ?�비게이??중앙 */
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0;
+    flex-shrink: 0;
+    gap: 16px;
+}
+
+.calendar-close-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.4em;
+    padding: 8px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.calendar-close-btn:hover {
+    opacity: 0.7;
+}
+
+/* ?�?��? ?�역 (버튼 + ?�짜) */
+.calendar-title-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.calendar-title-text {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    min-width: 80px;
+    justify-content: center;
+}
+
+.calendar-year {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.3em;
+    font-weight: 300;
+}
+
+.calendar-month {
+    color: #fff;
+    font-size: 1.6em;
+    font-weight: 600;
+}
+
+/* ?�비게이??버튼 - ?�더 ??*/
+.cal-nav-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: #fff;
+    font-size: 1.4em;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cal-nav-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.cal-nav-btn:disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+}
+
+.calendar-debug-btn {
+    display: none; /* ?�로?�션???��? */
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.65em;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.calendar-debug-btn:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+}
+
+/* 메인 ?�역 - ?�크�?가??*/
+.calendar-main {
+    flex: 1;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #000;
+    min-height: 0;
+}
+
+/* ?�짜 그리??- 7?? ???�이 깔끔?�게 */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    padding: 8px;
+    position: relative;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: visible;
+    background: #000;
+}
+
+/* �??�짜 ?� - ?�운???�음 */
+.cal-card {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    min-width: 80px;
+    background: #0a0a0a;
+    overflow: hidden;
+    border-radius: 0;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* 가로선 ?�거 */
+.cal-card:nth-child(7n+1)::after {
+    display: none;
+}
+
+.cal-card.today {
+    background: rgba(229, 9, 20, 0.15);
+}
+
+.cal-card.has-data {
+    background: #000;
+}
+
+/* 카드 ?�바?� */
+.cal-card-avatar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 카드 그라?�이??- ?�단 */
+.cal-card-gradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    background: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.8) 50%, transparent 100%);
+    z-index: 2;
+}
+
+/* ?�짜 - 좌측 ?�단, 16pt Light */
+.cal-card-day {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    font-size: 16pt;
+    font-weight: 300;
+    color: #fff;
+    z-index: 6;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* 카드 ?�보 - ?�단 (?�름 ?? 채팅???�래) */
+.cal-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px;
+    z-index: 3;
+}
+
+.cal-card-name {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.cal-card-count {
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* �?카드 - 좌측 ?�단???�짜�? 16pt Light ?�색 */
+.cal-card-empty {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    font-size: 16pt;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.25);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* 모바??- ?�래�??�크�? ?�치줌 가??*/
+@media (max-width: 768px) {
+    #calendar-overlay {
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y pinch-zoom;
+    }
+    
+    .calendar-fullscreen {
+        width: 600px;
+        min-width: 600px;
+        padding: 16px 20px;
+        touch-action: pan-x pan-y pinch-zoom;
+    }
+    
+    .calendar-main {
+        overflow: visible;
+    }
+    
+    .calendar-grid {
+        touch-action: pan-x pan-y pinch-zoom;
+    }
+    
+    .cal-card {
+        min-width: 70px;
+    }
+    
+    /* 모바??기본: ?�름/?�세?�보 ?��? */
+    .cal-card-info {
+        display: none;
+    }
+    
+    .cal-card-gradient {
+        display: none;
+    }
+    
+    /* ?��? ??(zoomed-in): ?�보 ?�시 */
+    .calendar-grid.zoomed-in .cal-card-info,
+    .calendar-grid.zoomed-in .cal-card-gradient {
+        display: block;
+    }
+    
+    .calendar-grid.zoomed-in .cal-card-name {
+        font-size: 1.1em;
+    }
+    
+    .calendar-grid.zoomed-in .cal-card-count {
+        font-size: 0.9em;
+    }
+}
+
+/* 축소 ??(zoomed-out): ?�짜�?*/
+.calendar-grid.zoomed-out .cal-card-info,
+.calendar-grid.zoomed-out .cal-card-gradient {
+    display: none !important;
+}
+
+/* PC?�서 카드 ???�게 */
+@media (min-width: 769px) {
+    .cal-card {
+        min-width: 100px;
+    }
+    
+    .cal-card-info {
+        padding: 10px;
+    }
+    
+    .cal-card-day {
+        font-size: 0.9em;
+    }
+    
+    .cal-card-name {
+        font-size: 1em;
+    }
+    
+    .cal-card-count {
+        font-size: 0.8em;
+    }
+}
+
+/* ?�버�?모달 */
+.calendar-debug-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 70vh;
+    z-index: 82000;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+    overflow: hidden;
+}
+
+.debug-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-modal-header h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 0.9em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.debug-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.debug-clear-btn {
+    background: #E50914;
+    border: none;
+    color: #fff;
+    font-size: 0.7em;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.debug-clear-btn:hover {
+    background: #ff1a1a;
+}
+
+.debug-modal-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.4em;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.debug-modal-close:hover {
+    color: #fff;
+}
+
+.debug-modal-body {
+    flex: 1;
+    overflow: auto;
+}
+
+.debug-modal-content {
+    padding: 16px;
+    margin: 0;
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.7);
+    background: #0a0a0a;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 100%;
+}
+
+/* ========== Last Message ?�라?�드 ?�널 (중앙 ?�렬) ========== */
+.lastmsg-panel {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 400px;
+    max-width: 90%;
+    height: auto;
+    max-height: 45%;
+    background: #1a1a1a;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transform: translateX(-50%) translateY(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.lastmsg-panel.open {
+    transform: translateX(-50%) translateY(0);
+}
+
+.lastmsg-panel-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px 16px 0 0;
+    gap: 12px;
+}
+
+.lastmsg-panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #fff;
+    font-weight: 600;
+}
+
+.lastmsg-panel-date {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 14px;
+    flex: 1;
+}
+
+.lastmsg-close-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.lastmsg-close-btn:hover {
+    color: #fff;
+}
+
+.lastmsg-panel-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Last Message 캐릭??카드 - 가로로 �?직사각형, 배경 ?�음 */
+.lastmsg-card {
+    position: relative;
+    width: 100%;
+    height: 90px;
+    border-radius: 0;
+    overflow: hidden;
+    background: transparent;
+    display: flex;
+    align-items: stretch;
+}
+
+/* Last Message ?�바?� - ST 기본 ?��????�선?�위 ?�기�?*/
+.lastmsg-card > img.lastmsg-avatar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 200px;
+    height: 100%;
+    object-fit: cover !important;
+    object-position: 50% 30% !important;
+}
+
+/* ?��?지 ?�단 그라?�이???�버?�이 (?�름 가?�성) - ?�바?� ?�비??맞춤 */
+.lastmsg-card::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, 
+        transparent 0%, 
+        transparent 100px,
+        rgba(0,0,0,0.3) 200px,
+        rgba(0,0,0,0.5) 100%
+    ), linear-gradient(to top,
+        rgba(0,0,0,0.85) 0%,
+        rgba(0,0,0,0.4) 30%,
+        transparent 60%
+    );
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* ?�름 - 좌측 ?�단 (?��?지 ?? */
+.lastmsg-name {
+    position: absolute;
+    left: 12px;
+    bottom: 10px;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 170px;
+    z-index: 3;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* ?�계 - ?�측 */
+.lastmsg-stats {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: right;
+    z-index: 3;
+}
+
+.lastmsg-label {
+    font-size: 0.75em;
+    color: #fff;
+    font-weight: 500;
+    margin-bottom: 4px;
+    opacity: 0.7;
+}
+
+.lastmsg-time {
+    font-size: 1em;
+    color: #fff;
+    font-weight: 600;
+}
+
+.lastmsg-no-data {
+    padding: 24px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+/* 모바??최적??*/
+@media (max-width: 768px) {
+    .lastmsg-panel {
+        max-height: 50%;
+    }
+    
+    .lastmsg-card {
+        height: 80px;
+    }
+    
+    .lastmsg-avatar {
+        width: 160px;
+    }
+    
+    .lastmsg-card::after {
+        background: linear-gradient(to right, 
+            transparent 0%, 
+            transparent 80px,
+            rgba(0,0,0,0.3) 160px,
+            rgba(0,0,0,0.5) 100%
+        ), linear-gradient(to top,
+            rgba(0,0,0,0.85) 0%,
+            rgba(0,0,0,0.4) 30%,
+            transparent 60%
+        );
+    }
+    
+    .lastmsg-name {
+        font-size: 0.85em;
+        max-width: 130px;
+    }
+    
+    .lastmsg-time {
+        font-size: 0.9em;
+    }
+    
+    .lastmsg-label {
+        font-size: 0.7em;
+    }
+}
+
+/* ?�릭 가???�시 - cal-card */
+.cal-card.has-data {
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.cal-card.has-data:hover {
+    transform: scale(1.02);
+}
+
+.cal-card.has-data:active {
+    transform: scale(0.98);
+}
+
+/* ========== ?�이??모드 - 모노??========== */
+#calendar-overlay.light-mode,
+#calendar-overlay.light-mode {
+    background: #fff;
+}
+
+#calendar-overlay.light-mode .calendar-fullscreen,
+#calendar-overlay.light-mode .calendar-fullscreen {
+    background: #fff;
+}
+
+#calendar-overlay.light-mode .calendar-close-btn,
+#calendar-overlay.light-mode .calendar-year,
+#calendar-overlay.light-mode .calendar-close-btn,
+#calendar-overlay.light-mode .calendar-year {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#calendar-overlay.light-mode .calendar-month,
+#calendar-overlay.light-mode .calendar-month {
+    color: #000;
+}
+
+#calendar-overlay.light-mode .calendar-debug-btn,
+#calendar-overlay.light-mode .calendar-debug-btn {
+    border-color: rgba(0, 0, 0, 0.15);
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#calendar-overlay.light-mode .calendar-grid-wrapper,
+#calendar-overlay.light-mode .calendar-grid-wrapper {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#calendar-overlay.light-mode .calendar-weekdays,
+#calendar-overlay.light-mode .calendar-weekdays {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+#calendar-overlay.light-mode .calendar-weekdays span,
+#calendar-overlay.light-mode .calendar-weekdays span {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#calendar-overlay.light-mode .calendar-weekdays .sun,
+#calendar-overlay.light-mode .calendar-weekdays .sun {
+    color: #333;
+}
+
+#calendar-overlay.light-mode .calendar-weekdays .sat,
+#calendar-overlay.light-mode .calendar-weekdays .sat {
+    color: #666;
+}
+
+#calendar-overlay.light-mode .calendar-day,
+#calendar-overlay.light-mode .calendar-day {
+    border-color: rgba(0, 0, 0, 0.06);
+}
+
+#calendar-overlay.light-mode .calendar-day:not(.empty):hover,
+#calendar-overlay.light-mode .calendar-day:not(.empty):hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+#calendar-overlay.light-mode .calendar-day.today,
+#calendar-overlay.light-mode .calendar-day.today {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+#calendar-overlay.light-mode .calendar-day.today .day-number,
+#calendar-overlay.light-mode .calendar-day.today .day-number {
+    color: #333;
+}
+
+#calendar-overlay.light-mode .day-number,
+#calendar-overlay.light-mode .day-number {
+    color: #000;
+}
+
+#calendar-overlay.light-mode .cal-nav-btn,
+#calendar-overlay.light-mode .cal-nav-btn {
+    background: rgba(0, 0, 0, 0.06);
+    color: #000;
+}
+
+#calendar-overlay.light-mode .cal-nav-btn:hover:not(:disabled),
+#calendar-overlay.light-mode .cal-nav-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#calendar-overlay.light-mode .calendar-bot-card,
+#calendar-overlay.light-mode .calendar-bot-card {
+    background: #fff;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
+#calendar-overlay.light-mode .bot-card-gradient,
+#calendar-overlay.light-mode .bot-card-gradient {
+    background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.95) 30%, transparent 100%);
+}
+
+#calendar-overlay.light-mode .bot-card-name,
+#calendar-overlay.light-mode .bot-card-name {
+    color: #000;
+}
+
+#calendar-overlay.light-mode .bot-card-stats,
+#calendar-overlay.light-mode .bot-card-stats {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+#calendar-overlay.light-mode .bot-card-stats.positive,
+#calendar-overlay.light-mode .bot-card-stats.positive {
+    color: #333;
+}
+
+#calendar-overlay.light-mode .bot-card-date,
+#calendar-overlay.light-mode .bot-card-date {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#calendar-overlay.light-mode .calendar-footer,
+#calendar-overlay.light-mode .calendar-footer {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+#calendar-overlay.light-mode .calendar-debug-modal,
+#calendar-overlay.light-mode .calendar-debug-modal {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#calendar-overlay.light-mode .debug-modal-header,
+#calendar-overlay.light-mode .debug-modal-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+#calendar-overlay.light-mode .debug-modal-header h3,
+#calendar-overlay.light-mode .debug-modal-header h3 {
+    color: #000;
+}
+
+#calendar-overlay.light-mode .debug-modal-close,
+#calendar-overlay.light-mode .debug-modal-close {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#calendar-overlay.light-mode .debug-modal-content,
+#calendar-overlay.light-mode .debug-modal-content {
+    background: #f8f8f8;
+    color: #333;
+}
+
+/* ============================================
+   캘린???�이??모드 - cal-card 계열
+   ============================================ */
+
+/* 메인 영역 배경 */
+#calendar-overlay.light-mode .calendar-main {
+    background: #f5f5f5;
+}
+
+/* 그리??배경 */
+#calendar-overlay.light-mode .calendar-grid,
+#calendar-overlay.light-mode .calendar-grid {
+    background: #f5f5f5;
+}
+
+/* 기본 카드 */
+#calendar-overlay.light-mode .cal-card,
+#calendar-overlay.light-mode .cal-card {
+    background: #e8e8e8;
+}
+
+/* ?�늘 강조 */
+#calendar-overlay.light-mode .cal-card.today,
+#calendar-overlay.light-mode .cal-card.today {
+    background: rgba(51, 51, 51, 0.1);
+}
+
+/* ?�이???�는 카드 */
+#calendar-overlay.light-mode .cal-card.has-data,
+#calendar-overlay.light-mode .cal-card.has-data {
+    background: #fff;
+}
+
+/* 카드 그라?�이??*/
+#calendar-overlay.light-mode .cal-card-gradient,
+#calendar-overlay.light-mode .cal-card-gradient {
+    background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.9) 50%, transparent 100%);
+}
+
+/* ?�짜 ?�스??*/
+#calendar-overlay.light-mode .cal-card-day,
+#calendar-overlay.light-mode .cal-card-day {
+    color: #000;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+/* 카드 ?�름 */
+#calendar-overlay.light-mode .cal-card-name,
+#calendar-overlay.light-mode .cal-card-name {
+    color: #000;
+}
+
+/* 카드 카운??*/
+#calendar-overlay.light-mode .cal-card-count,
+#calendar-overlay.light-mode .cal-card-count {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* �?카드 ?�짜 */
+#calendar-overlay.light-mode .cal-card-empty,
+#calendar-overlay.light-mode .cal-card-empty {
+    color: rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   캘린???�이??모드 - lastmsg-panel 계열
+   ============================================ */
+
+/* ?�널 배경 */
+#calendar-overlay.light-mode .lastmsg-panel,
+#calendar-overlay.light-mode .lastmsg-panel {
+    background: #fff;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* ?�널 ?�더 */
+#calendar-overlay.light-mode .lastmsg-panel-header,
+#calendar-overlay.light-mode .lastmsg-panel-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* ?�더 ?�?��? */
+#calendar-overlay.light-mode .lastmsg-panel-header h3,
+#calendar-overlay.light-mode .lastmsg-panel-header h3 {
+    color: #000;
+}
+
+/* ?�짜 ?�스??*/
+#calendar-overlay.light-mode .lastmsg-panel-date,
+#calendar-overlay.light-mode .lastmsg-panel-date {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+/* ?�기 버튼 */
+#calendar-overlay.light-mode .lastmsg-close-btn,
+#calendar-overlay.light-mode .lastmsg-close-btn {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+#calendar-overlay.light-mode .lastmsg-close-btn:hover,
+#calendar-overlay.light-mode .lastmsg-close-btn:hover {
+    color: #000;
+}
+
+/* 캐릭??카드 그라?�이??*/
+#calendar-overlay.light-mode .lastmsg-card::after,
+#calendar-overlay.light-mode .lastmsg-card::after {
+    background: linear-gradient(to right, 
+        transparent 0%, 
+        transparent 100px,
+        rgba(255,255,255,0.5) 200px,
+        rgba(255,255,255,0.8) 100%
+    ), linear-gradient(to top,
+        rgba(255,255,255,0.95) 0%,
+        rgba(255,255,255,0.6) 30%,
+        transparent 60%
+    );
+}
+
+/* 캐릭???�름 */
+#calendar-overlay.light-mode .lastmsg-name,
+#calendar-overlay.light-mode .lastmsg-name {
+    color: #000;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+/* ?�계 ?�이�?*/
+#calendar-overlay.light-mode .lastmsg-label,
+#calendar-overlay.light-mode .lastmsg-label {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* ?�간 ?�스??*/
+#calendar-overlay.light-mode .lastmsg-time,
+#calendar-overlay.light-mode .lastmsg-time {
+    color: #000;
+}
+
+/* ?�이???�음 */
+#calendar-overlay.light-mode .lastmsg-no-data,
+#calendar-overlay.light-mode .lastmsg-no-data {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+
+/* ============================================
+   Debug Modal Styles
+   ============================================ */
+
+#chat-lobby-debug-modal .debug-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+}
+
+#chat-lobby-debug-modal .debug-modal-content {
+    position: relative;
+    background: #1a1a1a;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    z-index: 1;
+}
+
+#chat-lobby-debug-modal .debug-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+#chat-lobby-debug-modal .debug-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #fff;
+}
+
+#chat-lobby-debug-modal .debug-modal-actions {
+    display: flex;
+    gap: 8px;
+}
+
+#chat-lobby-debug-modal .debug-copy-btn,
+#chat-lobby-debug-modal .debug-clear-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+#chat-lobby-debug-modal .debug-copy-btn {
+    background: rgba(100, 150, 255, 0.2);
+    color: #6496ff;
+}
+
+#chat-lobby-debug-modal .debug-copy-btn:hover {
+    background: rgba(100, 150, 255, 0.3);
+}
+
+#chat-lobby-debug-modal .debug-clear-btn {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+#chat-lobby-debug-modal .debug-clear-btn:hover {
+    background: rgba(255, 100, 100, 0.3);
+}
+
+#chat-lobby-debug-modal .debug-modal-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 8px;
+}
+
+#chat-lobby-debug-modal .debug-modal-close:hover {
+    color: #fff;
+}
+
+#chat-lobby-debug-modal .debug-modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+#chat-lobby-debug-modal .debug-modal-pre {
+    margin: 0;
+    padding: 16px;
+    background: #111;
+    border-radius: 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    color: #0f0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-x: auto;
+}
+
+/* Light mode */
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-content,
+body.light-mode #chat-lobby-debug-modal .debug-modal-content {
+    background: #fff;
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-header,
+body.light-mode #chat-lobby-debug-modal .debug-modal-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-header h3,
+body.light-mode #chat-lobby-debug-modal .debug-modal-header h3 {
+    color: #000;
+}
+
+#chat-lobby-container.light-mode ~ #chat-lobby-debug-modal .debug-modal-pre,
+body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
+    background: #f5f5f5;
+    color: #333;
+}
+/* ============================================
+   Debug Panel (?�라?�드 ???�태)
+   ============================================ */
+
+.debug-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: #1a1a1a;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.debug-panel.open {
+    transform: translateY(0);
+}
+
+.debug-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px 16px 0 0;
+}
+
+.debug-panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #fff;
+}
+
+.debug-panel-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.debug-panel-actions button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.debug-panel-actions button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.debug-panel-actions .debug-clear-btn {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+.debug-panel-actions .debug-clear-btn:hover {
+    background: rgba(255, 100, 100, 0.3);
+}
+
+.debug-panel-actions .debug-close-btn {
+    background: transparent;
+    font-size: 18px;
+}
+
+.debug-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.debug-panel-pre {
+    margin: 0;
+    padding: 12px;
+    background: #111;
+    border-radius: 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    color: #0f0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+/* Light mode */
+#chat-lobby-container.light-mode .debug-panel {
+    background: #fff;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+#chat-lobby-container.light-mode .debug-panel-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+#chat-lobby-container.light-mode .debug-panel-header h3 {
+    color: #000;
+}
+
+#chat-lobby-container.light-mode .debug-panel-actions button {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+#chat-lobby-container.light-mode .debug-panel-pre {
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* 모바??최적??*/
+@media (max-width: 768px) {
+    .debug-panel {
+        height: 70%;
+    }
+    
+    .debug-panel-pre {
+        font-size: 10px;
+    }
+}
+
+/* ============================================
+   가상 스크롤러 스타일
+   ============================================ */
+.virtual-scroll-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.virtual-scroll-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 200px);
+    justify-content: center;
+    gap: var(--card-gap, 9px);
+    align-content: start;
+}
+
+.virtual-sentinel {
+    height: 1px;
+    width: 100%;
+    pointer-events: none;
+}
+
+/* ============================================
+   페르소나 퀵버튼 스타일
+   ============================================ */
+.persona-quick-btn {
+    position: relative;
+    padding: 0 !important;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid var(--accent-color, #7c3aed);
+    background: var(--lobby-bg-light, #2d2d2d);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.persona-quick-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+    border-color: var(--accent-hover, #8b5cf6);
+}
+
+.persona-quick-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 이미지 로드 실패 시 fallback */
+.persona-quick-avatar[src=""],
+.persona-quick-avatar:not([src]) {
+    display: none;
+}
+
+/* 라이트 모드 */
+.light-mode .persona-quick-btn {
+    border-color: #7c3aed;
+    background: #f5f5f5;
+}
+
+.light-mode .persona-quick-btn:hover {
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+/* ============================================
+   ChatLobby 4.0 - 탭 시스템
+   ============================================ */
+
+/* 헤더 내 탭 바 */
+.lobby-tabs.header-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0;
+    margin: 0 0 0 16px;
+    background: transparent;
+    border: none;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-shrink: 0;
+}
+
+.lobby-tabs.header-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.lobby-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--lobby-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.lobby-tab:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--lobby-text);
+}
+
+.lobby-tab.active {
+    background: var(--lobby-accent);
+    color: white;
+}
+
+.lobby-tab .tab-icon {
+    font-size: 13px;
+}
+
+.lobby-tab .tab-name {
+    font-size: 11px;
+}
+
+/* 모바일: 아이콘만 */
+@media (max-width: 600px) {
+    .lobby-tabs.header-tabs {
+        margin-left: 8px;
+        gap: 2px;
+    }
+    
+    .lobby-tab {
+        padding: 6px 8px;
+    }
+    
+    .lobby-tab .tab-name {
+        display: none;
+    }
+    
+    .lobby-tab .tab-icon {
+        font-size: 14px;
+    }
+}
+
+/* 탭 컨텐츠 */
+.tab-content {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    gap: 12px;
+}
+
+.tab-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.tab-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--lobby-text);
+}
+
+.tab-back-btn {
+    padding: 6px 12px;
+    border: none;
+    background: var(--lobby-bg-hover);
+    color: var(--lobby-text);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 150ms ease;
+}
+
+.tab-back-btn:hover {
+    background: var(--lobby-accent);
+    color: white;
+}
+
+.tab-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--lobby-text-secondary);
+}
+
+/* 빈 상태 */
+.tab-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--lobby-text-secondary);
+}
+
+.tab-empty .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.tab-empty p {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--lobby-text);
+}
+
+.tab-empty small {
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.tab-empty-small {
+    padding: 20px;
+    text-align: center;
+    color: var(--lobby-text-secondary);
+    font-size: 13px;
+}
+
+/* 탭 그리드 (채팅 카드) */
+.tab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+/* 채팅 카드 */
+.chat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+    background: var(--lobby-bg-card);
+    border: 1px solid var(--lobby-border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    gap: 8px;
+}
+
+.chat-card:hover {
+    background: var(--lobby-bg-hover);
+    border-color: var(--lobby-accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.chat-card-avatar {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid var(--lobby-border);
+    flex-shrink: 0;
+}
+
+.chat-card-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.chat-card-avatar .type-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    font-size: 12px;
+    background: var(--lobby-bg-card);
+    border-radius: 50%;
+    padding: 2px;
+}
+
+.chat-card-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+    width: 100%;
+    overflow: hidden;
+}
+
+.chat-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lobby-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.chat-card-time {
+    font-size: 11px;
+    color: var(--lobby-text-secondary);
+}
+
+/* 폴더 리스트 */
+.tab-folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.folder-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--lobby-bg-card);
+    border: 1px solid var(--lobby-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.folder-card:hover {
+    background: var(--lobby-bg-hover);
+    border-color: var(--lobby-accent);
+}
+
+.folder-card .folder-icon {
+    font-size: 24px;
+}
+
+.folder-card .folder-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.folder-card .folder-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--lobby-text);
+}
+
+.folder-card .folder-count {
+    font-size: 12px;
+    color: var(--lobby-text-secondary);
+}
+
+.folder-card .folder-arrow {
+    font-size: 20px;
+    color: var(--lobby-text-secondary);
+}
+
+/* 모바일 탭 그리드 */
+@media (max-width: 768px) {
+    .tab-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    
+    .chat-card {
+        padding: 10px 8px;
+    }
+    
+    .chat-card-avatar {
+        width: 52px;
+        height: 52px;
+    }
+    
+    .chat-card-name {
+        font-size: 11px;
+    }
+    
+    .chat-card-time {
+        font-size: 10px;
+    }
+}
+
+/* ============================================
+   페르소나 반원 메뉴 - 하단 배치 (7개 표시, 흐림 효과)
+   ============================================ */
+
+/* 컨테이너 */
+#persona-radial-container {
+    position: absolute !important;
+    inset: 0;
+    z-index: 10001 !important;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* 오버레이 */
+.persona-menu-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
+    pointer-events: none;
+}
+
+.persona-menu-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 반원 메뉴 - 하단 중앙 */
+.persona-menu-arc {
+    position: absolute;
+    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    width: 500px;
+    height: 280px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    cursor: grab;
+    will-change: transform, opacity;
+}
+
+.persona-menu-arc.open {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+.persona-menu-arc:active {
+    cursor: grabbing;
+}
+
+/* 아이템 컨테이너 */
+.persona-arc-items {
+    position: absolute;
+    bottom: 130px;
+    left: 50%;
+    width: 0;
+    height: 0;
+    transition: transform 120ms cubic-bezier(.2,.9,.3,1);
+}
+
+/* 중앙 표시 영역 (사진 + 이름 + 모드) */
+.persona-arc-center {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--lobby-accent);
+    padding: 8px 16px 10px;
+    border-radius: 16px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 200ms ease;
+    min-width: 100px;
+}
+
+.persona-arc-center:hover {
+    /* hover 효과 제거 - 정보 영역으로 */
+}
+
+/* 현재 페르소나로 스크롤 버튼 (중앙 카드 안) */
+.persona-scroll-to-current {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 100ms ease;
+    z-index: 60;
+    padding: 0;
+}
+
+.persona-scroll-to-current:hover {
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(1.1);
+}
+
+.persona-scroll-to-current:active {
+    transform: scale(0.95);
+}
+
+.persona-center-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.persona-center-name {
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+.persona-center-mode {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 10px;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+
+/* 아이템 - 반원 배치 */
+.persona-arc-item {
+    position: absolute;
+    width: var(--size, 64px);
+    height: var(--size, 64px);
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.35);
+    background: var(--lobby-bg-card, #2a2a2a);
+    cursor: pointer;
+    padding: 0;
+    overflow: visible;
+    /* CSS 변수로 위치/스케일/투명도 적용 */
+    transform: translate(calc(var(--x, 0px) - 50%), var(--y, 0px)) scale(var(--scale, 1));
+    opacity: var(--opacity, 1);
+    z-index: var(--z, 1);
+    transition: transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                opacity 200ms ease,
+                border-color 150ms ease,
+                box-shadow 150ms ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    pointer-events: auto;
+    will-change: transform, opacity;
+}
+
+.persona-menu-arc.open .persona-arc-item {
+    opacity: var(--opacity, 1);
+}
+
+/* 호버 시 - 약간 강조 */
+.persona-arc-item:hover {
+    transform: translate(calc(var(--x, 0px) - 50%), var(--y, 0px)) scale(calc(var(--scale, 1) * 1.15)) translateY(-4px) !important;
+    opacity: 1 !important;
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    z-index: 100 !important;
+    transition: all 80ms ease-out !important;
+}
+
+.persona-arc-item:active {
+    transform: translate(calc(var(--x, 0px) - 50%), var(--y, 0px)) scale(calc(var(--scale, 1) * 1.08)) translateY(-2px) !important;
+}
+
+/* 이름 라벨 - 항상 아래에 표시 (모바일 스타일) */
+.persona-arc-label {
+    position: absolute;
+    top: auto;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.65);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0.9;
+    pointer-events: none;
+    max-width: 70px;
+    min-width: 30px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.3px;
+    box-shadow: none;
+}
+
+.persona-arc-label::after {
+    display: none;
+}
+
+/* 현재 선택 표시 - 진짜 강조 */
+.persona-arc-item.is-current {
+    border: 3px solid #10b981;
+    transform: translate(calc(var(--x, 0px) - 50%), var(--y, 0px)) scale(calc(var(--scale, 1) * 1.15)) !important;
+    box-shadow: 
+        0 0 0 4px rgba(16, 185, 129, 0.3), 
+        0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.persona-arc-item.is-current::before {
+    content: '✓';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    background: #10b981;
+    color: white;
+    font-size: 11px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* 즐겨찾기 표시 */
+.persona-arc-item.is-fav::after {
+    content: '★';
+    position: absolute;
+    bottom: -5px;
+    right: -5px;
+    width: 18px;
+    height: 18px;
+    background: #fbbf24;
+    color: white;
+    font-size: 10px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.persona-arc-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.persona-arc-fallback {
+    display: none;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    background: var(--lobby-bg-hover, #404040);
+    border-radius: 50%;
+}
+
+/* 빈 상태 */
+.persona-arc-empty {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+/* FAB 버튼 - 크기 증가 */
+.persona-fab {
+    position: absolute !important;
+    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: linear-gradient(145deg, #667eea, #764ba2);
+    z-index: 10001;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0;
+}
+
+.persona-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 28px rgba(102, 126, 234, 0.6);
+}
+
+.persona-fab:active {
+    transform: scale(0.95);
+}
+
+.persona-fab.open {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8);
+}
+
+.persona-fab img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.persona-fab-icon {
+    font-size: 24px;
+}
+
+/* 모션 감소 */
+@media (prefers-reduced-motion: reduce) {
+    .persona-menu-arc,
+    .persona-arc-item,
+    .persona-fab,
+    .persona-menu-overlay {
+        transition: none;
+    }
+}
+
+/* ============================================
+   라이트 모드 테마
+   ============================================ */
+.light-mode .persona-menu-overlay {
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.light-mode .persona-arc-item {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.light-mode .persona-arc-item:hover {
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 
+        0 0 0 4px rgba(102, 126, 234, 0.2),
+        0 8px 28px rgba(102, 126, 234, 0.4);
+}
+
+.light-mode .persona-arc-center {
+    background: var(--lobby-accent);
+}
+
+.light-mode .persona-center-mode {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.light-mode .persona-arc-indicator {
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.light-mode .persona-arc-empty {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .persona-fab {
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
+}
+
+.light-mode .persona-arc-label {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   다크 모드 테마 (기본)
+   ============================================ */
+.dark-mode .persona-menu-overlay,
+[data-theme="dark"] .persona-menu-overlay {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.dark-mode .persona-arc-item,
+[data-theme="dark"] .persona-arc-item {
+    background: #1a1a2e;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 모바일 대응 - 터치 영역 + 크기 축소 */
+@media (max-width: 768px) {
+    .persona-menu-arc {
+        width: 100%;
+        max-width: 380px;
+        height: 280px;
+        bottom: calc(40px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    .persona-arc-items {
+        bottom: 125px;
+    }
+    
+    .persona-arc-item {
+        width: 52px;
+        height: 52px;
+    }
+    
+    /* 모바일: 라벨 약간 작게 */
+    .persona-arc-label {
+        font-size: 8px;
+        max-width: 52px;
+        bottom: -18px;
+    }
+    
+    /* FAB 버튼 - 메뉴 열리면 숨김 */
+    .persona-fab {
+        width: 52px;
+        height: 52px;
+        bottom: calc(50px + env(safe-area-inset-bottom, 0px)) !important;
+        right: 16px;
+    }
+    
+    .persona-fab.open {
+        opacity: 0;
+        pointer-events: none;
+        transform: scale(0.8);
+    }
+    
+    .persona-arc-center {
+        padding: 8px 16px 12px;
+        bottom: 10px;
+    }
+    
+    .persona-center-avatar {
+        width: 56px;
+        height: 56px;
+    }
+    
+    .persona-center-name {
+        font-size: 14px;
+    }
+    
+    .persona-arc-indicator {
+        bottom: 65px;
+    }
+}
+
+/* 키보드 포커스 스타일 */
+.persona-arc-item:focus-visible {
+    outline: 2px solid var(--lobby-accent);
+    outline-offset: 3px;
+}
+
+.persona-fab:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 3px;
+}
+
+/* ============================================
+   탭 시스템 - 리스트형 카드 & 보관함
+   ============================================ */
+
+/* 탭 리스트 (리스트형 레이아웃) */
+.tab-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+/* 리스트형 채팅 카드 */
+.tab-list .chat-card {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 12px;
+}
+
+.tab-list .chat-card-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+}
+
+.tab-list .chat-card-info {
+    flex: 1;
+    min-width: 0;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.tab-list .chat-card-name {
+    font-size: 14px;
+}
+
+.tab-list .chat-card-sub {
+    font-size: 12px;
+    color: var(--lobby-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.tab-list .chat-card-preview {
+    font-size: 12px;
+    color: var(--lobby-text-secondary);
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+.tab-list .chat-card-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.tab-list .chat-card-date {
+    font-size: 11px;
+    color: var(--lobby-text-secondary);
+}
+
+.tab-list .chat-card-count {
+    font-size: 11px;
+    color: var(--lobby-accent);
+}
+
+/* 메뉴 버튼 */
+.chat-card-menu-btn {
+    background: transparent;
+    border: none;
+    color: var(--lobby-text-secondary);
+    font-size: 18px;
+    padding: 4px 8px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.chat-card:hover .chat-card-menu-btn {
+    opacity: 1;
+}
+
+.chat-card-menu-btn:hover {
+    color: var(--lobby-text);
+}
+
+/* 보관함 필터 바 */
+.library-filter-bar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--lobby-border);
+}
+
+.library-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--lobby-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.library-filter-btn:hover {
+    background: var(--lobby-bg-hover);
+    color: var(--lobby-text);
+}
+
+.library-filter-btn.active {
+    background: var(--lobby-accent);
+    color: white;
+}
+
+/* 폴더 관리 버튼 (⚙️) */
+.library-filter-btn.folder-manage-btn {
+    margin-left: auto;
+    padding: 8px 12px;
+    font-size: 16px;
+}
+
+.library-filter-btn.folder-manage-btn:hover {
+    background: var(--lobby-bg-hover);
+}
+
+/* 폴더 리스트 (보관함용) */
+.folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 모바일 리스트형 카드 */
+@media (max-width: 768px) {
+    .tab-list .chat-card {
+        padding: 10px 12px;
+        gap: 10px;
+    }
+    
+    .tab-list .chat-card-avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .tab-list .chat-card-name {
+        font-size: 13px;
+    }
+    
+    .chat-card-menu-btn {
+        opacity: 1;
+        padding: 8px;
+    }
+    
+    .library-filter-bar {
+        gap: 4px;
+    }
+    
+    .library-filter-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}
