@@ -1199,6 +1199,13 @@ function closeChatFolderMenu() {
  */
 export function handleSortChange(sortValue) {
     storage.setSortOption(sortValue);
+    
+    // 분기 새로고침 버튼 visibility 토글
+    const branchRefreshBtn = document.getElementById('chat-lobby-branch-refresh');
+    if (branchRefreshBtn) {
+        branchRefreshBtn.style.display = sortValue === 'branch' ? 'flex' : 'none';
+    }
+    
     refreshCurrentChatList();
 }
 

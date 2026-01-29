@@ -303,6 +303,12 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                     // FAB 프리뷰 갱신
                     updateFabPreview();
                 }
+            },
+            // 🔥 페르소나 변경 감지 (세팅 업데이트 시)
+            onSettingsUpdated: async () => {
+                console.log('[ChatLobby] Settings updated, refreshing persona FAB');
+                await refreshPersonaRadialMenu();
+                await renderPersonaBar();
             }
         };
         
@@ -333,6 +339,11 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, eventHandlers.onMessageReceived);
         }
         
+        // 페르소나 변경 감지 (SETTINGS_UPDATED)
+        if (eventTypes.SETTINGS_UPDATED) {
+            eventSource.on(eventTypes.SETTINGS_UPDATED, eventHandlers.onSettingsUpdated);
+        }
+        
         eventsRegistered = true;
     }
     
@@ -359,6 +370,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             eventSource.off?.(eventTypes.MESSAGE_RECEIVED, eventHandlers.onMessageReceived);
             eventSource.off?.(eventTypes.USER_MESSAGE_RENDERED, eventHandlers.onMessageSent);
             eventSource.off?.(eventTypes.CHARACTER_MESSAGE_RENDERED, eventHandlers.onMessageReceived);
+            eventSource.off?.(eventTypes.SETTINGS_UPDATED, eventHandlers.onSettingsUpdated);
             
             eventsRegistered = false;
             eventHandlers = null;
