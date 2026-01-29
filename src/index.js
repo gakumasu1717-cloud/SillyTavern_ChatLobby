@@ -25,6 +25,8 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
 import { intervalManager } from './utils/intervalManager.js';
 import { openDrawerSafely } from './utils/drawerHelper.js';
 import { initCustomThemeIntegration, cleanupCustomThemeIntegration } from './integration/customTheme.js';
+import { analyzeBranches } from './utils/branchAnalyzer.js';
+import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 
 (function() {
     'use strict';
@@ -1093,6 +1095,9 @@ import { initCustomThemeIntegration, cleanupCustomThemeIntegration } from './int
             case 'switch-persona':
                 handleSwitchPersona(el);
                 break;
+            case 'refresh-branches':
+                handleRefreshBranches();
+                break;
         }
     }
     
@@ -1210,6 +1215,61 @@ import { initCustomThemeIntegration, cleanupCustomThemeIntegration } from './int
             showToast('페르소나 변경됨', 'success');
         } else {
             showToast('페르소나 변경 실패', 'error');
+        }
+    }
+
+    /**
+     * 분기 분석 새로고침 처리
+     */
+    async function handleRefreshBranches() {
+        const currentChar = store.getCurrentCharacter();
+        if (!currentChar) {
+            showToast('캐릭터를 먼저 선택하세요', 'warning');
+            return;
+        }
+        
+        const charAvatar = currentChar.avatar;
+        const btn = document.getElementById('chat-lobby-branch-refresh');
+        
+        try {
+            // 버튼 비활성화 및 로딩 표시
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="icon">⏳</span>';
+            }
+            
+            showToast('분기 분석 중...', 'info');
+            
+            // 캐시 클리어
+            clearBranchCache(charAvatar);
+            
+            // 채팅 목록 가져오기
+            const chats = await api.getChats(charAvatar);
+            if (!chats || chats.length === 0) {
+                showToast('채팅이 없습니다', 'warning');
+                return;
+            }
+            
+            // 분기 분석 실행
+            const branches = await analyzeBranches(charAvatar, chats, (progress) => {
+                console.log('[ChatLobby] Branch analysis progress:', Math.round(progress * 100) + '%');
+            });
+            
+            console.log('[ChatLobby] Branch analysis complete:', branches);
+            showToast(`분기 분석 완료: ${Object.keys(branches).length}개 분기 발견`, 'success');
+            
+            // 채팅 목록 새로고침
+            await renderChatList(chats, charAvatar);
+            
+        } catch (error) {
+            console.error('[ChatLobby] Failed to refresh branches:', error);
+            showToast('분기 분석 실패', 'error');
+        } finally {
+            // 버튼 복원
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="icon">🔍</span>';
+            }
         }
     }
 

@@ -123,7 +123,8 @@ function groupByFingerprint(fingerprints) {
 }
 
 /**
- * 같은 fingerprint 그룹 내에서 부모-자식 관계 분석
+ * 같은 fingerprint 그룹 내에서 부모-자식 관계 분석 (Timelines 방식)
+ * 메시지 index별로 순회하면서 previousNodes로 정확한 부모 추적
  * @param {string} charAvatar
  * @param {Array} group - [{ fileName, length }]
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
@@ -142,43 +143,99 @@ async function analyzeGroup(charAvatar, group) {
         }
     }));
     
-    // 각 채팅에 대해 부모 찾기
-    for (const current of group) {
-        const currentContent = chatContents[current.fileName];
-        if (!currentContent || currentContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
+    const fileNames = Object.keys(chatContents);
+    if (fileNames.length < 2) return {};
+    
+    // Timelines 방식: 메시지 index별로 transpose
+    const maxLength = Math.max(...Object.values(chatContents).map(c => c.length));
+    
+    // previousNodes: 각 채팅의 "이전 노드" 추적 (Timelines 핵심)
+    // 부모 채팅과 분기점을 추적
+    const branchPoints = {};  // { fileName: { parentChat, branchPoint } }
+    const lastMatchingIndex = {};  // { fileName: 마지막으로 다른 채팅과 일치한 index }
+    
+    // 초기화: 모든 채팅은 root에서 시작
+    for (const fn of fileNames) {
+        lastMatchingIndex[fn] = -1;
+    }
+    
+    // 메시지 index 0부터 순회
+    for (let msgIdx = 0; msgIdx < maxLength; msgIdx++) {
+        // 이 index에서 각 채팅의 메시지 content 수집
+        const msgByContent = {};  // { contentHash: [fileName1, fileName2, ...] }
         
-        let bestParent = null;
-        let bestCommonLen = 0;
-        
-        // 모든 다른 채팅과 비교
-        for (const candidate of group) {
-            if (candidate.fileName === current.fileName) continue;
+        for (const fn of fileNames) {
+            const content = chatContents[fn];
+            if (msgIdx >= content.length) continue;  // 이 채팅은 여기서 끝
             
-            const candidateContent = chatContents[candidate.fileName];
-            if (!candidateContent || candidateContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
+            const msg = content[msgIdx];
+            const hash = getMessageHash(msg);
             
-            const commonLen = findCommonPrefixLength(candidateContent, currentContent);
-            
-            // 부모 조건:
-            // 1. 후보가 현재보다 짧거나 같아야 함 (부모가 자식보다 길 수 없음)
-            // 2. 공통 부분이 후보의 거의 전체여야 함 (후보가 현재의 prefix)
-            // 3. 가장 긴 공통을 가진 것이 직접 부모
-            const candidateLen = candidateContent.length;
-            const currentLen = currentContent.length;
-            
-            if (candidateLen <= currentLen && commonLen > bestCommonLen) {
-                bestCommonLen = commonLen;
-                bestParent = candidate.fileName;
+            if (!msgByContent[hash]) {
+                msgByContent[hash] = [];
             }
+            msgByContent[hash].push(fn);
         }
         
-        // 최소 2개 이상 메시지가 같아야 진짜 분기 (그리팅만 같은 건 제외)
-        const MIN_COMMON_FOR_BRANCH = 2;
+        // 같은 content를 가진 채팅들끼리 그룹화
+        const contentGroups = Object.values(msgByContent);
         
-        if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
-            result[current.fileName] = {
-                parentChat: bestParent,
-                branchPoint: bestCommonLen,
+        // 단일 그룹이면 아직 분기 안 됨
+        if (contentGroups.length === 1) {
+            // 모든 채팅이 동일한 content를 가짐
+            for (const fn of contentGroups[0]) {
+                lastMatchingIndex[fn] = msgIdx;
+            }
+        } else {
+            // 여러 그룹으로 분리됨 = 분기 발생!
+            // 가장 긴 채팅을 가진 그룹을 "원본"으로 간주
+            let mainGroup = contentGroups[0];
+            let mainMaxLen = Math.max(...mainGroup.map(fn => chatContents[fn].length));
+            
+            for (const grp of contentGroups) {
+                const grpMaxLen = Math.max(...grp.map(fn => chatContents[fn].length));
+                if (grpMaxLen > mainMaxLen) {
+                    mainGroup = grp;
+                    mainMaxLen = grpMaxLen;
+                }
+            }
+            
+            // 원본 그룹 중 가장 긴 채팅을 부모로 지정
+            const parentChat = mainGroup.reduce((a, b) => 
+                chatContents[a].length >= chatContents[b].length ? a : b
+            );
+            
+            // 다른 그룹들은 분기
+            for (const grp of contentGroups) {
+                if (grp === mainGroup) {
+                    // 원본 그룹도 업데이트
+                    for (const fn of grp) {
+                        lastMatchingIndex[fn] = msgIdx;
+                    }
+                    continue;
+                }
+                
+                // 분기된 채팅들
+                for (const fn of grp) {
+                    // 아직 분기점이 기록되지 않았으면 기록
+                    if (!branchPoints[fn]) {
+                        branchPoints[fn] = {
+                            parentChat: parentChat,
+                            branchPoint: msgIdx  // 이 index에서 분기됨
+                        };
+                    }
+                }
+            }
+        }
+    }
+    
+    // 결과 정리
+    for (const [fileName, info] of Object.entries(branchPoints)) {
+        // 분기점이 2 미만이면 (그리팅만 같음) 제외
+        if (info.branchPoint >= 2) {
+            result[fileName] = {
+                parentChat: info.parentChat,
+                branchPoint: info.branchPoint,
                 depth: 1
             };
         }
@@ -202,6 +259,18 @@ async function analyzeGroup(charAvatar, group) {
     }
     
     return result;
+}
+
+/**
+ * 메시지 해시 생성 (Timelines 방식 비교용)
+ * @param {Object} message
+ * @returns {string}
+ */
+function getMessageHash(message) {
+    if (!message) return '';
+    // mes 필드의 개행 정규화 후 비교
+    const mes = (message.mes || '').replace(/\r\n/g, '\n');
+    return mes;
 }
 
 /**
