@@ -3,11 +3,40 @@
 // ============================================
 
 const STORAGE_KEY = 'chatLobby_calendar';
-const CURRENT_VERSION = 1; // 구조 변경 시 마이그레이션용
+const CURRENT_VERSION = 2; // v2: 아바타명 해시 압축
 const THIS_YEAR = new Date().getFullYear();
 
 // 캐시
 let _snapshotsCache = null;
+
+/**
+ * 아바타명 해시 (djb2) - 용량 절약용
+ * @param {string} str
+ * @returns {string}
+ */
+function hashAvatar(str) {
+    if (!str) return '';
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return hash.toString(36);
+}
+
+/**
+ * byChar/lastChatTimes 객체 압축 (아바타명 → 해시)
+ * @param {Object} obj
+ * @returns {Object}
+ */
+function compressAvatarKeys(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const result = {};
+    for (const [avatar, value] of Object.entries(obj)) {
+        result[hashAvatar(avatar)] = value;
+    }
+    return result;
+}
 
 /**
  * 로컬 날짜 문자열 반환 (타임존 안전)
@@ -33,12 +62,24 @@ export function loadSnapshots(forceRefresh = false) {
             const parsed = JSON.parse(data);
             const version = parsed.version || 0;
             
-            // 버전 마이그레이션 (필요시)
+            // 버전 마이그레이션
             if (version < CURRENT_VERSION) {
                 console.log('[Calendar] Migrating data from version', version, 'to', CURRENT_VERSION);
-                // 현재는 v0 -> v1: 구조 동일, 버전 필드만 추가
-                const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
+                // v1 → v2: 기존 데이터의 아바타명 해시 압축
+                const oldSnapshots = parsed.snapshots || {};
+                const newSnapshots = {};
+                for (const [date, snap] of Object.entries(oldSnapshots)) {
+                    newSnapshots[date] = {
+                        total: snap.total,
+                        topChar: snap.topChar ? hashAvatar(snap.topChar) : '',
+                        byChar: snap.byChar ? compressAvatarKeys(snap.byChar) : {},
+                        lastChatTimes: snap.lastChatTimes ? compressAvatarKeys(snap.lastChatTimes) : {}
+                    };
+                }
+                const migrated = { version: CURRENT_VERSION, snapshots: newSnapshots };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+                _snapshotsCache = newSnapshots;
+                return _snapshotsCache;
             }
             
             _snapshotsCache = parsed.snapshots || {};
@@ -106,24 +147,32 @@ export function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = 
     try {
         const snapshots = loadSnapshots(true);
         
+        // 🔥 아바타명 해시 압축
+        const compressedByChar = compressAvatarKeys(byChar);
+        const compressedLastChatTimes = compressAvatarKeys(lastChatTimes);
+        const compressedTopChar = topChar ? hashAvatar(topChar) : '';
+        
         // 기존 스냅샷의 lastChatTimes와 병합 (새 값이 우선)
         const existingTimes = snapshots[date]?.lastChatTimes || {};
-        const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+        const mergedLastChatTimes = { ...existingTimes, ...compressedLastChatTimes };
         
-        snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+        snapshots[date] = { total, topChar: compressedTopChar, byChar: compressedByChar, lastChatTimes: mergedLastChatTimes };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-        console.log('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', topChar, '| lastChatTimes count:', Object.keys(mergedLastChatTimes).length);
+        console.log('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', compressedTopChar, '| lastChatTimes count:', Object.keys(mergedLastChatTimes).length);
     } catch (e) {
         // 용량 초과 시 오래된 데이터 정리
         if (e.name === 'QuotaExceededError') {
             console.warn('[Calendar] QuotaExceededError - cleaning old data');
             cleanOldSnapshots();
-            // 재시도 (병합 로직 동일하게 적용)
+            // 재시도 (압축 로직 동일하게 적용)
             try {
                 const snapshots = loadSnapshots(true);
+                const compByChar = compressAvatarKeys(byChar);
+                const compLastChatTimes = compressAvatarKeys(lastChatTimes);
+                const compTopChar = topChar ? hashAvatar(topChar) : '';
                 const existingTimes = snapshots[date]?.lastChatTimes || {};
-                const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-                snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+                const mergedTimes = { ...existingTimes, ...compLastChatTimes };
+                snapshots[date] = { total, topChar: compTopChar, byChar: compByChar, lastChatTimes: mergedTimes };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
             } catch (e2) {
                 console.error('[Calendar] Still failed after cleanup:', e2);

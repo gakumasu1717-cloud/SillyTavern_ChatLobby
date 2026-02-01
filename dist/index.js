@@ -2767,6 +2767,11 @@ ${message}` : message;
     chatsPanel.classList.add("visible");
     updateChatHeader(character);
     showFolderBar(true);
+    const savedSortOption = storage.getSortOption();
+    const branchRefreshBtn = document.getElementById("chat-lobby-branch-refresh");
+    if (branchRefreshBtn) {
+      branchRefreshBtn.style.display = savedSortOption === "branch" ? "flex" : "none";
+    }
     console.log("[ChatList] Updating persona quick button for:", character.avatar);
     updatePersonaQuickButton(character.avatar);
     const cachedChats = cache.get("chats", character.avatar);
@@ -5969,9 +5974,26 @@ ${message}` : message;
 
   // src/data/calendarStorage.js
   var STORAGE_KEY3 = "chatLobby_calendar";
-  var CURRENT_VERSION = 1;
+  var CURRENT_VERSION = 2;
   var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
   var _snapshotsCache = null;
+  function hashAvatar(str) {
+    if (!str) return "";
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) + hash + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return hash.toString(36);
+  }
+  function compressAvatarKeys(obj) {
+    if (!obj || typeof obj !== "object") return obj;
+    const result = {};
+    for (const [avatar, value] of Object.entries(obj)) {
+      result[hashAvatar(avatar)] = value;
+    }
+    return result;
+  }
   function getLocalDateString(date = /* @__PURE__ */ new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
@@ -5986,8 +6008,20 @@ ${message}` : message;
         const version = parsed.version || 0;
         if (version < CURRENT_VERSION) {
           console.log("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
-          const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
+          const oldSnapshots = parsed.snapshots || {};
+          const newSnapshots = {};
+          for (const [date, snap] of Object.entries(oldSnapshots)) {
+            newSnapshots[date] = {
+              total: snap.total,
+              topChar: snap.topChar ? hashAvatar(snap.topChar) : "",
+              byChar: snap.byChar ? compressAvatarKeys(snap.byChar) : {},
+              lastChatTimes: snap.lastChatTimes ? compressAvatarKeys(snap.lastChatTimes) : {}
+            };
+          }
+          const migrated = { version: CURRENT_VERSION, snapshots: newSnapshots };
           localStorage.setItem(STORAGE_KEY3, JSON.stringify(migrated));
+          _snapshotsCache = newSnapshots;
+          return _snapshotsCache;
         }
         _snapshotsCache = parsed.snapshots || {};
         return _snapshotsCache;
@@ -6026,20 +6060,26 @@ ${message}` : message;
     _snapshotsCache = null;
     try {
       const snapshots = loadSnapshots(true);
+      const compressedByChar = compressAvatarKeys(byChar);
+      const compressedLastChatTimes = compressAvatarKeys(lastChatTimes);
+      const compressedTopChar = topChar ? hashAvatar(topChar) : "";
       const existingTimes = snapshots[date]?.lastChatTimes || {};
-      const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-      snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+      const mergedLastChatTimes = { ...existingTimes, ...compressedLastChatTimes };
+      snapshots[date] = { total, topChar: compressedTopChar, byChar: compressedByChar, lastChatTimes: mergedLastChatTimes };
       localStorage.setItem(STORAGE_KEY3, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
+      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", compressedTopChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
     } catch (e) {
       if (e.name === "QuotaExceededError") {
         console.warn("[Calendar] QuotaExceededError - cleaning old data");
         cleanOldSnapshots();
         try {
           const snapshots = loadSnapshots(true);
+          const compByChar = compressAvatarKeys(byChar);
+          const compLastChatTimes = compressAvatarKeys(lastChatTimes);
+          const compTopChar = topChar ? hashAvatar(topChar) : "";
           const existingTimes = snapshots[date]?.lastChatTimes || {};
-          const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-          snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+          const mergedTimes = { ...existingTimes, ...compLastChatTimes };
+          snapshots[date] = { total, topChar: compTopChar, byChar: compByChar, lastChatTimes: mergedTimes };
           localStorage.setItem(STORAGE_KEY3, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
         } catch (e2) {
           console.error("[Calendar] Still failed after cleanup:", e2);

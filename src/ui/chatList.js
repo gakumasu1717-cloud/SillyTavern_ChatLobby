@@ -327,6 +327,13 @@ export async function renderChatList(character) {
     chatsPanel.classList.add('visible');
     updateChatHeader(character);
     showFolderBar(true);
+    
+    // 🔥 분기 버튼 초기 visibility 설정 (저장된 정렬 옵션 확인)
+    const savedSortOption = storage.getSortOption();
+    const branchRefreshBtn = document.getElementById('chat-lobby-branch-refresh');
+    if (branchRefreshBtn) {
+        branchRefreshBtn.style.display = savedSortOption === 'branch' ? 'flex' : 'none';
+    }
 
     // 페르소나 퀵버튼 업데이트
     console.log('[ChatList] Updating persona quick button for:', character.avatar);
