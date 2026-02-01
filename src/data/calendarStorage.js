@@ -3,7 +3,7 @@
 // ============================================
 
 const STORAGE_KEY = 'chatLobby_calendar';
-const CURRENT_VERSION = 3; // v3: 아바타명 압축 롤백 + 정리 최적화
+const CURRENT_VERSION = 1; // 구조 변경 시 마이그레이션용
 const THIS_YEAR = new Date().getFullYear();
 
 // 캐시
@@ -16,42 +16,6 @@ let _snapshotsCache = null;
  */
 export function getLocalDateString(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-/**
- * byChar/lastChatTimes 정리 (0값 제거)
- * @param {Object} obj
- * @returns {Object}
- */
-function cleanZeroValues(obj) {
-    if (!obj || typeof obj !== 'object') return obj;
-    const result = {};
-    for (const [key, value] of Object.entries(obj)) {
-        if (value && value !== 0) {
-            result[key] = value;
-        }
-    }
-    return result;
-}
-
-/**
- * 오래된 스냅샷 상세 정보 정리 (30일 이전은 total만 유지)
- * @param {Object} snapshots
- * @returns {Object}
- */
-function trimOldSnapshotDetails(snapshots) {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = getLocalDateString(thirtyDaysAgo);
-    
-    for (const date of Object.keys(snapshots)) {
-        if (date < cutoff) {
-            // 30일 이전 스냅샷은 total만 유지 (용량 절약)
-            const snap = snapshots[date];
-            snapshots[date] = { total: snap.total, topChar: snap.topChar };
-        }
-    }
-    return snapshots;
 }
 
 /**
@@ -69,18 +33,12 @@ export function loadSnapshots(forceRefresh = false) {
             const parsed = JSON.parse(data);
             const version = parsed.version || 0;
             
-            // 버전 마이그레이션
+            // 버전 마이그레이션 (필요시)
             if (version < CURRENT_VERSION) {
                 console.log('[Calendar] Migrating data from version', version, 'to', CURRENT_VERSION);
-                // v2 → v3: 해시 압축 제거 불가 (복원 불가), 기존 데이터 유지
-                // 새 데이터는 원본 아바타명으로 저장됨
-                const snapshots = parsed.snapshots || {};
-                // 오래된 스냅샷 상세 정보 정리
-                trimOldSnapshotDetails(snapshots);
-                const migrated = { version: CURRENT_VERSION, snapshots };
+                // 현재는 v0 -> v1: 구조 동일, 버전 필드만 추가
+                const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-                _snapshotsCache = snapshots;
-                return _snapshotsCache;
             }
             
             _snapshotsCache = parsed.snapshots || {};
@@ -148,19 +106,11 @@ export function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = 
     try {
         const snapshots = loadSnapshots(true);
         
-        // 🔥 0값 제거로 용량 절약 (원본 아바타명 유지)
-        const cleanedByChar = cleanZeroValues(byChar);
-        const cleanedLastChatTimes = cleanZeroValues(lastChatTimes);
-        
         // 기존 스냅샷의 lastChatTimes와 병합 (새 값이 우선)
         const existingTimes = snapshots[date]?.lastChatTimes || {};
-        const mergedLastChatTimes = { ...existingTimes, ...cleanedLastChatTimes };
+        const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
         
-        snapshots[date] = { total, topChar, byChar: cleanedByChar, lastChatTimes: mergedLastChatTimes };
-        
-        // 오래된 스냅샷 상세 정보 정리 (30일 이전)
-        trimOldSnapshotDetails(snapshots);
-        
+        snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
         console.log('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', topChar, '| lastChatTimes count:', Object.keys(mergedLastChatTimes).length);
     } catch (e) {
@@ -168,15 +118,12 @@ export function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = 
         if (e.name === 'QuotaExceededError') {
             console.warn('[Calendar] QuotaExceededError - cleaning old data');
             cleanOldSnapshots();
-            // 재시도
+            // 재시도 (병합 로직 동일하게 적용)
             try {
                 const snapshots = loadSnapshots(true);
-                const cleanedByChar = cleanZeroValues(byChar);
-                const cleanedLastChatTimes = cleanZeroValues(lastChatTimes);
                 const existingTimes = snapshots[date]?.lastChatTimes || {};
-                const mergedTimes = { ...existingTimes, ...cleanedLastChatTimes };
-                snapshots[date] = { total, topChar, byChar: cleanedByChar, lastChatTimes: mergedTimes };
-                trimOldSnapshotDetails(snapshots);
+                const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+                snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
             } catch (e2) {
                 console.error('[Calendar] Still failed after cleanup:', e2);

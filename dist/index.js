@@ -5974,33 +5974,11 @@ ${message}` : message;
 
   // src/data/calendarStorage.js
   var STORAGE_KEY3 = "chatLobby_calendar";
-  var CURRENT_VERSION = 3;
+  var CURRENT_VERSION = 1;
   var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
   var _snapshotsCache = null;
   function getLocalDateString(date = /* @__PURE__ */ new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  }
-  function cleanZeroValues(obj) {
-    if (!obj || typeof obj !== "object") return obj;
-    const result = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (value && value !== 0) {
-        result[key] = value;
-      }
-    }
-    return result;
-  }
-  function trimOldSnapshotDetails(snapshots) {
-    const thirtyDaysAgo = /* @__PURE__ */ new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = getLocalDateString(thirtyDaysAgo);
-    for (const date of Object.keys(snapshots)) {
-      if (date < cutoff) {
-        const snap = snapshots[date];
-        snapshots[date] = { total: snap.total, topChar: snap.topChar };
-      }
-    }
-    return snapshots;
   }
   function loadSnapshots(forceRefresh = false) {
     if (_snapshotsCache && !forceRefresh) {
@@ -6013,12 +5991,8 @@ ${message}` : message;
         const version = parsed.version || 0;
         if (version < CURRENT_VERSION) {
           console.log("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
-          const snapshots = parsed.snapshots || {};
-          trimOldSnapshotDetails(snapshots);
-          const migrated = { version: CURRENT_VERSION, snapshots };
+          const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
           localStorage.setItem(STORAGE_KEY3, JSON.stringify(migrated));
-          _snapshotsCache = snapshots;
-          return _snapshotsCache;
         }
         _snapshotsCache = parsed.snapshots || {};
         return _snapshotsCache;
@@ -6057,12 +6031,9 @@ ${message}` : message;
     _snapshotsCache = null;
     try {
       const snapshots = loadSnapshots(true);
-      const cleanedByChar = cleanZeroValues(byChar);
-      const cleanedLastChatTimes = cleanZeroValues(lastChatTimes);
       const existingTimes = snapshots[date]?.lastChatTimes || {};
-      const mergedLastChatTimes = { ...existingTimes, ...cleanedLastChatTimes };
-      snapshots[date] = { total, topChar, byChar: cleanedByChar, lastChatTimes: mergedLastChatTimes };
-      trimOldSnapshotDetails(snapshots);
+      const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+      snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
       localStorage.setItem(STORAGE_KEY3, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
       console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
     } catch (e) {
@@ -6071,12 +6042,9 @@ ${message}` : message;
         cleanOldSnapshots();
         try {
           const snapshots = loadSnapshots(true);
-          const cleanedByChar = cleanZeroValues(byChar);
-          const cleanedLastChatTimes = cleanZeroValues(lastChatTimes);
           const existingTimes = snapshots[date]?.lastChatTimes || {};
-          const mergedTimes = { ...existingTimes, ...cleanedLastChatTimes };
-          snapshots[date] = { total, topChar, byChar: cleanedByChar, lastChatTimes: mergedTimes };
-          trimOldSnapshotDetails(snapshots);
+          const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+          snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
           localStorage.setItem(STORAGE_KEY3, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
         } catch (e2) {
           console.error("[Calendar] Still failed after cleanup:", e2);
