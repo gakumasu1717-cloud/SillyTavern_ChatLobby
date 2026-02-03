@@ -2415,10 +2415,10 @@ ${message}` : message;
       return null;
     }
   }
-  async function ensureFingerprints(charAvatar, chats, onProgress = null) {
-    const existing = getAllFingerprints(charAvatar);
+  async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false) {
+    const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
     const result = { ...existing };
-    const needsUpdate = chats.filter((chat) => {
+    const needsUpdate = forceRefresh ? chats : chats.filter((chat) => {
       const fn = chat.file_name || "";
       const cached = existing[fn];
       const chatLength = chat.chat_items || chat.message_count || 0;
@@ -2524,11 +2524,11 @@ ${message}` : message;
     }
     return result;
   }
-  async function analyzeBranches(charAvatar, chats, onProgress = null) {
-    console.log("[BranchAnalyzer] Starting analysis for", charAvatar);
+  async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
+    console.log("[BranchAnalyzer] Starting analysis for", charAvatar, "forceRefresh:", forceRefresh);
     const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
       if (onProgress) onProgress(p * 0.5);
-    });
+    }, forceRefresh);
     const groups = groupByFingerprint(fingerprints);
     const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
     console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
@@ -8927,9 +8927,10 @@ ${message}` : message;
           showToast("\uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4", "warning");
           return;
         }
+        console.log("[ChatLobby] Starting forced branch analysis for", chats.length, "chats");
         const branches = await analyzeBranches(charAvatar, chats, (progress) => {
           console.log("[ChatLobby] Branch analysis progress:", Math.round(progress * 100) + "%");
-        });
+        }, true);
         console.log("[ChatLobby] Branch analysis complete:", branches);
         showToast(`\uBD84\uAE30 \uBD84\uC11D \uC644\uB8CC: ${Object.keys(branches).length}\uAC1C \uBD84\uAE30 \uBC1C\uACAC`, "success");
         cache.invalidate("chats", charAvatar);

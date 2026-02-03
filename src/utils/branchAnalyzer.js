@@ -57,14 +57,15 @@ async function loadChatContent(charAvatar, fileName) {
  * @param {string} charAvatar
  * @param {Array} chats - 채팅 목록 [{file_name, chat_items, ...}]
  * @param {Function} onProgress - 진행률 콜백 (0~1)
+ * @param {boolean} forceRefresh - 강제 재분석 (모든 채팅 재처리)
  * @returns {Promise<Object>} - { [fileName]: { hash, length } }
  */
-export async function ensureFingerprints(charAvatar, chats, onProgress = null) {
-    const existing = getAllFingerprints(charAvatar);
+export async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false) {
+    const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
     const result = { ...existing };
     
-    // fingerprint가 없는 채팅만 필터
-    const needsUpdate = chats.filter(chat => {
+    // fingerprint가 없는 채팅만 필터 (forceRefresh면 전부)
+    const needsUpdate = forceRefresh ? chats : chats.filter(chat => {
         const fn = chat.file_name || '';
         const cached = existing[fn];
         // 캐시가 없거나 메시지 수가 바뀌었으면 업데이트 필요
@@ -244,15 +245,16 @@ async function analyzeGroup(charAvatar, group) {
  * @param {string} charAvatar
  * @param {Array} chats
  * @param {Function} onProgress
+ * @param {boolean} forceRefresh - 강제 재분석 (캐시 무시)
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
  */
-export async function analyzeBranches(charAvatar, chats, onProgress = null) {
-    console.log('[BranchAnalyzer] Starting analysis for', charAvatar);
+export async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
+    console.log('[BranchAnalyzer] Starting analysis for', charAvatar, 'forceRefresh:', forceRefresh);
     
-    // 1. fingerprint 생성/업데이트
+    // 1. fingerprint 생성/업데이트 (강제 재분석 시 모든 채팅 재처리)
     const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
         if (onProgress) onProgress(p * 0.5); // 50%까지
-    });
+    }, forceRefresh);
     
     // 2. fingerprint로 그룹핑
     const groups = groupByFingerprint(fingerprints);

@@ -1282,10 +1282,12 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 return;
             }
             
-            // 분기 분석 실행
+            console.log('[ChatLobby] Starting forced branch analysis for', chats.length, 'chats');
+            
+            // 분기 분석 실행 (forceRefresh = true)
             const branches = await analyzeBranches(charAvatar, chats, (progress) => {
                 console.log('[ChatLobby] Branch analysis progress:', Math.round(progress * 100) + '%');
-            });
+            }, true);  // 🔥 강제 재분석
             
             console.log('[ChatLobby] Branch analysis complete:', branches);
             showToast(`분기 분석 완료: ${Object.keys(branches).length}개 분기 발견`, 'success');
