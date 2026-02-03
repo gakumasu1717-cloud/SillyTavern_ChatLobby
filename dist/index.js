@@ -3259,7 +3259,7 @@ ${message}` : message;
   }
   function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
-    refreshCurrentChatList();
+    refreshCurrentChatList2();
   }
   var activeFolderMenu = null;
   function showChatFolderMenu(targetBtn, charAvatar, fileName) {
@@ -3310,7 +3310,7 @@ ${message}` : message;
           showToast("\uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }
         closeChatFolderMenu();
-        await refreshCurrentChatList();
+        await refreshCurrentChatList2();
       });
     });
     setTimeout(() => {
@@ -3335,9 +3335,9 @@ ${message}` : message;
     if (branchRefreshBtn) {
       branchRefreshBtn.style.display = sortValue === "branch" ? "flex" : "none";
     }
-    refreshCurrentChatList();
+    refreshCurrentChatList2();
   }
-  async function refreshCurrentChatList() {
+  async function refreshCurrentChatList2() {
     const character = store.currentCharacter;
     if (!character) return;
     const chatsList = document.getElementById("chat-lobby-chats-list");
@@ -3401,7 +3401,7 @@ ${message}` : message;
       const currentValue = filterSelect.value;
       filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
     }
-    await refreshCurrentChatList();
+    await refreshCurrentChatList2();
   }
   function isBatchMode() {
     return store.batchModeActive;
@@ -8957,7 +8957,8 @@ ${message}` : message;
         });
         console.log("[ChatLobby] Branch analysis complete:", branches);
         showToast(`\uBD84\uAE30 \uBD84\uC11D \uC644\uB8CC: ${Object.keys(branches).length}\uAC1C \uBD84\uAE30 \uBC1C\uACAC`, "success");
-        await renderChatList(chats, charAvatar);
+        cache.invalidate("chats", charAvatar);
+        await refreshCurrentChatList();
       } catch (error) {
         console.error("[ChatLobby] Failed to refresh branches:", error);
         showToast("\uBD84\uAE30 \uBD84\uC11D \uC2E4\uD328", "error");
