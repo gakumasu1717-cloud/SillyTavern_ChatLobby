@@ -496,6 +496,13 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         // 🔥 최근 채팅 DOM 캐싱 (로비가 열리기 전에!)
         cacheRecentChatsBeforeOpen();
         
+        // 🔥 현재 채팅 중인 캐릭터를 lastChatCache에 즉시 갱신 (채팅 화면에서 로비 열 때)
+        const currentCharBeforeOpen = getCurrentCharacterAvatar();
+        if (currentCharBeforeOpen) {
+            lastChatCache.updateNow(currentCharBeforeOpen);
+            console.log('[ChatLobby] Updated lastChatCache for current chat:', currentCharBeforeOpen);
+        }
+        
         // 열기 시작 - 즉시 락 (CHAT_CHANGED settle까지 유지)
         isOpeningLobby = true;
         store.setLobbyOpen(true);  // 다른 호출 차단을 위해 즉시 설정

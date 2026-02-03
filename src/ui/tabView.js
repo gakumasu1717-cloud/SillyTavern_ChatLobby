@@ -11,6 +11,7 @@ import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { showToast, showConfirm } from './notifications.js';
 import { openChat } from '../handlers/chatHandlers.js';
+import { getLocalDateString } from '../data/calendarStorage.js';
 
 // ============================================
 // 디버그 로깅
@@ -59,6 +60,28 @@ export async function cacheRecentChatsBeforeOpen() {
     // 기존 캐시 백업 (DOM에서 가져오지 못하면 유지)
     const previousCache = [...state.cachedRecentChats];
     state.cachedRecentChats = [];
+    
+    // 🔥 현재 채팅 중인 캐릭터 정보 먼저 추가 (채팅 화면에서 로비 열 때 필수)
+    const context = api.getContext();
+    if (context?.characterId !== undefined && context.characterId >= 0) {
+        const char = context.characters?.[context.characterId];
+        if (char?.avatar) {
+            state.cachedRecentChats.push({
+                file: char.chat || '',
+                avatar: char.avatar,
+                isGroup: false,
+                characterName: char.name || char.avatar.replace(/\.[^.]+$/, ''),
+                chatName: char.chat || '',
+                date: '방금',
+                preview: '',
+                messageCount: char.chat_size || 0,
+                thumbnailSrc: `/characters/${encodeURIComponent(char.avatar)}`,
+                type: 'char',
+                lastChatTime: Date.now(),
+            });
+            log('Added current character to cache:', char.avatar);
+        }
+    }
     
     // DOM이 준비될 때까지 대기 (최대 0.5초로 단축)
     for (let retry = 0; retry < MAX_CACHE_RETRIES; retry++) {
