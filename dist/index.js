@@ -3765,13 +3765,12 @@ ${message}` : message;
     isOpeningChat = true;
     const { fileName, charAvatar, charIndex } = chatInfo;
     console.log("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
-    if (!charAvatar || !fileName) {
-      console.error("[ChatHandlers] Missing chat data");
-      showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
-      isOpeningChat = false;
-      return;
-    }
     try {
+      if (!charAvatar || !fileName) {
+        console.error("[ChatHandlers] Missing chat data");
+        showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
+        return;
+      }
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === charAvatar);
@@ -3949,8 +3948,9 @@ ${message}` : message;
   async function startNewCharacterChat(btn) {
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
-    if (!charIndex || !charAvatar) {
-      console.error("[ChatHandlers] No character selected");
+    const charIndexNum = parseInt(charIndex, 10);
+    if (!charAvatar || isNaN(charIndexNum) || charIndexNum < 0) {
+      console.error("[ChatHandlers] No character selected or invalid index");
       showToast("\uCE90\uB9AD\uD130\uAC00 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
@@ -3966,7 +3966,7 @@ ${message}` : message;
     try {
       cache.invalidate("chats", charAvatar);
       closeLobbyKeepState();
-      await api.selectCharacterById(parseInt(charIndex, 10));
+      await api.selectCharacterById(charIndexNum);
       await waitForCharacterSelect(charAvatar, 2e3);
       if (actualChatCount > 0) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);

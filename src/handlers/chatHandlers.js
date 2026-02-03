@@ -38,14 +38,13 @@ export async function openChat(chatInfo) {
     
     console.log('[ChatHandlers] openChat called:', { fileName, charAvatar, charIndex });
     
-    if (!charAvatar || !fileName) {
-        console.error('[ChatHandlers] Missing chat data');
-        showToast('채팅 정보가 올바르지 않습니다.', 'error');
-        isOpeningChat = false;
-        return;
-    }
-    
     try {
+        if (!charAvatar || !fileName) {
+            console.error('[ChatHandlers] Missing chat data');
+            showToast('채팅 정보가 올바르지 않습니다.', 'error');
+            return;
+        }
+        
         const context = api.getContext();
         const characters = context?.characters || [];
         const index = characters.findIndex(c => c.avatar === charAvatar);
@@ -321,8 +320,10 @@ async function startNewCharacterChat(btn) {
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
     
-    if (!charIndex || !charAvatar) {
-        console.error('[ChatHandlers] No character selected');
+    // NaN 처리 포함한 유효성 검사
+    const charIndexNum = parseInt(charIndex, 10);
+    if (!charAvatar || isNaN(charIndexNum) || charIndexNum < 0) {
+        console.error('[ChatHandlers] No character selected or invalid index');
         showToast('캐릭터가 선택되지 않았습니다.', 'error');
         return;
     }
@@ -345,7 +346,7 @@ async function startNewCharacterChat(btn) {
         // 로비 닫기 (상태 유지)
         closeLobbyKeepState();
         
-        await api.selectCharacterById(parseInt(charIndex, 10));
+        await api.selectCharacterById(charIndexNum);
         
         // 캐릭터 선택 완료 대기
         await waitForCharacterSelect(charAvatar, 2000);
