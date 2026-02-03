@@ -8829,7 +8829,7 @@ ${message}` : message;
       }
     }
     async function handleRefreshBranches() {
-      const currentChar = store.getCurrentCharacter();
+      const currentChar = store.currentCharacter;
       if (!currentChar) {
         showToast("\uCE90\uB9AD\uD130\uB97C \uBA3C\uC800 \uC120\uD0DD\uD558\uC138\uC694", "warning");
         return;

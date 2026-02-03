@@ -1254,7 +1254,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
      * 분기 분석 새로고침 처리
      */
     async function handleRefreshBranches() {
-        const currentChar = store.getCurrentCharacter();
+        const currentChar = store.currentCharacter;
         if (!currentChar) {
             showToast('캐릭터를 먼저 선택하세요', 'warning');
             return;
