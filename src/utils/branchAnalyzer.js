@@ -165,7 +165,6 @@ async function analyzeGroup(charAvatar, group) {
     // 분기 판정 상수
     const MIN_COMMON_FOR_BRANCH = 5;  // 최소 5개 메시지 (그리팅 + 2번 왕복 대화)
     const PARENT_COVERAGE_THRESHOLD = 0.7;  // 후보의 70% 이상이 공통이어야 원본으로 인정
-    const MIN_CURRENT_COVERAGE = 0.1;  // 현재 채팅의 최소 10% 이상이 공통이어야 분기로 인정
     
     // 각 채팅에 대해 가장 가까운 부모 찾기
     for (const current of validFiles) {
@@ -189,28 +188,19 @@ async function analyzeGroup(charAvatar, group) {
             // 현재 채팅이 분기점 이후 추가 메시지가 있어야 함
             if (currentLen <= commonLen) continue;
             
-            // 🔥 현재 채팅 기준 공통 비율도 확인
-            // 199개 채팅과 10개 채팅이 공통 5개면 → 10개 채팅은 50% 공통 (분기 가능성)
-            // 199개 채팅과 200개 채팅이 공통 5개면 → 200개 채팅은 2.5% 공통 (별개 채팅)
-            const currentCoverage = commonLen / currentLen;
-            if (currentCoverage < MIN_CURRENT_COVERAGE) {
-                // 현재 채팅의 아주 일부만 공통 → 완전히 별개 채팅
-                continue;
-            }
-            
             // 후보가 "원본/부모"가 되려면:
-            // - 후보 길이가 공통 부분과 거의 같거나 (후보가 분기점에서 끝남)
             // - 공통 부분이 후보의 상당 부분을 차지해야 함
+            // - 예: 후보 10개, 공통 10개 → 100% (완벽한 부모)
+            // - 예: 후보 10개, 공통 7개 → 70% (부모 가능)
+            // - 예: 후보 100개, 공통 5개 → 5% (형제 관계, 부모 아님)
             const candidateCoverage = commonLen / candidateLen;
             
-            // 후보가 공통 부분 이후로도 많이 진행했다면 → 형제 관계일 가능성 높음, 부모 아님
-            // 후보가 공통 부분에서 끝나거나 조금만 더 갔다면 → 원본/부모일 가능성 높음
             if (candidateCoverage < PARENT_COVERAGE_THRESHOLD) {
                 // 후보도 분기점 이후로 많이 진행함 → 형제 관계, 부모 아님
                 continue;
             }
             
-            // 점수 계산: 공통 길이가 길수록 + 후보가 짧을수록 좋음
+            // 점수 계산: 공통 길이가 길수록 + 후보가 짧을수록 좋음 (직접 부모 우선)
             const score = commonLen * 1000 - candidateLen;
             
             if (score > bestScore) {

@@ -2477,7 +2477,6 @@ ${message}` : message;
     }
     const MIN_COMMON_FOR_BRANCH = 5;
     const PARENT_COVERAGE_THRESHOLD = 0.7;
-    const MIN_CURRENT_COVERAGE = 0.1;
     for (const current of validFiles) {
       const currentContent = chatContents[current.fileName];
       const currentLen = currentContent.length;
@@ -2491,10 +2490,6 @@ ${message}` : message;
         const commonLen = commonLengths[current.fileName][candidate.fileName];
         if (commonLen < MIN_COMMON_FOR_BRANCH) continue;
         if (currentLen <= commonLen) continue;
-        const currentCoverage = commonLen / currentLen;
-        if (currentCoverage < MIN_CURRENT_COVERAGE) {
-          continue;
-        }
         const candidateCoverage = commonLen / candidateLen;
         if (candidateCoverage < PARENT_COVERAGE_THRESHOLD) {
           continue;
