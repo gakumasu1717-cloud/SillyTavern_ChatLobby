@@ -1,10 +1,19 @@
 // ============================================
-// 브랜치 분석기 - Timelines tl_node_data.js 원본 기반
-// buildGraph()의 previousNodes 로직을 정확히 따름
+// 브랜치 분석기 - Timelines 방식 참고
+// 채팅들의 분기 관계를 분석하고 트리 구조로 정렬
 // ============================================
 
 import { api } from '../api/sillyTavern.js';
-import { setBranchInfo } from '../data/branchCache.js';
+import {
+    createFingerprint,
+    findCommonPrefixLength,
+    getBranchInfo,
+    getFingerprint,
+    setFingerprint,
+    setBranchInfo,
+    getAllBranches,
+    getAllFingerprints
+} from '../data/branchCache.js';
 
 /**
  * 채팅 내용 로드 (API 호출)
@@ -36,7 +45,7 @@ async function loadChatContent(charAvatar, fileName) {
             return data.slice(1);
         }
         
-        return data || [];
+        return data;
     } catch (e) {
         console.error('[BranchAnalyzer] Failed to load chat:', fileName, e);
         return null;
@@ -44,233 +53,198 @@ async function loadChatContent(charAvatar, fileName) {
 }
 
 /**
- * Timelines 원본: preprocessChatSessions()
- * 채팅들을 메시지 인덱스별로 전치(transpose)
- * 
- * @param {Object} chatHistory - { fileName: [messages] }
- * @returns {Array} allChats - 2D 배열, allChats[messageId] = [{file_name, index, message}, ...]
+ * 캐릭터의 모든 채팅에 대해 fingerprint 생성 (없는 것만)
+ * @param {string} charAvatar
+ * @param {Array} chats - 채팅 목록 [{file_name, chat_items, ...}]
+ * @param {Function} onProgress - 진행률 콜백 (0~1)
+ * @returns {Promise<Object>} - { [fileName]: { hash, length } }
  */
-function preprocessChatSessions(chatHistory) {
-    const allChats = [];
+export async function ensureFingerprints(charAvatar, chats, onProgress = null) {
+    const existing = getAllFingerprints(charAvatar);
+    const result = { ...existing };
     
-    for (const [file_name, messages] of Object.entries(chatHistory)) {
-        messages.forEach((message, index) => {
-            if (!allChats[index]) {
-                allChats[index] = [];
+    // fingerprint가 없는 채팅만 필터
+    const needsUpdate = chats.filter(chat => {
+        const fn = chat.file_name || '';
+        const cached = existing[fn];
+        // 캐시가 없거나 메시지 수가 바뀌었으면 업데이트 필요
+        const chatLength = chat.chat_items || chat.message_count || 0;
+        return !cached || cached.length !== chatLength;
+    });
+    
+    console.log(`[BranchAnalyzer] Need fingerprint for ${needsUpdate.length}/${chats.length} chats`);
+    
+    // 병렬로 처리 (최대 5개씩)
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
+        const batch = needsUpdate.slice(i, i + BATCH_SIZE);
+        
+        await Promise.all(batch.map(async (chat) => {
+            const fn = chat.file_name || '';
+            const content = await loadChatContent(charAvatar, fn);
+            
+            if (content && content.length > 0) {
+                const hash = createFingerprint(content);
+                const length = content.length;
+                
+                setFingerprint(charAvatar, fn, hash, length);
+                result[fn] = { hash, length };
             }
-            allChats[index].push({
-                file_name,
-                index,
-                message
-            });
-        });
+        }));
+        
+        if (onProgress) {
+            onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
+        }
+        
+        // UI 블로킹 방지
+        await new Promise(r => setTimeout(r, 10));
     }
     
-    return allChats;
+    return result;
 }
 
 /**
- * Timelines 원본: groupMessagesByContent()
- * 같은 내용의 메시지끼리 그룹화
- * 
- * @param {Array} messages - [{file_name, index, message}, ...]
- * @returns {Object} groups - { messageContent: [{file_name, index, message}, ...] }
+ * fingerprint가 같은 채팅들끼리 그룹핑
+ * @param {Object} fingerprints - { [fileName]: { hash, length } }
+ * @returns {Object} - { [hash]: [fileName1, fileName2, ...] }
  */
-function groupMessagesByContent(messages) {
+function groupByFingerprint(fingerprints) {
     const groups = {};
     
-    messages.forEach((messageObj) => {
-        const { file_name, message } = messageObj;
-        try {
-            // 개행 정규화 (Timelines 원본 그대로)
-            const mes = (message.mes || '').replace(/\r\n/g, '\n');
-            
-            if (!groups[mes]) {
-                groups[mes] = [];
-            }
-            groups[mes].push({ file_name, message });
-        } catch (e) {
-            console.error('[BranchAnalyzer] Message grouping error:', e);
+    for (const [fileName, data] of Object.entries(fingerprints)) {
+        const hash = data.hash;
+        if (!groups[hash]) {
+            groups[hash] = [];
         }
-    });
+        groups[hash].push({ fileName, length: data.length });
+    }
     
     return groups;
 }
 
 /**
- * Timelines 원본 buildGraph() 핵심 로직 기반 분기 분석
- * 
- * 핵심 원리:
- * - previousNodes[file_name] = 해당 채팅이 현재 연결된 노드 ID
- * - 같은 내용의 메시지들은 같은 노드로 연결됨
- * - 분기 = "이전까지 같은 노드에 있던 채팅들이 다른 그룹으로 갈라질 때"
- * 
+ * 같은 fingerprint 그룹 내에서 부모-자식 관계 분석
  * @param {string} charAvatar
- * @param {Array} chats - [{file_name, ...}]
- * @param {Function} onProgress
+ * @param {Array} group - [{ fileName, length }]
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
  */
-export async function analyzeBranches(charAvatar, chats, onProgress = null) {
-    console.log('[BranchAnalyzer] Starting Timelines-style analysis for', charAvatar);
+async function analyzeGroup(charAvatar, group) {
+    if (group.length < 2) return {};
     
-    if (!chats || chats.length < 2) {
-        console.log('[BranchAnalyzer] Not enough chats to analyze');
-        return {};
-    }
-    
-    // 1. 모든 채팅 내용 로드
-    const chatHistory = {};  // { fileName: [messages] }
-    
-    for (let i = 0; i < chats.length; i++) {
-        const chat = chats[i];
-        const fn = chat.file_name || '';
-        if (!fn) continue;
-        
-        const content = await loadChatContent(charAvatar, fn);
-        if (content && content.length > 0) {
-            chatHistory[fn] = content;
-        }
-        
-        if (onProgress) onProgress((i + 1) / chats.length * 0.3);
-    }
-    
-    const fileNames = Object.keys(chatHistory);
-    console.log('[BranchAnalyzer] Loaded', fileNames.length, 'chats');
-    
-    if (fileNames.length < 2) {
-        console.log('[BranchAnalyzer] Not enough valid chats');
-        return {};
-    }
-    
-    // 2. Timelines 방식: 메시지 인덱스별로 전치
-    const allChats = preprocessChatSessions(chatHistory);
-    console.log('[BranchAnalyzer] Max message depth:', allChats.length);
-    
-    // 3. 분기 분석 핵심 로직
-    // previousNodes[file_name] = 이전 메시지에서 해당 채팅이 속한 노드 ID
-    const previousNodes = {};   // { file_name: nodeId }
-    const branchInfo = {};      // { file_name: { parentChat, branchPoint } }
-    let keyCounter = 1;
-    
-    // 초기화: 모든 채팅은 root에서 시작
-    fileNames.forEach(fn => {
-        previousNodes[fn] = 'root';
-    });
-    
-    // 4. 메시지 인덱스별로 순회
-    for (let messageId = 0; messageId < allChats.length; messageId++) {
-        const messagesAtThisLevel = allChats[messageId];
-        if (!messagesAtThisLevel || messagesAtThisLevel.length === 0) continue;
-        
-        // 이 messageId에서 같은 내용끼리 그룹화
-        const groups = groupMessagesByContent(messagesAtThisLevel);
-        
-        // 🔥 핵심: 이전까지 같은 노드에 있던 채팅들이 이제 다른 그룹으로 갈라지는지 체크
-        // prevNode별로 어떤 그룹들로 분산되는지 확인
-        const prevNodeToGroups = new Map();  // { prevNode: Map<groupKey, [file_names]> }
-        
-        for (const [groupKey, group] of Object.entries(groups)) {
-            for (const messageObj of group) {
-                const fn = messageObj.file_name;
-                const prevNode = previousNodes[fn];
-                
-                if (!prevNodeToGroups.has(prevNode)) {
-                    prevNodeToGroups.set(prevNode, new Map());
-                }
-                const groupsFromPrevNode = prevNodeToGroups.get(prevNode);
-                if (!groupsFromPrevNode.has(groupKey)) {
-                    groupsFromPrevNode.set(groupKey, []);
-                }
-                groupsFromPrevNode.get(groupKey).push(fn);
-            }
-        }
-        
-        // 분기 감지: 같은 prevNode에서 여러 그룹으로 갈라지면 분기!
-        for (const [prevNode, groupsFromPrevNode] of prevNodeToGroups) {
-            if (groupsFromPrevNode.size > 1) {
-                // 여러 그룹으로 갈라짐 = 분기 발생!
-                console.log(`[BranchAnalyzer] Branch detected at messageId ${messageId} from prevNode ${prevNode}`);
-                
-                // 가장 많은 채팅이 있는 그룹을 "메인"으로
-                let mainGroupKey = null;
-                let maxCount = 0;
-                for (const [gk, fns] of groupsFromPrevNode) {
-                    if (fns.length > maxCount) {
-                        maxCount = fns.length;
-                        mainGroupKey = gk;
-                    }
-                }
-                
-                // 메인 그룹의 첫 번째 채팅을 부모로
-                const mainFiles = groupsFromPrevNode.get(mainGroupKey);
-                const parentChat = mainFiles[0];
-                
-                // 나머지 그룹의 채팅들은 분기로 기록
-                for (const [gk, fns] of groupsFromPrevNode) {
-                    if (gk !== mainGroupKey) {
-                        for (const fn of fns) {
-                            if (!branchInfo[fn]) {
-                                branchInfo[fn] = {
-                                    parentChat: parentChat,
-                                    branchPoint: messageId
-                                };
-                                console.log(`[BranchAnalyzer] ${fn} branches from ${parentChat} at message ${messageId}`);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // 각 그룹에 새로운 nodeId 할당하고 previousNodes 업데이트
-        for (const [groupKey, group] of Object.entries(groups)) {
-            const nodeId = `message${keyCounter}`;
-            keyCounter++;
-            
-            for (const messageObj of group) {
-                previousNodes[messageObj.file_name] = nodeId;
-            }
-        }
-        
-        if (onProgress) onProgress(0.3 + (messageId + 1) / allChats.length * 0.7);
-    }
-    
-    // 5. 결과 정리 + depth 계산
     const result = {};
+    const chatContents = {};
     
-    // 분기점이 1 이상인 것만 (첫 메시지부터 다르면 별개 채팅)
-    for (const [fileName, info] of Object.entries(branchInfo)) {
-        if (info.branchPoint >= 1) {
-            result[fileName] = {
-                parentChat: info.parentChat,
-                branchPoint: info.branchPoint,
+    // 모든 채팅 내용 로드
+    await Promise.all(group.map(async (item) => {
+        const content = await loadChatContent(charAvatar, item.fileName);
+        if (content) {
+            chatContents[item.fileName] = content;
+        }
+    }));
+    
+    // 각 채팅에 대해 부모 찾기
+    for (const current of group) {
+        const currentContent = chatContents[current.fileName];
+        if (!currentContent || currentContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
+        
+        let bestParent = null;
+        let bestCommonLen = 0;
+        
+        // 모든 다른 채팅과 비교
+        for (const candidate of group) {
+            if (candidate.fileName === current.fileName) continue;
+            
+            const candidateContent = chatContents[candidate.fileName];
+            if (!candidateContent || candidateContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
+            
+            const commonLen = findCommonPrefixLength(candidateContent, currentContent);
+            
+            // 부모 조건:
+            // 1. 후보가 현재보다 짧거나 같아야 함 (부모가 자식보다 길 수 없음)
+            // 2. 공통 부분이 후보의 거의 전체여야 함 (후보가 현재의 prefix)
+            // 3. 가장 긴 공통을 가진 것이 직접 부모
+            const candidateLen = candidateContent.length;
+            const currentLen = currentContent.length;
+            
+            if (candidateLen <= currentLen && commonLen > bestCommonLen) {
+                bestCommonLen = commonLen;
+                bestParent = candidate.fileName;
+            }
+        }
+        
+        // 최소 2개 이상 메시지가 같아야 진짜 분기 (그리팅만 같은 건 제외)
+        const MIN_COMMON_FOR_BRANCH = 2;
+        
+        if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
+            result[current.fileName] = {
+                parentChat: bestParent,
+                branchPoint: bestCommonLen,
                 depth: 1
             };
         }
     }
     
-    // depth 재계산 (부모의 depth + 1)
-    const calculateDepth = (fn, visited = new Set()) => {
-        if (visited.has(fn)) return 0;
-        visited.add(fn);
+    // depth 계산 (부모의 depth + 1)
+    const calculateDepth = (fileName, visited = new Set()) => {
+        if (visited.has(fileName)) return 0;
+        visited.add(fileName);
         
-        const info = result[fn];
-        if (!info) return 0;
+        const info = result[fileName];
+        if (!info || !info.parentChat) return 0;
         
         const parentDepth = calculateDepth(info.parentChat, visited);
         info.depth = parentDepth + 1;
         return info.depth;
     };
     
-    for (const fn of Object.keys(result)) {
-        calculateDepth(fn);
-        // 캐시에 저장
-        const info = result[fn];
-        setBranchInfo(charAvatar, fn, info.parentChat, info.branchPoint, info.depth);
+    for (const fileName of Object.keys(result)) {
+        calculateDepth(fileName);
     }
     
-    console.log('[BranchAnalyzer] Found', Object.keys(result).length, 'branches');
     return result;
+}
+
+/**
+ * 캐릭터의 전체 브랜치 구조 분석
+ * @param {string} charAvatar
+ * @param {Array} chats
+ * @param {Function} onProgress
+ * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
+ */
+export async function analyzeBranches(charAvatar, chats, onProgress = null) {
+    console.log('[BranchAnalyzer] Starting analysis for', charAvatar);
+    
+    // 1. fingerprint 생성/업데이트
+    const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
+        if (onProgress) onProgress(p * 0.5); // 50%까지
+    });
+    
+    // 2. fingerprint로 그룹핑
+    const groups = groupByFingerprint(fingerprints);
+    
+    // 3. 2개 이상인 그룹만 분석 (분기 가능성 있음)
+    const multiGroups = Object.values(groups).filter(g => g.length >= 2);
+    console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
+    
+    // 4. 각 그룹 분석
+    const allBranches = {};
+    for (let i = 0; i < multiGroups.length; i++) {
+        const group = multiGroups[i];
+        const groupResult = await analyzeGroup(charAvatar, group);
+        
+        // 결과 병합 및 캐시 저장
+        for (const [fileName, info] of Object.entries(groupResult)) {
+            allBranches[fileName] = info;
+            setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+        }
+        
+        if (onProgress) {
+            onProgress(0.5 + (i + 1) / multiGroups.length * 0.5);
+        }
+    }
+    
+    console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
+    return allBranches;
 }
 
 /**
@@ -280,6 +254,15 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null) {
  * @returns {boolean}
  */
 export function needsBranchAnalysis(charAvatar, chats) {
-    // 2개 이상의 채팅이 있으면 분석 가능
-    return chats && chats.length >= 2;
+    const fingerprints = getAllFingerprints(charAvatar);
+    
+    // fingerprint가 없는 채팅이 있으면 분석 필요
+    for (const chat of chats) {
+        const fn = chat.file_name || '';
+        if (!fingerprints[fn]) {
+            return true;
+        }
+    }
+    
+    return false;
 }
