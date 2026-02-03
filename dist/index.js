@@ -2475,25 +2475,30 @@ ${message}` : message;
         commonLengths[current.fileName][other.fileName] = findCommonPrefixLength(chatContents[current.fileName], chatContents[other.fileName]);
       }
     }
+    const MIN_COMMON_FOR_BRANCH = 3;
+    const PARENT_COVERAGE_THRESHOLD = 0.8;
     for (const current of validFiles) {
       const currentContent = chatContents[current.fileName];
       const currentLen = currentContent.length;
       let bestParent = null;
       let bestCommonLen = 0;
-      let bestParentLen = Infinity;
+      let bestScore = -1;
       for (const candidate of validFiles) {
         if (candidate.fileName === current.fileName) continue;
         const candidateContent = chatContents[candidate.fileName];
         const candidateLen = candidateContent.length;
         const commonLen = commonLengths[current.fileName][candidate.fileName];
-        if (commonLen < 2) continue;
-        const currentHasMore = currentLen > commonLen;
-        if (currentHasMore) {
-          if (commonLen > bestCommonLen || commonLen === bestCommonLen && candidateLen < bestParentLen) {
-            bestCommonLen = commonLen;
-            bestParent = candidate.fileName;
-            bestParentLen = candidateLen;
-          }
+        if (commonLen < MIN_COMMON_FOR_BRANCH) continue;
+        if (currentLen <= commonLen) continue;
+        const candidateCoverage = commonLen / candidateLen;
+        if (candidateCoverage < PARENT_COVERAGE_THRESHOLD) {
+          continue;
+        }
+        const score = commonLen * 1e3 - candidateLen;
+        if (score > bestScore) {
+          bestScore = score;
+          bestCommonLen = commonLen;
+          bestParent = candidate.fileName;
         }
       }
       if (bestParent) {

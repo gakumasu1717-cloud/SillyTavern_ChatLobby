@@ -124,6 +124,12 @@ function groupByFingerprint(fingerprints) {
 
 /**
  * 같은 fingerprint 그룹 내에서 부모-자식 관계 분석
+ * 
+ * 분기 판정 기준:
+ * 1. 공통 prefix가 최소 3개 이상 (그리팅 + 유저 + AI 응답)
+ * 2. 후보가 "원본"이 되려면: 공통 부분이 후보 길이의 90% 이상이거나, 후보가 공통 부분에서 끝남
+ * 3. 현재 채팅이 분기점 이후 추가 메시지가 있어야 함
+ * 
  * @param {string} charAvatar
  * @param {Array} group - [{ fileName, length }]
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
@@ -155,15 +161,18 @@ async function analyzeGroup(charAvatar, group) {
         }
     }
     
+    // 분기 판정 상수
+    const MIN_COMMON_FOR_BRANCH = 3;  // 최소 3개 메시지 (그리팅 + 유저 + AI)
+    const PARENT_COVERAGE_THRESHOLD = 0.8;  // 후보의 80% 이상이 공통이어야 원본으로 인정
+    
     // 각 채팅에 대해 가장 가까운 부모 찾기
-    // 부모 조건: 공통 부분이 가장 길고, 그 공통 부분이 후보의 전체 길이와 가장 가까운 것
     for (const current of validFiles) {
         const currentContent = chatContents[current.fileName];
         const currentLen = currentContent.length;
         
         let bestParent = null;
         let bestCommonLen = 0;
-        let bestParentLen = Infinity;
+        let bestScore = -1;  // 점수 기반 선택
         
         for (const candidate of validFiles) {
             if (candidate.fileName === current.fileName) continue;
@@ -172,22 +181,31 @@ async function analyzeGroup(charAvatar, group) {
             const candidateLen = candidateContent.length;
             const commonLen = commonLengths[current.fileName][candidate.fileName];
             
-            // 최소 2개 이상 메시지가 같아야 함 (그리팅만 같은 건 제외)
-            if (commonLen < 2) continue;
+            // 최소 공통 메시지 수 확인
+            if (commonLen < MIN_COMMON_FOR_BRANCH) continue;
             
-            // 분기점 이후 현재 채팅이 더 진행되었는지 확인
-            // 공통 부분이 같고, 현재 채팅이 분기 이후 추가 메시지가 있어야 함
-            const currentHasMore = currentLen > commonLen;
+            // 현재 채팅이 분기점 이후 추가 메시지가 있어야 함
+            if (currentLen <= commonLen) continue;
             
-            if (currentHasMore) {
-                // 더 긴 공통을 가진 것이 우선 (더 가까운 분기)
-                // 공통 길이가 같으면 후보가 짧은 것이 우선 (직접 부모)
-                if (commonLen > bestCommonLen || 
-                    (commonLen === bestCommonLen && candidateLen < bestParentLen)) {
-                    bestCommonLen = commonLen;
-                    bestParent = candidate.fileName;
-                    bestParentLen = candidateLen;
-                }
+            // 후보가 "원본/부모"가 되려면:
+            // - 후보 길이가 공통 부분과 거의 같거나 (후보가 분기점에서 끝남)
+            // - 공통 부분이 후보의 상당 부분을 차지해야 함
+            const candidateCoverage = commonLen / candidateLen;
+            
+            // 후보가 공통 부분 이후로도 많이 진행했다면 → 형제 관계일 가능성 높음, 부모 아님
+            // 후보가 공통 부분에서 끝나거나 조금만 더 갔다면 → 원본/부모일 가능성 높음
+            if (candidateCoverage < PARENT_COVERAGE_THRESHOLD) {
+                // 후보도 분기점 이후로 많이 진행함 → 형제 관계, 부모 아님
+                continue;
+            }
+            
+            // 점수 계산: 공통 길이가 길수록 + 후보가 짧을수록 좋음
+            const score = commonLen * 1000 - candidateLen;
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestCommonLen = commonLen;
+                bestParent = candidate.fileName;
             }
         }
         
