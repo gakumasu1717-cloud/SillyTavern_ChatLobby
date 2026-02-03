@@ -79,7 +79,7 @@ function preprocessChatSessions(chatHistory) {
 function groupMessagesByContent(messages) {
     const groups = {};
     
-    messages.forEach((messageObj, index) => {
+    messages.forEach((messageObj) => {
         const { file_name, message } = messageObj;
         try {
             // 개행 정규화 (Timelines 원본 그대로)
@@ -88,7 +88,7 @@ function groupMessagesByContent(messages) {
             if (!groups[mes]) {
                 groups[mes] = [];
             }
-            groups[mes].push({ file_name, index, message });
+            groups[mes].push({ file_name, message });
         } catch (e) {
             console.error('[BranchAnalyzer] Message grouping error:', e);
         }
@@ -100,12 +100,10 @@ function groupMessagesByContent(messages) {
 /**
  * Timelines 원본 buildGraph() 핵심 로직 기반 분기 분석
  * 
- * previousNodes[file_name] = 해당 채팅이 현재 연결된 노드 ID
- * 
- * 동작 원리:
- * 1. 각 messageId에서 같은 내용의 메시지들을 그룹화
- * 2. 같은 그룹 내 채팅들은 같은 노드에 연결
- * 3. 다른 그룹으로 갈라지면 = 분기 발생!
+ * 핵심 원리:
+ * - previousNodes[file_name] = 해당 채팅이 현재 연결된 노드 ID
+ * - 같은 내용의 메시지들은 같은 노드로 연결됨
+ * - 분기 = "이전까지 같은 노드에 있던 채팅들이 다른 그룹으로 갈라질 때"
  * 
  * @param {string} charAvatar
  * @param {Array} chats - [{file_name, ...}]
@@ -137,6 +135,8 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null) {
     }
     
     const fileNames = Object.keys(chatHistory);
+    console.log('[BranchAnalyzer] Loaded', fileNames.length, 'chats');
+    
     if (fileNames.length < 2) {
         console.log('[BranchAnalyzer] Not enough valid chats');
         return {};
@@ -144,90 +144,92 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null) {
     
     // 2. Timelines 방식: 메시지 인덱스별로 전치
     const allChats = preprocessChatSessions(chatHistory);
+    console.log('[BranchAnalyzer] Max message depth:', allChats.length);
     
-    // 3. Timelines buildGraph 핵심 로직
-    // previousNodes[file_name] = 해당 채팅이 현재 연결된 노드 ID
+    // 3. 분기 분석 핵심 로직
+    // previousNodes[file_name] = 이전 메시지에서 해당 채팅이 속한 노드 ID
     const previousNodes = {};   // { file_name: nodeId }
     const branchInfo = {};      // { file_name: { parentChat, branchPoint } }
     let keyCounter = 1;
     
-    // 노드 ID → 해당 노드를 처음 만든 채팅 파일명 매핑
-    const nodeOwner = {};  // { nodeId: file_name }
+    // 초기화: 모든 채팅은 root에서 시작
+    fileNames.forEach(fn => {
+        previousNodes[fn] = 'root';
+    });
     
-    // 초기화: 모든 채팅은 root에서 시작 (Timelines 원본 그대로)
-    if (allChats[0]) {
-        allChats[0].forEach(({ file_name }) => {
-            previousNodes[file_name] = 'root';
-        });
-    }
-    
-    // 4. 메시지 인덱스별로 순회 (Timelines buildGraph 그대로)
+    // 4. 메시지 인덱스별로 순회
     for (let messageId = 0; messageId < allChats.length; messageId++) {
-        // 이 messageId에서 같은 내용끼리 그룹화
-        const groups = groupMessagesByContent(allChats[messageId]);
+        const messagesAtThisLevel = allChats[messageId];
+        if (!messagesAtThisLevel || messagesAtThisLevel.length === 0) continue;
         
-        // 각 그룹(같은 메시지 내용)마다 노드 생성
-        for (const [text, group] of Object.entries(groups)) {
-            const nodeId = `message${keyCounter}`;
-            
-            // 🔥 Timelines 핵심: 각 채팅의 부모 노드 확인
-            // 같은 그룹인데 previousNodes가 다르면 = 분기!
-            
-            // 이 그룹의 모든 previousNodes 수집
-            const prevNodesInGroup = new Map();  // { prevNodeId: [file_names] }
+        // 이 messageId에서 같은 내용끼리 그룹화
+        const groups = groupMessagesByContent(messagesAtThisLevel);
+        
+        // 🔥 핵심: 이전까지 같은 노드에 있던 채팅들이 이제 다른 그룹으로 갈라지는지 체크
+        // prevNode별로 어떤 그룹들로 분산되는지 확인
+        const prevNodeToGroups = new Map();  // { prevNode: Map<groupKey, [file_names]> }
+        
+        for (const [groupKey, group] of Object.entries(groups)) {
             for (const messageObj of group) {
                 const fn = messageObj.file_name;
                 const prevNode = previousNodes[fn];
-                if (!prevNodesInGroup.has(prevNode)) {
-                    prevNodesInGroup.set(prevNode, []);
+                
+                if (!prevNodeToGroups.has(prevNode)) {
+                    prevNodeToGroups.set(prevNode, new Map());
                 }
-                prevNodesInGroup.get(prevNode).push(fn);
+                const groupsFromPrevNode = prevNodeToGroups.get(prevNode);
+                if (!groupsFromPrevNode.has(groupKey)) {
+                    groupsFromPrevNode.set(groupKey, []);
+                }
+                groupsFromPrevNode.get(groupKey).push(fn);
             }
-            
-            // 여러 이전 노드에서 오면 = 분기 발생!
-            if (prevNodesInGroup.size > 1) {
-                // 가장 많은 채팅이 연결된 prevNode를 "메인"으로
-                let mainPrevNode = null;
+        }
+        
+        // 분기 감지: 같은 prevNode에서 여러 그룹으로 갈라지면 분기!
+        for (const [prevNode, groupsFromPrevNode] of prevNodeToGroups) {
+            if (groupsFromPrevNode.size > 1) {
+                // 여러 그룹으로 갈라짐 = 분기 발생!
+                console.log(`[BranchAnalyzer] Branch detected at messageId ${messageId} from prevNode ${prevNode}`);
+                
+                // 가장 많은 채팅이 있는 그룹을 "메인"으로
+                let mainGroupKey = null;
                 let maxCount = 0;
-                for (const [prevNode, fns] of prevNodesInGroup) {
+                for (const [gk, fns] of groupsFromPrevNode) {
                     if (fns.length > maxCount) {
                         maxCount = fns.length;
-                        mainPrevNode = prevNode;
+                        mainGroupKey = gk;
                     }
                 }
                 
-                // 메인이 아닌 채팅들은 분기로 기록
-                for (const [prevNode, fns] of prevNodesInGroup) {
-                    if (prevNode !== mainPrevNode) {
+                // 메인 그룹의 첫 번째 채팅을 부모로
+                const mainFiles = groupsFromPrevNode.get(mainGroupKey);
+                const parentChat = mainFiles[0];
+                
+                // 나머지 그룹의 채팅들은 분기로 기록
+                for (const [gk, fns] of groupsFromPrevNode) {
+                    if (gk !== mainGroupKey) {
                         for (const fn of fns) {
                             if (!branchInfo[fn]) {
-                                // 부모 채팅 = prevNode를 소유한 채팅
-                                const parentChat = nodeOwner[prevNode] || 
-                                                  prevNodesInGroup.get(mainPrevNode)?.[0];
-                                if (parentChat && parentChat !== fn) {
-                                    branchInfo[fn] = {
-                                        parentChat: parentChat,
-                                        branchPoint: messageId
-                                    };
-                                }
+                                branchInfo[fn] = {
+                                    parentChat: parentChat,
+                                    branchPoint: messageId
+                                };
+                                console.log(`[BranchAnalyzer] ${fn} branches from ${parentChat} at message ${messageId}`);
                             }
                         }
                     }
                 }
             }
-            
-            // 이 그룹의 모든 채팅을 이 노드에 연결
-            for (const messageObj of group) {
-                const fn = messageObj.file_name;
-                previousNodes[fn] = nodeId;
-            }
-            
-            // 노드 소유자 기록 (첫 번째 채팅)
-            if (group.length > 0) {
-                nodeOwner[nodeId] = group[0].file_name;
-            }
-            
+        }
+        
+        // 각 그룹에 새로운 nodeId 할당하고 previousNodes 업데이트
+        for (const [groupKey, group] of Object.entries(groups)) {
+            const nodeId = `message${keyCounter}`;
             keyCounter++;
+            
+            for (const messageObj of group) {
+                previousNodes[messageObj.file_name] = nodeId;
+            }
         }
         
         if (onProgress) onProgress(0.3 + (messageId + 1) / allChats.length * 0.7);
@@ -236,9 +238,9 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null) {
     // 5. 결과 정리 + depth 계산
     const result = {};
     
-    // 분기점이 2 이상인 것만 (그리팅만 같은 건 제외)
+    // 분기점이 1 이상인 것만 (첫 메시지부터 다르면 별개 채팅)
     for (const [fileName, info] of Object.entries(branchInfo)) {
-        if (info.branchPoint >= 2) {
+        if (info.branchPoint >= 1) {
             result[fileName] = {
                 parentChat: info.parentChat,
                 branchPoint: info.branchPoint,

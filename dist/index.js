@@ -2389,14 +2389,14 @@ ${message}` : message;
   }
   function groupMessagesByContent(messages) {
     const groups = {};
-    messages.forEach((messageObj, index) => {
+    messages.forEach((messageObj) => {
       const { file_name, message } = messageObj;
       try {
         const mes = (message.mes || "").replace(/\r\n/g, "\n");
         if (!groups[mes]) {
           groups[mes] = [];
         }
-        groups[mes].push({ file_name, index, message });
+        groups[mes].push({ file_name, message });
       } catch (e) {
         console.error("[BranchAnalyzer] Message grouping error:", e);
       }
@@ -2421,72 +2421,78 @@ ${message}` : message;
       if (onProgress) onProgress((i + 1) / chats.length * 0.3);
     }
     const fileNames = Object.keys(chatHistory);
+    console.log("[BranchAnalyzer] Loaded", fileNames.length, "chats");
     if (fileNames.length < 2) {
       console.log("[BranchAnalyzer] Not enough valid chats");
       return {};
     }
     const allChats = preprocessChatSessions(chatHistory);
+    console.log("[BranchAnalyzer] Max message depth:", allChats.length);
     const previousNodes = {};
     const branchInfo = {};
     let keyCounter = 1;
-    const nodeOwner = {};
-    if (allChats[0]) {
-      allChats[0].forEach(({ file_name }) => {
-        previousNodes[file_name] = "root";
-      });
-    }
+    fileNames.forEach((fn) => {
+      previousNodes[fn] = "root";
+    });
     for (let messageId = 0; messageId < allChats.length; messageId++) {
-      const groups = groupMessagesByContent(allChats[messageId]);
-      for (const [text, group] of Object.entries(groups)) {
-        const nodeId = `message${keyCounter}`;
-        const prevNodesInGroup = /* @__PURE__ */ new Map();
+      const messagesAtThisLevel = allChats[messageId];
+      if (!messagesAtThisLevel || messagesAtThisLevel.length === 0) continue;
+      const groups = groupMessagesByContent(messagesAtThisLevel);
+      const prevNodeToGroups = /* @__PURE__ */ new Map();
+      for (const [groupKey, group] of Object.entries(groups)) {
         for (const messageObj of group) {
           const fn = messageObj.file_name;
           const prevNode = previousNodes[fn];
-          if (!prevNodesInGroup.has(prevNode)) {
-            prevNodesInGroup.set(prevNode, []);
+          if (!prevNodeToGroups.has(prevNode)) {
+            prevNodeToGroups.set(prevNode, /* @__PURE__ */ new Map());
           }
-          prevNodesInGroup.get(prevNode).push(fn);
+          const groupsFromPrevNode = prevNodeToGroups.get(prevNode);
+          if (!groupsFromPrevNode.has(groupKey)) {
+            groupsFromPrevNode.set(groupKey, []);
+          }
+          groupsFromPrevNode.get(groupKey).push(fn);
         }
-        if (prevNodesInGroup.size > 1) {
-          let mainPrevNode = null;
+      }
+      for (const [prevNode, groupsFromPrevNode] of prevNodeToGroups) {
+        if (groupsFromPrevNode.size > 1) {
+          console.log(`[BranchAnalyzer] Branch detected at messageId ${messageId} from prevNode ${prevNode}`);
+          let mainGroupKey = null;
           let maxCount = 0;
-          for (const [prevNode, fns] of prevNodesInGroup) {
+          for (const [gk, fns] of groupsFromPrevNode) {
             if (fns.length > maxCount) {
               maxCount = fns.length;
-              mainPrevNode = prevNode;
+              mainGroupKey = gk;
             }
           }
-          for (const [prevNode, fns] of prevNodesInGroup) {
-            if (prevNode !== mainPrevNode) {
+          const mainFiles = groupsFromPrevNode.get(mainGroupKey);
+          const parentChat = mainFiles[0];
+          for (const [gk, fns] of groupsFromPrevNode) {
+            if (gk !== mainGroupKey) {
               for (const fn of fns) {
                 if (!branchInfo[fn]) {
-                  const parentChat = nodeOwner[prevNode] || prevNodesInGroup.get(mainPrevNode)?.[0];
-                  if (parentChat && parentChat !== fn) {
-                    branchInfo[fn] = {
-                      parentChat,
-                      branchPoint: messageId
-                    };
-                  }
+                  branchInfo[fn] = {
+                    parentChat,
+                    branchPoint: messageId
+                  };
+                  console.log(`[BranchAnalyzer] ${fn} branches from ${parentChat} at message ${messageId}`);
                 }
               }
             }
           }
         }
-        for (const messageObj of group) {
-          const fn = messageObj.file_name;
-          previousNodes[fn] = nodeId;
-        }
-        if (group.length > 0) {
-          nodeOwner[nodeId] = group[0].file_name;
-        }
+      }
+      for (const [groupKey, group] of Object.entries(groups)) {
+        const nodeId = `message${keyCounter}`;
         keyCounter++;
+        for (const messageObj of group) {
+          previousNodes[messageObj.file_name] = nodeId;
+        }
       }
       if (onProgress) onProgress(0.3 + (messageId + 1) / allChats.length * 0.7);
     }
     const result = {};
     for (const [fileName, info] of Object.entries(branchInfo)) {
-      if (info.branchPoint >= 2) {
+      if (info.branchPoint >= 1) {
         result[fileName] = {
           parentChat: info.parentChat,
           branchPoint: info.branchPoint,
