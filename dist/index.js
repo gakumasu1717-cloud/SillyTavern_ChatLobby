@@ -2371,16 +2371,37 @@ ${message}` : message;
       return null;
     }
   }
-  function getMessageHash(message) {
-    if (!message) return "";
-    const mes = (message.mes || "").replace(/\r\n/g, "\n").trim();
-    if (mes.length < 100) return mes;
-    let hash = 5381;
-    for (let i = 0; i < mes.length; i++) {
-      hash = (hash << 5) + hash + mes.charCodeAt(i);
-      hash = hash & hash;
+  function preprocessChatSessions(chatHistory) {
+    const allChats = [];
+    for (const [file_name, messages] of Object.entries(chatHistory)) {
+      messages.forEach((message, index) => {
+        if (!allChats[index]) {
+          allChats[index] = [];
+        }
+        allChats[index].push({
+          file_name,
+          index,
+          message
+        });
+      });
     }
-    return `#${hash.toString(36)}_${mes.length}`;
+    return allChats;
+  }
+  function groupMessagesByContent(messages) {
+    const groups = {};
+    messages.forEach((messageObj, index) => {
+      const { file_name, message } = messageObj;
+      try {
+        const mes = (message.mes || "").replace(/\r\n/g, "\n");
+        if (!groups[mes]) {
+          groups[mes] = [];
+        }
+        groups[mes].push({ file_name, index, message });
+      } catch (e) {
+        console.error("[BranchAnalyzer] Message grouping error:", e);
+      }
+    });
+    return groups;
   }
   async function analyzeBranches(charAvatar, chats, onProgress = null) {
     console.log("[BranchAnalyzer] Starting Timelines-style analysis for", charAvatar);
@@ -2388,65 +2409,80 @@ ${message}` : message;
       console.log("[BranchAnalyzer] Not enough chats to analyze");
       return {};
     }
-    const chatContents = {};
-    const fileNames = [];
+    const chatHistory = {};
     for (let i = 0; i < chats.length; i++) {
       const chat = chats[i];
       const fn = chat.file_name || "";
       if (!fn) continue;
       const content = await loadChatContent(charAvatar, fn);
       if (content && content.length > 0) {
-        chatContents[fn] = content;
-        fileNames.push(fn);
+        chatHistory[fn] = content;
       }
-      if (onProgress) onProgress((i + 1) / chats.length * 0.5);
+      if (onProgress) onProgress((i + 1) / chats.length * 0.3);
     }
+    const fileNames = Object.keys(chatHistory);
     if (fileNames.length < 2) {
       console.log("[BranchAnalyzer] Not enough valid chats");
       return {};
     }
+    const allChats = preprocessChatSessions(chatHistory);
     const previousNodes = {};
     const branchInfo = {};
-    const rootChat = fileNames[0];
-    for (const fn of fileNames) {
-      previousNodes[fn] = fn === rootChat ? null : rootChat;
+    let keyCounter = 1;
+    const nodeOwner = {};
+    if (allChats[0]) {
+      allChats[0].forEach(({ file_name }) => {
+        previousNodes[file_name] = "root";
+      });
     }
-    const maxLength = Math.max(...Object.values(chatContents).map((c) => c.length));
-    for (let msgIdx = 0; msgIdx < maxLength; msgIdx++) {
-      const contentGroups = {};
-      for (const fn of fileNames) {
-        const content = chatContents[fn];
-        if (msgIdx >= content.length) continue;
-        const hash = getMessageHash(content[msgIdx]);
-        if (!contentGroups[hash]) {
-          contentGroups[hash] = [];
-        }
-        contentGroups[hash].push(fn);
-      }
-      const groups = Object.values(contentGroups);
-      if (groups.length <= 1) continue;
-      for (const group of groups) {
-        let representative = group[0];
-        for (const fn of group) {
-          const prev = previousNodes[fn];
-          if (prev && group.includes(prev)) {
-            representative = prev;
-            break;
+    for (let messageId = 0; messageId < allChats.length; messageId++) {
+      const groups = groupMessagesByContent(allChats[messageId]);
+      for (const [text, group] of Object.entries(groups)) {
+        const nodeId = `message${keyCounter}`;
+        const prevNodesInGroup = /* @__PURE__ */ new Map();
+        for (const messageObj of group) {
+          const fn = messageObj.file_name;
+          const prevNode = previousNodes[fn];
+          if (!prevNodesInGroup.has(prevNode)) {
+            prevNodesInGroup.set(prevNode, []);
           }
+          prevNodesInGroup.get(prevNode).push(fn);
         }
-        for (const fn of group) {
-          if (fn !== representative) {
-            if (!branchInfo[fn] && previousNodes[fn] && !group.includes(previousNodes[fn])) {
-              branchInfo[fn] = {
-                parentChat: previousNodes[fn],
-                branchPoint: msgIdx
-              };
+        if (prevNodesInGroup.size > 1) {
+          let mainPrevNode = null;
+          let maxCount = 0;
+          for (const [prevNode, fns] of prevNodesInGroup) {
+            if (fns.length > maxCount) {
+              maxCount = fns.length;
+              mainPrevNode = prevNode;
             }
           }
-          previousNodes[fn] = representative;
+          for (const [prevNode, fns] of prevNodesInGroup) {
+            if (prevNode !== mainPrevNode) {
+              for (const fn of fns) {
+                if (!branchInfo[fn]) {
+                  const parentChat = nodeOwner[prevNode] || prevNodesInGroup.get(mainPrevNode)?.[0];
+                  if (parentChat && parentChat !== fn) {
+                    branchInfo[fn] = {
+                      parentChat,
+                      branchPoint: messageId
+                    };
+                  }
+                }
+              }
+            }
+          }
         }
+        for (const messageObj of group) {
+          const fn = messageObj.file_name;
+          previousNodes[fn] = nodeId;
+        }
+        if (group.length > 0) {
+          nodeOwner[nodeId] = group[0].file_name;
+        }
+        keyCounter++;
       }
-      if (onProgress) onProgress(0.5 + (msgIdx + 1) / maxLength * 0.5);
+      if (onProgress) onProgress(0.3 + (messageId + 1) / allChats.length * 0.7);
     }
     const result = {};
     for (const [fileName, info] of Object.entries(branchInfo)) {
