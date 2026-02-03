@@ -1,5 +1,5 @@
 // ============================================
-// 브랜치 분석기 - Timelines 방식 참고
+// 브랜치 분석기 - 날짜 기반 + 점수 폴백
 // 채팅들의 분기 관계를 분석하고 트리 구조로 정렬
 // ============================================
 
@@ -14,6 +14,31 @@ import {
     getAllBranches,
     getAllFingerprints
 } from '../data/branchCache.js';
+
+// 분기 판정 상수
+const MIN_COMMON_FOR_BRANCH = 3;  // 최소 3개 메시지 (그리팅 + 1번 왕복)
+
+/**
+ * 파일명에서 날짜 추출
+ * 패턴: "대화 - 2026-01-29@18h40m17s788ms.jsonl"
+ * @param {string} fileName
+ * @returns {number|null} - timestamp 또는 null
+ */
+function extractDateFromFileName(fileName) {
+    const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
+    if (match) {
+        return new Date(
+            parseInt(match[1]),      // 년
+            parseInt(match[2]) - 1,  // 월 (0부터 시작)
+            parseInt(match[3]),      // 일
+            parseInt(match[4]),      // 시
+            parseInt(match[5]),      // 분
+            parseInt(match[6]),      // 초
+            parseInt(match[7])       // 밀리초
+        ).getTime();
+    }
+    return null;
+}
 
 /**
  * 채팅 내용 로드 (API 호출)
@@ -125,11 +150,7 @@ function groupByFingerprint(fingerprints) {
 
 /**
  * 같은 fingerprint 그룹 내에서 부모-자식 관계 분석
- * 
- * 분기 판정 기준:
- * 1. 공통 prefix가 최소 3개 이상 (그리팅 + 유저 + AI 응답)
- * 2. 후보가 "원본"이 되려면: 공통 부분이 후보 길이의 90% 이상이거나, 후보가 공통 부분에서 끝남
- * 3. 현재 채팅이 분기점 이후 추가 메시지가 있어야 함
+ * 날짜가 있으면 날짜 기반, 없으면 점수 기반
  * 
  * @param {string} charAvatar
  * @param {Array} group - [{ fileName, length }]
@@ -138,7 +159,6 @@ function groupByFingerprint(fingerprints) {
 async function analyzeGroup(charAvatar, group) {
     if (group.length < 2) return {};
     
-    const result = {};
     const chatContents = {};
     
     // 모든 채팅 내용 로드
@@ -149,63 +169,64 @@ async function analyzeGroup(charAvatar, group) {
         }
     }));
     
-    // 공통 prefix 길이 매트릭스 계산 (O(n²) 비교)
-    const commonLengths = {};  // { fileName: { otherFileName: commonLen } }
+    // 유효한 파일만 필터
     const validFiles = group.filter(g => chatContents[g.fileName]?.length >= 2);
+    if (validFiles.length < 2) return {};
     
-    for (const current of validFiles) {
-        commonLengths[current.fileName] = {};
-        for (const other of validFiles) {
-            if (current.fileName === other.fileName) continue;
-            commonLengths[current.fileName][other.fileName] = 
-                findCommonPrefixLength(chatContents[current.fileName], chatContents[other.fileName]);
+    // 날짜 파싱 시도
+    const dates = {};
+    let allHaveDates = true;
+    
+    for (const item of validFiles) {
+        const date = extractDateFromFileName(item.fileName);
+        if (date) {
+            dates[item.fileName] = date;
+        } else {
+            allHaveDates = false;
         }
     }
     
-    // 분기 판정 상수
-    const MIN_COMMON_FOR_BRANCH = 5;  // 최소 5개 메시지 (그리팅 + 2번 왕복 대화)
-    const PARENT_COVERAGE_THRESHOLD = 0.7;  // 후보의 70% 이상이 공통이어야 원본으로 인정
+    // 부모 결정 방식 선택
+    if (allHaveDates) {
+        console.log('[BranchAnalyzer] Using date-based analysis');
+        return analyzeByDate(validFiles, dates, chatContents);
+    } else {
+        console.log('[BranchAnalyzer] Using score-based analysis (some files have no date)');
+        return analyzeByScore(validFiles, chatContents);
+    }
+}
+
+/**
+ * 날짜 기반 분석 - 오래된 채팅이 부모
+ */
+function analyzeByDate(group, dates, chatContents) {
+    const result = {};
     
-    // 각 채팅에 대해 가장 가까운 부모 찾기
-    for (const current of validFiles) {
+    // 날짜순 정렬 (오래된 순)
+    const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
+    
+    // 각 채팅에 대해 나보다 오래된 채팅 중 가장 가까운 부모 찾기
+    for (let i = 1; i < sorted.length; i++) {
+        const current = sorted[i];
         const currentContent = chatContents[current.fileName];
-        const currentLen = currentContent.length;
+        if (!currentContent) continue;
         
         let bestParent = null;
-        let bestCommonLen = 0;
-        let bestScore = -1;  // 점수 기반 선택
+        let bestCommon = 0;
         
-        for (const candidate of validFiles) {
-            if (candidate.fileName === current.fileName) continue;
-            
+        // 나보다 오래된 채팅들만 검사
+        for (let j = 0; j < i; j++) {
+            const candidate = sorted[j];
             const candidateContent = chatContents[candidate.fileName];
-            const candidateLen = candidateContent.length;
-            const commonLen = commonLengths[current.fileName][candidate.fileName];
+            if (!candidateContent) continue;
             
-            // 최소 공통 메시지 수 확인
-            if (commonLen < MIN_COMMON_FOR_BRANCH) continue;
+            const common = findCommonPrefixLength(currentContent, candidateContent);
             
-            // 현재 채팅이 분기점 이후 추가 메시지가 있어야 함
-            if (currentLen <= commonLen) continue;
-            
-            // 후보가 "원본/부모"가 되려면:
-            // - 공통 부분이 후보의 상당 부분을 차지해야 함
-            // - 예: 후보 10개, 공통 10개 → 100% (완벽한 부모)
-            // - 예: 후보 10개, 공통 7개 → 70% (부모 가능)
-            // - 예: 후보 100개, 공통 5개 → 5% (형제 관계, 부모 아님)
-            const candidateCoverage = commonLen / candidateLen;
-            
-            if (candidateCoverage < PARENT_COVERAGE_THRESHOLD) {
-                // 후보도 분기점 이후로 많이 진행함 → 형제 관계, 부모 아님
-                continue;
-            }
-            
-            // 점수 계산: 공통 길이가 길수록 + 후보가 짧을수록 좋음 (직접 부모 우선)
-            const score = commonLen * 1000 - candidateLen;
-            
-            if (score > bestScore) {
-                bestScore = score;
-                bestCommonLen = commonLen;
+            // 최소 공통 메시지 확인 & 현재가 분기점 이후 진행했는지
+            if (common >= MIN_COMMON_FOR_BRANCH && 
+                currentContent.length > common && 
+                common > bestCommon) {
+                bestCommon = common;
                 bestParent = candidate.fileName;
             }
         }
@@ -213,31 +234,88 @@ async function analyzeGroup(charAvatar, group) {
         if (bestParent) {
             result[current.fileName] = {
                 parentChat: bestParent,
-                branchPoint: bestCommonLen,
+                branchPoint: bestCommon,
                 depth: 1
             };
-            console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommonLen}`);
+            console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
         }
     }
     
-    // depth 계산 (부모의 depth + 1)
-    const calculateDepth = (fileName, visited = new Set()) => {
+    // depth 계산
+    calculateDepths(result);
+    return result;
+}
+
+/**
+ * 점수 기반 분석 - 공통 많고 짧은 게 부모
+ */
+function analyzeByScore(group, chatContents) {
+    const result = {};
+    
+    for (const current of group) {
+        const currentContent = chatContents[current.fileName];
+        if (!currentContent || currentContent.length < 2) continue;
+        
+        let bestParent = null;
+        let bestScore = -1;
+        let bestCommon = 0;
+        
+        for (const candidate of group) {
+            if (candidate.fileName === current.fileName) continue;
+            
+            const candidateContent = chatContents[candidate.fileName];
+            if (!candidateContent) continue;
+            
+            const common = findCommonPrefixLength(currentContent, candidateContent);
+            
+            // 최소 공통 & 현재가 분기점 이후 진행
+            if (common < MIN_COMMON_FOR_BRANCH) continue;
+            if (currentContent.length <= common) continue;
+            
+            // 점수: 공통 많을수록 + 짧을수록 (직접 부모 우선)
+            const score = common * 1000 - candidateContent.length;
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestCommon = common;
+                bestParent = candidate.fileName;
+            }
+        }
+        
+        if (bestParent) {
+            result[current.fileName] = {
+                parentChat: bestParent,
+                branchPoint: bestCommon,
+                depth: 1
+            };
+            console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
+        }
+    }
+    
+    // depth 계산
+    calculateDepths(result);
+    return result;
+}
+
+/**
+ * depth 계산 (부모의 depth + 1)
+ */
+function calculateDepths(result) {
+    const getDepth = (fileName, visited = new Set()) => {
         if (visited.has(fileName)) return 0;
         visited.add(fileName);
         
         const info = result[fileName];
         if (!info || !info.parentChat) return 0;
         
-        const parentDepth = calculateDepth(info.parentChat, visited);
+        const parentDepth = getDepth(info.parentChat, visited);
         info.depth = parentDepth + 1;
         return info.depth;
     };
     
     for (const fileName of Object.keys(result)) {
-        calculateDepth(fileName);
+        getDepth(fileName);
     }
-    
-    return result;
 }
 
 /**
@@ -253,13 +331,13 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
     
     // 1. fingerprint 생성/업데이트 (강제 재분석 시 모든 채팅 재처리)
     const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
-        if (onProgress) onProgress(p * 0.5); // 50%까지
+        if (onProgress) onProgress(p * 0.3); // 30%까지
     }, forceRefresh);
     
     // 2. fingerprint로 그룹핑
     const groups = groupByFingerprint(fingerprints);
     
-    // 3. 2개 이상인 그룹만 분석 (분기 가능성 있음)
+    // 3. 2개 이상인 그룹 분석 (분기 가능성 있음)
     const multiGroups = Object.values(groups).filter(g => g.length >= 2);
     console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
     
@@ -276,10 +354,28 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         }
         
         if (onProgress) {
-            onProgress(0.5 + (i + 1) / multiGroups.length * 0.5);
+            onProgress(0.3 + (i + 1) / multiGroups.length * 0.4); // 30~70%
         }
     }
     
+    // 5. 다른 fingerprint 그룹 간에도 교차 비교 (분기가 일찍 발생한 경우)
+    const allChatsFlat = Object.values(groups).flat();
+    if (allChatsFlat.length >= 2 && Object.keys(groups).length > 1) {
+        console.log('[BranchAnalyzer] Cross-group analysis for', allChatsFlat.length, 'chats');
+        const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
+        
+        for (const [fileName, info] of Object.entries(crossResult)) {
+            // 기존 결과가 없거나, 새 결과가 더 긴 공통 prefix를 가지면 업데이트
+            if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
+                allBranches[fileName] = info;
+                setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+            }
+        }
+        
+        if (onProgress) onProgress(0.9);
+    }
+    
+    if (onProgress) onProgress(1);
     console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
     return allBranches;
 }

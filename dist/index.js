@@ -2391,6 +2391,29 @@ ${message}` : message;
   }
 
   // src/utils/branchAnalyzer.js
+  var MIN_COMMON_FOR_BRANCH = 3;
+  function extractDateFromFileName(fileName) {
+    const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
+    if (match) {
+      return new Date(
+        parseInt(match[1]),
+        // 년
+        parseInt(match[2]) - 1,
+        // 월 (0부터 시작)
+        parseInt(match[3]),
+        // 일
+        parseInt(match[4]),
+        // 시
+        parseInt(match[5]),
+        // 분
+        parseInt(match[6]),
+        // 초
+        parseInt(match[7])
+        // 밀리초
+      ).getTime();
+    }
+    return null;
+  }
   async function loadChatContent(charAvatar, fileName) {
     try {
       const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
@@ -2458,7 +2481,6 @@ ${message}` : message;
   }
   async function analyzeGroup(charAvatar, group) {
     if (group.length < 2) return {};
-    const result = {};
     const chatContents = {};
     await Promise.all(group.map(async (item) => {
       const content = await loadChatContent(charAvatar, item.fileName);
@@ -2466,68 +2488,109 @@ ${message}` : message;
         chatContents[item.fileName] = content;
       }
     }));
-    const commonLengths = {};
     const validFiles = group.filter((g) => chatContents[g.fileName]?.length >= 2);
-    for (const current of validFiles) {
-      commonLengths[current.fileName] = {};
-      for (const other of validFiles) {
-        if (current.fileName === other.fileName) continue;
-        commonLengths[current.fileName][other.fileName] = findCommonPrefixLength(chatContents[current.fileName], chatContents[other.fileName]);
+    if (validFiles.length < 2) return {};
+    const dates = {};
+    let allHaveDates = true;
+    for (const item of validFiles) {
+      const date = extractDateFromFileName(item.fileName);
+      if (date) {
+        dates[item.fileName] = date;
+      } else {
+        allHaveDates = false;
       }
     }
-    const MIN_COMMON_FOR_BRANCH = 5;
-    const PARENT_COVERAGE_THRESHOLD = 0.7;
-    for (const current of validFiles) {
+    if (allHaveDates) {
+      console.log("[BranchAnalyzer] Using date-based analysis");
+      return analyzeByDate(validFiles, dates, chatContents);
+    } else {
+      console.log("[BranchAnalyzer] Using score-based analysis (some files have no date)");
+      return analyzeByScore(validFiles, chatContents);
+    }
+  }
+  function analyzeByDate(group, dates, chatContents) {
+    const result = {};
+    const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
+    for (let i = 1; i < sorted.length; i++) {
+      const current = sorted[i];
       const currentContent = chatContents[current.fileName];
-      const currentLen = currentContent.length;
+      if (!currentContent) continue;
       let bestParent = null;
-      let bestCommonLen = 0;
-      let bestScore = -1;
-      for (const candidate of validFiles) {
-        if (candidate.fileName === current.fileName) continue;
+      let bestCommon = 0;
+      for (let j = 0; j < i; j++) {
+        const candidate = sorted[j];
         const candidateContent = chatContents[candidate.fileName];
-        const candidateLen = candidateContent.length;
-        const commonLen = commonLengths[current.fileName][candidate.fileName];
-        if (commonLen < MIN_COMMON_FOR_BRANCH) continue;
-        if (currentLen <= commonLen) continue;
-        const candidateCoverage = commonLen / candidateLen;
-        if (candidateCoverage < PARENT_COVERAGE_THRESHOLD) {
-          continue;
-        }
-        const score = commonLen * 1e3 - candidateLen;
-        if (score > bestScore) {
-          bestScore = score;
-          bestCommonLen = commonLen;
+        if (!candidateContent) continue;
+        const common = findCommonPrefixLength(currentContent, candidateContent);
+        if (common >= MIN_COMMON_FOR_BRANCH && currentContent.length > common && common > bestCommon) {
+          bestCommon = common;
           bestParent = candidate.fileName;
         }
       }
       if (bestParent) {
         result[current.fileName] = {
           parentChat: bestParent,
-          branchPoint: bestCommonLen,
+          branchPoint: bestCommon,
           depth: 1
         };
-        console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommonLen}`);
+        console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
       }
     }
-    const calculateDepth = (fileName, visited = /* @__PURE__ */ new Set()) => {
+    calculateDepths(result);
+    return result;
+  }
+  function analyzeByScore(group, chatContents) {
+    const result = {};
+    for (const current of group) {
+      const currentContent = chatContents[current.fileName];
+      if (!currentContent || currentContent.length < 2) continue;
+      let bestParent = null;
+      let bestScore = -1;
+      let bestCommon = 0;
+      for (const candidate of group) {
+        if (candidate.fileName === current.fileName) continue;
+        const candidateContent = chatContents[candidate.fileName];
+        if (!candidateContent) continue;
+        const common = findCommonPrefixLength(currentContent, candidateContent);
+        if (common < MIN_COMMON_FOR_BRANCH) continue;
+        if (currentContent.length <= common) continue;
+        const score = common * 1e3 - candidateContent.length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestCommon = common;
+          bestParent = candidate.fileName;
+        }
+      }
+      if (bestParent) {
+        result[current.fileName] = {
+          parentChat: bestParent,
+          branchPoint: bestCommon,
+          depth: 1
+        };
+        console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
+      }
+    }
+    calculateDepths(result);
+    return result;
+  }
+  function calculateDepths(result) {
+    const getDepth = (fileName, visited = /* @__PURE__ */ new Set()) => {
       if (visited.has(fileName)) return 0;
       visited.add(fileName);
       const info = result[fileName];
       if (!info || !info.parentChat) return 0;
-      const parentDepth = calculateDepth(info.parentChat, visited);
+      const parentDepth = getDepth(info.parentChat, visited);
       info.depth = parentDepth + 1;
       return info.depth;
     };
     for (const fileName of Object.keys(result)) {
-      calculateDepth(fileName);
+      getDepth(fileName);
     }
-    return result;
   }
   async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
     console.log("[BranchAnalyzer] Starting analysis for", charAvatar, "forceRefresh:", forceRefresh);
     const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
-      if (onProgress) onProgress(p * 0.5);
+      if (onProgress) onProgress(p * 0.3);
     }, forceRefresh);
     const groups = groupByFingerprint(fingerprints);
     const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
@@ -2541,9 +2604,22 @@ ${message}` : message;
         setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
       }
       if (onProgress) {
-        onProgress(0.5 + (i + 1) / multiGroups.length * 0.5);
+        onProgress(0.3 + (i + 1) / multiGroups.length * 0.4);
       }
     }
+    const allChatsFlat = Object.values(groups).flat();
+    if (allChatsFlat.length >= 2 && Object.keys(groups).length > 1) {
+      console.log("[BranchAnalyzer] Cross-group analysis for", allChatsFlat.length, "chats");
+      const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
+      for (const [fileName, info] of Object.entries(crossResult)) {
+        if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
+          allBranches[fileName] = info;
+          setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+        }
+      }
+      if (onProgress) onProgress(0.9);
+    }
+    if (onProgress) onProgress(1);
     console.log("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");
     return allBranches;
   }
