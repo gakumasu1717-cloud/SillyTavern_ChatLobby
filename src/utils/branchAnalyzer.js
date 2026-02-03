@@ -142,45 +142,62 @@ async function analyzeGroup(charAvatar, group) {
         }
     }));
     
-    // 각 채팅에 대해 부모 찾기
-    for (const current of group) {
+    // 공통 prefix 길이 매트릭스 계산 (O(n²) 비교)
+    const commonLengths = {};  // { fileName: { otherFileName: commonLen } }
+    const validFiles = group.filter(g => chatContents[g.fileName]?.length >= 2);
+    
+    for (const current of validFiles) {
+        commonLengths[current.fileName] = {};
+        for (const other of validFiles) {
+            if (current.fileName === other.fileName) continue;
+            commonLengths[current.fileName][other.fileName] = 
+                findCommonPrefixLength(chatContents[current.fileName], chatContents[other.fileName]);
+        }
+    }
+    
+    // 각 채팅에 대해 가장 가까운 부모 찾기
+    // 부모 조건: 공통 부분이 가장 길고, 그 공통 부분이 후보의 전체 길이와 가장 가까운 것
+    for (const current of validFiles) {
         const currentContent = chatContents[current.fileName];
-        if (!currentContent || currentContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
+        const currentLen = currentContent.length;
         
         let bestParent = null;
         let bestCommonLen = 0;
+        let bestParentLen = Infinity;
         
-        // 모든 다른 채팅과 비교
-        for (const candidate of group) {
+        for (const candidate of validFiles) {
             if (candidate.fileName === current.fileName) continue;
             
             const candidateContent = chatContents[candidate.fileName];
-            if (!candidateContent || candidateContent.length < 2) continue;  // 최소 2개 이상 메시지 필요
-            
-            const commonLen = findCommonPrefixLength(candidateContent, currentContent);
-            
-            // 부모 조건:
-            // 1. 후보가 현재보다 짧거나 같아야 함 (부모가 자식보다 길 수 없음)
-            // 2. 공통 부분이 후보의 거의 전체여야 함 (후보가 현재의 prefix)
-            // 3. 가장 긴 공통을 가진 것이 직접 부모
             const candidateLen = candidateContent.length;
-            const currentLen = currentContent.length;
+            const commonLen = commonLengths[current.fileName][candidate.fileName];
             
-            if (candidateLen <= currentLen && commonLen > bestCommonLen) {
-                bestCommonLen = commonLen;
-                bestParent = candidate.fileName;
+            // 최소 2개 이상 메시지가 같아야 함 (그리팅만 같은 건 제외)
+            if (commonLen < 2) continue;
+            
+            // 분기점 이후 현재 채팅이 더 진행되었는지 확인
+            // 공통 부분이 같고, 현재 채팅이 분기 이후 추가 메시지가 있어야 함
+            const currentHasMore = currentLen > commonLen;
+            
+            if (currentHasMore) {
+                // 더 긴 공통을 가진 것이 우선 (더 가까운 분기)
+                // 공통 길이가 같으면 후보가 짧은 것이 우선 (직접 부모)
+                if (commonLen > bestCommonLen || 
+                    (commonLen === bestCommonLen && candidateLen < bestParentLen)) {
+                    bestCommonLen = commonLen;
+                    bestParent = candidate.fileName;
+                    bestParentLen = candidateLen;
+                }
             }
         }
         
-        // 최소 2개 이상 메시지가 같아야 진짜 분기 (그리팅만 같은 건 제외)
-        const MIN_COMMON_FOR_BRANCH = 2;
-        
-        if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
+        if (bestParent) {
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommonLen,
                 depth: 1
             };
+            console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommonLen}`);
         }
     }
     

@@ -4,7 +4,7 @@
 // ============================================
 
 const STORAGE_KEY = 'chatLobby_branchCache';
-const FINGERPRINT_MESSAGE_COUNT = 10; // 앞 10개 메시지로 fingerprint 생성
+const FINGERPRINT_MESSAGE_COUNT = 1; // 첫 메시지(그리팅)만으로 fingerprint - 모든 채팅이 같은 그룹으로
 
 /**
  * 브랜치 캐시 데이터 구조
@@ -82,30 +82,24 @@ function hashString(str) {
 
 /**
  * 채팅 메시지들로 fingerprint 생성
- * 첫 번째 메시지(그리팅)는 모든 채팅이 같으므로 2번째부터 시작
+ * 첫 번째 메시지(그리팅)만 사용 - 같은 캐릭터의 모든 채팅이 같은 그룹으로 묶임
  * @param {Array} messages - 채팅 메시지 배열
  * @returns {string}
  */
 function createFingerprint(messages) {
-    // 그리팅(index 0) 건너뛰고 2번째부터 N개 메시지로 해시 생성
-    const parts = [];
-    const startIdx = 1; // 그리팅 건너뛰기
-    const count = Math.min(FINGERPRINT_MESSAGE_COUNT + startIdx, messages.length);
-    
-    for (let i = startIdx; i < count; i++) {
-        const msg = messages[i];
-        if (msg && msg.mes) {
-            // role + content 조합
-            parts.push((msg.is_user ? 'U' : 'A') + ':' + msg.mes.substring(0, 100));
-        }
+    // 첫 번째 메시지(그리팅)로만 해시 생성
+    // 이렇게 하면 같은 캐릭터의 모든 채팅이 같은 그룹으로 묶여서 전체 비교 가능
+    if (!messages || messages.length === 0) {
+        return 'empty_0';
     }
     
-    // 메시지가 그리팅밖에 없으면 빈 fingerprint
-    if (parts.length === 0) {
-        return 'empty_' + messages.length;
+    const firstMsg = messages[0];
+    if (firstMsg && firstMsg.mes) {
+        // 그리팅 메시지 앞부분으로 해시
+        return hashString((firstMsg.is_user ? 'U' : 'A') + ':' + firstMsg.mes.substring(0, 200));
     }
     
-    return hashString(parts.join('|'));
+    return 'empty_' + messages.length;
 }
 
 /**

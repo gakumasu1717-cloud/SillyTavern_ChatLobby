@@ -2297,7 +2297,6 @@ ${message}` : message;
 
   // src/data/branchCache.js
   var STORAGE_KEY2 = "chatLobby_branchCache";
-  var FINGERPRINT_MESSAGE_COUNT = 10;
   var cacheData = null;
   function loadCache() {
     if (cacheData) return cacheData;
@@ -2330,19 +2329,14 @@ ${message}` : message;
     return hash.toString(36);
   }
   function createFingerprint(messages) {
-    const parts = [];
-    const startIdx = 1;
-    const count = Math.min(FINGERPRINT_MESSAGE_COUNT + startIdx, messages.length);
-    for (let i = startIdx; i < count; i++) {
-      const msg = messages[i];
-      if (msg && msg.mes) {
-        parts.push((msg.is_user ? "U" : "A") + ":" + msg.mes.substring(0, 100));
-      }
+    if (!messages || messages.length === 0) {
+      return "empty_0";
     }
-    if (parts.length === 0) {
-      return "empty_" + messages.length;
+    const firstMsg = messages[0];
+    if (firstMsg && firstMsg.mes) {
+      return hashString((firstMsg.is_user ? "U" : "A") + ":" + firstMsg.mes.substring(0, 200));
     }
-    return hashString(parts.join("|"));
+    return "empty_" + messages.length;
   }
   function findCommonPrefixLength(chat1, chat2) {
     const minLen = Math.min(chat1.length, chat2.length);
@@ -2472,30 +2466,43 @@ ${message}` : message;
         chatContents[item.fileName] = content;
       }
     }));
-    for (const current of group) {
+    const commonLengths = {};
+    const validFiles = group.filter((g) => chatContents[g.fileName]?.length >= 2);
+    for (const current of validFiles) {
+      commonLengths[current.fileName] = {};
+      for (const other of validFiles) {
+        if (current.fileName === other.fileName) continue;
+        commonLengths[current.fileName][other.fileName] = findCommonPrefixLength(chatContents[current.fileName], chatContents[other.fileName]);
+      }
+    }
+    for (const current of validFiles) {
       const currentContent = chatContents[current.fileName];
-      if (!currentContent || currentContent.length < 2) continue;
+      const currentLen = currentContent.length;
       let bestParent = null;
       let bestCommonLen = 0;
-      for (const candidate of group) {
+      let bestParentLen = Infinity;
+      for (const candidate of validFiles) {
         if (candidate.fileName === current.fileName) continue;
         const candidateContent = chatContents[candidate.fileName];
-        if (!candidateContent || candidateContent.length < 2) continue;
-        const commonLen = findCommonPrefixLength(candidateContent, currentContent);
         const candidateLen = candidateContent.length;
-        const currentLen = currentContent.length;
-        if (candidateLen <= currentLen && commonLen > bestCommonLen) {
-          bestCommonLen = commonLen;
-          bestParent = candidate.fileName;
+        const commonLen = commonLengths[current.fileName][candidate.fileName];
+        if (commonLen < 2) continue;
+        const currentHasMore = currentLen > commonLen;
+        if (currentHasMore) {
+          if (commonLen > bestCommonLen || commonLen === bestCommonLen && candidateLen < bestParentLen) {
+            bestCommonLen = commonLen;
+            bestParent = candidate.fileName;
+            bestParentLen = candidateLen;
+          }
         }
       }
-      const MIN_COMMON_FOR_BRANCH = 2;
-      if (bestParent && bestCommonLen >= MIN_COMMON_FOR_BRANCH) {
+      if (bestParent) {
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommonLen,
           depth: 1
         };
+        console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommonLen}`);
       }
     }
     const calculateDepth = (fileName, visited = /* @__PURE__ */ new Set()) => {
