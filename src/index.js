@@ -1276,7 +1276,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             clearBranchCache(charAvatar);
             
             // 채팅 목록 가져오기
-            const chats = await api.getChats(charAvatar);
+            const chats = await api.fetchChatsForCharacter(charAvatar, true);  // 🔥 강제 새로고침
             if (!chats || chats.length === 0) {
                 showToast('채팅이 없습니다', 'warning');
                 return;

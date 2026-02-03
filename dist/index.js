@@ -8922,7 +8922,7 @@ ${message}` : message;
         }
         showToast("\uBD84\uAE30 \uBD84\uC11D \uC911...", "info");
         clearCharacterCache(charAvatar);
-        const chats = await api.getChats(charAvatar);
+        const chats = await api.fetchChatsForCharacter(charAvatar, true);
         if (!chats || chats.length === 0) {
           showToast("\uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4", "warning");
           return;
