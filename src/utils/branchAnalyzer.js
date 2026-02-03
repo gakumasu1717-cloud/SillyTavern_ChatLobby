@@ -163,8 +163,9 @@ async function analyzeGroup(charAvatar, group) {
     }
     
     // 분기 판정 상수
-    const MIN_COMMON_FOR_BRANCH = 3;  // 최소 3개 메시지 (그리팅 + 유저 + AI)
-    const PARENT_COVERAGE_THRESHOLD = 0.8;  // 후보의 80% 이상이 공통이어야 원본으로 인정
+    const MIN_COMMON_FOR_BRANCH = 5;  // 최소 5개 메시지 (그리팅 + 2번 왕복 대화)
+    const PARENT_COVERAGE_THRESHOLD = 0.7;  // 후보의 70% 이상이 공통이어야 원본으로 인정
+    const MIN_CURRENT_COVERAGE = 0.1;  // 현재 채팅의 최소 10% 이상이 공통이어야 분기로 인정
     
     // 각 채팅에 대해 가장 가까운 부모 찾기
     for (const current of validFiles) {
@@ -187,6 +188,15 @@ async function analyzeGroup(charAvatar, group) {
             
             // 현재 채팅이 분기점 이후 추가 메시지가 있어야 함
             if (currentLen <= commonLen) continue;
+            
+            // 🔥 현재 채팅 기준 공통 비율도 확인
+            // 199개 채팅과 10개 채팅이 공통 5개면 → 10개 채팅은 50% 공통 (분기 가능성)
+            // 199개 채팅과 200개 채팅이 공통 5개면 → 200개 채팅은 2.5% 공통 (별개 채팅)
+            const currentCoverage = commonLen / currentLen;
+            if (currentCoverage < MIN_CURRENT_COVERAGE) {
+                // 현재 채팅의 아주 일부만 공통 → 완전히 별개 채팅
+                continue;
+            }
             
             // 후보가 "원본/부모"가 되려면:
             // - 후보 길이가 공통 부분과 거의 같거나 (후보가 분기점에서 끝남)
