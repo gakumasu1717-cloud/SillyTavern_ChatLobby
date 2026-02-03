@@ -18,6 +18,17 @@ import {
 // 분기 판정 상수
 const MIN_COMMON_FOR_BRANCH = 3;  // 최소 3개 메시지 (그리팅 + 1번 왕복)
 
+// 채팅 내용 캐시 (중복 로드 방지)
+const chatContentCache = new Map();
+
+/**
+ * 캐시 클리어 (메모리 해제)
+ */
+function clearContentCache() {
+    chatContentCache.clear();
+    console.log('[BranchAnalyzer] Content cache cleared');
+}
+
 /**
  * 파일명에서 날짜 추출
  * 패턴: "대화 - 2026-01-29@18h40m17s788ms.jsonl"
@@ -41,12 +52,19 @@ function extractDateFromFileName(fileName) {
 }
 
 /**
- * 채팅 내용 로드 (API 호출)
+ * 채팅 내용 로드 (캐시 사용)
  * @param {string} charAvatar
  * @param {string} fileName
  * @returns {Promise<Array|null>}
  */
 async function loadChatContent(charAvatar, fileName) {
+    const cacheKey = `${charAvatar}:${fileName}`;
+    
+    // 캐시에 있으면 반환
+    if (chatContentCache.has(cacheKey)) {
+        return chatContentCache.get(cacheKey);
+    }
+    
     try {
         const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
         const chatName = fileName.replace('.jsonl', '');
@@ -61,18 +79,27 @@ async function loadChatContent(charAvatar, fileName) {
             }),
         });
         
-        if (!response.ok) return null;
+        if (!response.ok) {
+            chatContentCache.set(cacheKey, null);
+            return null;
+        }
         
         const data = await response.json();
         
+        let content = null;
         // 첫 번째는 메타데이터이므로 제외
         if (Array.isArray(data) && data.length > 1) {
-            return data.slice(1);
+            content = data.slice(1);
+        } else {
+            content = data;
         }
         
-        return data;
+        // 캐시에 저장
+        chatContentCache.set(cacheKey, content);
+        return content;
     } catch (e) {
         console.error('[BranchAnalyzer] Failed to load chat:', fileName, e);
+        chatContentCache.set(cacheKey, null);
         return null;
     }
 }
@@ -329,55 +356,65 @@ function calculateDepths(result) {
 export async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
     console.log('[BranchAnalyzer] Starting analysis for', charAvatar, 'forceRefresh:', forceRefresh);
     
-    // 1. fingerprint 생성/업데이트 (강제 재분석 시 모든 채팅 재처리)
-    const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
-        if (onProgress) onProgress(p * 0.3); // 30%까지
-    }, forceRefresh);
-    
-    // 2. fingerprint로 그룹핑
-    const groups = groupByFingerprint(fingerprints);
-    
-    // 3. 2개 이상인 그룹 분석 (분기 가능성 있음)
-    const multiGroups = Object.values(groups).filter(g => g.length >= 2);
-    console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
-    
-    // 4. 각 그룹 분석
-    const allBranches = {};
-    for (let i = 0; i < multiGroups.length; i++) {
-        const group = multiGroups[i];
-        const groupResult = await analyzeGroup(charAvatar, group);
+    try {
+        // 1. fingerprint 생성/업데이트 (0~20%)
+        const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
+            if (onProgress) onProgress(p * 0.2);
+        }, forceRefresh);
         
-        // 결과 병합 및 캐시 저장
-        for (const [fileName, info] of Object.entries(groupResult)) {
-            allBranches[fileName] = info;
-            setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
-        }
+        // 2. fingerprint로 그룹핑
+        const groups = groupByFingerprint(fingerprints);
         
-        if (onProgress) {
-            onProgress(0.3 + (i + 1) / multiGroups.length * 0.4); // 30~70%
-        }
-    }
-    
-    // 5. 다른 fingerprint 그룹 간에도 교차 비교 (분기가 일찍 발생한 경우)
-    const allChatsFlat = Object.values(groups).flat();
-    if (allChatsFlat.length >= 2 && Object.keys(groups).length > 1) {
-        console.log('[BranchAnalyzer] Cross-group analysis for', allChatsFlat.length, 'chats');
-        const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
+        // 3. 2개 이상인 그룹 분석 (20~80%)
+        const multiGroups = Object.values(groups).filter(g => g.length >= 2);
+        console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
         
-        for (const [fileName, info] of Object.entries(crossResult)) {
-            // 기존 결과가 없거나, 새 결과가 더 긴 공통 prefix를 가지면 업데이트
-            if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
+        const allBranches = {};
+        for (let i = 0; i < multiGroups.length; i++) {
+            const group = multiGroups[i];
+            const groupResult = await analyzeGroup(charAvatar, group);
+            
+            for (const [fileName, info] of Object.entries(groupResult)) {
                 allBranches[fileName] = info;
                 setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
             }
+            
+            if (onProgress) {
+                onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.6); // 20~80%
+            }
         }
         
-        if (onProgress) onProgress(0.9);
+        // 4. 교차 비교 (80~95%) - 다른 그룹 간에도 비교
+        const allChatsFlat = Object.values(groups).flat();
+        if (allChatsFlat.length >= 2) {
+            // 아직 부모를 못 찾은 채팅들
+            const unmatched = allChatsFlat.filter(f => !allBranches[f.fileName]);
+            
+            if (unmatched.length >= 1 && allChatsFlat.length > unmatched.length) {
+                console.log('[BranchAnalyzer] Cross-group analysis for', unmatched.length, 'unmatched chats');
+                
+                // unmatched + 이미 매칭된 채팅들 전체와 비교
+                const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
+                
+                for (const [fileName, info] of Object.entries(crossResult)) {
+                    if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
+                        allBranches[fileName] = info;
+                        setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+                    }
+                }
+            }
+            
+            if (onProgress) onProgress(0.95);
+        }
+        
+        if (onProgress) onProgress(1);
+        console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
+        return allBranches;
+        
+    } finally {
+        // 분석 끝나면 메모리 해제
+        clearContentCache();
     }
-    
-    if (onProgress) onProgress(1);
-    console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
-    return allBranches;
 }
 
 /**
