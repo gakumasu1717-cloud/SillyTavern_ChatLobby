@@ -7,11 +7,8 @@ import { api } from '../api/sillyTavern.js';
 import {
     createFingerprint,
     findCommonPrefixLength,
-    getBranchInfo,
-    getFingerprint,
     setFingerprint,
     setBranchInfo,
-    getAllBranches,
     getAllFingerprints
 } from '../data/branchCache.js';
 
@@ -26,7 +23,6 @@ const chatContentCache = new Map();
  */
 function clearContentCache() {
     chatContentCache.clear();
-    console.log('[BranchAnalyzer] Content cache cleared');
 }
 
 /**
@@ -215,10 +211,8 @@ async function analyzeGroup(charAvatar, group) {
     
     // 부모 결정 방식 선택
     if (allHaveDates) {
-        console.log('[BranchAnalyzer] Using date-based analysis');
         return analyzeByDate(validFiles, dates, chatContents);
     } else {
-        console.log('[BranchAnalyzer] Using score-based analysis (some files have no date)');
         return analyzeByScore(validFiles, chatContents);
     }
 }
@@ -249,9 +243,10 @@ function analyzeByDate(group, dates, chatContents) {
             
             const common = findCommonPrefixLength(currentContent, candidateContent);
             
-            // 최소 공통 메시지 확인 & 현재가 분기점 이후 진행했는지
+            // 최소 공통 메시지 확인
+            // 현재 또는 후보 중 하나라도 분기점 이후 진행했으면 OK
             if (common >= MIN_COMMON_FOR_BRANCH && 
-                currentContent.length > common && 
+                (currentContent.length > common || candidateContent.length > common) &&
                 common > bestCommon) {
                 bestCommon = common;
                 bestParent = candidate.fileName;
@@ -264,7 +259,6 @@ function analyzeByDate(group, dates, chatContents) {
                 branchPoint: bestCommon,
                 depth: 1
             };
-            console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
         }
     }
     
@@ -315,7 +309,6 @@ function analyzeByScore(group, chatContents) {
                 branchPoint: bestCommon,
                 depth: 1
             };
-            console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
         }
     }
     

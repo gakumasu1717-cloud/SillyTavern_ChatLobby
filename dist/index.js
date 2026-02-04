@@ -2395,7 +2395,6 @@ ${message}` : message;
   var chatContentCache = /* @__PURE__ */ new Map();
   function clearContentCache() {
     chatContentCache.clear();
-    console.log("[BranchAnalyzer] Content cache cleared");
   }
   function extractDateFromFileName(fileName) {
     const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
@@ -2518,10 +2517,8 @@ ${message}` : message;
       }
     }
     if (allHaveDates) {
-      console.log("[BranchAnalyzer] Using date-based analysis");
       return analyzeByDate(validFiles, dates, chatContents);
     } else {
-      console.log("[BranchAnalyzer] Using score-based analysis (some files have no date)");
       return analyzeByScore(validFiles, chatContents);
     }
   }
@@ -2539,7 +2536,7 @@ ${message}` : message;
         const candidateContent = chatContents[candidate.fileName];
         if (!candidateContent) continue;
         const common = findCommonPrefixLength(currentContent, candidateContent);
-        if (common >= MIN_COMMON_FOR_BRANCH && currentContent.length > common && common > bestCommon) {
+        if (common >= MIN_COMMON_FOR_BRANCH && (currentContent.length > common || candidateContent.length > common) && common > bestCommon) {
           bestCommon = common;
           bestParent = candidate.fileName;
         }
@@ -2550,7 +2547,6 @@ ${message}` : message;
           branchPoint: bestCommon,
           depth: 1
         };
-        console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
       }
     }
     calculateDepths(result);
@@ -2584,7 +2580,6 @@ ${message}` : message;
           branchPoint: bestCommon,
           depth: 1
         };
-        console.log(`[BranchAnalyzer] ${current.fileName} branches from ${bestParent} at message ${bestCommon}`);
       }
     }
     calculateDepths(result);
