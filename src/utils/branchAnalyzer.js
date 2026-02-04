@@ -169,6 +169,15 @@ function groupByFingerprint(fingerprints) {
         groups[hash].push({ fileName, length: data.length });
     }
     
+    // 🔥 디버깅: 그룹별 채팅 목록 출력
+    console.log('[Grouping] Total groups:', Object.keys(groups).length);
+    for (const [hash, chats] of Object.entries(groups)) {
+        if (chats.length >= 2) {
+            console.log(`[Grouping] hash=${hash} (${chats.length}개):`, 
+                chats.map(c => `${c.fileName.substring(0, 30)}...(${c.length})`).join(', '));
+        }
+    }
+    
     return groups;
 }
 
@@ -227,6 +236,8 @@ function analyzeByDate(group, dates, chatContents) {
     // 날짜순 정렬 (오래된 순)
     const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
     
+    console.log('[analyzeByDate] Sorted order:', sorted.map(s => s.fileName.substring(0, 25)).join(' → '));
+    
     // 각 채팅에 대해 나보다 오래된 채팅 중 가장 가까운 부모 찾기
     for (let i = 1; i < sorted.length; i++) {
         const current = sorted[i];
@@ -236,37 +247,53 @@ function analyzeByDate(group, dates, chatContents) {
         let bestParent = null;
         let bestCommon = 0;
         
+        console.log(`[analyzeByDate] Checking: ${current.fileName.substring(0, 30)} (len=${currentContent.length})`);
+        
         // 나보다 오래된 채팅들만 검사
         for (let j = 0; j < i; j++) {
             const candidate = sorted[j];
             const candidateContent = chatContents[candidate.fileName];
             if (!candidateContent) continue;
             
+            console.log(`  vs ${candidate.fileName.substring(0, 30)} (len=${candidateContent.length})`);
+            
             const common = findCommonPrefixLength(currentContent, candidateContent);
             
             // 최소 공통 메시지 확인
-            if (common < MIN_COMMON_FOR_BRANCH) continue;
+            if (common < MIN_COMMON_FOR_BRANCH) {
+                console.log(`  ❌ common=${common} < MIN_COMMON=${MIN_COMMON_FOR_BRANCH}`);
+                continue;
+            }
             
             // 🔥 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
             const shorterLen = Math.min(currentContent.length, candidateContent.length);
             const ratio = common / shorterLen;
-            if (ratio < MIN_BRANCH_RATIO) continue;
+            if (ratio < MIN_BRANCH_RATIO) {
+                console.log(`  ❌ ratio=${(ratio*100).toFixed(1)}% < MIN_RATIO=${MIN_BRANCH_RATIO*100}%`);
+                continue;
+            }
             
             // 현재 또는 후보 중 하나라도 분기점 이후 진행했으면 OK
             if (currentContent.length > common || candidateContent.length > common) {
                 if (common > bestCommon) {
+                    console.log(`  ✅ Best so far: common=${common}, ratio=${(ratio*100).toFixed(1)}%`);
                     bestCommon = common;
                     bestParent = candidate.fileName;
                 }
+            } else {
+                console.log(`  ❌ No progress after branch point`);
             }
         }
         
         if (bestParent) {
+            console.log(`[analyzeByDate] ✅ BRANCH: ${current.fileName.substring(0, 25)} → ${bestParent.substring(0, 25)} @${bestCommon}`);
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommon,
                 depth: 1
             };
+        } else {
+            console.log(`[analyzeByDate] ⚪ No parent found for ${current.fileName.substring(0, 25)}`);
         }
     }
     

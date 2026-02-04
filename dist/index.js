@@ -2341,7 +2341,12 @@ ${message}` : message;
         combined += (msg.is_user ? "U" : "A") + ":" + msg.mes.substring(0, 100) + "|";
       }
     }
-    return hashString(combined);
+    const hash = hashString(combined);
+    const preview = messages.slice(0, 3).map(
+      (m, i) => `${i}:${m?.is_user ? "U" : "A"}:"${(m?.mes || "").substring(0, 30)}..."`
+    ).join(" | ");
+    console.log(`[Fingerprint] hash=${hash}, msgCount=${messages.length}, preview=[${preview}]`);
+    return hash;
   }
   function findCommonPrefixLength(chat1, chat2) {
     const minLen = Math.min(chat1.length, chat2.length);
@@ -2352,9 +2357,15 @@ ${message}` : message;
       if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
         commonLen++;
       } else {
+        console.log(
+          `[CommonPrefix] Diff at ${i}: `,
+          `[1] ${msg1?.is_user ? "U" : "A"}:"${(msg1?.mes || "").substring(0, 50)}..."`,
+          `[2] ${msg2?.is_user ? "U" : "A"}:"${(msg2?.mes || "").substring(0, 50)}..."`
+        );
         break;
       }
     }
+    console.log(`[CommonPrefix] Result: ${commonLen}/${minLen} (chat1=${chat1.length}, chat2=${chat2.length})`);
     return commonLen;
   }
   function setFingerprint(charAvatar, chatFileName, hash, length) {
@@ -2499,6 +2510,15 @@ ${message}` : message;
       }
       groups[hash].push({ fileName, length: data.length });
     }
+    console.log("[Grouping] Total groups:", Object.keys(groups).length);
+    for (const [hash, chats] of Object.entries(groups)) {
+      if (chats.length >= 2) {
+        console.log(
+          `[Grouping] hash=${hash} (${chats.length}\uAC1C):`,
+          chats.map((c) => `${c.fileName.substring(0, 30)}...(${c.length})`).join(", ")
+        );
+      }
+    }
     return groups;
   }
   async function analyzeGroup(charAvatar, group) {
@@ -2531,34 +2551,49 @@ ${message}` : message;
   function analyzeByDate(group, dates, chatContents) {
     const result = {};
     const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
+    console.log("[analyzeByDate] Sorted order:", sorted.map((s) => s.fileName.substring(0, 25)).join(" \u2192 "));
     for (let i = 1; i < sorted.length; i++) {
       const current = sorted[i];
       const currentContent = chatContents[current.fileName];
       if (!currentContent) continue;
       let bestParent = null;
       let bestCommon = 0;
+      console.log(`[analyzeByDate] Checking: ${current.fileName.substring(0, 30)} (len=${currentContent.length})`);
       for (let j = 0; j < i; j++) {
         const candidate = sorted[j];
         const candidateContent = chatContents[candidate.fileName];
         if (!candidateContent) continue;
+        console.log(`  vs ${candidate.fileName.substring(0, 30)} (len=${candidateContent.length})`);
         const common = findCommonPrefixLength(currentContent, candidateContent);
-        if (common < MIN_COMMON_FOR_BRANCH) continue;
+        if (common < MIN_COMMON_FOR_BRANCH) {
+          console.log(`  \u274C common=${common} < MIN_COMMON=${MIN_COMMON_FOR_BRANCH}`);
+          continue;
+        }
         const shorterLen = Math.min(currentContent.length, candidateContent.length);
         const ratio = common / shorterLen;
-        if (ratio < MIN_BRANCH_RATIO) continue;
+        if (ratio < MIN_BRANCH_RATIO) {
+          console.log(`  \u274C ratio=${(ratio * 100).toFixed(1)}% < MIN_RATIO=${MIN_BRANCH_RATIO * 100}%`);
+          continue;
+        }
         if (currentContent.length > common || candidateContent.length > common) {
           if (common > bestCommon) {
+            console.log(`  \u2705 Best so far: common=${common}, ratio=${(ratio * 100).toFixed(1)}%`);
             bestCommon = common;
             bestParent = candidate.fileName;
           }
+        } else {
+          console.log(`  \u274C No progress after branch point`);
         }
       }
       if (bestParent) {
+        console.log(`[analyzeByDate] \u2705 BRANCH: ${current.fileName.substring(0, 25)} \u2192 ${bestParent.substring(0, 25)} @${bestCommon}`);
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
           depth: 1
         };
+      } else {
+        console.log(`[analyzeByDate] \u26AA No parent found for ${current.fileName.substring(0, 25)}`);
       }
     }
     calculateDepths(result);

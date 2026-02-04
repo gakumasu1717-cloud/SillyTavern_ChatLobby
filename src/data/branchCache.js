@@ -103,8 +103,15 @@ function createFingerprint(messages) {
         }
     }
     
-    // 해시만 반환 (length 제거 - 분기 채팅도 같은 그룹으로 묶이도록)
-    return hashString(combined);
+    const hash = hashString(combined);
+    
+    // 🔥 디버깅: 앞 3개 메시지 미리보기
+    const preview = messages.slice(0, 3).map((m, i) => 
+        `${i}:${m?.is_user ? 'U' : 'A'}:"${(m?.mes || '').substring(0, 30)}..."`
+    ).join(' | ');
+    console.log(`[Fingerprint] hash=${hash}, msgCount=${messages.length}, preview=[${preview}]`);
+    
+    return hash;
 }
 
 /**
@@ -125,10 +132,16 @@ function findCommonPrefixLength(chat1, chat2) {
         if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
             commonLen++;
         } else {
+            // 🔥 디버깅: 처음 다른 지점 출력
+            console.log(`[CommonPrefix] Diff at ${i}: `, 
+                `[1] ${msg1?.is_user ? 'U' : 'A'}:"${(msg1?.mes || '').substring(0, 50)}..."`,
+                `[2] ${msg2?.is_user ? 'U' : 'A'}:"${(msg2?.mes || '').substring(0, 50)}..."`
+            );
             break;
         }
     }
     
+    console.log(`[CommonPrefix] Result: ${commonLen}/${minLen} (chat1=${chat1.length}, chat2=${chat2.length})`);
     return commonLen;
 }
 
