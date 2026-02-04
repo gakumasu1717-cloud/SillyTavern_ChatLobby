@@ -13,8 +13,8 @@ import {
 } from '../data/branchCache.js';
 
 // 분기 판정 상수
-const MIN_COMMON_FOR_BRANCH = 3;  // 최소 3개 메시지 (그리팅 + 1번 왕복)
-const MIN_BRANCH_RATIO = 0.1;     // 최소 분기점 비율 (짧은 쪽의 10% 이상이 공통이어야 분기로 인정)
+const MIN_COMMON_FOR_BRANCH = 10;  // 최소 10개 메시지 공통이어야 분기로 인정
+const MIN_BRANCH_RATIO = 0.3;      // 짧은 쪽의 30% 이상이 공통이어야 분기로 인정
 
 // 채팅 내용 캐시 (중복 로드 방지)
 const chatContentCache = new Map();
@@ -358,6 +358,7 @@ function calculateDepths(result) {
 
 /**
  * 캐릭터의 전체 브랜치 구조 분석
+ * fingerprint 그룹핑 없이 전체 채팅을 직접 비교
  * @param {string} charAvatar
  * @param {Array} chats
  * @param {Function} onProgress
@@ -365,49 +366,115 @@ function calculateDepths(result) {
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
  */
 export async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
-    console.log('[BranchAnalyzer] Starting analysis for', charAvatar, 'forceRefresh:', forceRefresh);
+    console.log('[BranchAnalyzer] Starting analysis for', charAvatar, 'forceRefresh:', forceRefresh, 'chats:', chats.length);
+    
+    if (chats.length < 2) {
+        console.log('[BranchAnalyzer] Not enough chats to analyze');
+        return {};
+    }
     
     try {
-        // 1. fingerprint 생성/업데이트 (0~20%)
-        const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
-            if (onProgress) onProgress(p * 0.2);
-        }, forceRefresh);
+        // 1. 모든 채팅 내용 로드 (0~50%)
+        const chatContents = {};
+        const validChats = [];
         
-        // 2. fingerprint로 그룹핑
-        const groups = groupByFingerprint(fingerprints);
-        
-        // 3. 2개 이상인 그룹 분석 (20~80%)
-        const multiGroups = Object.values(groups).filter(g => g.length >= 2);
-        console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with potential branches`);
-        
-        const allBranches = {};
-        for (let i = 0; i < multiGroups.length; i++) {
-            const group = multiGroups[i];
-            const groupResult = await analyzeGroup(charAvatar, group);
+        for (let i = 0; i < chats.length; i++) {
+            const chat = chats[i];
+            const fn = chat.file_name || '';
+            const content = await loadChatContent(charAvatar, fn);
             
-            for (const [fileName, info] of Object.entries(groupResult)) {
-                allBranches[fileName] = info;
-                setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+            if (content && content.length >= MIN_COMMON_FOR_BRANCH) {
+                chatContents[fn] = content;
+                validChats.push({
+                    fileName: fn,
+                    length: content.length,
+                    date: extractDateFromFileName(fn)
+                });
             }
             
             if (onProgress) {
-                onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.6); // 20~80%
+                onProgress((i + 1) / chats.length * 0.5);
             }
         }
         
-        // 4. 교차 비교 제거됨
-        // fingerprint가 다른 채팅끼리는 분기 관계가 아님
-        // (처음 10개 메시지가 다르면 분기가 아닌 별개 채팅)
-        // 기존 교차 비교는 그리팅만 같은 무관한 채팅을 부모로 잘못 판정하는 문제 발생
+        console.log('[BranchAnalyzer] Loaded', validChats.length, 'valid chats (min length:', MIN_COMMON_FOR_BRANCH, ')');
         
-        if (onProgress) onProgress(0.95);
+        if (validChats.length < 2) {
+            console.log('[BranchAnalyzer] Not enough valid chats');
+            return {};
+        }
+        
+        // 2. 날짜순 정렬 (날짜 없으면 길이순)
+        const allHaveDates = validChats.every(c => c.date !== null);
+        
+        if (allHaveDates) {
+            validChats.sort((a, b) => a.date - b.date);
+        } else {
+            // 날짜 없으면 길이순 (짧은 게 먼저 = 부모 후보)
+            validChats.sort((a, b) => a.length - b.length);
+        }
+        
+        // 3. 분기 분석 (50~95%)
+        const allBranches = {};
+        
+        for (let i = 1; i < validChats.length; i++) {
+            const current = validChats[i];
+            const currentContent = chatContents[current.fileName];
+            
+            let bestParent = null;
+            let bestCommon = 0;
+            
+            // 이전 채팅들과 비교 (정렬 기준으로 이전 = 부모 후보)
+            for (let j = 0; j < i; j++) {
+                const candidate = validChats[j];
+                const candidateContent = chatContents[candidate.fileName];
+                
+                const common = findCommonPrefixLength(currentContent, candidateContent);
+                
+                // 분기 조건 체크
+                if (common < MIN_COMMON_FOR_BRANCH) continue;
+                
+                const shorterLen = Math.min(currentContent.length, candidateContent.length);
+                const ratio = common / shorterLen;
+                if (ratio < MIN_BRANCH_RATIO) continue;
+                
+                // 분기점 이후 진행했는지 체크
+                if (currentContent.length <= common && candidateContent.length <= common) continue;
+                
+                // 가장 긴 공통 prefix를 가진 부모 선택
+                if (common > bestCommon) {
+                    bestCommon = common;
+                    bestParent = candidate.fileName;
+                }
+            }
+            
+            if (bestParent) {
+                allBranches[current.fileName] = {
+                    parentChat: bestParent,
+                    branchPoint: bestCommon,
+                    depth: 1
+                };
+                setBranchInfo(charAvatar, current.fileName, bestParent, bestCommon, 1);
+                
+                console.log('[BranchAnalyzer] Branch found:', current.fileName, 
+                    '→ parent:', bestParent, 
+                    'common:', bestCommon, 
+                    'ratio:', (bestCommon / Math.min(currentContent.length, chatContents[bestParent].length) * 100).toFixed(1) + '%');
+            }
+            
+            if (onProgress) {
+                onProgress(0.5 + (i / validChats.length) * 0.45);
+            }
+        }
+        
+        // depth 계산
+        calculateDepths(allBranches);
         
         if (onProgress) onProgress(1);
         console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
         return allBranches;
         
     } finally {
-        // 분석 끝나면 메모리 해제
         clearContentCache();
     }
 }
