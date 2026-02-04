@@ -2329,7 +2329,7 @@ ${message}` : message;
     }
     return hash.toString(36);
   }
-  function createFingerprint(messages) {
+  function createFingerprint(messages, fileName = "unknown") {
     if (!messages || messages.length === 0) {
       return "empty";
     }
@@ -2345,7 +2345,7 @@ ${message}` : message;
     const preview = messages.slice(0, 3).map(
       (m, i) => `${i}:${m?.is_user ? "U" : "A"}:"${(m?.mes || "").substring(0, 30)}..."`
     ).join(" | ");
-    console.log(`[Fingerprint] hash=${hash}, msgCount=${messages.length}, preview=[${preview}]`);
+    console.log(`[FP] \u{1F4C1}${fileName} \u2192 hash=${hash}, len=${messages.length}, [${preview}]`);
     return hash;
   }
   function findCommonPrefixLength(chat1, chat2) {
@@ -2437,12 +2437,10 @@ ${message}` : message;
   }
   async function loadChatContent(charAvatar, fileName) {
     const cacheKey = `${charAvatar}:${fileName}`;
-    if (chatContentCache.has(cacheKey)) {
-      return chatContentCache.get(cacheKey);
-    }
     try {
       const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
       const chatName = fileName.replace(".jsonl", "");
+      console.log(`[LoadChat] Loading: ${fileName} (charDir=${charDir}, chatName=${chatName})`);
       const response = await fetch("/api/chats/get", {
         method: "POST",
         headers: api.getRequestHeaders(),
@@ -2453,6 +2451,7 @@ ${message}` : message;
         })
       });
       if (!response.ok) {
+        console.log(`[LoadChat] FAILED: ${fileName} - status ${response.status}`);
         chatContentCache.set(cacheKey, null);
         return null;
       }
@@ -2463,6 +2462,9 @@ ${message}` : message;
       } else {
         content = data;
       }
+      const firstMsg = content?.[0];
+      const secondMsg = content?.[1];
+      console.log(`[LoadChat] OK: ${fileName} -> ${content?.length || 0} msgs, first="${(firstMsg?.mes || "").substring(0, 50)}...", second="${(secondMsg?.mes || "").substring(0, 50)}..."`);
       chatContentCache.set(cacheKey, content);
       return content;
     } catch (e) {
@@ -2488,7 +2490,7 @@ ${message}` : message;
         const fn = chat.file_name || "";
         const content = await loadChatContent(charAvatar, fn);
         if (content && content.length > 0) {
-          const hash = createFingerprint(content);
+          const hash = createFingerprint(content, fn);
           const length = content.length;
           setFingerprint(charAvatar, fn, hash, length);
           result[fn] = { hash, length };

@@ -57,14 +57,16 @@ function extractDateFromFileName(fileName) {
 async function loadChatContent(charAvatar, fileName) {
     const cacheKey = `${charAvatar}:${fileName}`;
     
-    // 캐시에 있으면 반환
-    if (chatContentCache.has(cacheKey)) {
-        return chatContentCache.get(cacheKey);
-    }
+    // 🔥 디버깅: 캐시 일시 비활성화
+    // if (chatContentCache.has(cacheKey)) {
+    //     return chatContentCache.get(cacheKey);
+    // }
     
     try {
         const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
         const chatName = fileName.replace('.jsonl', '');
+        
+        console.log(`[LoadChat] Loading: ${fileName} (charDir=${charDir}, chatName=${chatName})`);
         
         const response = await fetch('/api/chats/get', {
             method: 'POST',
@@ -77,6 +79,7 @@ async function loadChatContent(charAvatar, fileName) {
         });
         
         if (!response.ok) {
+            console.log(`[LoadChat] FAILED: ${fileName} - status ${response.status}`);
             chatContentCache.set(cacheKey, null);
             return null;
         }
@@ -90,6 +93,11 @@ async function loadChatContent(charAvatar, fileName) {
         } else {
             content = data;
         }
+        
+        // 🔥 디버깅: 로드된 데이터 확인
+        const firstMsg = content?.[0];
+        const secondMsg = content?.[1];
+        console.log(`[LoadChat] OK: ${fileName} -> ${content?.length || 0} msgs, first="${(firstMsg?.mes || '').substring(0, 50)}...", second="${(secondMsg?.mes || '').substring(0, 50)}..."`);
         
         // 캐시에 저장
         chatContentCache.set(cacheKey, content);
@@ -134,7 +142,7 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
             const content = await loadChatContent(charAvatar, fn);
             
             if (content && content.length > 0) {
-                const hash = createFingerprint(content);
+                const hash = createFingerprint(content, fn);
                 const length = content.length;
                 
                 setFingerprint(charAvatar, fn, hash, length);

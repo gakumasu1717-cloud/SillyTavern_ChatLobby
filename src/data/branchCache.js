@@ -85,9 +85,10 @@ function hashString(str) {
  * 앞 N개 메시지로 해시 생성 → 빠른 그룹핑용
  * 일찍 분기한 채팅은 교차 비교에서 잡힘
  * @param {Array} messages - 채팅 메시지 배열
+ * @param {string} fileName - 파일명 (디버깅용)
  * @returns {string}
  */
-function createFingerprint(messages) {
+function createFingerprint(messages, fileName = 'unknown') {
     if (!messages || messages.length === 0) {
         return 'empty';
     }
@@ -105,11 +106,11 @@ function createFingerprint(messages) {
     
     const hash = hashString(combined);
     
-    // 🔥 디버깅: 앞 3개 메시지 미리보기
+    // 🔥 디버깅: 파일명 + 앞 3개 메시지 미리보기
     const preview = messages.slice(0, 3).map((m, i) => 
         `${i}:${m?.is_user ? 'U' : 'A'}:"${(m?.mes || '').substring(0, 30)}..."`
     ).join(' | ');
-    console.log(`[Fingerprint] hash=${hash}, msgCount=${messages.length}, preview=[${preview}]`);
+    console.log(`[FP] 📁${fileName} → hash=${hash}, len=${messages.length}, [${preview}]`);
     
     return hash;
 }
