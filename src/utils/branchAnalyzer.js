@@ -382,23 +382,12 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
             }
         }
         
-        // 4. 교차 비교 (80~95%) - 다른 그룹 간에도 비교
-        const allChatsFlat = Object.values(groups).flat();
-        if (allChatsFlat.length >= 2) {
-            console.log('[BranchAnalyzer] Cross-group analysis for', allChatsFlat.length, 'chats');
-            
-            const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
-            
-            for (const [fileName, info] of Object.entries(crossResult)) {
-                // 기존 결과가 없거나, 새 결과가 더 긴 공통 prefix를 가지면 업데이트
-                if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
-                    allBranches[fileName] = info;
-                    setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
-                }
-            }
-            
-            if (onProgress) onProgress(0.95);
-        }
+        // 4. 교차 비교 제거됨
+        // fingerprint가 다른 채팅끼리는 분기 관계가 아님
+        // (처음 10개 메시지가 다르면 분기가 아닌 별개 채팅)
+        // 기존 교차 비교는 그리팅만 같은 무관한 채팅을 부모로 잘못 판정하는 문제 발생
+        
+        if (onProgress) onProgress(0.95);
         
         if (onProgress) onProgress(1);
         console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');

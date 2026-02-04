@@ -2626,18 +2626,7 @@ ${message}` : message;
           onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.6);
         }
       }
-      const allChatsFlat = Object.values(groups).flat();
-      if (allChatsFlat.length >= 2) {
-        console.log("[BranchAnalyzer] Cross-group analysis for", allChatsFlat.length, "chats");
-        const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
-        for (const [fileName, info] of Object.entries(crossResult)) {
-          if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
-            allBranches[fileName] = info;
-            setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
-          }
-        }
-        if (onProgress) onProgress(0.95);
-      }
+      if (onProgress) onProgress(0.95);
       if (onProgress) onProgress(1);
       console.log("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");
       return allBranches;
