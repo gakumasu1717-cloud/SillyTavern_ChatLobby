@@ -308,57 +308,59 @@ class SillyTavernAPI {
             return cache.get('chats', characterAvatar);
         }
         
-        // 중복 요청 방지
-        const cacheKey = `chats_${characterAvatar}`;
-        return cache.getOrFetch(cacheKey, async () => {
-            try {
-                const response = await this.fetchWithRetry('/api/characters/chats', {
-                    method: 'POST',
-                    headers: this.getRequestHeaders(),
-                    body: JSON.stringify({
-                        avatar_url: characterAvatar,
-                        simple: false
-                    }),
-                });
-                
-                if (!response.ok) {
-                    console.error('[API] HTTP error:', response.status);
-                    return [];
-                }
-                
-                const data = await response.json();
-                if (data?.error === true) return [];
-                
-                // API 응답이 객체(숫자 키) 또는 배열일 수 있음
-                let result;
-                if (Array.isArray(data)) {
-                    result = data;
-                } else if (data && typeof data === 'object') {
-                    // 객체인 경우 배열로 변환 (SillyTavern 형식)
-                    result = Object.values(data);
-                } else {
-                    result = [];
-                }
-                
-                // 캐시 저장 (키 형식 통일: chats, characterAvatar)
-                cache.set('chats', result, characterAvatar);
-                
-                // 채팅 수 캐시
-                const count = result.length;
-                cache.set('chatCounts', count, characterAvatar);
-                
-                // 메시지 수 합계 (chat_items 합산)
-                const messageCount = result.reduce((sum, chat) => {
-                    return sum + (chat.chat_items || 0);
-                }, 0);
-                cache.set('messageCounts', messageCount, characterAvatar);
-                
-                return result;
-            } catch (error) {
-                console.error('[API] Failed to load chats:', error);
+        // forceRefresh면 캐시 무효화
+        if (forceRefresh) {
+            cache.invalidate('chats', characterAvatar);
+        }
+        
+        // 직접 API 호출 (중복 요청 방지 없이)
+        try {
+            const response = await this.fetchWithRetry('/api/characters/chats', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                    avatar_url: characterAvatar,
+                    simple: false
+                }),
+            });
+            
+            if (!response.ok) {
+                console.error('[API] HTTP error:', response.status);
                 return [];
             }
-        });
+            
+            const data = await response.json();
+            if (data?.error === true) return [];
+            
+            // API 응답이 객체(숫자 키) 또는 배열일 수 있음
+            let result;
+            if (Array.isArray(data)) {
+                result = data;
+            } else if (data && typeof data === 'object') {
+                // 객체인 경우 배열로 변환 (SillyTavern 형식)
+                result = Object.values(data);
+            } else {
+                result = [];
+            }
+            
+            // 캐시 저장
+            cache.set('chats', result, characterAvatar);
+            
+            // 채팅 수 캐시
+            const count = result.length;
+            cache.set('chatCounts', count, characterAvatar);
+            
+            // 메시지 수 합계 (chat_items 합산)
+            const messageCount = result.reduce((sum, chat) => {
+                return sum + (chat.chat_items || 0);
+            }, 0);
+            cache.set('messageCounts', messageCount, characterAvatar);
+            
+            return result;
+        } catch (error) {
+            console.error('[API] Failed to load chats:', error);
+            return [];
+        }
     }
     
     /**

@@ -1356,44 +1356,44 @@ ${message}` : message;
       if (!forceRefresh && cache.isValid("chats", characterAvatar)) {
         return cache.get("chats", characterAvatar);
       }
-      const cacheKey = `chats_${characterAvatar}`;
-      return cache.getOrFetch(cacheKey, async () => {
-        try {
-          const response = await this.fetchWithRetry("/api/characters/chats", {
-            method: "POST",
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({
-              avatar_url: characterAvatar,
-              simple: false
-            })
-          });
-          if (!response.ok) {
-            console.error("[API] HTTP error:", response.status);
-            return [];
-          }
-          const data = await response.json();
-          if (data?.error === true) return [];
-          let result;
-          if (Array.isArray(data)) {
-            result = data;
-          } else if (data && typeof data === "object") {
-            result = Object.values(data);
-          } else {
-            result = [];
-          }
-          cache.set("chats", result, characterAvatar);
-          const count = result.length;
-          cache.set("chatCounts", count, characterAvatar);
-          const messageCount = result.reduce((sum, chat) => {
-            return sum + (chat.chat_items || 0);
-          }, 0);
-          cache.set("messageCounts", messageCount, characterAvatar);
-          return result;
-        } catch (error) {
-          console.error("[API] Failed to load chats:", error);
+      if (forceRefresh) {
+        cache.invalidate("chats", characterAvatar);
+      }
+      try {
+        const response = await this.fetchWithRetry("/api/characters/chats", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body: JSON.stringify({
+            avatar_url: characterAvatar,
+            simple: false
+          })
+        });
+        if (!response.ok) {
+          console.error("[API] HTTP error:", response.status);
           return [];
         }
-      });
+        const data = await response.json();
+        if (data?.error === true) return [];
+        let result;
+        if (Array.isArray(data)) {
+          result = data;
+        } else if (data && typeof data === "object") {
+          result = Object.values(data);
+        } else {
+          result = [];
+        }
+        cache.set("chats", result, characterAvatar);
+        const count = result.length;
+        cache.set("chatCounts", count, characterAvatar);
+        const messageCount = result.reduce((sum, chat) => {
+          return sum + (chat.chat_items || 0);
+        }, 0);
+        cache.set("messageCounts", messageCount, characterAvatar);
+        return result;
+      } catch (error) {
+        console.error("[API] Failed to load chats:", error);
+        return [];
+      }
     }
     /**
      * 채팅 생성일 가져오기 (첫 메시지의 send_date)
