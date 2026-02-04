@@ -67,17 +67,26 @@ function saveCache() {
 }
 
 /**
- * 문자열 해시 (djb2 알고리즘 - 빠르고 충돌 적음)
+ * 문자열 해시 (64비트 해시 - 충돌 방지)
  * @param {string} str
  * @returns {string}
  */
 function hashString(str) {
-    let hash = 5381;
+    // 두 개의 32비트 해시 조합 (충돌 확률 대폭 감소)
+    let h1 = 5381;
+    let h2 = 52711;
+    
     for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) + hash) + str.charCodeAt(i);
-        hash = hash & hash; // Convert to 32bit integer
+        const ch = str.charCodeAt(i);
+        h1 = ((h1 << 5) + h1) ^ ch;
+        h2 = ((h2 << 5) + h2) ^ ch;
+        h1 = h1 & h1;
+        h2 = h2 & h2;
     }
-    return hash.toString(36);
+    
+    // 두 해시를 조합해서 더 긴 해시 생성
+    const combined = (h1 >>> 0).toString(36) + '-' + (h2 >>> 0).toString(36);
+    return combined;
 }
 
 /**

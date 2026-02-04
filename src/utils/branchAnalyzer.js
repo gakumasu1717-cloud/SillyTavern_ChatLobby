@@ -28,12 +28,15 @@ function clearContentCache() {
 
 /**
  * 파일명에서 날짜 추출
- * 패턴: "대화 - 2026-01-29@18h40m17s788ms.jsonl"
+ * 패턴1: "대화 - 2026-01-29@18h40m17s788ms.jsonl" (밀리초 포함)
+ * 패턴2: "Branch #333 - 2026-01-26@01h29m56s.jsonl" (밀리초 없음)
+ * 패턴3: "백도진 - 2026-1-23 @04h 07m 56s 422ms imported.jsonl" (공백 포함, imported)
  * @param {string} fileName
  * @returns {number|null} - timestamp 또는 null
  */
 function extractDateFromFileName(fileName) {
-    const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
+    // 패턴1: 밀리초 포함 (공백 없는 표준 형식)
+    let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
     if (match) {
         return new Date(
             parseInt(match[1]),      // 년
@@ -45,6 +48,35 @@ function extractDateFromFileName(fileName) {
             parseInt(match[7])       // 밀리초
         ).getTime();
     }
+    
+    // 패턴2: 밀리초 없는 패턴 (Branch 파일 등)
+    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s/);
+    if (match) {
+        return new Date(
+            parseInt(match[1]),      // 년
+            parseInt(match[2]) - 1,  // 월 (0부터 시작)
+            parseInt(match[3]),      // 일
+            parseInt(match[4]),      // 시
+            parseInt(match[5]),      // 분
+            parseInt(match[6]),      // 초
+            0                        // 밀리초 (없으면 0)
+        ).getTime();
+    }
+    
+    // 패턴3: imported 파일 (공백 포함) - "2026-1-23 @04h 07m 56s 422ms"
+    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s\s*(\d+)ms/);
+    if (match) {
+        return new Date(
+            parseInt(match[1]),      // 년
+            parseInt(match[2]) - 1,  // 월 (0부터 시작)
+            parseInt(match[3]),      // 일
+            parseInt(match[4]),      // 시
+            parseInt(match[5]),      // 분
+            parseInt(match[6]),      // 초
+            parseInt(match[7])       // 밀리초
+        ).getTime();
+    }
+    
     return null;
 }
 
@@ -217,6 +249,7 @@ async function analyzeGroup(charAvatar, group) {
     // 날짜 파싱 시도
     const dates = {};
     let allHaveDates = true;
+    const failedDates = [];
     
     for (const item of validFiles) {
         const date = extractDateFromFileName(item.fileName);
@@ -224,13 +257,22 @@ async function analyzeGroup(charAvatar, group) {
             dates[item.fileName] = date;
         } else {
             allHaveDates = false;
+            failedDates.push(item.fileName);
         }
+    }
+    
+    // 🔥 디버깅: 날짜 파싱 결과
+    console.log(`[analyzeGroup] Date parsing: ${Object.keys(dates).length}/${validFiles.length} success, allHaveDates=${allHaveDates}`);
+    if (failedDates.length > 0) {
+        console.log('[analyzeGroup] Failed date parsing:', failedDates.map(f => f.substring(0, 40)).join(', '));
     }
     
     // 부모 결정 방식 선택
     if (allHaveDates) {
+        console.log('[analyzeGroup] Using DATE-based analysis');
         return analyzeByDate(validFiles, dates, chatContents);
     } else {
+        console.log('[analyzeGroup] Using SCORE-based analysis (some dates missing)');
         return analyzeByScore(validFiles, chatContents);
     }
 }
