@@ -2297,6 +2297,7 @@ ${message}` : message;
 
   // src/data/branchCache.js
   var STORAGE_KEY2 = "chatLobby_branchCache";
+  var FINGERPRINT_MESSAGE_COUNT = 10;
   var cacheData = null;
   function loadCache() {
     if (cacheData) return cacheData;
@@ -2332,11 +2333,15 @@ ${message}` : message;
     if (!messages || messages.length === 0) {
       return "empty_0";
     }
-    const firstMsg = messages[0];
-    if (firstMsg && firstMsg.mes) {
-      return hashString((firstMsg.is_user ? "U" : "A") + ":" + firstMsg.mes.substring(0, 200));
+    const targetCount = Math.min(FINGERPRINT_MESSAGE_COUNT, messages.length);
+    let combined = "";
+    for (let i = 0; i < targetCount; i++) {
+      const msg = messages[i];
+      if (msg && msg.mes) {
+        combined += (msg.is_user ? "U" : "A") + ":" + msg.mes.substring(0, 100) + "|";
+      }
     }
-    return "empty_" + messages.length;
+    return hashString(combined) + "_" + messages.length;
   }
   function findCommonPrefixLength(chat1, chat2) {
     const minLen = Math.min(chat1.length, chat2.length);
