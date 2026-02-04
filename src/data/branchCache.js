@@ -267,6 +267,16 @@ export function clearCharacterCache(charAvatar) {
     const cache = loadCache();
     delete cache.characters[charAvatar];
     saveCache();
+    console.log('[BranchCache] Cleared cache for:', charAvatar);
+}
+
+/**
+ * 전체 캐시 초기화 (모든 캐릭터)
+ */
+export function clearAllCache() {
+    cacheData = { version: 1, characters: {} };
+    saveCache();
+    console.log('[BranchCache] Cleared ALL cache');
 }
 
 // Export utilities

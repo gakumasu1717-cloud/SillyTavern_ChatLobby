@@ -2322,12 +2322,17 @@ ${message}` : message;
     }
   }
   function hashString(str) {
-    let hash = 5381;
+    let h1 = 5381;
+    let h2 = 52711;
     for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) + hash + str.charCodeAt(i);
-      hash = hash & hash;
+      const ch = str.charCodeAt(i);
+      h1 = (h1 << 5) + h1 ^ ch;
+      h2 = (h2 << 5) + h2 ^ ch;
+      h1 = h1 & h1;
+      h2 = h2 & h2;
     }
-    return hash.toString(36);
+    const combined = (h1 >>> 0).toString(36) + "-" + (h2 >>> 0).toString(36);
+    return combined;
   }
   function createFingerprint(messages, fileName = "unknown") {
     if (!messages || messages.length === 0) {
@@ -2404,6 +2409,7 @@ ${message}` : message;
     const cache2 = loadCache();
     delete cache2.characters[charAvatar];
     saveCache();
+    console.log("[BranchCache] Cleared cache for:", charAvatar);
   }
 
   // src/utils/branchAnalyzer.js
@@ -2414,7 +2420,45 @@ ${message}` : message;
     chatContentCache.clear();
   }
   function extractDateFromFileName(fileName) {
-    const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
+    let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
+    if (match) {
+      return new Date(
+        parseInt(match[1]),
+        // 년
+        parseInt(match[2]) - 1,
+        // 월 (0부터 시작)
+        parseInt(match[3]),
+        // 일
+        parseInt(match[4]),
+        // 시
+        parseInt(match[5]),
+        // 분
+        parseInt(match[6]),
+        // 초
+        parseInt(match[7])
+        // 밀리초
+      ).getTime();
+    }
+    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s/);
+    if (match) {
+      return new Date(
+        parseInt(match[1]),
+        // 년
+        parseInt(match[2]) - 1,
+        // 월 (0부터 시작)
+        parseInt(match[3]),
+        // 일
+        parseInt(match[4]),
+        // 시
+        parseInt(match[5]),
+        // 분
+        parseInt(match[6]),
+        // 초
+        0
+        // 밀리초 (없으면 0)
+      ).getTime();
+    }
+    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s\s*(\d+)ms/);
     if (match) {
       return new Date(
         parseInt(match[1]),
@@ -2536,17 +2580,25 @@ ${message}` : message;
     if (validFiles.length < 2) return {};
     const dates = {};
     let allHaveDates = true;
+    const failedDates = [];
     for (const item of validFiles) {
       const date = extractDateFromFileName(item.fileName);
       if (date) {
         dates[item.fileName] = date;
       } else {
         allHaveDates = false;
+        failedDates.push(item.fileName);
       }
     }
+    console.log(`[analyzeGroup] Date parsing: ${Object.keys(dates).length}/${validFiles.length} success, allHaveDates=${allHaveDates}`);
+    if (failedDates.length > 0) {
+      console.log("[analyzeGroup] Failed date parsing:", failedDates.map((f) => f.substring(0, 40)).join(", "));
+    }
     if (allHaveDates) {
+      console.log("[analyzeGroup] Using DATE-based analysis");
       return analyzeByDate(validFiles, dates, chatContents);
     } else {
+      console.log("[analyzeGroup] Using SCORE-based analysis (some dates missing)");
       return analyzeByScore(validFiles, chatContents);
     }
   }
