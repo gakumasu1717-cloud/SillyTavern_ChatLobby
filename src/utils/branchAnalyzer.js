@@ -385,20 +385,15 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         // 4. 교차 비교 (80~95%) - 다른 그룹 간에도 비교
         const allChatsFlat = Object.values(groups).flat();
         if (allChatsFlat.length >= 2) {
-            // 아직 부모를 못 찾은 채팅들
-            const unmatched = allChatsFlat.filter(f => !allBranches[f.fileName]);
+            console.log('[BranchAnalyzer] Cross-group analysis for', allChatsFlat.length, 'chats');
             
-            if (unmatched.length >= 1 && allChatsFlat.length > unmatched.length) {
-                console.log('[BranchAnalyzer] Cross-group analysis for', unmatched.length, 'unmatched chats');
-                
-                // unmatched + 이미 매칭된 채팅들 전체와 비교
-                const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
-                
-                for (const [fileName, info] of Object.entries(crossResult)) {
-                    if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
-                        allBranches[fileName] = info;
-                        setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
-                    }
+            const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
+            
+            for (const [fileName, info] of Object.entries(crossResult)) {
+                // 기존 결과가 없거나, 새 결과가 더 긴 공통 prefix를 가지면 업데이트
+                if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
+                    allBranches[fileName] = info;
+                    setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
                 }
             }
             

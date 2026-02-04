@@ -2331,7 +2331,7 @@ ${message}` : message;
   }
   function createFingerprint(messages) {
     if (!messages || messages.length === 0) {
-      return "empty_0";
+      return "empty";
     }
     const targetCount = Math.min(FINGERPRINT_MESSAGE_COUNT, messages.length);
     let combined = "";
@@ -2341,15 +2341,15 @@ ${message}` : message;
         combined += (msg.is_user ? "U" : "A") + ":" + msg.mes.substring(0, 100) + "|";
       }
     }
-    return hashString(combined) + "_" + messages.length;
+    return hashString(combined);
   }
   function findCommonPrefixLength(chat1, chat2) {
     const minLen = Math.min(chat1.length, chat2.length);
     let commonLen = 0;
     for (let i = 0; i < minLen; i++) {
-      const msg1 = chat1[i]?.mes || "";
-      const msg2 = chat2[i]?.mes || "";
-      if (msg1 === msg2) {
+      const msg1 = chat1[i];
+      const msg2 = chat2[i];
+      if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
         commonLen++;
       } else {
         break;
@@ -2628,15 +2628,12 @@ ${message}` : message;
       }
       const allChatsFlat = Object.values(groups).flat();
       if (allChatsFlat.length >= 2) {
-        const unmatched = allChatsFlat.filter((f) => !allBranches[f.fileName]);
-        if (unmatched.length >= 1 && allChatsFlat.length > unmatched.length) {
-          console.log("[BranchAnalyzer] Cross-group analysis for", unmatched.length, "unmatched chats");
-          const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
-          for (const [fileName, info] of Object.entries(crossResult)) {
-            if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
-              allBranches[fileName] = info;
-              setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
-            }
+        console.log("[BranchAnalyzer] Cross-group analysis for", allChatsFlat.length, "chats");
+        const crossResult = await analyzeGroup(charAvatar, allChatsFlat);
+        for (const [fileName, info] of Object.entries(crossResult)) {
+          if (!allBranches[fileName] || info.branchPoint > allBranches[fileName].branchPoint) {
+            allBranches[fileName] = info;
+            setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
           }
         }
         if (onProgress) onProgress(0.95);

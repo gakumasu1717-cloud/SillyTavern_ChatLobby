@@ -89,7 +89,7 @@ function hashString(str) {
  */
 function createFingerprint(messages) {
     if (!messages || messages.length === 0) {
-        return 'empty_0';
+        return 'empty';
     }
     
     // 앞 N개 메시지로 해시 생성
@@ -103,8 +103,8 @@ function createFingerprint(messages) {
         }
     }
     
-    // 해시 + 메시지 수 (길이 다르면 다른 fingerprint)
-    return hashString(combined) + '_' + messages.length;
+    // 해시만 반환 (length 제거 - 분기 채팅도 같은 그룹으로 묶이도록)
+    return hashString(combined);
 }
 
 /**
@@ -118,10 +118,11 @@ function findCommonPrefixLength(chat1, chat2) {
     let commonLen = 0;
     
     for (let i = 0; i < minLen; i++) {
-        const msg1 = chat1[i]?.mes || '';
-        const msg2 = chat2[i]?.mes || '';
+        const msg1 = chat1[i];
+        const msg2 = chat2[i];
         
-        if (msg1 === msg2) {
+        // 내용 + 발신자 둘 다 체크
+        if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
             commonLen++;
         } else {
             break;
