@@ -2572,6 +2572,7 @@ ${message}` : message;
         const common = findCommonPrefixLength(currentContent, candidateContent);
         if (common < MIN_COMMON_FOR_BRANCH) continue;
         if (currentContent.length <= common) continue;
+        if (candidateContent.length > currentContent.length) continue;
         const score = common * 1e3 - candidateContent.length;
         if (score > bestScore) {
           bestScore = score;

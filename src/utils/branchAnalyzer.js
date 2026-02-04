@@ -269,6 +269,7 @@ function analyzeByDate(group, dates, chatContents) {
 
 /**
  * 점수 기반 분석 - 공통 많고 짧은 게 부모
+ * 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
  */
 function analyzeByScore(group, chatContents) {
     const result = {};
@@ -292,6 +293,10 @@ function analyzeByScore(group, chatContents) {
             // 최소 공통 & 현재가 분기점 이후 진행
             if (common < MIN_COMMON_FOR_BRANCH) continue;
             if (currentContent.length <= common) continue;
+            
+            // 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
+            // (짧거나 같은 채팅만 부모가 될 수 있음)
+            if (candidateContent.length > currentContent.length) continue;
             
             // 점수: 공통 많을수록 + 짧을수록 (직접 부모 우선)
             const score = common * 1000 - candidateContent.length;
