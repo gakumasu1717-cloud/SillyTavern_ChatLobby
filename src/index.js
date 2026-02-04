@@ -1292,9 +1292,8 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             console.log('[ChatLobby] Branch analysis complete:', branches);
             showToast(`분기 분석 완료: ${Object.keys(branches).length}개 분기 발견`, 'success');
             
-            // 🔥 채팅 목록 새로고침 (캐시 무효화 후 분기 정렬 적용)
-            cache.invalidate('chats', charAvatar);
-            await refreshCurrentChatList();
+            // 🔥 채팅 목록 강제 새로고침 (분기 정렬 적용)
+            await refreshCurrentChatList(true);
             
         } catch (error) {
             console.error('[ChatLobby] Failed to refresh branches:', error);

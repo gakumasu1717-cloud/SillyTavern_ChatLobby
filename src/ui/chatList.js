@@ -1218,13 +1218,30 @@ export function handleSortChange(sortValue) {
 
 /**
  * 현재 채팅 목록 새로고침 (정렬/필터 변경 시)
+ * @param {boolean} forceReload - 강제로 API에서 다시 가져오기
  */
-export async function refreshCurrentChatList() {
+export async function refreshCurrentChatList(forceReload = false) {
     const character = store.currentCharacter;
     if (!character) return;
     
     const chatsList = document.getElementById('chat-lobby-chats-list');
     if (!chatsList) return;
+    
+    // 강제 새로고침이면 API에서 다시 가져오기
+    if (forceReload) {
+        chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
+        try {
+            const chats = await api.fetchChatsForCharacter(character.avatar, true);
+            if (chats && chats.length > 0) {
+                renderChats(chatsList, chats, character.avatar);
+            } else {
+                chatsList.innerHTML = '<div class="lobby-empty-state"><i>💬</i><div>채팅 기록이 없습니다</div></div>';
+            }
+        } catch (error) {
+            console.error('[ChatList] Failed to reload chats:', error);
+        }
+        return;
+    }
     
     // 캐시된 데이터로 바로 다시 렌더링
     const cachedChats = cache.get('chats', character.avatar);

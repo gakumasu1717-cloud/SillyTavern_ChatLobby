@@ -3410,11 +3410,25 @@ ${message}` : message;
     }
     refreshCurrentChatList2();
   }
-  async function refreshCurrentChatList2() {
+  async function refreshCurrentChatList2(forceReload = false) {
     const character = store.currentCharacter;
     if (!character) return;
     const chatsList = document.getElementById("chat-lobby-chats-list");
     if (!chatsList) return;
+    if (forceReload) {
+      chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
+      try {
+        const chats = await api.fetchChatsForCharacter(character.avatar, true);
+        if (chats && chats.length > 0) {
+          renderChats(chatsList, chats, character.avatar);
+        } else {
+          chatsList.innerHTML = '<div class="lobby-empty-state"><i>\u{1F4AC}</i><div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div></div>';
+        }
+      } catch (error) {
+        console.error("[ChatList] Failed to reload chats:", error);
+      }
+      return;
+    }
     const cachedChats = cache.get("chats", character.avatar);
     if (cachedChats) {
       renderChats(chatsList, cachedChats, character.avatar);
@@ -9031,8 +9045,7 @@ ${message}` : message;
         }, true);
         console.log("[ChatLobby] Branch analysis complete:", branches);
         showToast(`\uBD84\uAE30 \uBD84\uC11D \uC644\uB8CC: ${Object.keys(branches).length}\uAC1C \uBD84\uAE30 \uBC1C\uACAC`, "success");
-        cache.invalidate("chats", charAvatar);
-        await refreshCurrentChatList();
+        await refreshCurrentChatList(true);
       } catch (error) {
         console.error("[ChatLobby] Failed to refresh branches:", error);
         showToast("\uBD84\uAE30 \uBD84\uC11D \uC2E4\uD328", "error");
