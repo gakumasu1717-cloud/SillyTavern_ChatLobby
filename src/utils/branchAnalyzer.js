@@ -14,6 +14,7 @@ import {
 
 // 분기 판정 상수
 const MIN_COMMON_FOR_BRANCH = 3;  // 최소 3개 메시지 (그리팅 + 1번 왕복)
+const MIN_BRANCH_RATIO = 0.1;     // 최소 분기점 비율 (짧은 쪽의 10% 이상이 공통이어야 분기로 인정)
 
 // 채팅 내용 캐시 (중복 로드 방지)
 const chatContentCache = new Map();
@@ -244,12 +245,19 @@ function analyzeByDate(group, dates, chatContents) {
             const common = findCommonPrefixLength(currentContent, candidateContent);
             
             // 최소 공통 메시지 확인
+            if (common < MIN_COMMON_FOR_BRANCH) continue;
+            
+            // 🔥 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
+            const shorterLen = Math.min(currentContent.length, candidateContent.length);
+            const ratio = common / shorterLen;
+            if (ratio < MIN_BRANCH_RATIO) continue;
+            
             // 현재 또는 후보 중 하나라도 분기점 이후 진행했으면 OK
-            if (common >= MIN_COMMON_FOR_BRANCH && 
-                (currentContent.length > common || candidateContent.length > common) &&
-                common > bestCommon) {
-                bestCommon = common;
-                bestParent = candidate.fileName;
+            if (currentContent.length > common || candidateContent.length > common) {
+                if (common > bestCommon) {
+                    bestCommon = common;
+                    bestParent = candidate.fileName;
+                }
             }
         }
         
@@ -293,6 +301,11 @@ function analyzeByScore(group, chatContents) {
             // 최소 공통 & 현재가 분기점 이후 진행
             if (common < MIN_COMMON_FOR_BRANCH) continue;
             if (currentContent.length <= common) continue;
+            
+            // 🔥 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
+            const shorterLen = Math.min(currentContent.length, candidateContent.length);
+            const ratio = common / shorterLen;
+            if (ratio < MIN_BRANCH_RATIO) continue;
             
             // 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
             // (짧거나 같은 채팅만 부모가 될 수 있음)

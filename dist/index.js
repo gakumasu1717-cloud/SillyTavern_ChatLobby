@@ -2397,6 +2397,7 @@ ${message}` : message;
 
   // src/utils/branchAnalyzer.js
   var MIN_COMMON_FOR_BRANCH = 3;
+  var MIN_BRANCH_RATIO = 0.1;
   var chatContentCache = /* @__PURE__ */ new Map();
   function clearContentCache() {
     chatContentCache.clear();
@@ -2541,9 +2542,15 @@ ${message}` : message;
         const candidateContent = chatContents[candidate.fileName];
         if (!candidateContent) continue;
         const common = findCommonPrefixLength(currentContent, candidateContent);
-        if (common >= MIN_COMMON_FOR_BRANCH && (currentContent.length > common || candidateContent.length > common) && common > bestCommon) {
-          bestCommon = common;
-          bestParent = candidate.fileName;
+        if (common < MIN_COMMON_FOR_BRANCH) continue;
+        const shorterLen = Math.min(currentContent.length, candidateContent.length);
+        const ratio = common / shorterLen;
+        if (ratio < MIN_BRANCH_RATIO) continue;
+        if (currentContent.length > common || candidateContent.length > common) {
+          if (common > bestCommon) {
+            bestCommon = common;
+            bestParent = candidate.fileName;
+          }
         }
       }
       if (bestParent) {
@@ -2572,6 +2579,9 @@ ${message}` : message;
         const common = findCommonPrefixLength(currentContent, candidateContent);
         if (common < MIN_COMMON_FOR_BRANCH) continue;
         if (currentContent.length <= common) continue;
+        const shorterLen = Math.min(currentContent.length, candidateContent.length);
+        const ratio = common / shorterLen;
+        if (ratio < MIN_BRANCH_RATIO) continue;
         if (candidateContent.length > currentContent.length) continue;
         const score = common * 1e3 - candidateContent.length;
         if (score > bestScore) {
