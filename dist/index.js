@@ -3321,7 +3321,7 @@ ${message}` : message;
   }
   function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
-    refreshCurrentChatList2();
+    refreshCurrentChatList();
   }
   var activeFolderMenu = null;
   function showChatFolderMenu(targetBtn, charAvatar, fileName) {
@@ -3372,7 +3372,7 @@ ${message}` : message;
           showToast("\uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }
         closeChatFolderMenu();
-        await refreshCurrentChatList2();
+        await refreshCurrentChatList();
       });
     });
     setTimeout(() => {
@@ -3397,9 +3397,9 @@ ${message}` : message;
     if (branchRefreshBtn) {
       branchRefreshBtn.style.display = sortValue === "branch" ? "flex" : "none";
     }
-    refreshCurrentChatList2();
+    refreshCurrentChatList();
   }
-  async function refreshCurrentChatList2(forceReload = false) {
+  async function refreshCurrentChatList(forceReload = false) {
     const character = store.currentCharacter;
     if (!character) return;
     const chatsList = document.getElementById("chat-lobby-chats-list");
@@ -3477,7 +3477,7 @@ ${message}` : message;
       const currentValue = filterSelect.value;
       filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
     }
-    await refreshCurrentChatList2();
+    await refreshCurrentChatList();
   }
   function isBatchMode() {
     return store.batchModeActive;
