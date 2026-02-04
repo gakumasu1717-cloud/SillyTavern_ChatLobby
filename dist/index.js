@@ -2347,10 +2347,6 @@ ${message}` : message;
       }
     }
     const hash = hashString(combined);
-    const preview = messages.slice(0, 3).map(
-      (m, i) => `${i}:${m?.is_user ? "U" : "A"}:"${(m?.mes || "").substring(0, 30)}..."`
-    ).join(" | ");
-    console.log(`[FP] \u{1F4C1}${fileName} \u2192 hash=${hash}, len=${messages.length}, [${preview}]`);
     return hash;
   }
   function findCommonPrefixLength(chat1, chat2) {
@@ -2362,15 +2358,9 @@ ${message}` : message;
       if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
         commonLen++;
       } else {
-        console.log(
-          `[CommonPrefix] Diff at ${i}: `,
-          `[1] ${msg1?.is_user ? "U" : "A"}:"${(msg1?.mes || "").substring(0, 50)}..."`,
-          `[2] ${msg2?.is_user ? "U" : "A"}:"${(msg2?.mes || "").substring(0, 50)}..."`
-        );
         break;
       }
     }
-    console.log(`[CommonPrefix] Result: ${commonLen}/${minLen} (chat1=${chat1.length}, chat2=${chat2.length})`);
     return commonLen;
   }
   function setFingerprint(charAvatar, chatFileName, hash, length) {
@@ -2481,10 +2471,12 @@ ${message}` : message;
   }
   async function loadChatContent(charAvatar, fileName) {
     const cacheKey = `${charAvatar}:${fileName}`;
+    if (chatContentCache.has(cacheKey)) {
+      return chatContentCache.get(cacheKey);
+    }
     try {
       const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
       const chatName = fileName.replace(".jsonl", "");
-      console.log(`[LoadChat] Loading: ${fileName} (charDir=${charDir}, chatName=${chatName})`);
       const response = await fetch("/api/chats/get", {
         method: "POST",
         headers: api.getRequestHeaders(),
@@ -2495,7 +2487,6 @@ ${message}` : message;
         })
       });
       if (!response.ok) {
-        console.log(`[LoadChat] FAILED: ${fileName} - status ${response.status}`);
         chatContentCache.set(cacheKey, null);
         return null;
       }
@@ -2506,9 +2497,6 @@ ${message}` : message;
       } else {
         content = data;
       }
-      const firstMsg = content?.[0];
-      const secondMsg = content?.[1];
-      console.log(`[LoadChat] OK: ${fileName} -> ${content?.length || 0} msgs, first="${(firstMsg?.mes || "").substring(0, 50)}...", second="${(secondMsg?.mes || "").substring(0, 50)}..."`);
       chatContentCache.set(cacheKey, content);
       return content;
     } catch (e) {
@@ -2526,7 +2514,6 @@ ${message}` : message;
       const chatLength = chat.chat_items || chat.message_count || 0;
       return !cached || cached.length !== chatLength;
     });
-    console.log(`[BranchAnalyzer] Need fingerprint for ${needsUpdate.length}/${chats.length} chats`);
     const BATCH_SIZE = 5;
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
       const batch = needsUpdate.slice(i, i + BATCH_SIZE);
@@ -2556,15 +2543,6 @@ ${message}` : message;
       }
       groups[hash].push({ fileName, length: data.length });
     }
-    console.log("[Grouping] Total groups:", Object.keys(groups).length);
-    for (const [hash, chats] of Object.entries(groups)) {
-      if (chats.length >= 2) {
-        console.log(
-          `[Grouping] hash=${hash} (${chats.length}\uAC1C):`,
-          chats.map((c) => `${c.fileName.substring(0, 30)}...(${c.length})`).join(", ")
-        );
-      }
-    }
     return groups;
   }
   async function analyzeGroup(charAvatar, group) {
@@ -2590,64 +2568,47 @@ ${message}` : message;
         failedDates.push(item.fileName);
       }
     }
-    console.log(`[analyzeGroup] Date parsing: ${Object.keys(dates).length}/${validFiles.length} success, allHaveDates=${allHaveDates}`);
-    if (failedDates.length > 0) {
-      console.log("[analyzeGroup] Failed date parsing:", failedDates.map((f) => f.substring(0, 40)).join(", "));
-    }
     if (allHaveDates) {
-      console.log("[analyzeGroup] Using DATE-based analysis");
       return analyzeByDate(validFiles, dates, chatContents);
     } else {
-      console.log("[analyzeGroup] Using SCORE-based analysis (some dates missing)");
       return analyzeByScore(validFiles, chatContents);
     }
   }
   function analyzeByDate(group, dates, chatContents) {
     const result = {};
     const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
-    console.log("[analyzeByDate] Sorted order:", sorted.map((s) => s.fileName.substring(0, 25)).join(" \u2192 "));
     for (let i = 1; i < sorted.length; i++) {
       const current = sorted[i];
       const currentContent = chatContents[current.fileName];
       if (!currentContent) continue;
       let bestParent = null;
       let bestCommon = 0;
-      console.log(`[analyzeByDate] Checking: ${current.fileName.substring(0, 30)} (len=${currentContent.length})`);
       for (let j = 0; j < i; j++) {
         const candidate = sorted[j];
         const candidateContent = chatContents[candidate.fileName];
         if (!candidateContent) continue;
-        console.log(`  vs ${candidate.fileName.substring(0, 30)} (len=${candidateContent.length})`);
         const common = findCommonPrefixLength(currentContent, candidateContent);
         if (common < MIN_COMMON_FOR_BRANCH) {
-          console.log(`  \u274C common=${common} < MIN_COMMON=${MIN_COMMON_FOR_BRANCH}`);
           continue;
         }
         const shorterLen = Math.min(currentContent.length, candidateContent.length);
         const ratio = common / shorterLen;
         if (ratio < MIN_BRANCH_RATIO) {
-          console.log(`  \u274C ratio=${(ratio * 100).toFixed(1)}% < MIN_RATIO=${MIN_BRANCH_RATIO * 100}%`);
           continue;
         }
         if (currentContent.length > common || candidateContent.length > common) {
           if (common > bestCommon) {
-            console.log(`  \u2705 Best so far: common=${common}, ratio=${(ratio * 100).toFixed(1)}%`);
             bestCommon = common;
             bestParent = candidate.fileName;
           }
-        } else {
-          console.log(`  \u274C No progress after branch point`);
         }
       }
       if (bestParent) {
-        console.log(`[analyzeByDate] \u2705 BRANCH: ${current.fileName.substring(0, 25)} \u2192 ${bestParent.substring(0, 25)} @${bestCommon}`);
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
           depth: 1
         };
-      } else {
-        console.log(`[analyzeByDate] \u26AA No parent found for ${current.fileName.substring(0, 25)}`);
       }
     }
     calculateDepths(result);
@@ -9179,11 +9140,7 @@ ${message}` : message;
           showToast("\uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4", "warning");
           return;
         }
-        console.log("[ChatLobby] Starting forced branch analysis for", chats.length, "chats");
-        const branches = await analyzeBranches(charAvatar, chats, (progress) => {
-          console.log("[ChatLobby] Branch analysis progress:", Math.round(progress * 100) + "%");
-        }, true);
-        console.log("[ChatLobby] Branch analysis complete:", branches);
+        const branches = await analyzeBranches(charAvatar, chats, null, true);
         showToast(`\uBD84\uAE30 \uBD84\uC11D \uC644\uB8CC: ${Object.keys(branches).length}\uAC1C \uBD84\uAE30 \uBC1C\uACAC`, "success");
         await refreshCurrentChatList(true);
       } catch (error) {

@@ -89,16 +89,13 @@ function extractDateFromFileName(fileName) {
 async function loadChatContent(charAvatar, fileName) {
     const cacheKey = `${charAvatar}:${fileName}`;
     
-    // 🔥 디버깅: 캐시 일시 비활성화
-    // if (chatContentCache.has(cacheKey)) {
-    //     return chatContentCache.get(cacheKey);
-    // }
+    if (chatContentCache.has(cacheKey)) {
+        return chatContentCache.get(cacheKey);
+    }
     
     try {
         const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
         const chatName = fileName.replace('.jsonl', '');
-        
-        console.log(`[LoadChat] Loading: ${fileName} (charDir=${charDir}, chatName=${chatName})`);
         
         const response = await fetch('/api/chats/get', {
             method: 'POST',
@@ -111,7 +108,6 @@ async function loadChatContent(charAvatar, fileName) {
         });
         
         if (!response.ok) {
-            console.log(`[LoadChat] FAILED: ${fileName} - status ${response.status}`);
             chatContentCache.set(cacheKey, null);
             return null;
         }
@@ -125,11 +121,6 @@ async function loadChatContent(charAvatar, fileName) {
         } else {
             content = data;
         }
-        
-        // 🔥 디버깅: 로드된 데이터 확인
-        const firstMsg = content?.[0];
-        const secondMsg = content?.[1];
-        console.log(`[LoadChat] OK: ${fileName} -> ${content?.length || 0} msgs, first="${(firstMsg?.mes || '').substring(0, 50)}...", second="${(secondMsg?.mes || '').substring(0, 50)}..."`);
         
         // 캐시에 저장
         chatContentCache.set(cacheKey, content);
@@ -161,8 +152,6 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
         const chatLength = chat.chat_items || chat.message_count || 0;
         return !cached || cached.length !== chatLength;
     });
-    
-    console.log(`[BranchAnalyzer] Need fingerprint for ${needsUpdate.length}/${chats.length} chats`);
     
     // 병렬로 처리 (최대 5개씩)
     const BATCH_SIZE = 5;
@@ -209,15 +198,6 @@ function groupByFingerprint(fingerprints) {
         groups[hash].push({ fileName, length: data.length });
     }
     
-    // 🔥 디버깅: 그룹별 채팅 목록 출력
-    console.log('[Grouping] Total groups:', Object.keys(groups).length);
-    for (const [hash, chats] of Object.entries(groups)) {
-        if (chats.length >= 2) {
-            console.log(`[Grouping] hash=${hash} (${chats.length}개):`, 
-                chats.map(c => `${c.fileName.substring(0, 30)}...(${c.length})`).join(', '));
-        }
-    }
-    
     return groups;
 }
 
@@ -261,18 +241,10 @@ async function analyzeGroup(charAvatar, group) {
         }
     }
     
-    // 🔥 디버깅: 날짜 파싱 결과
-    console.log(`[analyzeGroup] Date parsing: ${Object.keys(dates).length}/${validFiles.length} success, allHaveDates=${allHaveDates}`);
-    if (failedDates.length > 0) {
-        console.log('[analyzeGroup] Failed date parsing:', failedDates.map(f => f.substring(0, 40)).join(', '));
-    }
-    
     // 부모 결정 방식 선택
     if (allHaveDates) {
-        console.log('[analyzeGroup] Using DATE-based analysis');
         return analyzeByDate(validFiles, dates, chatContents);
     } else {
-        console.log('[analyzeGroup] Using SCORE-based analysis (some dates missing)');
         return analyzeByScore(validFiles, chatContents);
     }
 }
@@ -286,8 +258,6 @@ function analyzeByDate(group, dates, chatContents) {
     // 날짜순 정렬 (오래된 순)
     const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
     
-    console.log('[analyzeByDate] Sorted order:', sorted.map(s => s.fileName.substring(0, 25)).join(' → '));
-    
     // 각 채팅에 대해 나보다 오래된 채팅 중 가장 가까운 부모 찾기
     for (let i = 1; i < sorted.length; i++) {
         const current = sorted[i];
@@ -297,53 +267,41 @@ function analyzeByDate(group, dates, chatContents) {
         let bestParent = null;
         let bestCommon = 0;
         
-        console.log(`[analyzeByDate] Checking: ${current.fileName.substring(0, 30)} (len=${currentContent.length})`);
-        
         // 나보다 오래된 채팅들만 검사
         for (let j = 0; j < i; j++) {
             const candidate = sorted[j];
             const candidateContent = chatContents[candidate.fileName];
             if (!candidateContent) continue;
             
-            console.log(`  vs ${candidate.fileName.substring(0, 30)} (len=${candidateContent.length})`);
-            
             const common = findCommonPrefixLength(currentContent, candidateContent);
             
             // 최소 공통 메시지 확인
             if (common < MIN_COMMON_FOR_BRANCH) {
-                console.log(`  ❌ common=${common} < MIN_COMMON=${MIN_COMMON_FOR_BRANCH}`);
                 continue;
             }
             
-            // 🔥 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
+            // 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
             const shorterLen = Math.min(currentContent.length, candidateContent.length);
             const ratio = common / shorterLen;
             if (ratio < MIN_BRANCH_RATIO) {
-                console.log(`  ❌ ratio=${(ratio*100).toFixed(1)}% < MIN_RATIO=${MIN_BRANCH_RATIO*100}%`);
                 continue;
             }
             
             // 현재 또는 후보 중 하나라도 분기점 이후 진행했으면 OK
             if (currentContent.length > common || candidateContent.length > common) {
                 if (common > bestCommon) {
-                    console.log(`  ✅ Best so far: common=${common}, ratio=${(ratio*100).toFixed(1)}%`);
                     bestCommon = common;
                     bestParent = candidate.fileName;
                 }
-            } else {
-                console.log(`  ❌ No progress after branch point`);
             }
         }
         
         if (bestParent) {
-            console.log(`[analyzeByDate] ✅ BRANCH: ${current.fileName.substring(0, 25)} → ${bestParent.substring(0, 25)} @${bestCommon}`);
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommon,
                 depth: 1
             };
-        } else {
-            console.log(`[analyzeByDate] ⚪ No parent found for ${current.fileName.substring(0, 25)}`);
         }
     }
     
@@ -379,7 +337,7 @@ function analyzeByScore(group, chatContents) {
             if (common < MIN_COMMON_FOR_BRANCH) continue;
             if (currentContent.length <= common) continue;
             
-            // 🔥 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
+            // 분기점 비율 체크
             const shorterLen = Math.min(currentContent.length, candidateContent.length);
             const ratio = common / shorterLen;
             if (ratio < MIN_BRANCH_RATIO) continue;
