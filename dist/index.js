@@ -4281,9 +4281,13 @@ ${message}` : message;
     currentFolderId: null,
     libraryChats: [],
     folders: [],
-    isLoading: false,
     activeContextMenu: null
   };
+  var loading = {
+    recent: false,
+    library: false
+  };
+  var recentDomObserver = null;
   var TABS = [
     { id: "characters", icon: "\u{1F465}", name: "\uCE90\uB9AD\uD130" },
     { id: "recent", icon: "\u{1F550}", name: "\uCD5C\uADFC" },
@@ -4436,8 +4440,8 @@ ${message}` : message;
     return container;
   }
   async function loadTabData(tabId) {
-    if (state.isLoading) return;
-    state.isLoading = true;
+    if (loading[tabId]) return;
+    loading[tabId] = true;
     try {
       switch (tabId) {
         case "recent":
@@ -4453,7 +4457,7 @@ ${message}` : message;
       logError(`Failed to load ${tabId}:`, e);
       showToast("\uB370\uC774\uD130 \uB85C\uB4DC \uC2E4\uD328", "error");
     } finally {
-      state.isLoading = false;
+      loading[tabId] = false;
     }
   }
   function loadRecentChats() {
@@ -5239,6 +5243,39 @@ ${message}` : message;
         }
     `;
     document.head.appendChild(style);
+  }
+  function debounce2(fn, delay) {
+    let timer = null;
+    return function(...args) {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+  function startRecentDomObserver() {
+    if (recentDomObserver) return;
+    const container = document.querySelector("#rm_print_characters_block") || document.body;
+    if (!container) return;
+    const debouncedUpdate = debounce2(() => {
+      const els = document.querySelectorAll(".recentChat");
+      if (els.length > 0) {
+        log("[Observer] .recentChat changed, updating cache");
+        state.cachedRecentChats = [];
+        cacheElements(els);
+      }
+    }, 300);
+    recentDomObserver = new MutationObserver(debouncedUpdate);
+    recentDomObserver.observe(container, {
+      childList: true,
+      subtree: true
+    });
+    log("[Observer] Started watching .recentChat DOM changes");
+  }
+  function stopRecentDomObserver() {
+    if (recentDomObserver) {
+      recentDomObserver.disconnect();
+      recentDomObserver = null;
+      log("[Observer] Stopped watching .recentChat DOM changes");
+    }
   }
 
   // src/ui/templates.js
@@ -8505,7 +8542,9 @@ ${message}` : message;
       if (store.isLobbyOpen) {
         return;
       }
-      cacheRecentChatsBeforeOpen();
+      await cacheRecentChatsBeforeOpen();
+      loadRecentChats();
+      stopRecentDomObserver();
       const currentCharBeforeOpen = getCurrentCharacterAvatar();
       if (currentCharBeforeOpen) {
         lastChatCache.updateNow(currentCharBeforeOpen);
@@ -8610,6 +8649,7 @@ ${message}` : message;
       store.setLobbyOpen(false);
       store.reset();
       closeChatPanel();
+      startRecentDomObserver();
       updateFabPreview();
     }
     let isDebugPanelOpen = false;

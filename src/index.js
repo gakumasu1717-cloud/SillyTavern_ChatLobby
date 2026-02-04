@@ -17,7 +17,7 @@ import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } f
 import { showToast } from './ui/notifications.js';
 import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
 import { openCalendarView, closeCalendarView } from './ui/calendarView.js';
-import { bindTabEvents, switchTab, getCurrentTab, refreshCurrentTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen } from './ui/tabView.js';
+import { bindTabEvents, switchTab, getCurrentTab, refreshCurrentTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen, loadRecentChats, startRecentDomObserver, stopRecentDomObserver } from './ui/tabView.js';
 import { lastChatCache } from './data/lastChatCache.js';
 import { loadSnapshots as loadCalendarSnapshots, getLocalDateString } from './data/calendarStorage.js';
 import { debounce, isMobile } from './utils/eventHelpers.js';
@@ -494,7 +494,13 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         }
         
         // 🔥 최근 채팅 DOM 캐싱 (로비가 열리기 전에!)
-        cacheRecentChatsBeforeOpen();
+        await cacheRecentChatsBeforeOpen();
+        
+        // 🔥 캐싱 완료 후 바로 state.recentChats에 반영
+        loadRecentChats();
+        
+        // 🔥 DOM 감시 중지 (로비 열림)
+        stopRecentDomObserver();
         
         // 🔥 현재 채팅 중인 캐릭터를 lastChatCache에 즉시 갱신 (채팅 화면에서 로비 열 때)
         const currentCharBeforeOpen = getCurrentCharacterAvatar();
@@ -656,6 +662,9 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         store.setLobbyOpen(false);
         store.reset(); // 상태 초기화
         closeChatPanel();
+        
+        // 🔥 로비 닫힐 때 DOM 감시 시작 (채팅 변경 감지)
+        startRecentDomObserver();
         
         // FAB 프리뷰 갱신 (로비 닫을 때)
         updateFabPreview();

@@ -39,9 +39,17 @@ const state = {
     currentFolderId: null,
     libraryChats: [],
     folders: [],
-    isLoading: false,
     activeContextMenu: null,
 };
+
+// 탭별 로딩 가드 (전역 isLoading 대신)
+const loading = {
+    recent: false,
+    library: false,
+};
+
+// DOM 변화 감지용 Observer
+let recentDomObserver = null;
 
 const TABS = [
     { id: 'characters', icon: '👥', name: '캐릭터' },
@@ -244,8 +252,9 @@ function createTabContentContainer(tabId) {
 // ============================================
 
 async function loadTabData(tabId) {
-    if (state.isLoading) return;
-    state.isLoading = true;
+    // 탭별 로딩 가드 (다른 탭 로딩이 최근 탭을 막지 않음)
+    if (loading[tabId]) return;
+    loading[tabId] = true;
     
     try {
         switch (tabId) {
@@ -262,7 +271,7 @@ async function loadTabData(tabId) {
         logError(`Failed to load ${tabId}:`, e);
         showToast('데이터 로드 실패', 'error');
     } finally {
-        state.isLoading = false;
+        loading[tabId] = false;
     }
 }
 
@@ -270,7 +279,8 @@ async function loadTabData(tabId) {
 // 최근 채팅 뷰
 // ============================================
 
-function loadRecentChats() {
+// 🔥 export 추가 - 로비 열 때 직접 호출 가능
+export function loadRecentChats() {
     // 캐싱된 데이터 사용 (없으면 새로 가져오기)
     if (state.cachedRecentChats.length > 0) {
         state.recentChats = state.cachedRecentChats;
@@ -1314,4 +1324,59 @@ export function injectContextMenuStyles() {
     `;
     
     document.head.appendChild(style);
+}
+
+// ============================================
+// DOM 변화 감지 (로비 닫혀있을 때 .recentChat 변화 감지)
+// ============================================
+
+/**
+ * 디바운스 헬퍼
+ */
+function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+
+/**
+ * 로비 닫혀있을 때 .recentChat DOM 변화 감지 시작
+ */
+export function startRecentDomObserver() {
+    // 이미 감시 중이면 무시
+    if (recentDomObserver) return;
+    
+    // #rm_print_characters_block 또는 body에서 감시
+    const container = document.querySelector('#rm_print_characters_block') || document.body;
+    if (!container) return;
+    
+    const debouncedUpdate = debounce(() => {
+        const els = document.querySelectorAll('.recentChat');
+        if (els.length > 0) {
+            log('[Observer] .recentChat changed, updating cache');
+            state.cachedRecentChats = [];  // 기존 캐시 클리어
+            cacheElements(els);
+        }
+    }, 300);
+    
+    recentDomObserver = new MutationObserver(debouncedUpdate);
+    recentDomObserver.observe(container, { 
+        childList: true, 
+        subtree: true 
+    });
+    
+    log('[Observer] Started watching .recentChat DOM changes');
+}
+
+/**
+ * 로비 열릴 때 감지 중지
+ */
+export function stopRecentDomObserver() {
+    if (recentDomObserver) {
+        recentDomObserver.disconnect();
+        recentDomObserver = null;
+        log('[Observer] Stopped watching .recentChat DOM changes');
+    }
 }
