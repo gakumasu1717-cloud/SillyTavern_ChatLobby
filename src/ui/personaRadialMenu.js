@@ -15,7 +15,7 @@ import { showToast } from './notifications.js';
 
 const state = {
     isOpen: false,
-    mode: 'favorites',      // 'favorites' | 'all'
+    mode: 'favorites',      // 'favorites' | 'recent' | 'all'
     selectedIndex: 0,       // 현재 선택된 인덱스
     favorites: [],
     allPersonas: [],
@@ -195,12 +195,26 @@ function renderItems() {
     const container = document.getElementById('persona-arc-items');
     if (!container) return;
     
-    let items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
-    
-    // 즐겨찾기 없으면 자동으로 전체 모드로 전환
-    if (items.length === 0 && state.mode === 'favorites') {
-        state.mode = 'all';
+    // 모드별 아이템 결정
+    let items;
+    if (state.mode === 'favorites') {
+        items = state.favorites;
+    } else if (state.mode === 'recent') {
+        const usage = storage.getPersonaRecentUsage();
+        items = [...state.allPersonas].sort((a, b) => {
+            return (usage[b.key] || 0) - (usage[a.key] || 0);
+        });
+    } else {
         items = state.allPersonas;
+    }
+    
+    // 즐겨찾기 없으면 자동으로 최근 사용순 모드로 전환
+    if (items.length === 0 && state.mode === 'favorites') {
+        state.mode = 'recent';
+        const usage = storage.getPersonaRecentUsage();
+        items = [...state.allPersonas].sort((a, b) => {
+            return (usage[b.key] || 0) - (usage[a.key] || 0);
+        });
         updateMode();
     }
     
@@ -264,8 +278,7 @@ function renderItems() {
                     data-key="${escapeHtml(persona.key)}"
                     data-name="${escapeHtml(displayName)}"
                     style="--x:${x}px; --y:${y}px; --scale:${scale}; --opacity:${opacity}; --z:${zIndex}; --size:${itemSize}px;">
-                <img src="${avatarUrl}" alt=""
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="${avatarUrl}" alt="">
                 <span class="persona-arc-fallback">👤</span>
                 <span class="persona-arc-label">${escapeHtml(displayName)}</span>
             </button>
@@ -273,6 +286,15 @@ function renderItems() {
     });
     
     container.innerHTML = html;
+    
+    // 이미지 로드 실패 시 fallback 표시 (inline onerror 대신)
+    container.querySelectorAll('.persona-arc-item img').forEach(img => {
+        img.addEventListener('error', () => {
+            img.style.display = 'none';
+            const fallback = img.nextElementSibling;
+            if (fallback) fallback.style.display = 'flex';
+        });
+    });
     
     // SVG 인디케이터 업데이트
     updateIndicator(items.length, maxScroll);
@@ -295,13 +317,14 @@ function updateIndicator(totalItems, maxScroll) {
     if (!centerMode) return;
     
     const visibleCount = getVisibleCount();
-    const modeText = state.mode === 'favorites' ? '⭐' : '👥';
+    const modeText = state.mode === 'favorites' ? '⭐' : state.mode === 'recent' ? '🕐' : '👥';
+    const modeLabel = state.mode === 'favorites' ? '즐겨찾기' : state.mode === 'recent' ? '최근 사용' : '전체';
     
     // 스크롤 가능한 경우에만 숫자 표시
     if (totalItems > visibleCount) {
         centerMode.textContent = `${modeText} ${state.selectedIndex + 1}/${totalItems}`;
     } else {
-        centerMode.textContent = state.mode === 'favorites' ? '⭐ 즐겨찾기' : '👥 전체';
+        centerMode.textContent = `${modeText} ${modeLabel}`;
     }
 }
 
@@ -329,7 +352,15 @@ function preloadNearbyImages() {
 
 function updateMode() {
     const centerMode = document.getElementById('persona-center-mode');
-    if (centerMode) centerMode.textContent = state.mode === 'favorites' ? '⭐ 즐겨찾기' : '👥 전체';
+    if (centerMode) {
+        if (state.mode === 'favorites') {
+            centerMode.textContent = '⭐ 즐겨찾기';
+        } else if (state.mode === 'recent') {
+            centerMode.textContent = '🕐 최근 사용';
+        } else {
+            centerMode.textContent = '👥 전체';
+        }
+    }
 }
 
 // ============================================
@@ -376,7 +407,14 @@ function closeMenu() {
 }
 
 function toggleMode() {
-    state.mode = state.mode === 'favorites' ? 'all' : 'favorites';
+    // favorites -> recent -> all -> favorites
+    if (state.mode === 'favorites') {
+        state.mode = 'recent';
+    } else if (state.mode === 'recent') {
+        state.mode = 'all';
+    } else {
+        state.mode = 'favorites';
+    }
     state.selectedIndex = 0;
     renderItems();
     updateMode();
@@ -415,7 +453,15 @@ function handleFabClick(e) {
     if (!state.isOpen) {
         openMenu();
     } else if (state.mode === 'favorites') {
-        toggleMode();
+        state.mode = 'recent';
+        state.selectedIndex = 0;
+        renderItems();
+        updateMode();
+    } else if (state.mode === 'recent') {
+        state.mode = 'all';
+        state.selectedIndex = 0;
+        renderItems();
+        updateMode();
     } else {
         closeMenu();
     }
@@ -470,13 +516,23 @@ function updateCenterDisplay() {
         }
     }
     if (centerMode) {
-        centerMode.textContent = state.mode === 'favorites' ? '⭐ 즐겨찾기' : '👥 전체';
+        if (state.mode === 'favorites') {
+            centerMode.textContent = '⭐ 즐겨찾기';
+        } else if (state.mode === 'recent') {
+            centerMode.textContent = '🕐 최근 사용';
+        } else {
+            centerMode.textContent = '👥 전체';
+        }
     }
 }
 
 async function applyPersona(key) {
     try {
         await api.setPersona(key);
+        
+        // 사용 기록 저장 (최근 사용순 정렬용)
+        storage.recordPersonaUsage(key);
+        
         showToast(`페르소나: ${key.replace(/\.[^.]+$/, '')}`, 'success');
         state.currentPersona = key;
         await updateFabAvatar();

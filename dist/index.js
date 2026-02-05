@@ -531,7 +531,9 @@ ${message}` : message;
     // 기본값: 최근 채팅순
     autoFavoriteRules: {
       recentDays: 0
-    }
+    },
+    personaRecentUsage: {}
+    // { [personaKey]: timestamp(number) } - 최근 사용순 정렬용
   };
   var StorageManager = class {
     constructor() {
@@ -616,6 +618,14 @@ ${message}` : message;
       if (data.characterFavorites && data.characterFavorites.length > 1e3) {
         data.characterFavorites = data.characterFavorites.slice(-1e3);
         console.log(`[Storage] Cleaned characterFavorites`);
+      }
+      if (data.personaRecentUsage) {
+        const entries = Object.entries(data.personaRecentUsage);
+        if (entries.length > 200) {
+          entries.sort((a, b) => b[1] - a[1]);
+          data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
+          console.log(`[Storage] Cleaned personaRecentUsage`);
+        }
       }
       this._data = data;
     }
@@ -956,6 +966,40 @@ ${message}` : message;
      */
     getPersonaFavorites() {
       return this.load().personaFavorites || [];
+    }
+    // ============================================
+    // 페르소나 최근 사용 기록
+    // ============================================
+    /**
+     * 페르소나 사용 기록 저장
+     * @param {string} personaKey - 페르소나 키
+     */
+    recordPersonaUsage(personaKey) {
+      this.update((data) => {
+        if (!data.personaRecentUsage) data.personaRecentUsage = {};
+        data.personaRecentUsage[personaKey] = Date.now();
+        const entries = Object.entries(data.personaRecentUsage);
+        if (entries.length > 200) {
+          entries.sort((a, b) => b[1] - a[1]);
+          data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
+        }
+      });
+    }
+    /**
+     * 특정 페르소나의 마지막 사용 시간 반환
+     * @param {string} personaKey - 페르소나 키
+     * @returns {number} timestamp (없으면 0)
+     */
+    getPersonaLastUsed(personaKey) {
+      const data = this.load();
+      return (data.personaRecentUsage || {})[personaKey] || 0;
+    }
+    /**
+     * 전체 사용 기록 반환 (정렬용)
+     * @returns {Object<string, number>}
+     */
+    getPersonaRecentUsage() {
+      return this.load().personaRecentUsage || {};
     }
   };
   var storage = new StorageManager();
@@ -5716,7 +5760,7 @@ ${message}` : message;
   var state2 = {
     isOpen: false,
     mode: "favorites",
-    // 'favorites' | 'all'
+    // 'favorites' | 'recent' | 'all'
     selectedIndex: 0,
     // 현재 선택된 인덱스
     favorites: [],
@@ -5848,10 +5892,23 @@ ${message}` : message;
   function renderItems() {
     const container = document.getElementById("persona-arc-items");
     if (!container) return;
-    let items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
-    if (items.length === 0 && state2.mode === "favorites") {
-      state2.mode = "all";
+    let items;
+    if (state2.mode === "favorites") {
+      items = state2.favorites;
+    } else if (state2.mode === "recent") {
+      const usage = storage.getPersonaRecentUsage();
+      items = [...state2.allPersonas].sort((a, b) => {
+        return (usage[b.key] || 0) - (usage[a.key] || 0);
+      });
+    } else {
       items = state2.allPersonas;
+    }
+    if (items.length === 0 && state2.mode === "favorites") {
+      state2.mode = "recent";
+      const usage = storage.getPersonaRecentUsage();
+      items = [...state2.allPersonas].sort((a, b) => {
+        return (usage[b.key] || 0) - (usage[a.key] || 0);
+      });
       updateMode();
     }
     if (items.length === 0) {
@@ -5894,14 +5951,20 @@ ${message}` : message;
                     data-key="${escapeHtml(persona.key)}"
                     data-name="${escapeHtml(displayName)}"
                     style="--x:${x}px; --y:${y}px; --scale:${scale}; --opacity:${opacity}; --z:${zIndex}; --size:${itemSize}px;">
-                <img src="${avatarUrl}" alt=""
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="${avatarUrl}" alt="">
                 <span class="persona-arc-fallback">\u{1F464}</span>
                 <span class="persona-arc-label">${escapeHtml(displayName)}</span>
             </button>
         `;
     });
     container.innerHTML = html;
+    container.querySelectorAll(".persona-arc-item img").forEach((img) => {
+      img.addEventListener("error", () => {
+        img.style.display = "none";
+        const fallback = img.nextElementSibling;
+        if (fallback) fallback.style.display = "flex";
+      });
+    });
     updateIndicator(items.length, maxScroll);
     container.querySelectorAll(".persona-arc-item").forEach((item) => {
       item.addEventListener("click", handleItemClick);
@@ -5913,11 +5976,12 @@ ${message}` : message;
     const centerMode = document.getElementById("persona-center-mode");
     if (!centerMode) return;
     const visibleCount = getVisibleCount();
-    const modeText = state2.mode === "favorites" ? "\u2B50" : "\u{1F465}";
+    const modeText = state2.mode === "favorites" ? "\u2B50" : state2.mode === "recent" ? "\u{1F550}" : "\u{1F465}";
+    const modeLabel = state2.mode === "favorites" ? "\uC990\uACA8\uCC3E\uAE30" : state2.mode === "recent" ? "\uCD5C\uADFC \uC0AC\uC6A9" : "\uC804\uCCB4";
     if (totalItems > visibleCount) {
       centerMode.textContent = `${modeText} ${state2.selectedIndex + 1}/${totalItems}`;
     } else {
-      centerMode.textContent = state2.mode === "favorites" ? "\u2B50 \uC990\uACA8\uCC3E\uAE30" : "\u{1F465} \uC804\uCCB4";
+      centerMode.textContent = `${modeText} ${modeLabel}`;
     }
   }
   function scrollToCurrentPersona() {
@@ -5939,7 +6003,15 @@ ${message}` : message;
   }
   function updateMode() {
     const centerMode = document.getElementById("persona-center-mode");
-    if (centerMode) centerMode.textContent = state2.mode === "favorites" ? "\u2B50 \uC990\uACA8\uCC3E\uAE30" : "\u{1F465} \uC804\uCCB4";
+    if (centerMode) {
+      if (state2.mode === "favorites") {
+        centerMode.textContent = "\u2B50 \uC990\uACA8\uCC3E\uAE30";
+      } else if (state2.mode === "recent") {
+        centerMode.textContent = "\u{1F550} \uCD5C\uADFC \uC0AC\uC6A9";
+      } else {
+        centerMode.textContent = "\u{1F465} \uC804\uCCB4";
+      }
+    }
   }
   function openMenu() {
     const arc = document.getElementById("persona-menu-arc");
@@ -5972,7 +6044,13 @@ ${message}` : message;
     fab.classList.remove("open");
   }
   function toggleMode() {
-    state2.mode = state2.mode === "favorites" ? "all" : "favorites";
+    if (state2.mode === "favorites") {
+      state2.mode = "recent";
+    } else if (state2.mode === "recent") {
+      state2.mode = "all";
+    } else {
+      state2.mode = "favorites";
+    }
     state2.selectedIndex = 0;
     renderItems();
     updateMode();
@@ -5999,7 +6077,15 @@ ${message}` : message;
     if (!state2.isOpen) {
       openMenu();
     } else if (state2.mode === "favorites") {
-      toggleMode();
+      state2.mode = "recent";
+      state2.selectedIndex = 0;
+      renderItems();
+      updateMode();
+    } else if (state2.mode === "recent") {
+      state2.mode = "all";
+      state2.selectedIndex = 0;
+      renderItems();
+      updateMode();
     } else {
       closeMenu();
     }
@@ -6043,12 +6129,19 @@ ${message}` : message;
       }
     }
     if (centerMode) {
-      centerMode.textContent = state2.mode === "favorites" ? "\u2B50 \uC990\uACA8\uCC3E\uAE30" : "\u{1F465} \uC804\uCCB4";
+      if (state2.mode === "favorites") {
+        centerMode.textContent = "\u2B50 \uC990\uACA8\uCC3E\uAE30";
+      } else if (state2.mode === "recent") {
+        centerMode.textContent = "\u{1F550} \uCD5C\uADFC \uC0AC\uC6A9";
+      } else {
+        centerMode.textContent = "\u{1F465} \uC804\uCCB4";
+      }
     }
   }
   async function applyPersona(key) {
     try {
       await api.setPersona(key);
+      storage.recordPersonaUsage(key);
       showToast(`\uD398\uB974\uC18C\uB098: ${key.replace(/\.[^.]+$/, "")}`, "success");
       state2.currentPersona = key;
       await updateFabAvatar();

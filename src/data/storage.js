@@ -22,7 +22,8 @@ const DEFAULT_DATA = {
     charSortOption: 'recent',  // 기본값: 최근 채팅순
     autoFavoriteRules: {
         recentDays: 0,
-    }
+    },
+    personaRecentUsage: {}  // { [personaKey]: timestamp(number) } - 최근 사용순 정렬용
 };
 
 /**
@@ -143,6 +144,16 @@ class StorageManager {
         if (data.characterFavorites && data.characterFavorites.length > 1000) {
             data.characterFavorites = data.characterFavorites.slice(-1000);
             console.log(`[Storage] Cleaned characterFavorites`);
+        }
+        
+        // 4. personaRecentUsage 크기 제한 (최대 200개)
+        if (data.personaRecentUsage) {
+            const entries = Object.entries(data.personaRecentUsage);
+            if (entries.length > 200) {
+                entries.sort((a, b) => b[1] - a[1]); // 최신순
+                data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
+                console.log(`[Storage] Cleaned personaRecentUsage`);
+            }
         }
         
         this._data = data;
@@ -523,6 +534,46 @@ class StorageManager {
      */
     getPersonaFavorites() {
         return this.load().personaFavorites || [];
+    }
+    
+    // ============================================
+    // 페르소나 최근 사용 기록
+    // ============================================
+    
+    /**
+     * 페르소나 사용 기록 저장
+     * @param {string} personaKey - 페르소나 키
+     */
+    recordPersonaUsage(personaKey) {
+        this.update((data) => {
+            if (!data.personaRecentUsage) data.personaRecentUsage = {};
+            data.personaRecentUsage[personaKey] = Date.now();
+            
+            // 무한 증가 방지: 최대 200개 유지
+            const entries = Object.entries(data.personaRecentUsage);
+            if (entries.length > 200) {
+                entries.sort((a, b) => b[1] - a[1]); // 최신순
+                data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
+            }
+        });
+    }
+    
+    /**
+     * 특정 페르소나의 마지막 사용 시간 반환
+     * @param {string} personaKey - 페르소나 키
+     * @returns {number} timestamp (없으면 0)
+     */
+    getPersonaLastUsed(personaKey) {
+        const data = this.load();
+        return (data.personaRecentUsage || {})[personaKey] || 0;
+    }
+    
+    /**
+     * 전체 사용 기록 반환 (정렬용)
+     * @returns {Object<string, number>}
+     */
+    getPersonaRecentUsage() {
+        return this.load().personaRecentUsage || {};
     }
 }
 
