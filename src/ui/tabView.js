@@ -44,9 +44,13 @@ const state = {
 
 // 탭별 로딩 가드 (전역 isLoading 대신)
 const loading = {
+    characters: false,
     recent: false,
     library: false,
 };
+
+// 컨텍스트 메뉴 리스너 참조 (정리용)
+let contextMenuCloseHandler = null;
 
 // DOM 변화 감지용 Observer
 let recentDomObserver = null;
@@ -115,10 +119,19 @@ export async function cacheRecentChatsBeforeOpen() {
 }
 
 function cacheElements(recentChatElements) {
+    // 이미 캐싱된 아바타 추적 (중복 방지)
+    const existingAvatars = new Set(
+        state.cachedRecentChats.map(c => c.avatar)
+    );
+    
     recentChatElements.forEach((el, idx) => {
         try {
             const file = el.getAttribute('data-file') || '';
             const avatar = el.getAttribute('data-avatar') || '';
+            
+            // 이미 캐싱된 아바타면 스킵
+            if (existingAvatars.has(avatar)) return;
+            
             const groupAttr = el.getAttribute('data-group');
             const isGroup = groupAttr !== null && groupAttr !== '';
             
@@ -252,6 +265,9 @@ function createTabContentContainer(tabId) {
 // ============================================
 
 async function loadTabData(tabId) {
+    // characters 탭은 별도 로딩 로직 없음
+    if (tabId === 'characters') return;
+    
     // 탭별 로딩 가드 (다른 탭 로딩이 최근 탭을 막지 않음)
     if (loading[tabId]) return;
     loading[tabId] = true;
@@ -462,56 +478,68 @@ async function loadLibrary() {
         }
     }
     
-    // API로 채팅 정보 가져오기
-    for (const [avatar, chats] of chatsByAvatar) {
-        try {
-            const apiChats = await api.fetchChatsForCharacter(avatar);
-            const entityInfo = characters.find(c => c.avatar === avatar);
-            const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, '');
-            
-            for (const { key, fileName } of chats) {
-                // API 응답에서 해당 채팅 찾기
-                const apiChat = apiChats.find(c => 
-                    c.file_name === fileName || 
-                    c.file_name === fileName.replace('.jsonl', '') ||
-                    `${c.file_name}.jsonl` === fileName
-                );
+    // API로 채팅 정보 가져오기 (병렬 처리)
+    await Promise.allSettled(
+        [...chatsByAvatar.entries()].map(async ([avatar, chats]) => {
+            try {
+                const apiChats = await api.fetchChatsForCharacter(avatar);
+                const entityInfo = characters.find(c => c.avatar === avatar);
+                const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, '');
                 
-                const cachedTime = lastChatCache.lastChatTimes.get(avatar);
-                const lastChatTime = typeof cachedTime === 'number' ? cachedTime : cachedTime?.time || 0;
-                
-                state.libraryChats.push({
-                    key,
-                    avatar,
-                    fileName,
-                    file: fileName,
-                    characterName: name,
-                    name,
-                    type: 'char',
-                    isGroup: false,
-                    lastChatTime,
-                    preview: apiChat?.mes || apiChat?.preview || '',
-                    messageCount: apiChat?.chat_items || 0,
-                    isFavorite: storage.isFavorite(avatar, fileName),
-                    folderId: storage.getChatFolder(avatar, fileName),
-                });
+                for (const { key, fileName } of chats) {
+                    // API 응답에서 해당 채팅 찾기
+                    const apiChat = apiChats.find(c => 
+                        c.file_name === fileName || 
+                        c.file_name === fileName.replace('.jsonl', '') ||
+                        `${c.file_name}.jsonl` === fileName
+                    );
+                    
+                    const cachedTime = lastChatCache.lastChatTimes.get(avatar);
+                    const lastChatTime = typeof cachedTime === 'number' ? cachedTime : cachedTime?.time || 0;
+                    
+                    state.libraryChats.push({
+                        key,
+                        avatar,
+                        fileName,
+                        file: fileName,
+                        characterName: name,
+                        name,
+                        type: 'char',
+                        isGroup: false,
+                        lastChatTime,
+                        preview: apiChat?.mes || apiChat?.preview || '',
+                        messageCount: apiChat?.chat_items || 0,
+                        isFavorite: storage.isFavorite(avatar, fileName),
+                        folderId: storage.getChatFolder(avatar, fileName),
+                    });
+                }
+            } catch (e) {
+                logError(`Failed to fetch chats for ${avatar}:`, e);
             }
-        } catch (e) {
-            logError(`Failed to fetch chats for ${avatar}:`, e);
-        }
-    }
+        })
+    );
     
     state.libraryChats.sort((a, b) => b.lastChatTime - a.lastChatTime);
     log(`Loaded ${state.libraryChats.length} library chats`);
 }
 
-// 키에서 avatar와 fileName만 추출 (간단한 파싱)
+// 키에서 avatar와 fileName만 추출 (확장자 기반 파싱 - _ 포함 아바타명 지원)
 function parseKeyBasic(key) {
-    const lastUnderscoreIdx = key.lastIndexOf('_');
-    if (lastUnderscoreIdx === -1) return null;
+    // avatar는 항상 .png, .jpg, .webp 등으로 끝남
+    const avatarMatch = key.match(/^(.+?\.(png|jpg|jpeg|gif|webp))_(.+)$/i);
+    if (!avatarMatch) {
+        // 기존 폴백: lastIndexOf
+        const lastUnderscoreIdx = key.lastIndexOf('_');
+        if (lastUnderscoreIdx === -1) return null;
+        
+        const avatar = key.substring(0, lastUnderscoreIdx);
+        const fileName = key.substring(lastUnderscoreIdx + 1);
+        if (avatar.startsWith('group:')) return null;
+        return { avatar, fileName };
+    }
     
-    const avatar = key.substring(0, lastUnderscoreIdx);
-    const fileName = key.substring(lastUnderscoreIdx + 1);
+    const avatar = avatarMatch[1];
+    const fileName = avatarMatch[3];
     
     // 그룹은 일단 제외 (API 다름)
     if (avatar.startsWith('group:')) return null;
@@ -521,14 +549,23 @@ function parseKeyBasic(key) {
 
 function parseChatKey(key, characters, groups) {
     // 키 형식: avatar.png_chatfile.jsonl (아바타에 _가 있을 수 있음)
-    const lastUnderscoreIdx = key.lastIndexOf('_');
-    if (lastUnderscoreIdx === -1) {
-        log(`Invalid key format (no underscore): ${key}`);
-        return null;
-    }
+    // 확장자 기반 파싱으로 정확하게 분리
+    let avatar, fileName;
     
-    const avatar = key.substring(0, lastUnderscoreIdx);
-    const fileName = key.substring(lastUnderscoreIdx + 1);
+    const avatarMatch = key.match(/^((?:group:)?.+?\.(png|jpg|jpeg|gif|webp))_(.+)$/i);
+    if (avatarMatch) {
+        avatar = avatarMatch[1];
+        fileName = avatarMatch[3];
+    } else {
+        // 기존 폴백: lastIndexOf
+        const lastUnderscoreIdx = key.lastIndexOf('_');
+        if (lastUnderscoreIdx === -1) {
+            log(`Invalid key format (no underscore): ${key}`);
+            return null;
+        }
+        avatar = key.substring(0, lastUnderscoreIdx);
+        fileName = key.substring(lastUnderscoreIdx + 1);
+    }
     
     const isGroup = avatar.startsWith('group:');
     const actualAvatar = isGroup ? avatar.replace('group:', '') : avatar;
@@ -805,8 +842,8 @@ function createChatItemHTML(chat, idx, source) {
     // 한 줄로: 캐릭터명 - 채팅명
     const titleLine = displayName ? `${escapeHtml(charName)} - ${escapeHtml(displayName)}` : escapeHtml(charName);
     
-    // data-full-preview는 따옴표 충돌 방지를 위해 Base64 인코딩
-    const encodedPreview = preview ? btoa(unescape(encodeURIComponent(preview))) : '';
+    // data-full-preview는 따옴표 충돌 방지를 위해 Base64 인코딩 (모던 방식)
+    const encodedPreview = preview ? safeBase64Encode(preview) : '';
     
     return `
         <div class="lobby-chat-item ${isFav ? 'is-favorite' : ''}" 
@@ -946,8 +983,8 @@ async function openRecentChat(chat, idx) {
     // 로비 닫기
     closeLobby();
     
-    // DOM이 다시 보이도록 약간 대기
-    await new Promise(r => setTimeout(r, 150));
+    // DOM이 다시 보이도록 대기 (rAF 2회 체이닝이 더 안정적)
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     
     // selector로 원본 DOM 요소 찾기 (isGroup 처리 포함)
     const selector = chat.isGroup
@@ -1015,6 +1052,11 @@ function closeContextMenu() {
     if (state.activeContextMenu) {
         state.activeContextMenu.remove();
         state.activeContextMenu = null;
+    }
+    // 리스너도 정리
+    if (contextMenuCloseHandler) {
+        document.removeEventListener('click', contextMenuCloseHandler);
+        contextMenuCloseHandler = null;
     }
 }
 
@@ -1094,20 +1136,34 @@ function showFolderMenu(targetBtn, avatar, fileName) {
         document.dispatchEvent(event);
     });
     
-    // 외부 클릭 시 닫기
+    // 외부 클릭 시 닫기 (리스너 참조 저장)
     setTimeout(() => {
-        document.addEventListener('click', function closeHandler(e) {
+        contextMenuCloseHandler = function(e) {
             if (!menu.contains(e.target)) {
                 closeContextMenu();
-                document.removeEventListener('click', closeHandler);
             }
-        });
+        };
+        document.addEventListener('click', contextMenuCloseHandler);
     }, 10);
 }
 
 // ============================================
 // 유틸리티
 // ============================================
+
+// 모던 Base64 인코딩 (deprecated unescape 대체)
+function safeBase64Encode(str) {
+    try {
+        const bytes = new TextEncoder().encode(str);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    } catch (e) {
+        return '';
+    }
+}
 
 function getTimeAgo(timestamp) {
     if (!timestamp) return '';
@@ -1348,9 +1404,12 @@ export function startRecentDomObserver() {
     // 이미 감시 중이면 무시
     if (recentDomObserver) return;
     
-    // #rm_print_characters_block 또는 body에서 감시
-    const container = document.querySelector('#rm_print_characters_block') || document.body;
-    if (!container) return;
+    // #rm_print_characters_block에서만 감시 (body 폴백 제거 - 성능 문제)
+    const container = document.querySelector('#rm_print_characters_block');
+    if (!container) {
+        log('[Observer] Target container #rm_print_characters_block not found, skipping');
+        return;
+    }
     
     const debouncedUpdate = debounce(() => {
         const els = document.querySelectorAll('.recentChat');

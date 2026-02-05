@@ -4400,9 +4400,11 @@ ${message}` : message;
     activeContextMenu: null
   };
   var loading = {
+    characters: false,
     recent: false,
     library: false
   };
+  var contextMenuCloseHandler = null;
   var recentDomObserver = null;
   var TABS = [
     { id: "characters", icon: "\u{1F465}", name: "\uCE90\uB9AD\uD130" },
@@ -4452,10 +4454,14 @@ ${message}` : message;
     }
   }
   function cacheElements(recentChatElements) {
+    const existingAvatars = new Set(
+      state.cachedRecentChats.map((c) => c.avatar)
+    );
     recentChatElements.forEach((el, idx) => {
       try {
         const file = el.getAttribute("data-file") || "";
         const avatar = el.getAttribute("data-avatar") || "";
+        if (existingAvatars.has(avatar)) return;
         const groupAttr = el.getAttribute("data-group");
         const isGroup = groupAttr !== null && groupAttr !== "";
         const characterName = el.querySelector(".characterName")?.textContent?.trim() || "";
@@ -4556,6 +4562,7 @@ ${message}` : message;
     return container;
   }
   async function loadTabData(tabId) {
+    if (tabId === "characters") return;
     if (loading[tabId]) return;
     loading[tabId] = true;
     try {
@@ -4720,45 +4727,54 @@ ${message}` : message;
         chatsByAvatar.get(parsed.avatar).push({ key, fileName: parsed.fileName });
       }
     }
-    for (const [avatar, chats] of chatsByAvatar) {
-      try {
-        const apiChats = await api.fetchChatsForCharacter(avatar);
-        const entityInfo = characters.find((c) => c.avatar === avatar);
-        const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, "");
-        for (const { key, fileName } of chats) {
-          const apiChat = apiChats.find(
-            (c) => c.file_name === fileName || c.file_name === fileName.replace(".jsonl", "") || `${c.file_name}.jsonl` === fileName
-          );
-          const cachedTime = lastChatCache.lastChatTimes.get(avatar);
-          const lastChatTime = typeof cachedTime === "number" ? cachedTime : cachedTime?.time || 0;
-          state.libraryChats.push({
-            key,
-            avatar,
-            fileName,
-            file: fileName,
-            characterName: name,
-            name,
-            type: "char",
-            isGroup: false,
-            lastChatTime,
-            preview: apiChat?.mes || apiChat?.preview || "",
-            messageCount: apiChat?.chat_items || 0,
-            isFavorite: storage.isFavorite(avatar, fileName),
-            folderId: storage.getChatFolder(avatar, fileName)
-          });
+    await Promise.allSettled(
+      [...chatsByAvatar.entries()].map(async ([avatar, chats]) => {
+        try {
+          const apiChats = await api.fetchChatsForCharacter(avatar);
+          const entityInfo = characters.find((c) => c.avatar === avatar);
+          const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, "");
+          for (const { key, fileName } of chats) {
+            const apiChat = apiChats.find(
+              (c) => c.file_name === fileName || c.file_name === fileName.replace(".jsonl", "") || `${c.file_name}.jsonl` === fileName
+            );
+            const cachedTime = lastChatCache.lastChatTimes.get(avatar);
+            const lastChatTime = typeof cachedTime === "number" ? cachedTime : cachedTime?.time || 0;
+            state.libraryChats.push({
+              key,
+              avatar,
+              fileName,
+              file: fileName,
+              characterName: name,
+              name,
+              type: "char",
+              isGroup: false,
+              lastChatTime,
+              preview: apiChat?.mes || apiChat?.preview || "",
+              messageCount: apiChat?.chat_items || 0,
+              isFavorite: storage.isFavorite(avatar, fileName),
+              folderId: storage.getChatFolder(avatar, fileName)
+            });
+          }
+        } catch (e) {
+          logError(`Failed to fetch chats for ${avatar}:`, e);
         }
-      } catch (e) {
-        logError(`Failed to fetch chats for ${avatar}:`, e);
-      }
-    }
+      })
+    );
     state.libraryChats.sort((a, b) => b.lastChatTime - a.lastChatTime);
     log(`Loaded ${state.libraryChats.length} library chats`);
   }
   function parseKeyBasic(key) {
-    const lastUnderscoreIdx = key.lastIndexOf("_");
-    if (lastUnderscoreIdx === -1) return null;
-    const avatar = key.substring(0, lastUnderscoreIdx);
-    const fileName = key.substring(lastUnderscoreIdx + 1);
+    const avatarMatch = key.match(/^(.+?\.(png|jpg|jpeg|gif|webp))_(.+)$/i);
+    if (!avatarMatch) {
+      const lastUnderscoreIdx = key.lastIndexOf("_");
+      if (lastUnderscoreIdx === -1) return null;
+      const avatar2 = key.substring(0, lastUnderscoreIdx);
+      const fileName2 = key.substring(lastUnderscoreIdx + 1);
+      if (avatar2.startsWith("group:")) return null;
+      return { avatar: avatar2, fileName: fileName2 };
+    }
+    const avatar = avatarMatch[1];
+    const fileName = avatarMatch[3];
     if (avatar.startsWith("group:")) return null;
     return { avatar, fileName };
   }
@@ -4941,7 +4957,7 @@ ${message}` : message;
     const avatarSrc = chat.thumbnailSrc || (chat.avatar ? `/characters/${chat.avatar}` : "");
     const avatarHTML = avatarSrc ? `<div class="chat-avatar-lg"><img src="${escapeHtml(avatarSrc)}" alt="" onerror="this.parentElement.innerHTML='\u{1F464}'"></div>` : `<div class="chat-avatar-lg">\u{1F464}</div>`;
     const titleLine = displayName ? `${escapeHtml(charName)} - ${escapeHtml(displayName)}` : escapeHtml(charName);
-    const encodedPreview = preview ? btoa(unescape(encodeURIComponent(preview))) : "";
+    const encodedPreview = preview ? safeBase64Encode(preview) : "";
     return `
         <div class="lobby-chat-item ${isFav ? "is-favorite" : ""}" 
              data-avatar="${escapeHtml(chat.avatar)}"
@@ -5045,7 +5061,7 @@ ${message}` : message;
   async function openRecentChat(chat, idx) {
     log("Opening recent chat:", chat.file, chat.avatar);
     closeLobby();
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const selector = chat.isGroup ? `.recentChat[data-group="${chat.avatar}"]` : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
     const recentEl = document.querySelector(selector);
     if (recentEl) {
@@ -5091,6 +5107,10 @@ ${message}` : message;
     if (state.activeContextMenu) {
       state.activeContextMenu.remove();
       state.activeContextMenu = null;
+    }
+    if (contextMenuCloseHandler) {
+      document.removeEventListener("click", contextMenuCloseHandler);
+      contextMenuCloseHandler = null;
     }
   }
   function showFolderMenu(targetBtn, avatar, fileName) {
@@ -5153,13 +5173,25 @@ ${message}` : message;
       document.dispatchEvent(event);
     });
     setTimeout(() => {
-      document.addEventListener("click", function closeHandler(e) {
+      contextMenuCloseHandler = function(e) {
         if (!menu.contains(e.target)) {
           closeContextMenu();
-          document.removeEventListener("click", closeHandler);
         }
-      });
+      };
+      document.addEventListener("click", contextMenuCloseHandler);
     }, 10);
+  }
+  function safeBase64Encode(str) {
+    try {
+      const bytes = new TextEncoder().encode(str);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    } catch (e) {
+      return "";
+    }
   }
   function getTimeAgo(timestamp) {
     if (!timestamp) return "";
@@ -5369,8 +5401,11 @@ ${message}` : message;
   }
   function startRecentDomObserver() {
     if (recentDomObserver) return;
-    const container = document.querySelector("#rm_print_characters_block") || document.body;
-    if (!container) return;
+    const container = document.querySelector("#rm_print_characters_block");
+    if (!container) {
+      log("[Observer] Target container #rm_print_characters_block not found, skipping");
+      return;
+    }
     const debouncedUpdate = debounce2(() => {
       const els = document.querySelectorAll(".recentChat");
       if (els.length > 0) {
@@ -5787,9 +5822,26 @@ ${message}` : message;
     // 한 번에 스크롤하는 개수
     SCROLL_COOLDOWN: 60,
     // 스크롤 쿨다운
-    ITEM_WIDTH: 50
+    ITEM_WIDTH: 50,
     // 아이템 간격 (드래그 계산용) - 감도 높임
+    MOMENTUM_FRICTION: 0.88,
+    // 관성 감속 (0.85~0.88이 자연스러움)
+    MOMENTUM_MULTIPLIER: 8
+    // 속도-거리 변환 배수
   };
+  var preloadedUrls = /* @__PURE__ */ new Set();
+  function getCurrentItems() {
+    if (state2.mode === "favorites") return state2.favorites;
+    if (state2.mode === "recent") {
+      const usage = storage.getPersonaRecentUsage();
+      return [...state2.allPersonas].sort((a, b) => (usage[b.key] || 0) - (usage[a.key] || 0));
+    }
+    return state2.allPersonas;
+  }
+  function getMaxScroll() {
+    const items = getCurrentItems();
+    return Math.max(0, items.length - getVisibleCount());
+  }
   function getVisibleCount() {
     return 7;
   }
@@ -5892,23 +5944,10 @@ ${message}` : message;
   function renderItems() {
     const container = document.getElementById("persona-arc-items");
     if (!container) return;
-    let items;
-    if (state2.mode === "favorites") {
-      items = state2.favorites;
-    } else if (state2.mode === "recent") {
-      const usage = storage.getPersonaRecentUsage();
-      items = [...state2.allPersonas].sort((a, b) => {
-        return (usage[b.key] || 0) - (usage[a.key] || 0);
-      });
-    } else {
-      items = state2.allPersonas;
-    }
+    let items = getCurrentItems();
     if (items.length === 0 && state2.mode === "favorites") {
       state2.mode = "recent";
-      const usage = storage.getPersonaRecentUsage();
-      items = [...state2.allPersonas].sort((a, b) => {
-        return (usage[b.key] || 0) - (usage[a.key] || 0);
-      });
+      items = getCurrentItems();
       updateMode();
     }
     if (items.length === 0) {
@@ -5917,7 +5956,7 @@ ${message}` : message;
       updateIndicator(0, 0);
       return;
     }
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     state2.selectedIndex = Math.min(Math.max(0, state2.selectedIndex), maxScroll);
     const visibleCount_ = getVisibleCount();
     const visibleItems = items.slice(state2.selectedIndex, state2.selectedIndex + visibleCount_);
@@ -5993,12 +6032,15 @@ ${message}` : message;
     }
   }
   function preloadNearbyImages() {
-    const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
+    const items = getCurrentItems();
     const start = Math.max(0, state2.selectedIndex - 3);
     const end = Math.min(items.length, state2.selectedIndex + getVisibleCount() + 3);
     for (let i = start; i < end; i++) {
-      const img = new Image();
-      img.src = `/User Avatars/${encodeURIComponent(items[i].key)}`;
+      const url = `/User Avatars/${encodeURIComponent(items[i].key)}`;
+      if (!preloadedUrls.has(url)) {
+        preloadedUrls.add(url);
+        new Image().src = url;
+      }
     }
   }
   function updateMode() {
@@ -6063,8 +6105,7 @@ ${message}` : message;
     }
   }
   function scrollNext() {
-    const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     if (state2.selectedIndex < maxScroll) {
       state2.selectedIndex = Math.min(maxScroll, state2.selectedIndex + CONFIG2.SCROLL_STEP);
       scheduleRender();
@@ -6181,8 +6222,7 @@ ${message}` : message;
     if (!state2.isOpen) return;
     e.preventDefault();
     const direction = e.deltaY > 0 ? 1 : -1;
-    const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     const newIndex = Math.max(0, Math.min(maxScroll, state2.selectedIndex + direction));
     if (newIndex !== state2.selectedIndex) {
       state2.selectedIndex = newIndex;
@@ -6222,13 +6262,15 @@ ${message}` : message;
     lastTouchX = currentX;
     lastTouchTime = currentTime;
     const threshold = 30;
-    const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     const accumulatedDelta = touchStartX - currentX;
     const steps = Math.floor(Math.abs(accumulatedDelta) / threshold);
     if (steps > 0) {
       const direction = accumulatedDelta > 0 ? 1 : -1;
-      const targetIndex = Math.max(0, Math.min(maxScroll, state2.selectedIndex + direction));
+      const targetIndex = Math.max(0, Math.min(
+        maxScroll,
+        state2.selectedIndex + direction * steps
+      ));
       if (targetIndex !== state2.selectedIndex) {
         state2.selectedIndex = targetIndex;
         scheduleRender();
@@ -6241,11 +6283,13 @@ ${message}` : message;
     if (Math.abs(touchVelocity) > 0.3) {
       startMomentumScroll();
     }
-    touchMoved = false;
+    setTimeout(() => {
+      touchMoved = false;
+    }, 50);
     touchVelocity = 0;
   }
   function startMomentumScroll() {
-    const friction = 0.92;
+    const friction = CONFIG2.MOMENTUM_FRICTION;
     const minVelocity = 0.05;
     let velocity = touchVelocity;
     let accumulated = 0;
@@ -6255,9 +6299,8 @@ ${message}` : message;
         momentumTimer = null;
         return;
       }
-      accumulated += velocity * 8;
-      const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
-      const maxScroll = Math.max(0, items.length - 1);
+      accumulated += velocity * CONFIG2.MOMENTUM_MULTIPLIER;
+      const maxScroll = getMaxScroll();
       const threshold = 30;
       if (Math.abs(accumulated) >= threshold) {
         const direction = accumulated > 0 ? 1 : -1;
@@ -6292,8 +6335,7 @@ ${message}` : message;
     dragStartX = e.clientX;
     pcAccumulatedDrag += deltaX;
     const threshold = CONFIG2.ITEM_WIDTH;
-    const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     if (Math.abs(pcAccumulatedDrag) >= threshold) {
       const direction = pcAccumulatedDrag > 0 ? 1 : -1;
       const newIndex = Math.max(0, Math.min(maxScroll, state2.selectedIndex + direction));
@@ -6341,6 +6383,19 @@ ${message}` : message;
       arc.addEventListener("mousedown", handleMouseDown);
     }
     document.addEventListener("keydown", handleKeydown);
+    window.addEventListener("blur", handleWindowBlur);
+  }
+  function handleWindowBlur() {
+    if (isDragging) {
+      isDragging = false;
+      pcAccumulatedDrag = 0;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    }
+    if (momentumTimer) {
+      cancelAnimationFrame(momentumTimer);
+      momentumTimer = null;
+    }
   }
   function handleCenterClick(e) {
     e.preventDefault();
@@ -6356,6 +6411,12 @@ ${message}` : message;
     document.removeEventListener("keydown", handleKeydown);
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
+    window.removeEventListener("blur", handleWindowBlur);
+    if (momentumTimer) {
+      cancelAnimationFrame(momentumTimer);
+      momentumTimer = null;
+    }
+    preloadedUrls.clear();
     const container = document.getElementById("persona-radial-container");
     if (container) container.remove();
     state2.isInitialized = false;

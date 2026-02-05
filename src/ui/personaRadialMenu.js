@@ -35,7 +35,29 @@ const CONFIG = {
     SCROLL_STEP: 1,         // 한 번에 스크롤하는 개수
     SCROLL_COOLDOWN: 60,    // 스크롤 쿨다운
     ITEM_WIDTH: 50,         // 아이템 간격 (드래그 계산용) - 감도 높임
+    MOMENTUM_FRICTION: 0.88,    // 관성 감속 (0.85~0.88이 자연스러움)
+    MOMENTUM_MULTIPLIER: 8,     // 속도-거리 변환 배수
 };
+
+// 이미지 프리로드 캐싱
+const preloadedUrls = new Set();
+
+// 현재 모드의 아이템 목록 반환
+function getCurrentItems() {
+    if (state.mode === 'favorites') return state.favorites;
+    if (state.mode === 'recent') {
+        const usage = storage.getPersonaRecentUsage();
+        return [...state.allPersonas].sort((a, b) => 
+            (usage[b.key] || 0) - (usage[a.key] || 0));
+    }
+    return state.allPersonas;
+}
+
+// 최대 스크롤 인덱스 계산 (마지막에서 visibleCount만큼 보이게)
+function getMaxScroll() {
+    const items = getCurrentItems();
+    return Math.max(0, items.length - getVisibleCount());
+}
 
 // 페르소나 표시 개수: 7개 고정
 function getVisibleCount() {
@@ -79,9 +101,10 @@ function scheduleRender() {
     });
 }
 
-// 인디케이터는 이제 center-mode에 통합됨 (별도 표시/숨김 불필요)
+// 인디케이터는 이제 center-mode에 통합됨 - 레거시 호환용 빈 함수
 function showIndicator() {
-    // center-mode에서 자동 업데이트되므로 별도 처리 불필요
+    // NOTE: updateIndicator()가 renderItems에서 호출되어 center-mode에 표시됨
+    // scrollPrev/scrollNext에서 호출하지만 실제 동작은 scheduleRender에서 처리
 }
 
 // ============================================
@@ -195,26 +218,13 @@ function renderItems() {
     const container = document.getElementById('persona-arc-items');
     if (!container) return;
     
-    // 모드별 아이템 결정
-    let items;
-    if (state.mode === 'favorites') {
-        items = state.favorites;
-    } else if (state.mode === 'recent') {
-        const usage = storage.getPersonaRecentUsage();
-        items = [...state.allPersonas].sort((a, b) => {
-            return (usage[b.key] || 0) - (usage[a.key] || 0);
-        });
-    } else {
-        items = state.allPersonas;
-    }
+    // 모드별 아이템 결정 (헬퍼 함수 사용)
+    let items = getCurrentItems();
     
     // 즐겨찾기 없으면 자동으로 최근 사용순 모드로 전환
     if (items.length === 0 && state.mode === 'favorites') {
         state.mode = 'recent';
-        const usage = storage.getPersonaRecentUsage();
-        items = [...state.allPersonas].sort((a, b) => {
-            return (usage[b.key] || 0) - (usage[a.key] || 0);
-        });
+        items = getCurrentItems();
         updateMode();
     }
     
@@ -225,8 +235,8 @@ function renderItems() {
         return;
     }
     
-    // 스크롤 인덱스 정규화
-    const maxScroll = Math.max(0, items.length - 1);
+    // 스크롤 인덱스 정규화 (마지막에서 visibleCount만큼 보이게)
+    const maxScroll = getMaxScroll();
     state.selectedIndex = Math.min(Math.max(0, state.selectedIndex), maxScroll);
     
     // 보이는 아이템 계산
@@ -338,15 +348,18 @@ function scrollToCurrentPersona() {
     }
 }
 
-// 앞뒤 이미지 프리로딩 (DOM 안 건드림)
+// 앞뒤 이미지 프리로딩 (이미 로드된 URL은 스킵)
 function preloadNearbyImages() {
-    const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
+    const items = getCurrentItems();
     const start = Math.max(0, state.selectedIndex - 3);
     const end = Math.min(items.length, state.selectedIndex + getVisibleCount() + 3);
     
     for (let i = start; i < end; i++) {
-        const img = new Image();
-        img.src = `/User Avatars/${encodeURIComponent(items[i].key)}`;
+        const url = `/User Avatars/${encodeURIComponent(items[i].key)}`;
+        if (!preloadedUrls.has(url)) {
+            preloadedUrls.add(url);
+            new Image().src = url;
+        }
     }
 }
 
@@ -433,8 +446,7 @@ function scrollPrev() {
 }
 
 function scrollNext() {
-    const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1); // 끝까지 스크롤 가능
+    const maxScroll = getMaxScroll();
     if (state.selectedIndex < maxScroll) {
         state.selectedIndex = Math.min(maxScroll, state.selectedIndex + CONFIG.SCROLL_STEP);
         scheduleRender();
@@ -483,9 +495,8 @@ async function handleItemClick(e) {
     await applyPersona(key);
 }
 
-function handleItemHover(e) {
-    // 호버 시 중앙 표시 변경하지 않음 - 현재 선택된 페르소나만 표시
-}
+// handleItemHover: 의도적으로 비움 - 중앙에는 현재 선택된 페르소나만 표시
+function handleItemHover(e) { }
 
 function updateCenterDisplay() {
     const centerName = document.getElementById('persona-center-name');
@@ -580,8 +591,7 @@ function handleWheel(e) {
     
     // 쿨다운 없이 바로 스크롤 (촤르륵)
     const direction = e.deltaY > 0 ? 1 : -1;
-    const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     
     const newIndex = Math.max(0, Math.min(maxScroll, state.selectedIndex + direction));
     if (newIndex !== state.selectedIndex) {
@@ -635,15 +645,16 @@ function handleTouchMove(e) {
     
     // 드래그 중 즉시 인덱스 이동 (감도 향상: 30px)
     const threshold = 30;
-    const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     
     const accumulatedDelta = touchStartX - currentX;
     const steps = Math.floor(Math.abs(accumulatedDelta) / threshold);
     
+    // steps만큼 한번에 이동 (빠른 스와이프 대응)
     if (steps > 0) {
         const direction = accumulatedDelta > 0 ? 1 : -1;
-        const targetIndex = Math.max(0, Math.min(maxScroll, state.selectedIndex + direction));
+        const targetIndex = Math.max(0, Math.min(maxScroll, 
+            state.selectedIndex + direction * steps));
         
         if (targetIndex !== state.selectedIndex) {
             state.selectedIndex = targetIndex;
@@ -663,12 +674,13 @@ function handleTouchEnd(e) {
         startMomentumScroll();
     }
     
-    touchMoved = false;
+    // click 이벤트보다 늦게 리셋해야 오버레이가 닫히지 않음
+    setTimeout(() => { touchMoved = false; }, 50);
     touchVelocity = 0;
 }
 
 function startMomentumScroll() {
-    const friction = 0.92;
+    const friction = CONFIG.MOMENTUM_FRICTION;
     const minVelocity = 0.05;
     let velocity = touchVelocity;
     let accumulated = 0;
@@ -681,11 +693,10 @@ function startMomentumScroll() {
             return;
         }
         
-        // 속도를 거리로 변환
-        accumulated += velocity * 8;
+        // 속도를 거리로 변환 (CONFIG 상수 사용)
+        accumulated += velocity * CONFIG.MOMENTUM_MULTIPLIER;
         
-        const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
-        const maxScroll = Math.max(0, items.length - 1);
+        const maxScroll = getMaxScroll();
         const threshold = 30;
         
         if (Math.abs(accumulated) >= threshold) {
@@ -736,8 +747,7 @@ function handleMouseMove(e) {
     
     // 일정 거리 누적되면 인덱스 이동
     const threshold = CONFIG.ITEM_WIDTH;
-    const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
-    const maxScroll = Math.max(0, items.length - 1);
+    const maxScroll = getMaxScroll();
     
     if (Math.abs(pcAccumulatedDrag) >= threshold) {
         const direction = pcAccumulatedDrag > 0 ? 1 : -1;
@@ -802,6 +812,24 @@ function bindEvents() {
     
     // 글로벌 키보드 이벤트
     document.addEventListener('keydown', handleKeydown);
+    
+    // blur 시 드래그 리스너 정리 (탭 전환 등에서 mouseup 누락 방지)
+    window.addEventListener('blur', handleWindowBlur);
+}
+
+// 창 포커스 해제 시 드래그 상태 정리
+function handleWindowBlur() {
+    if (isDragging) {
+        isDragging = false;
+        pcAccumulatedDrag = 0;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+    }
+    // 관성 스크롤도 정지
+    if (momentumTimer) {
+        cancelAnimationFrame(momentumTimer);
+        momentumTimer = null;
+    }
 }
 
 function handleCenterClick(e) {
@@ -824,6 +852,17 @@ export function cleanupPersonaRadialMenu() {
     document.removeEventListener('keydown', handleKeydown);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
+    window.removeEventListener('blur', handleWindowBlur);
+    
+    // 관성 스크롤 정지
+    if (momentumTimer) {
+        cancelAnimationFrame(momentumTimer);
+        momentumTimer = null;
+    }
+    
+    // 프리로드 캐시 정리
+    preloadedUrls.clear();
+    
     const container = document.getElementById('persona-radial-container');
     if (container) container.remove();
     state.isInitialized = false;
