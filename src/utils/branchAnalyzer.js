@@ -8,7 +8,9 @@ import {
     createFingerprint,
     findCommonPrefixLength,
     setFingerprint,
+    setFingerprintBatch,
     setBranchInfo,
+    setBranchInfoBatch,
     getAllFingerprints
 } from '../data/branchCache.js';
 
@@ -38,7 +40,7 @@ function extractDateFromFileName(fileName) {
     // 패턴1: 밀리초 포함 (공백 없는 표준 형식)
     let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
     if (match) {
-        return new Date(
+        const timestamp = new Date(
             parseInt(match[1]),      // 년
             parseInt(match[2]) - 1,  // 월 (0부터 시작)
             parseInt(match[3]),      // 일
@@ -47,12 +49,13 @@ function extractDateFromFileName(fileName) {
             parseInt(match[6]),      // 초
             parseInt(match[7])       // 밀리초
         ).getTime();
+        return isNaN(timestamp) ? null : timestamp;
     }
     
     // 패턴2: 밀리초 없는 패턴 (Branch 파일 등)
     match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s/);
     if (match) {
-        return new Date(
+        const timestamp = new Date(
             parseInt(match[1]),      // 년
             parseInt(match[2]) - 1,  // 월 (0부터 시작)
             parseInt(match[3]),      // 일
@@ -61,12 +64,13 @@ function extractDateFromFileName(fileName) {
             parseInt(match[6]),      // 초
             0                        // 밀리초 (없으면 0)
         ).getTime();
+        return isNaN(timestamp) ? null : timestamp;
     }
     
     // 패턴3: imported 파일 (공백 포함) - "2026-1-23 @04h 07m 56s 422ms"
     match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s\s*(\d+)ms/);
     if (match) {
-        return new Date(
+        const timestamp = new Date(
             parseInt(match[1]),      // 년
             parseInt(match[2]) - 1,  // 월 (0부터 시작)
             parseInt(match[3]),      // 일
@@ -75,6 +79,7 @@ function extractDateFromFileName(fileName) {
             parseInt(match[6]),      // 초
             parseInt(match[7])       // 밀리초
         ).getTime();
+        return isNaN(timestamp) ? null : timestamp;
     }
     
     return null;
@@ -108,7 +113,7 @@ async function loadChatContent(charAvatar, fileName) {
         });
         
         if (!response.ok) {
-            chatContentCache.set(cacheKey, null);
+            // 실패 시 캐시하지 않음 (API 불안정 시 재시도 가능)
             return null;
         }
         
@@ -127,7 +132,7 @@ async function loadChatContent(charAvatar, fileName) {
         return content;
     } catch (e) {
         console.error('[BranchAnalyzer] Failed to load chat:', fileName, e);
-        chatContentCache.set(cacheKey, null);
+        // 실패 시 캐시하지 않음
         return null;
     }
 }
@@ -155,6 +160,8 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
     
     // 병렬로 처리 (최대 5개씩)
     const BATCH_SIZE = 5;
+    const batchEntries = []; // 배치 저장용
+    
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
         const batch = needsUpdate.slice(i, i + BATCH_SIZE);
         
@@ -166,7 +173,7 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
                 const hash = createFingerprint(content, fn);
                 const length = content.length;
                 
-                setFingerprint(charAvatar, fn, hash, length);
+                batchEntries.push({ fileName: fn, hash, length });
                 result[fn] = { hash, length };
             }
         }));
@@ -177,6 +184,11 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
         
         // UI 블로킹 방지
         await new Promise(r => setTimeout(r, 10));
+    }
+    
+    // 마지막에 한 번만 저장
+    if (batchEntries.length > 0) {
+        setFingerprintBatch(charAvatar, batchEntries);
     }
     
     return result;
@@ -202,6 +214,51 @@ function groupByFingerprint(fingerprints) {
 }
 
 /**
+ * 메시지 해시 전처리 (빠른 비교용)
+ * 전체 mes 비교 대신 길이 + 샘플 문자열로 비교
+ * @param {Object} msg
+ * @returns {string}
+ */
+function hashMessageFast(msg) {
+    if (!msg?.mes) return msg?.is_user ? 'U:0:' : 'A:0:';
+    
+    const m = msg.mes;
+    const len = m.length;
+    const head = m.substring(0, 50);
+    const tail = len > 100 ? m.substring(len - 50) : '';
+    const mid = len > 150 ? m.substring((len >> 1), (len >> 1) + 50) : '';
+    
+    return `${msg.is_user ? 'U' : 'A'}:${len}:${head}${tail}${mid}`;
+}
+
+/**
+ * 이진탐색으로 분기점 찾기 (순수 분기 구조 전용)
+ * @param {Array<string>} chat1 - 해시 배열
+ * @param {Array<string>} chat2 - 해시 배열
+ * @returns {number} - 공통 메시지 수
+ */
+function findCommonPrefixLengthFast(chat1, chat2) {
+    const minLen = Math.min(chat1.length, chat2.length);
+    if (minLen === 0) return 0;
+    
+    // 끝까지 같으면 바로 리턴
+    if (chat1[minLen - 1] === chat2[minLen - 1]) return minLen;
+    
+    // 이진탐색: 처음으로 달라지는 지점 찾기
+    let lo = 0, hi = minLen - 1;
+    while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (chat1[mid] === chat2[mid]) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    
+    return lo;
+}
+
+/**
  * 같은 fingerprint 그룹 내에서 부모-자식 관계 분석
  * 날짜가 있으면 날짜 기반, 없으면 점수 기반
  * 
@@ -212,13 +269,16 @@ function groupByFingerprint(fingerprints) {
 async function analyzeGroup(charAvatar, group) {
     if (group.length < 2) return {};
     
-    const chatContents = {};
+    const chatContents = {};  // 원본 데이터
+    const chatHashes = {};    // 해시 전처리된 데이터
     
-    // 모든 채팅 내용 로드
+    // 모든 채팅 내용 로드 + 해시 전처리
     await Promise.all(group.map(async (item) => {
         const content = await loadChatContent(charAvatar, item.fileName);
         if (content) {
             chatContents[item.fileName] = content;
+            // 로드할 때 해시 미리 계산 (채팅당 1회)
+            chatHashes[item.fileName] = content.map(msg => hashMessageFast(msg));
         }
     }));
     
@@ -243,16 +303,16 @@ async function analyzeGroup(charAvatar, group) {
     
     // 부모 결정 방식 선택
     if (allHaveDates) {
-        return analyzeByDate(validFiles, dates, chatContents);
+        return analyzeByDate(validFiles, dates, chatContents, chatHashes);
     } else {
-        return analyzeByScore(validFiles, chatContents);
+        return analyzeByScore(validFiles, chatContents, chatHashes);
     }
 }
 
 /**
  * 날짜 기반 분석 - 오래된 채팅이 부모
  */
-function analyzeByDate(group, dates, chatContents) {
+function analyzeByDate(group, dates, chatContents, chatHashes) {
     const result = {};
     
     // 날짜순 정렬 (오래된 순)
@@ -262,7 +322,8 @@ function analyzeByDate(group, dates, chatContents) {
     for (let i = 1; i < sorted.length; i++) {
         const current = sorted[i];
         const currentContent = chatContents[current.fileName];
-        if (!currentContent) continue;
+        const currentHashes = chatHashes[current.fileName];
+        if (!currentContent || !currentHashes) continue;
         
         let bestParent = null;
         let bestCommon = 0;
@@ -271,9 +332,11 @@ function analyzeByDate(group, dates, chatContents) {
         for (let j = 0; j < i; j++) {
             const candidate = sorted[j];
             const candidateContent = chatContents[candidate.fileName];
-            if (!candidateContent) continue;
+            const candidateHashes = chatHashes[candidate.fileName];
+            if (!candidateContent || !candidateHashes) continue;
             
-            const common = findCommonPrefixLength(currentContent, candidateContent);
+            // 이진탐색으로 분기점 찾기 (해시 비교)
+            const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
             
             // 최소 공통 메시지 확인
             if (common < MIN_COMMON_FOR_BRANCH) {
@@ -312,14 +375,15 @@ function analyzeByDate(group, dates, chatContents) {
 
 /**
  * 점수 기반 분석 - 공통 많고 짧은 게 부모
- * 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
+ * 순환 방지: 후보가 현재보다 길거나, 같은 길이면 파일명 사전순으로 결정
  */
-function analyzeByScore(group, chatContents) {
+function analyzeByScore(group, chatContents, chatHashes) {
     const result = {};
     
     for (const current of group) {
         const currentContent = chatContents[current.fileName];
-        if (!currentContent || currentContent.length < 2) continue;
+        const currentHashes = chatHashes[current.fileName];
+        if (!currentContent || currentContent.length < 2 || !currentHashes) continue;
         
         let bestParent = null;
         let bestScore = -1;
@@ -329,9 +393,11 @@ function analyzeByScore(group, chatContents) {
             if (candidate.fileName === current.fileName) continue;
             
             const candidateContent = chatContents[candidate.fileName];
-            if (!candidateContent) continue;
+            const candidateHashes = chatHashes[candidate.fileName];
+            if (!candidateContent || !candidateHashes) continue;
             
-            const common = findCommonPrefixLength(currentContent, candidateContent);
+            // 이진탐색으로 분기점 찾기 (해시 비교)
+            const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
             
             // 최소 공통 & 현재가 분기점 이후 진행
             if (common < MIN_COMMON_FOR_BRANCH) continue;
@@ -343,8 +409,10 @@ function analyzeByScore(group, chatContents) {
             if (ratio < MIN_BRANCH_RATIO) continue;
             
             // 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
-            // (짧거나 같은 채팅만 부모가 될 수 있음)
+            // 같은 길이면 파일명 사전순으로 결정
             if (candidateContent.length > currentContent.length) continue;
+            if (candidateContent.length === currentContent.length 
+                && candidate.fileName > current.fileName) continue;
             
             // 점수: 공통 많을수록 + 짧을수록 (직접 부모 우선)
             const score = common * 1000 - candidateContent.length;
@@ -422,6 +490,8 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
         
         const allBranches = {};
+        const branchEntries = []; // 배치 저장용
+        
         for (let i = 0; i < multiGroups.length; i++) {
             const group = multiGroups[i];
             console.log(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
@@ -430,7 +500,12 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
             
             for (const [fileName, info] of Object.entries(groupResult)) {
                 allBranches[fileName] = info;
-                setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+                branchEntries.push({
+                    fileName,
+                    parentChat: info.parentChat,
+                    branchPoint: info.branchPoint,
+                    depth: info.depth
+                });
                 
                 console.log('[BranchAnalyzer] Branch found:', fileName, 
                     '→ parent:', info.parentChat, 
@@ -440,6 +515,11 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
             if (onProgress) {
                 onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.75);
             }
+        }
+        
+        // 마지막에 한 번만 저장
+        if (branchEntries.length > 0) {
+            setBranchInfoBatch(charAvatar, branchEntries);
         }
         
         if (onProgress) onProgress(1);

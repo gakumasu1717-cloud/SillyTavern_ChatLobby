@@ -2393,42 +2393,35 @@ ${message}` : message;
     const hash = hashString(combined);
     return hash;
   }
-  function findCommonPrefixLength(chat1, chat2) {
-    const minLen = Math.min(chat1.length, chat2.length);
-    let commonLen = 0;
-    for (let i = 0; i < minLen; i++) {
-      const msg1 = chat1[i];
-      const msg2 = chat2[i];
-      if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
-        commonLen++;
-      } else {
-        break;
-      }
-    }
-    return commonLen;
-  }
-  function setFingerprint(charAvatar, chatFileName, hash, length) {
+  function setFingerprintBatch(charAvatar, entries) {
+    if (!entries || entries.length === 0) return;
     const cache2 = loadCache();
     if (!cache2.characters[charAvatar]) {
       cache2.characters[charAvatar] = { fingerprints: {}, branches: {} };
     }
-    cache2.characters[charAvatar].fingerprints[chatFileName] = {
-      hash,
-      length,
-      lastUpdated: Date.now()
-    };
+    const now = Date.now();
+    for (const { fileName, hash, length } of entries) {
+      cache2.characters[charAvatar].fingerprints[fileName] = {
+        hash,
+        length,
+        lastUpdated: now
+      };
+    }
     saveCache();
   }
-  function setBranchInfo(charAvatar, chatFileName, parentChat, branchPoint, depth) {
+  function setBranchInfoBatch(charAvatar, entries) {
+    if (!entries || entries.length === 0) return;
     const cache2 = loadCache();
     if (!cache2.characters[charAvatar]) {
       cache2.characters[charAvatar] = { fingerprints: {}, branches: {} };
     }
-    cache2.characters[charAvatar].branches[chatFileName] = {
-      parentChat,
-      branchPoint,
-      depth
-    };
+    for (const { fileName, parentChat, branchPoint, depth } of entries) {
+      cache2.characters[charAvatar].branches[fileName] = {
+        parentChat,
+        branchPoint,
+        depth
+      };
+    }
     saveCache();
   }
   function getAllBranches(charAvatar) {
@@ -2456,7 +2449,7 @@ ${message}` : message;
   function extractDateFromFileName(fileName) {
     let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
     if (match) {
-      return new Date(
+      const timestamp = new Date(
         parseInt(match[1]),
         // 년
         parseInt(match[2]) - 1,
@@ -2472,10 +2465,11 @@ ${message}` : message;
         parseInt(match[7])
         // 밀리초
       ).getTime();
+      return isNaN(timestamp) ? null : timestamp;
     }
     match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s/);
     if (match) {
-      return new Date(
+      const timestamp = new Date(
         parseInt(match[1]),
         // 년
         parseInt(match[2]) - 1,
@@ -2491,10 +2485,11 @@ ${message}` : message;
         0
         // 밀리초 (없으면 0)
       ).getTime();
+      return isNaN(timestamp) ? null : timestamp;
     }
     match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s\s*(\d+)ms/);
     if (match) {
-      return new Date(
+      const timestamp = new Date(
         parseInt(match[1]),
         // 년
         parseInt(match[2]) - 1,
@@ -2510,6 +2505,7 @@ ${message}` : message;
         parseInt(match[7])
         // 밀리초
       ).getTime();
+      return isNaN(timestamp) ? null : timestamp;
     }
     return null;
   }
@@ -2531,7 +2527,6 @@ ${message}` : message;
         })
       });
       if (!response.ok) {
-        chatContentCache.set(cacheKey, null);
         return null;
       }
       const data = await response.json();
@@ -2545,7 +2540,6 @@ ${message}` : message;
       return content;
     } catch (e) {
       console.error("[BranchAnalyzer] Failed to load chat:", fileName, e);
-      chatContentCache.set(cacheKey, null);
       return null;
     }
   }
@@ -2559,6 +2553,7 @@ ${message}` : message;
       return !cached || cached.length !== chatLength;
     });
     const BATCH_SIZE = 5;
+    const batchEntries = [];
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
       const batch = needsUpdate.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (chat) => {
@@ -2567,7 +2562,7 @@ ${message}` : message;
         if (content && content.length > 0) {
           const hash = createFingerprint(content, fn);
           const length = content.length;
-          setFingerprint(charAvatar, fn, hash, length);
+          batchEntries.push({ fileName: fn, hash, length });
           result[fn] = { hash, length };
         }
       }));
@@ -2575,6 +2570,9 @@ ${message}` : message;
         onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
       }
       await new Promise((r) => setTimeout(r, 10));
+    }
+    if (batchEntries.length > 0) {
+      setFingerprintBatch(charAvatar, batchEntries);
     }
     return result;
   }
@@ -2589,13 +2587,39 @@ ${message}` : message;
     }
     return groups;
   }
+  function hashMessageFast(msg) {
+    if (!msg?.mes) return msg?.is_user ? "U:0:" : "A:0:";
+    const m = msg.mes;
+    const len = m.length;
+    const head = m.substring(0, 50);
+    const tail = len > 100 ? m.substring(len - 50) : "";
+    const mid = len > 150 ? m.substring(len >> 1, (len >> 1) + 50) : "";
+    return `${msg.is_user ? "U" : "A"}:${len}:${head}${tail}${mid}`;
+  }
+  function findCommonPrefixLengthFast(chat1, chat2) {
+    const minLen = Math.min(chat1.length, chat2.length);
+    if (minLen === 0) return 0;
+    if (chat1[minLen - 1] === chat2[minLen - 1]) return minLen;
+    let lo = 0, hi = minLen - 1;
+    while (lo < hi) {
+      const mid = lo + hi >>> 1;
+      if (chat1[mid] === chat2[mid]) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
   async function analyzeGroup(charAvatar, group) {
     if (group.length < 2) return {};
     const chatContents = {};
+    const chatHashes = {};
     await Promise.all(group.map(async (item) => {
       const content = await loadChatContent(charAvatar, item.fileName);
       if (content) {
         chatContents[item.fileName] = content;
+        chatHashes[item.fileName] = content.map((msg) => hashMessageFast(msg));
       }
     }));
     const validFiles = group.filter((g) => chatContents[g.fileName]?.length >= 2);
@@ -2613,25 +2637,27 @@ ${message}` : message;
       }
     }
     if (allHaveDates) {
-      return analyzeByDate(validFiles, dates, chatContents);
+      return analyzeByDate(validFiles, dates, chatContents, chatHashes);
     } else {
-      return analyzeByScore(validFiles, chatContents);
+      return analyzeByScore(validFiles, chatContents, chatHashes);
     }
   }
-  function analyzeByDate(group, dates, chatContents) {
+  function analyzeByDate(group, dates, chatContents, chatHashes) {
     const result = {};
     const sorted = [...group].sort((a, b) => dates[a.fileName] - dates[b.fileName]);
     for (let i = 1; i < sorted.length; i++) {
       const current = sorted[i];
       const currentContent = chatContents[current.fileName];
-      if (!currentContent) continue;
+      const currentHashes = chatHashes[current.fileName];
+      if (!currentContent || !currentHashes) continue;
       let bestParent = null;
       let bestCommon = 0;
       for (let j = 0; j < i; j++) {
         const candidate = sorted[j];
         const candidateContent = chatContents[candidate.fileName];
-        if (!candidateContent) continue;
-        const common = findCommonPrefixLength(currentContent, candidateContent);
+        const candidateHashes = chatHashes[candidate.fileName];
+        if (!candidateContent || !candidateHashes) continue;
+        const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
         if (common < MIN_COMMON_FOR_BRANCH) {
           continue;
         }
@@ -2658,25 +2684,28 @@ ${message}` : message;
     calculateDepths(result);
     return result;
   }
-  function analyzeByScore(group, chatContents) {
+  function analyzeByScore(group, chatContents, chatHashes) {
     const result = {};
     for (const current of group) {
       const currentContent = chatContents[current.fileName];
-      if (!currentContent || currentContent.length < 2) continue;
+      const currentHashes = chatHashes[current.fileName];
+      if (!currentContent || currentContent.length < 2 || !currentHashes) continue;
       let bestParent = null;
       let bestScore = -1;
       let bestCommon = 0;
       for (const candidate of group) {
         if (candidate.fileName === current.fileName) continue;
         const candidateContent = chatContents[candidate.fileName];
-        if (!candidateContent) continue;
-        const common = findCommonPrefixLength(currentContent, candidateContent);
+        const candidateHashes = chatHashes[candidate.fileName];
+        if (!candidateContent || !candidateHashes) continue;
+        const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
         if (common < MIN_COMMON_FOR_BRANCH) continue;
         if (currentContent.length <= common) continue;
         const shorterLen = Math.min(currentContent.length, candidateContent.length);
         const ratio = common / shorterLen;
         if (ratio < MIN_BRANCH_RATIO) continue;
         if (candidateContent.length > currentContent.length) continue;
+        if (candidateContent.length === currentContent.length && candidate.fileName > current.fileName) continue;
         const score = common * 1e3 - candidateContent.length;
         if (score > bestScore) {
           bestScore = score;
@@ -2723,13 +2752,19 @@ ${message}` : message;
       const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
       console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
       const allBranches = {};
+      const branchEntries = [];
       for (let i = 0; i < multiGroups.length; i++) {
         const group = multiGroups[i];
         console.log(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
         const groupResult = await analyzeGroup(charAvatar, group);
         for (const [fileName, info] of Object.entries(groupResult)) {
           allBranches[fileName] = info;
-          setBranchInfo(charAvatar, fileName, info.parentChat, info.branchPoint, info.depth);
+          branchEntries.push({
+            fileName,
+            parentChat: info.parentChat,
+            branchPoint: info.branchPoint,
+            depth: info.depth
+          });
           console.log(
             "[BranchAnalyzer] Branch found:",
             fileName,
@@ -2742,6 +2777,9 @@ ${message}` : message;
         if (onProgress) {
           onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.75);
         }
+      }
+      if (branchEntries.length > 0) {
+        setBranchInfoBatch(charAvatar, branchEntries);
       }
       if (onProgress) onProgress(1);
       console.log("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");

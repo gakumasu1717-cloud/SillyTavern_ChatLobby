@@ -171,8 +171,9 @@ export function getFingerprint(charAvatar, chatFileName) {
  * @param {string} chatFileName
  * @param {string} hash
  * @param {number} length
+ * @param {boolean} skipSave - true면 saveCache() 스킵 (배치 저장용)
  */
-export function setFingerprint(charAvatar, chatFileName, hash, length) {
+export function setFingerprint(charAvatar, chatFileName, hash, length, skipSave = false) {
     const cache = loadCache();
     
     if (!cache.characters[charAvatar]) {
@@ -185,7 +186,32 @@ export function setFingerprint(charAvatar, chatFileName, hash, length) {
         lastUpdated: Date.now()
     };
     
-    saveCache();
+    if (!skipSave) saveCache();
+}
+
+/**
+ * fingerprint 배치 저장 (한 번에 여러 개)
+ * @param {string} charAvatar
+ * @param {Array<{fileName: string, hash: string, length: number}>} entries
+ */
+export function setFingerprintBatch(charAvatar, entries) {
+    if (!entries || entries.length === 0) return;
+    
+    const cache = loadCache();
+    if (!cache.characters[charAvatar]) {
+        cache.characters[charAvatar] = { fingerprints: {}, branches: {} };
+    }
+    
+    const now = Date.now();
+    for (const { fileName, hash, length } of entries) {
+        cache.characters[charAvatar].fingerprints[fileName] = {
+            hash,
+            length,
+            lastUpdated: now
+        };
+    }
+    
+    saveCache(); // 한 번만!
 }
 
 /**
@@ -195,8 +221,9 @@ export function setFingerprint(charAvatar, chatFileName, hash, length) {
  * @param {string|null} parentChat
  * @param {number} branchPoint
  * @param {number} depth
+ * @param {boolean} skipSave - true면 saveCache() 스킵 (배치 저장용)
  */
-export function setBranchInfo(charAvatar, chatFileName, parentChat, branchPoint, depth) {
+export function setBranchInfo(charAvatar, chatFileName, parentChat, branchPoint, depth, skipSave = false) {
     const cache = loadCache();
     
     if (!cache.characters[charAvatar]) {
@@ -209,7 +236,31 @@ export function setBranchInfo(charAvatar, chatFileName, parentChat, branchPoint,
         depth
     };
     
-    saveCache();
+    if (!skipSave) saveCache();
+}
+
+/**
+ * 브랜치 정보 배치 저장 (한 번에 여러 개)
+ * @param {string} charAvatar
+ * @param {Array<{fileName: string, parentChat: string|null, branchPoint: number, depth: number}>} entries
+ */
+export function setBranchInfoBatch(charAvatar, entries) {
+    if (!entries || entries.length === 0) return;
+    
+    const cache = loadCache();
+    if (!cache.characters[charAvatar]) {
+        cache.characters[charAvatar] = { fingerprints: {}, branches: {} };
+    }
+    
+    for (const { fileName, parentChat, branchPoint, depth } of entries) {
+        cache.characters[charAvatar].branches[fileName] = {
+            parentChat,
+            branchPoint,
+            depth
+        };
+    }
+    
+    saveCache(); // 한 번만!
 }
 
 /**
