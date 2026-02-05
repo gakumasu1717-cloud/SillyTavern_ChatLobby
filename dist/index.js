@@ -4492,14 +4492,14 @@ ${message}` : message;
     }
   }
   function cacheElements(recentChatElements) {
-    const existingAvatars = new Set(
-      state.cachedRecentChats.map((c) => c.avatar)
+    const existingKeys = new Set(
+      state.cachedRecentChats.map((c) => `${c.avatar}_${c.file}`)
     );
     recentChatElements.forEach((el, idx) => {
       try {
         const file = el.getAttribute("data-file") || "";
         const avatar = el.getAttribute("data-avatar") || "";
-        if (existingAvatars.has(avatar)) return;
+        if (existingKeys.has(`${avatar}_${file}`)) return;
         const groupAttr = el.getAttribute("data-group");
         const isGroup = groupAttr !== null && groupAttr !== "";
         const characterName = el.querySelector(".characterName")?.textContent?.trim() || "";

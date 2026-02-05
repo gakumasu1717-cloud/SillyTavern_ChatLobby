@@ -119,9 +119,9 @@ export async function cacheRecentChatsBeforeOpen() {
 }
 
 function cacheElements(recentChatElements) {
-    // 이미 캐싱된 아바타 추적 (중복 방지)
-    const existingAvatars = new Set(
-        state.cachedRecentChats.map(c => c.avatar)
+    // 이미 캐싱된 avatar+file 조합 추적 (중복 방지)
+    const existingKeys = new Set(
+        state.cachedRecentChats.map(c => `${c.avatar}_${c.file}`)
     );
     
     recentChatElements.forEach((el, idx) => {
@@ -129,8 +129,8 @@ function cacheElements(recentChatElements) {
             const file = el.getAttribute('data-file') || '';
             const avatar = el.getAttribute('data-avatar') || '';
             
-            // 이미 캐싱된 아바타면 스킵
-            if (existingAvatars.has(avatar)) return;
+            // 이미 캐싱된 avatar+file 조합이면 스킵
+            if (existingKeys.has(`${avatar}_${file}`)) return;
             
             const groupAttr = el.getAttribute('data-group');
             const isGroup = groupAttr !== null && groupAttr !== '';
@@ -549,15 +549,15 @@ function parseKeyBasic(key) {
 
 function parseChatKey(key, characters, groups) {
     // 키 형식: avatar.png_chatfile.jsonl (아바타에 _가 있을 수 있음)
-    // 확장자 기반 파싱으로 정확하게 분리
+    // 확장자 기반 파싱으로 정확하게 분리 (이미지 확장자 명시)
     let avatar, fileName;
     
-    const avatarMatch = key.match(/^((?:group:)?.+?\.(png|jpg|jpeg|gif|webp))_(.+)$/i);
+    const avatarMatch = key.match(/^((?:group:)?.+\.(?:png|jpg|jpeg|gif|webp))_(.+)$/i);
     if (avatarMatch) {
         avatar = avatarMatch[1];
-        fileName = avatarMatch[3];
+        fileName = avatarMatch[2];
     } else {
-        // 기존 폴백: lastIndexOf
+        // 폴백: lastIndexOf (확장자 없는 특이 케이스)
         const lastUnderscoreIdx = key.lastIndexOf('_');
         if (lastUnderscoreIdx === -1) {
             log(`Invalid key format (no underscore): ${key}`);
