@@ -2440,11 +2440,48 @@ ${message}` : message;
   }
 
   // src/utils/branchAnalyzer.js
-  var MIN_COMMON_FOR_BRANCH = 10;
-  var MIN_BRANCH_RATIO = 0.3;
+  var SAFETY = {
+    TIMEOUT_MS: 3e4,
+    // 전체 분석 30초 제한
+    MAX_API_CALLS: 200,
+    // API 호출 최대 200회
+    MAX_ERRORS: 5
+    // 연속 에러 5회시 중단
+  };
   var chatContentCache = /* @__PURE__ */ new Map();
   function clearContentCache() {
     chatContentCache.clear();
+  }
+  function createAnalysisContext() {
+    return {
+      startTime: Date.now(),
+      apiCalls: 0,
+      errorCount: 0,
+      aborted: false,
+      abortReason: ""
+    };
+  }
+  function checkSafety(ctx) {
+    if (ctx.aborted) return false;
+    if (Date.now() - ctx.startTime > SAFETY.TIMEOUT_MS) {
+      ctx.aborted = true;
+      ctx.abortReason = `Timeout: ${SAFETY.TIMEOUT_MS}ms exceeded`;
+      console.warn("[BranchAnalyzer] SAFETY ABORT:", ctx.abortReason);
+      return false;
+    }
+    if (ctx.apiCalls >= SAFETY.MAX_API_CALLS) {
+      ctx.aborted = true;
+      ctx.abortReason = `API call limit: ${ctx.apiCalls}/${SAFETY.MAX_API_CALLS}`;
+      console.warn("[BranchAnalyzer] SAFETY ABORT:", ctx.abortReason);
+      return false;
+    }
+    if (ctx.errorCount >= SAFETY.MAX_ERRORS) {
+      ctx.aborted = true;
+      ctx.abortReason = `Too many errors: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`;
+      console.warn("[BranchAnalyzer] SAFETY ABORT:", ctx.abortReason);
+      return false;
+    }
+    return true;
   }
   function extractDateFromFileName(fileName) {
     let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
@@ -2509,11 +2546,12 @@ ${message}` : message;
     }
     return null;
   }
-  async function loadChatContent(charAvatar, fileName) {
+  async function loadChatContent(charAvatar, fileName, ctx = null) {
     const cacheKey = `${charAvatar}:${fileName}`;
     if (chatContentCache.has(cacheKey)) {
       return chatContentCache.get(cacheKey);
     }
+    if (ctx) ctx.apiCalls++;
     try {
       const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
       const chatName = fileName.replace(".jsonl", "");
@@ -2527,6 +2565,7 @@ ${message}` : message;
         })
       });
       if (!response.ok) {
+        if (ctx) ctx.errorCount++;
         return null;
       }
       const data = await response.json();
@@ -2540,10 +2579,11 @@ ${message}` : message;
       return content;
     } catch (e) {
       console.error("[BranchAnalyzer] Failed to load chat:", fileName, e);
+      if (ctx) ctx.errorCount++;
       return null;
     }
   }
-  async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false) {
+  async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false, ctx = null) {
     const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
     const result = { ...existing };
     const needsUpdate = forceRefresh ? chats : chats.filter((chat) => {
@@ -2555,10 +2595,11 @@ ${message}` : message;
     const BATCH_SIZE = 5;
     const batchEntries = [];
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
+      if (ctx && !checkSafety(ctx)) break;
       const batch = needsUpdate.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (chat) => {
         const fn = chat.file_name || "";
-        const content = await loadChatContent(charAvatar, fn);
+        const content = await loadChatContent(charAvatar, fn, ctx);
         if (content && content.length > 0) {
           const hash = createFingerprint(content, fn);
           const length = content.length;
@@ -2611,12 +2652,12 @@ ${message}` : message;
     }
     return lo;
   }
-  async function analyzeGroup(charAvatar, group) {
+  async function analyzeGroup(charAvatar, group, ctx = null) {
     if (group.length < 2) return {};
     const chatContents = {};
     const chatHashes = {};
     await Promise.all(group.map(async (item) => {
-      const content = await loadChatContent(charAvatar, item.fileName);
+      const content = await loadChatContent(charAvatar, item.fileName, ctx);
       if (content) {
         chatContents[item.fileName] = content;
         chatHashes[item.fileName] = content.map((msg) => hashMessageFast(msg));
@@ -2658,22 +2699,15 @@ ${message}` : message;
         const candidateHashes = chatHashes[candidate.fileName];
         if (!candidateContent || !candidateHashes) continue;
         const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
-        if (common < MIN_COMMON_FOR_BRANCH) {
-          continue;
-        }
-        const shorterLen = Math.min(currentContent.length, candidateContent.length);
-        const ratio = common / shorterLen;
-        if (ratio < MIN_BRANCH_RATIO) {
-          continue;
-        }
-        if (currentContent.length > common || candidateContent.length > common) {
-          if (common > bestCommon) {
-            bestCommon = common;
-            bestParent = candidate.fileName;
-          }
+        console.log(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
+        if (common === 0) continue;
+        if (common > bestCommon) {
+          bestCommon = common;
+          bestParent = candidate.fileName;
         }
       }
       if (bestParent) {
+        console.log(`[BranchAnalyzer][Date] RESULT: ${current.fileName} \u2192 parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
@@ -2691,7 +2725,6 @@ ${message}` : message;
       const currentHashes = chatHashes[current.fileName];
       if (!currentContent || currentContent.length < 2 || !currentHashes) continue;
       let bestParent = null;
-      let bestScore = -1;
       let bestCommon = 0;
       for (const candidate of group) {
         if (candidate.fileName === current.fileName) continue;
@@ -2699,21 +2732,18 @@ ${message}` : message;
         const candidateHashes = chatHashes[candidate.fileName];
         if (!candidateContent || !candidateHashes) continue;
         const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
-        if (common < MIN_COMMON_FOR_BRANCH) continue;
+        console.log(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
+        if (common === 0) continue;
         if (currentContent.length <= common) continue;
-        const shorterLen = Math.min(currentContent.length, candidateContent.length);
-        const ratio = common / shorterLen;
-        if (ratio < MIN_BRANCH_RATIO) continue;
         if (candidateContent.length > currentContent.length) continue;
         if (candidateContent.length === currentContent.length && candidate.fileName > current.fileName) continue;
-        const score = common * 1e3 - candidateContent.length;
-        if (score > bestScore) {
-          bestScore = score;
+        if (common > bestCommon) {
           bestCommon = common;
           bestParent = candidate.fileName;
         }
       }
       if (bestParent) {
+        console.log(`[BranchAnalyzer][Score] RESULT: ${current.fileName} \u2192 parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
@@ -2744,19 +2774,25 @@ ${message}` : message;
       console.log("[BranchAnalyzer] Not enough chats to analyze");
       return {};
     }
+    const ctx = createAnalysisContext();
     try {
       const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
         if (onProgress) onProgress(p * 0.2);
-      }, forceRefresh);
+      }, forceRefresh, ctx);
+      if (ctx.aborted) {
+        console.warn("[BranchAnalyzer] Aborted during fingerprint phase:", ctx.abortReason);
+        return {};
+      }
       const groups = groupByFingerprint(fingerprints);
       const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
       console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
       const allBranches = {};
       const branchEntries = [];
       for (let i = 0; i < multiGroups.length; i++) {
+        if (!checkSafety(ctx)) break;
         const group = multiGroups[i];
         console.log(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
-        const groupResult = await analyzeGroup(charAvatar, group);
+        const groupResult = await analyzeGroup(charAvatar, group, ctx);
         for (const [fileName, info] of Object.entries(groupResult)) {
           allBranches[fileName] = info;
           branchEntries.push({
@@ -2778,10 +2814,23 @@ ${message}` : message;
           onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.75);
         }
       }
+      for (const [fileName, info] of Object.entries(allBranches)) {
+        const parentFp = fingerprints[info.parentChat];
+        if (parentFp && info.branchPoint > parentFp.length) {
+          console.warn(`[BranchAnalyzer] Invalid branchPoint: ${fileName} branchPoint=${info.branchPoint} > parent(${info.parentChat}).length=${parentFp.length}. Removing.`);
+          delete allBranches[fileName];
+          const idx = branchEntries.findIndex((e) => e.fileName === fileName);
+          if (idx !== -1) branchEntries.splice(idx, 1);
+        }
+      }
       if (branchEntries.length > 0) {
         setBranchInfoBatch(charAvatar, branchEntries);
       }
       if (onProgress) onProgress(1);
+      if (ctx.aborted) {
+        console.warn(`[BranchAnalyzer] Analysis aborted: ${ctx.abortReason}`);
+      }
+      console.log(`[BranchAnalyzer] Safety report: apiCalls=${ctx.apiCalls}, errors=${ctx.errorCount}, elapsed=${Date.now() - ctx.startTime}ms, aborted=${ctx.aborted}`);
       console.log("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");
       return allBranches;
     } finally {

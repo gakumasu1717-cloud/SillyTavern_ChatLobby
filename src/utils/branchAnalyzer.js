@@ -14,9 +14,12 @@ import {
     getAllFingerprints
 } from '../data/branchCache.js';
 
-// 분기 판정 상수
-const MIN_COMMON_FOR_BRANCH = 10;  // 최소 10개 메시지 공통이어야 분기로 인정
-const MIN_BRANCH_RATIO = 0.3;      // 짧은 쪽의 30% 이상이 공통이어야 분기로 인정
+// 안전장치 상수
+const SAFETY = {
+    TIMEOUT_MS: 30000,    // 전체 분석 30초 제한
+    MAX_API_CALLS: 200,   // API 호출 최대 200회
+    MAX_ERRORS: 5,        // 연속 에러 5회시 중단
+};
 
 // 채팅 내용 캐시 (중복 로드 방지)
 const chatContentCache = new Map();
@@ -26,6 +29,48 @@ const chatContentCache = new Map();
  */
 function clearContentCache() {
     chatContentCache.clear();
+}
+
+/**
+ * 분석 컨텍스트 생성 (안전장치 추적용)
+ */
+function createAnalysisContext() {
+    return {
+        startTime: Date.now(),
+        apiCalls: 0,
+        errorCount: 0,
+        aborted: false,
+        abortReason: '',
+    };
+}
+
+/**
+ * 안전장치 체크 - 타임아웃, API 한도, 에러 한도
+ * @param {Object} ctx - 분석 컨텍스트
+ * @returns {boolean} - 계속 진행 가능하면 true
+ */
+function checkSafety(ctx) {
+    if (ctx.aborted) return false;
+
+    if (Date.now() - ctx.startTime > SAFETY.TIMEOUT_MS) {
+        ctx.aborted = true;
+        ctx.abortReason = `Timeout: ${SAFETY.TIMEOUT_MS}ms exceeded`;
+        console.warn('[BranchAnalyzer] SAFETY ABORT:', ctx.abortReason);
+        return false;
+    }
+    if (ctx.apiCalls >= SAFETY.MAX_API_CALLS) {
+        ctx.aborted = true;
+        ctx.abortReason = `API call limit: ${ctx.apiCalls}/${SAFETY.MAX_API_CALLS}`;
+        console.warn('[BranchAnalyzer] SAFETY ABORT:', ctx.abortReason);
+        return false;
+    }
+    if (ctx.errorCount >= SAFETY.MAX_ERRORS) {
+        ctx.aborted = true;
+        ctx.abortReason = `Too many errors: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`;
+        console.warn('[BranchAnalyzer] SAFETY ABORT:', ctx.abortReason);
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -91,12 +136,14 @@ function extractDateFromFileName(fileName) {
  * @param {string} fileName
  * @returns {Promise<Array|null>}
  */
-async function loadChatContent(charAvatar, fileName) {
+async function loadChatContent(charAvatar, fileName, ctx = null) {
     const cacheKey = `${charAvatar}:${fileName}`;
     
     if (chatContentCache.has(cacheKey)) {
         return chatContentCache.get(cacheKey);
     }
+    
+    if (ctx) ctx.apiCalls++;
     
     try {
         const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
@@ -113,7 +160,7 @@ async function loadChatContent(charAvatar, fileName) {
         });
         
         if (!response.ok) {
-            // 실패 시 캐시하지 않음 (API 불안정 시 재시도 가능)
+            if (ctx) ctx.errorCount++;
             return null;
         }
         
@@ -132,7 +179,7 @@ async function loadChatContent(charAvatar, fileName) {
         return content;
     } catch (e) {
         console.error('[BranchAnalyzer] Failed to load chat:', fileName, e);
-        // 실패 시 캐시하지 않음
+        if (ctx) ctx.errorCount++;
         return null;
     }
 }
@@ -145,7 +192,7 @@ async function loadChatContent(charAvatar, fileName) {
  * @param {boolean} forceRefresh - 강제 재분석 (모든 채팅 재처리)
  * @returns {Promise<Object>} - { [fileName]: { hash, length } }
  */
-export async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false) {
+export async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false, ctx = null) {
     const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
     const result = { ...existing };
     
@@ -163,11 +210,14 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
     const batchEntries = []; // 배치 저장용
     
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
+        // 안전장치 체크
+        if (ctx && !checkSafety(ctx)) break;
+        
         const batch = needsUpdate.slice(i, i + BATCH_SIZE);
         
         await Promise.all(batch.map(async (chat) => {
             const fn = chat.file_name || '';
-            const content = await loadChatContent(charAvatar, fn);
+            const content = await loadChatContent(charAvatar, fn, ctx);
             
             if (content && content.length > 0) {
                 const hash = createFingerprint(content, fn);
@@ -266,7 +316,7 @@ function findCommonPrefixLengthFast(chat1, chat2) {
  * @param {Array} group - [{ fileName, length }]
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
  */
-async function analyzeGroup(charAvatar, group) {
+async function analyzeGroup(charAvatar, group, ctx = null) {
     if (group.length < 2) return {};
     
     const chatContents = {};  // 원본 데이터
@@ -274,7 +324,7 @@ async function analyzeGroup(charAvatar, group) {
     
     // 모든 채팅 내용 로드 + 해시 전처리
     await Promise.all(group.map(async (item) => {
-        const content = await loadChatContent(charAvatar, item.fileName);
+        const content = await loadChatContent(charAvatar, item.fileName, ctx);
         if (content) {
             chatContents[item.fileName] = content;
             // 로드할 때 해시 미리 계산 (채팅당 1회)
@@ -338,28 +388,20 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
             // 이진탐색으로 분기점 찾기 (해시 비교)
             const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
             
-            // 최소 공통 메시지 확인
-            if (common < MIN_COMMON_FOR_BRANCH) {
-                continue;
-            }
+            console.log(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) → common=${common}`);
             
-            // 분기점 비율 체크 - 짧은 쪽 기준으로 최소 비율 이상이어야 분기
-            const shorterLen = Math.min(currentContent.length, candidateContent.length);
-            const ratio = common / shorterLen;
-            if (ratio < MIN_BRANCH_RATIO) {
-                continue;
-            }
+            // 공통 메시지가 없으면 스킵
+            if (common === 0) continue;
             
-            // 현재 또는 후보 중 하나라도 분기점 이후 진행했으면 OK
-            if (currentContent.length > common || candidateContent.length > common) {
-                if (common > bestCommon) {
-                    bestCommon = common;
-                    bestParent = candidate.fileName;
-                }
+            // 가장 공통이 많은 후보가 부모
+            if (common > bestCommon) {
+                bestCommon = common;
+                bestParent = candidate.fileName;
             }
         }
         
         if (bestParent) {
+            console.log(`[BranchAnalyzer][Date] RESULT: ${current.fileName} → parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommon,
@@ -374,8 +416,9 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
 }
 
 /**
- * 점수 기반 분석 - 공통 많고 짧은 게 부모
- * 순환 방지: 후보가 현재보다 길거나, 같은 길이면 파일명 사전순으로 결정
+ * 점수 기반 분석 - 공통 많은 게 부모
+ * 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
+ * 같은 길이면 파일명 사전순으로 결정
  */
 function analyzeByScore(group, chatContents, chatHashes) {
     const result = {};
@@ -386,7 +429,6 @@ function analyzeByScore(group, chatContents, chatHashes) {
         if (!currentContent || currentContent.length < 2 || !currentHashes) continue;
         
         let bestParent = null;
-        let bestScore = -1;
         let bestCommon = 0;
         
         for (const candidate of group) {
@@ -399,14 +441,12 @@ function analyzeByScore(group, chatContents, chatHashes) {
             // 이진탐색으로 분기점 찾기 (해시 비교)
             const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
             
-            // 최소 공통 & 현재가 분기점 이후 진행
-            if (common < MIN_COMMON_FOR_BRANCH) continue;
-            if (currentContent.length <= common) continue;
+            console.log(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) → common=${common}`);
             
-            // 분기점 비율 체크
-            const shorterLen = Math.min(currentContent.length, candidateContent.length);
-            const ratio = common / shorterLen;
-            if (ratio < MIN_BRANCH_RATIO) continue;
+            // 공통 메시지가 없으면 스킵
+            if (common === 0) continue;
+            // 현재가 분기점 이후 진행했어야 함
+            if (currentContent.length <= common) continue;
             
             // 순환 방지: 후보가 현재보다 길면 부모 후보에서 제외
             // 같은 길이면 파일명 사전순으로 결정
@@ -414,17 +454,15 @@ function analyzeByScore(group, chatContents, chatHashes) {
             if (candidateContent.length === currentContent.length 
                 && candidate.fileName > current.fileName) continue;
             
-            // 점수: 공통 많을수록 + 짧을수록 (직접 부모 우선)
-            const score = common * 1000 - candidateContent.length;
-            
-            if (score > bestScore) {
-                bestScore = score;
+            // 가장 공통이 많은 후보가 부모
+            if (common > bestCommon) {
                 bestCommon = common;
                 bestParent = candidate.fileName;
             }
         }
         
         if (bestParent) {
+            console.log(`[BranchAnalyzer][Score] RESULT: ${current.fileName} → parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommon,
@@ -476,11 +514,18 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         return {};
     }
     
+    const ctx = createAnalysisContext();
+    
     try {
         // 1. fingerprint 생성/업데이트 (0~20%)
         const fingerprints = await ensureFingerprints(charAvatar, chats, (p) => {
             if (onProgress) onProgress(p * 0.2);
-        }, forceRefresh);
+        }, forceRefresh, ctx);
+        
+        if (ctx.aborted) {
+            console.warn('[BranchAnalyzer] Aborted during fingerprint phase:', ctx.abortReason);
+            return {};
+        }
         
         // 2. fingerprint로 그룹핑 (O(N²) 방지)
         const groups = groupByFingerprint(fingerprints);
@@ -493,10 +538,13 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         const branchEntries = []; // 배치 저장용
         
         for (let i = 0; i < multiGroups.length; i++) {
+            // 안전장치 체크
+            if (!checkSafety(ctx)) break;
+            
             const group = multiGroups[i];
             console.log(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
             
-            const groupResult = await analyzeGroup(charAvatar, group);
+            const groupResult = await analyzeGroup(charAvatar, group, ctx);
             
             for (const [fileName, info] of Object.entries(groupResult)) {
                 allBranches[fileName] = info;
@@ -517,12 +565,29 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
             }
         }
         
+        // branchPoint 유효성 검증 (Step 3)
+        for (const [fileName, info] of Object.entries(allBranches)) {
+            const parentFp = fingerprints[info.parentChat];
+            if (parentFp && info.branchPoint > parentFp.length) {
+                console.warn(`[BranchAnalyzer] Invalid branchPoint: ${fileName} branchPoint=${info.branchPoint} > parent(${info.parentChat}).length=${parentFp.length}. Removing.`);
+                delete allBranches[fileName];
+                const idx = branchEntries.findIndex(e => e.fileName === fileName);
+                if (idx !== -1) branchEntries.splice(idx, 1);
+            }
+        }
+        
         // 마지막에 한 번만 저장
         if (branchEntries.length > 0) {
             setBranchInfoBatch(charAvatar, branchEntries);
         }
         
         if (onProgress) onProgress(1);
+        
+        // Safety report
+        if (ctx.aborted) {
+            console.warn(`[BranchAnalyzer] Analysis aborted: ${ctx.abortReason}`);
+        }
+        console.log(`[BranchAnalyzer] Safety report: apiCalls=${ctx.apiCalls}, errors=${ctx.errorCount}, elapsed=${Date.now() - ctx.startTime}ms, aborted=${ctx.aborted}`);
         console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
         return allBranches;
         
