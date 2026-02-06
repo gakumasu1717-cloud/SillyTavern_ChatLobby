@@ -284,6 +284,8 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             onMessageReceived: (chatId, type) => {
                 // 🔥 first_message는 캐릭터 첫 진입 시 자동 생성되는 인사말
                 // 실제 대화가 아니므로 lastChatCache를 갱신하지 않음
+                // CHARACTER_MESSAGE_RENDERED에서는 type이 전달되지 않을 수 있으므로
+                // type이 정확히 'first_message'인 경우에만 스킵
                 if (type === 'first_message') {
                     console.log('[ChatLobby] Skipping first_message for lastChatCache');
                     return;
@@ -541,8 +543,8 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 console.log('[ChatLobby] Invalidated cache for current character:', currentChar);
             }
             
-            // 상태 초기화 (이전 선택 정보 클리어, 핸들러는 유지, isLobbyOpen 유지)
-            store.reset();
+            // 상태 초기화 (이전 선택 정보 클리어, 핸들러/isLobbyOpen 절대 불변)
+            store.resetSelection();
             
             // 캐릭터 선택 락 리셋
             resetCharacterSelectLock();
@@ -567,9 +569,6 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             
             // 채팅 패널 닫기 (이전 캐릭터 선택 상태 클리어)
             closeChatPanel();
-            
-            // 캐릭터 목록 가져오기
-            const characters = api.getCharacters();
             
             // 페르소나 바와 캐릭터 그리드를 동시에 렌더링 (한 번에 같이)
             await Promise.all([
@@ -660,7 +659,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         }
         
         store.setLobbyOpen(false);
-        store.reset(); // 상태 초기화
+        store.resetSelection(); // 선택 상태 초기화
         closeChatPanel();
         
         // 🔥 로비 닫힐 때 DOM 감시 시작 (채팅 변경 감지)
@@ -1328,7 +1327,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         let targetCard = null;
         
         for (const card of cards) {
-            if (card.dataset.avatar === randomChar.avatar) {
+            if (card.dataset.charAvatar === randomChar.avatar) {
                 targetCard = card;
                 break;
             }
@@ -1399,6 +1398,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                     intervalManager.clear(checkInterval);
                     cache.invalidate('characters');
                     if (isLobbyOpen()) {
+                        // 로비가 아직 열려있는지 재확인 (async 작업 전)
                         await renderCharacterGrid(store.searchTerm);
                     }
                     showToast(`"${newChar.name}" 캐릭터가 추가되었습니다!`, 'success');
@@ -1562,15 +1562,10 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
     }
     
     /**
-     * 캐릭터 설정 열기 (미사용)
+     * 캐릭터 설정 열기 (미사용 - 향후 확장용 예비)
+     * @deprecated
      */
-    function handleOpenCharSettings() {
-        closeLobby();
-        setTimeout(() => {
-            const charInfoBtn = document.getElementById('option_settings');
-            if (charInfoBtn) charInfoBtn.click();
-        }, CONFIG.timing.menuCloseDelay);
-    }
+    // function handleOpenCharSettings() { ... } // 제거됨
     
     // ============================================
     // 옵션 메뉴에 버튼 추가

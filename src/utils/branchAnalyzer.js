@@ -216,6 +216,9 @@ async function loadChatContent(charAvatar, fileName, ctx = null) {
  * @returns {Promise<Object>} - { [fileName]: { hash, length } }
  */
 export async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false, ctx = null) {
+    // ctx가 없으면 단독 호출 — 끝나면 캐시 정리 필요
+    const isStandalone = !ctx;
+    try {
     const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
     const result = { ...existing };
     
@@ -265,6 +268,12 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
     }
     
     return result;
+    } finally {
+        // 단독 호출이면 캐시 정리 (analyzeBranches 경유 시 그쪽 finally에서 정리)
+        if (isStandalone) {
+            clearContentCache();
+        }
+    }
 }
 
 /**
@@ -531,10 +540,19 @@ function analyzeByScore(group, chatContents, chatHashes) {
 
 /**
  * depth 계산 (부모의 depth + 1)
+ * 순환 감지 시 해당 관계를 제거하고 경고
  */
 function calculateDepths(result) {
     const getDepth = (fileName, visited = new Set()) => {
-        if (visited.has(fileName)) return 0;
+        if (visited.has(fileName)) {
+            // 순환 감지 — 이 노드의 parent 관계를 끊어 트리 무결성 유지
+            console.warn('[BranchAnalyzer] Cycle detected at', fileName, '— removing parent link');
+            if (result[fileName]) {
+                result[fileName].parentChat = null;
+                result[fileName].branchPoint = 0;
+            }
+            return 0;
+        }
         visited.add(fileName);
         
         const info = result[fileName];

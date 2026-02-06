@@ -85,17 +85,17 @@
   // src/utils/textUtils.js
   function escapeHtml(text) {
     if (!text) return "";
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
+    return text.replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
   }
   function truncateText(text, maxLength) {
     if (!text) return "";
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + "...";
   }
+  var HTML_ESCAPE_MAP;
   var init_textUtils = __esm({
     "src/utils/textUtils.js"() {
+      HTML_ESCAPE_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
     }
   });
 
@@ -1117,16 +1117,21 @@ ${message}` : message;
     // 상태 초기화
     // ============================================
     /**
-     * 상태 초기화 (로비 닫을 때)
-     * 주의: 핸들러는 초기화하지 않음
+     * 선택 상태만 초기화 (로비 열기/닫기 시)
+     * ⚠️ isLobbyOpen, isLobbyLocked, 핸들러는 절대 건드리지 않음
+     * 이 필드들은 반드시 전용 setter로만 변경할 것
      */
-    reset() {
+    resetSelection() {
       this._state.currentCharacter = null;
       this._state.currentGroup = null;
       this._state.batchModeActive = false;
       this._state.searchTerm = "";
       this._state.selectedTag = null;
       this._state.tagBarExpanded = false;
+    }
+    /** @deprecated resetSelection()을 사용할 것 */
+    reset() {
+      this.resetSelection();
     }
   };
   var store = new Store();
@@ -2372,8 +2377,8 @@ ${message}` : message;
       const ch = str.charCodeAt(i);
       h1 = (h1 << 5) + h1 ^ ch;
       h2 = (h2 << 5) + h2 ^ ch;
-      h1 = h1 & h1;
-      h2 = h2 & h2;
+      h1 = h1 | 0;
+      h2 = h2 | 0;
     }
     const combined = (h1 >>> 0).toString(36) + "-" + (h2 >>> 0).toString(36);
     return combined;
@@ -2612,38 +2617,45 @@ ${message}` : message;
     return null;
   }
   async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false, ctx = null) {
-    const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
-    const result = { ...existing };
-    const needsUpdate = forceRefresh ? chats : chats.filter((chat) => {
-      const fn = chat.file_name || "";
-      const cached = existing[fn];
-      const chatLength = chat.chat_items || chat.message_count || 0;
-      return !cached || cached.length !== chatLength;
-    });
-    const BATCH_SIZE = 3;
-    const batchEntries = [];
-    for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
-      if (ctx && !checkSafety(ctx)) break;
-      const batch = needsUpdate.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (chat) => {
+    const isStandalone = !ctx;
+    try {
+      const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
+      const result = { ...existing };
+      const needsUpdate = forceRefresh ? chats : chats.filter((chat) => {
         const fn = chat.file_name || "";
-        const content = await loadChatContent(charAvatar, fn, ctx);
-        if (content && content.length > 0) {
-          const hash = createFingerprint(content, fn);
-          const length = content.length;
-          batchEntries.push({ fileName: fn, hash, length });
-          result[fn] = { hash, length };
+        const cached = existing[fn];
+        const chatLength = chat.chat_items || chat.message_count || 0;
+        return !cached || cached.length !== chatLength;
+      });
+      const BATCH_SIZE = 3;
+      const batchEntries = [];
+      for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
+        if (ctx && !checkSafety(ctx)) break;
+        const batch = needsUpdate.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (chat) => {
+          const fn = chat.file_name || "";
+          const content = await loadChatContent(charAvatar, fn, ctx);
+          if (content && content.length > 0) {
+            const hash = createFingerprint(content, fn);
+            const length = content.length;
+            batchEntries.push({ fileName: fn, hash, length });
+            result[fn] = { hash, length };
+          }
+        }));
+        if (onProgress) {
+          onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
         }
-      }));
-      if (onProgress) {
-        onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
+        await new Promise((r) => setTimeout(r, 200));
       }
-      await new Promise((r) => setTimeout(r, 200));
+      if (batchEntries.length > 0) {
+        setFingerprintBatch(charAvatar, batchEntries);
+      }
+      return result;
+    } finally {
+      if (isStandalone) {
+        clearContentCache();
+      }
     }
-    if (batchEntries.length > 0) {
-      setFingerprintBatch(charAvatar, batchEntries);
-    }
-    return result;
   }
   function groupByFingerprint(fingerprints) {
     const groups = {};
@@ -2812,7 +2824,14 @@ ${message}` : message;
   }
   function calculateDepths(result) {
     const getDepth = (fileName, visited = /* @__PURE__ */ new Set()) => {
-      if (visited.has(fileName)) return 0;
+      if (visited.has(fileName)) {
+        console.warn("[BranchAnalyzer] Cycle detected at", fileName, "\u2014 removing parent link");
+        if (result[fileName]) {
+          result[fileName].parentChat = null;
+          result[fileName].branchPoint = 0;
+        }
+        return 0;
+      }
       visited.add(fileName);
       const info = result[fileName];
       if (!info || !info.parentChat) return 0;
@@ -4415,12 +4434,12 @@ ${message}` : message;
     }
     store.setLobbyOpen(false);
     closeChatPanel();
+    startRecentDomObserver();
   }
 
   // src/data/calendarStorage.js
   var STORAGE_KEY3 = "chatLobby_calendar";
   var CURRENT_VERSION = 1;
-  var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
   var _snapshotsCache = null;
   function getLocalDateString(date = /* @__PURE__ */ new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -4471,7 +4490,8 @@ ${message}` : message;
     }
   }
   function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
-    const jan1 = `${THIS_YEAR}-01-01`;
+    const thisYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const jan1 = `${thisYear}-01-01`;
     if (!isBaseline && date < jan1) return;
     _snapshotsCache = null;
     try {
@@ -8037,7 +8057,7 @@ ${message}` : message;
 
   // src/ui/calendarView.js
   var calendarOverlay = null;
-  var THIS_YEAR2 = (/* @__PURE__ */ new Date()).getFullYear();
+  var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
   var currentMonth = (/* @__PURE__ */ new Date()).getMonth();
   var isCalculating = false;
   var originalViewport = null;
@@ -8083,7 +8103,7 @@ ${message}` : message;
                         <div class="calendar-title-area">
                             <button class="cal-nav-btn" id="calendar-prev">\u2039</button>
                             <div class="calendar-title-text">
-                                <span class="calendar-year">${THIS_YEAR2}.</span>
+                                <span class="calendar-year">${THIS_YEAR}.</span>
                                 <span class="calendar-month" id="calendar-title"></span>
                             </div>
                             <button class="cal-nav-btn" id="calendar-next">\u203A</button>
@@ -8297,8 +8317,8 @@ ${message}` : message;
     title.textContent = currentMonth + 1;
     prevBtn.disabled = currentMonth === 0;
     nextBtn.disabled = currentMonth === 11;
-    const firstDay = new Date(THIS_YEAR2, currentMonth, 1).getDay();
-    const daysInMonth = new Date(THIS_YEAR2, currentMonth + 1, 0).getDate();
+    const firstDay = new Date(THIS_YEAR, currentMonth, 1).getDay();
+    const daysInMonth = new Date(THIS_YEAR, currentMonth + 1, 0).getDate();
     const snapshots = loadSnapshots();
     let html = "";
     const today = getLocalDateString();
@@ -8306,7 +8326,7 @@ ${message}` : message;
       html += '<div class="cal-card cal-card-blank"></div>';
     }
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = `${THIS_YEAR2}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const date = `${THIS_YEAR}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const snapshot = snapshots[date];
       const isToday = date === today;
       const hasData = !!snapshot;
@@ -8315,7 +8335,7 @@ ${message}` : message;
       if (hasData && validTopChar) {
         const avatarUrl = `/characters/${encodeURIComponent(validTopChar)}`;
         const charName = validTopChar.replace(/\.[^/.]+$/, "");
-        const currentDate = new Date(THIS_YEAR2, currentMonth, day);
+        const currentDate = new Date(THIS_YEAR, currentMonth, day);
         const recentData = findRecentSnapshot(currentDate);
         const prevSnapshot = recentData?.snapshot;
         const prevCharMsgs = prevSnapshot?.byChar?.[validTopChar] || 0;
@@ -8336,7 +8356,7 @@ ${message}` : message;
                 </div>
             `;
       } else if (hasData && !validTopChar) {
-        const currentDate = new Date(THIS_YEAR2, currentMonth, day);
+        const currentDate = new Date(THIS_YEAR, currentMonth, day);
         const recentData = findRecentSnapshot(currentDate);
         const prevSnapshot = recentData?.snapshot;
         const prevTotal = prevSnapshot?.total || 0;
@@ -8928,7 +8948,7 @@ ${message}` : message;
           cache.invalidate("messageCounts", currentChar);
           console.log("[ChatLobby] Invalidated cache for current character:", currentChar);
         }
-        store.reset();
+        store.resetSelection();
         resetCharacterSelectLock();
         try {
           const context = api.getContext();
@@ -8943,7 +8963,6 @@ ${message}` : message;
           toggleBatchMode();
         }
         closeChatPanel();
-        const characters = api.getCharacters();
         await Promise.all([
           renderPersonaBar(),
           renderCharacterGrid(),
@@ -9001,7 +9020,7 @@ ${message}` : message;
         icon?.classList.add("closedIcon");
       }
       store.setLobbyOpen(false);
-      store.reset();
+      store.resetSelection();
       closeChatPanel();
       startRecentDomObserver();
       updateFabPreview();
@@ -9446,7 +9465,7 @@ ${message}` : message;
       const cards = document.querySelectorAll(".lobby-char-card");
       let targetCard = null;
       for (const card of cards) {
-        if (card.dataset.avatar === randomChar.avatar) {
+        if (card.dataset.charAvatar === randomChar.avatar) {
           targetCard = card;
           break;
         }
@@ -9597,13 +9616,6 @@ ${message}` : message;
         const rightNavIcon = document.getElementById("rightNavDrawerIcon");
         if (rightNavIcon) rightNavIcon.click();
       }
-    }
-    function handleOpenCharSettings() {
-      closeLobby2();
-      setTimeout(() => {
-        const charInfoBtn = document.getElementById("option_settings");
-        if (charInfoBtn) charInfoBtn.click();
-      }, CONFIG.timing.menuCloseDelay);
     }
     function addLobbyToOptionsMenu() {
       const optionsMenu = document.getElementById("options");

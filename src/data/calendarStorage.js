@@ -4,7 +4,6 @@
 
 const STORAGE_KEY = 'chatLobby_calendar';
 const CURRENT_VERSION = 1; // 구조 변경 시 마이그레이션용
-const THIS_YEAR = new Date().getFullYear();
 
 // 캐시
 let _snapshotsCache = null;
@@ -97,7 +96,8 @@ function cleanOldSnapshots() {
  */
 export function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
     // 올해 1월 1일 이전 데이터는 저장 안 함 (베이스라인 예외)
-    const jan1 = `${THIS_YEAR}-01-01`;
+    const thisYear = new Date().getFullYear();
+    const jan1 = `${thisYear}-01-01`;
     if (!isBaseline && date < jan1) return;
     
     // 캐시 무효화

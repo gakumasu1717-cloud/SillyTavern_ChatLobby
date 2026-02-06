@@ -80,8 +80,8 @@ function hashString(str) {
         const ch = str.charCodeAt(i);
         h1 = ((h1 << 5) + h1) ^ ch;
         h2 = ((h2 << 5) + h2) ^ ch;
-        h1 = h1 & h1;
-        h2 = h2 & h2;
+        h1 = h1 | 0;  // 32비트 정수 강제 변환
+        h2 = h2 | 0;  // 32비트 정수 강제 변환
     }
     
     // 두 해시를 조합해서 더 긴 해시 생성

@@ -16,6 +16,7 @@ import { showToast, showConfirm, showAlert } from '../ui/notifications.js';
 import { CONFIG } from '../config.js';
 import { waitFor, waitForCharacterSelect, waitForElement } from '../utils/waitFor.js';
 import { isMobile } from '../utils/eventHelpers.js';
+import { startRecentDomObserver } from '../ui/tabView.js';
 
 // ============================================
 // 채팅 열기
@@ -552,4 +553,7 @@ function closeLobbyKeepState() {
     store.setLobbyOpen(false);
     closeChatPanel();
     // 주의: store.reset()을 호출하지 않음 - 상태 유지
+
+    // 🔥 로비 닫힐 때 DOM 감시 시작 (채팅 변경 감지)
+    startRecentDomObserver();
 }

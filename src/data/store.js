@@ -168,16 +168,22 @@ class Store {
     // ============================================
     
     /**
-     * 상태 초기화 (로비 닫을 때)
-     * 주의: 핸들러는 초기화하지 않음
+     * 선택 상태만 초기화 (로비 열기/닫기 시)
+     * ⚠️ isLobbyOpen, isLobbyLocked, 핸들러는 절대 건드리지 않음
+     * 이 필드들은 반드시 전용 setter로만 변경할 것
      */
-    reset() {
+    resetSelection() {
         this._state.currentCharacter = null;
         this._state.currentGroup = null;
         this._state.batchModeActive = false;
         this._state.searchTerm = '';
         this._state.selectedTag = null;
         this._state.tagBarExpanded = false;
+    }
+    
+    /** @deprecated resetSelection()을 사용할 것 */
+    reset() {
+        this.resetSelection();
     }
 }
 

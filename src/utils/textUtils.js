@@ -7,11 +7,10 @@
  * @param {string} text - 원본 텍스트
  * @returns {string} 이스케이프된 텍스트
  */
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export function escapeHtml(text) {
     if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return text.replace(/[&<>"']/g, ch => HTML_ESCAPE_MAP[ch]);
 }
 
 /**
