@@ -16,7 +16,7 @@ import { showToast } from './notifications.js';
 const state = {
     isOpen: false,
     mode: 'favorites',      // 'favorites' | 'recent' | 'all'
-    selectedIndex: 0,       // 현재 선택된 인덱스
+    scrollIndex: 0,       // 현재 선택된 인덱스
     favorites: [],
     allPersonas: [],
     currentPersona: null,
@@ -47,14 +47,11 @@ function getCurrentItems() {
     if (state.mode === 'favorites') return state.favorites;
     if (state.mode === 'recent') {
         const queue = storage.getPersonaRecentUsage();
+        const orderMap = new Map(queue.map((k, i) => [k, i]));
         return [...state.allPersonas].sort((a, b) => {
-            const ai = queue.indexOf(a.key);
-            const bi = queue.indexOf(b.key);
-            // 사용 기록 없으면(-1) 뒤로
-            if (ai === -1 && bi === -1) return 0;
-            if (ai === -1) return 1;
-            if (bi === -1) return -1;
-            return ai - bi; // 인덱스 작을수록(=최근) 앞으로
+            const ai = orderMap.get(a.key) ?? Infinity;
+            const bi = orderMap.get(b.key) ?? Infinity;
+            return ai - bi;
         });
     }
     return state.allPersonas;
@@ -144,7 +141,10 @@ function createMenuHTML() {
  * 메뉴 초기화
  */
 export async function initPersonaRadialMenu() {
-    if (state.isInitialized) return;
+    // 재초기화 시 기존 리소스 정리 (이벤트 리스너 누수 방지)
+    if (state.isInitialized) {
+        cleanupPersonaRadialMenu();
+    }
     
     // 기존 요소 제거
     const existing = document.getElementById('persona-radial-container');
@@ -244,11 +244,11 @@ function renderItems() {
     
     // 스크롤 인덱스 정규화 (마지막에서 visibleCount만큼 보이게)
     const maxScroll = getMaxScroll();
-    state.selectedIndex = Math.min(Math.max(0, state.selectedIndex), maxScroll);
+    state.scrollIndex = Math.min(Math.max(0, state.scrollIndex), maxScroll);
     
     // 보이는 아이템 계산
     const visibleCount_ = getVisibleCount();
-    const visibleItems = items.slice(state.selectedIndex, state.selectedIndex + visibleCount_);
+    const visibleItems = items.slice(state.scrollIndex, state.scrollIndex + visibleCount_);
     
     // 중앙에는 항상 현재 선택된 페르소나 표시
     updateCenterDisplay();
@@ -339,7 +339,7 @@ function updateIndicator(totalItems, maxScroll) {
     
     // 스크롤 가능한 경우에만 숫자 표시
     if (totalItems > visibleCount) {
-        centerMode.textContent = `${modeText} ${state.selectedIndex + 1}/${totalItems}`;
+        centerMode.textContent = `${modeText} ${state.scrollIndex + 1}/${totalItems}`;
     } else {
         centerMode.textContent = `${modeText} ${modeLabel}`;
     }
@@ -350,7 +350,7 @@ function scrollToCurrentPersona() {
     const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
     const idx = items.findIndex(p => p.key === state.currentPersona);
     if (idx >= 0) {
-        state.selectedIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
+        state.scrollIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
         renderItems();
     }
 }
@@ -358,8 +358,8 @@ function scrollToCurrentPersona() {
 // 앞뒤 이미지 프리로딩 (이미 로드된 URL은 스킵)
 function preloadNearbyImages() {
     const items = getCurrentItems();
-    const start = Math.max(0, state.selectedIndex - 3);
-    const end = Math.min(items.length, state.selectedIndex + getVisibleCount() + 3);
+    const start = Math.max(0, state.scrollIndex - 3);
+    const end = Math.min(items.length, state.scrollIndex + getVisibleCount() + 3);
     
     for (let i = start; i < end; i++) {
         const url = `/User Avatars/${encodeURIComponent(items[i].key)}`;
@@ -384,6 +384,17 @@ function updateMode() {
 }
 
 // ============================================
+// 모드 전환 (통합)
+// ============================================
+
+function setMode(nextMode) {
+    state.mode = nextMode;
+    state.scrollIndex = 0;
+    renderItems();
+    updateMode();
+}
+
+// ============================================
 // 메뉴 열기/닫기
 // ============================================
 
@@ -394,13 +405,13 @@ function openMenu() {
     if (!arc || !fab) return;
     
     state.isOpen = true;
-    state.selectedIndex = 0;
+    state.scrollIndex = 0;
     
     // 현재 페르소나 근처로 스크롤
     const items = state.mode === 'favorites' ? state.favorites : state.allPersonas;
     const idx = items.findIndex(p => p.key === state.currentPersona);
     if (idx >= 0) {
-        state.selectedIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
+        state.scrollIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
     }
     
     arc.classList.add('open');
@@ -419,7 +430,7 @@ function closeMenu() {
     
     state.isOpen = false;
     state.mode = 'favorites';
-    state.selectedIndex = 0;
+    state.scrollIndex = 0;
     
     arc.classList.remove('open');
     if (overlay) overlay.classList.remove('open');
@@ -427,17 +438,10 @@ function closeMenu() {
 }
 
 function toggleMode() {
-    // favorites -> recent -> all -> favorites
-    if (state.mode === 'favorites') {
-        state.mode = 'recent';
-    } else if (state.mode === 'recent') {
-        state.mode = 'all';
-    } else {
-        state.mode = 'favorites';
-    }
-    state.selectedIndex = 0;
-    renderItems();
-    updateMode();
+    const next = state.mode === 'favorites' ? 'recent'
+               : state.mode === 'recent' ? 'all'
+               : 'favorites';
+    setMode(next);
 }
 
 // ============================================
@@ -445,8 +449,8 @@ function toggleMode() {
 // ============================================
 
 function scrollPrev() {
-    if (state.selectedIndex > 0) {
-        state.selectedIndex = Math.max(0, state.selectedIndex - CONFIG.SCROLL_STEP);
+    if (state.scrollIndex > 0) {
+        state.scrollIndex = Math.max(0, state.scrollIndex - CONFIG.SCROLL_STEP);
         scheduleRender();
         showIndicator();
     }
@@ -454,8 +458,8 @@ function scrollPrev() {
 
 function scrollNext() {
     const maxScroll = getMaxScroll();
-    if (state.selectedIndex < maxScroll) {
-        state.selectedIndex = Math.min(maxScroll, state.selectedIndex + CONFIG.SCROLL_STEP);
+    if (state.scrollIndex < maxScroll) {
+        state.scrollIndex = Math.min(maxScroll, state.scrollIndex + CONFIG.SCROLL_STEP);
         scheduleRender();
         showIndicator();
     }
@@ -472,15 +476,9 @@ function handleFabClick(e) {
     if (!state.isOpen) {
         openMenu();
     } else if (state.mode === 'favorites') {
-        state.mode = 'recent';
-        state.selectedIndex = 0;
-        renderItems();
-        updateMode();
+        setMode('recent');
     } else if (state.mode === 'recent') {
-        state.mode = 'all';
-        state.selectedIndex = 0;
-        renderItems();
-        updateMode();
+        setMode('all');
     } else {
         closeMenu();
     }
@@ -600,9 +598,9 @@ function handleWheel(e) {
     const direction = e.deltaY > 0 ? 1 : -1;
     const maxScroll = getMaxScroll();
     
-    const newIndex = Math.max(0, Math.min(maxScroll, state.selectedIndex + direction));
-    if (newIndex !== state.selectedIndex) {
-        state.selectedIndex = newIndex;
+    const newIndex = Math.max(0, Math.min(maxScroll, state.scrollIndex + direction));
+    if (newIndex !== state.scrollIndex) {
+        state.scrollIndex = newIndex;
         scheduleRender();
         showIndicator();
     }
@@ -661,10 +659,10 @@ function handleTouchMove(e) {
     if (steps > 0) {
         const direction = accumulatedDelta > 0 ? 1 : -1;
         const targetIndex = Math.max(0, Math.min(maxScroll, 
-            state.selectedIndex + direction * steps));
+            state.scrollIndex + direction * steps));
         
-        if (targetIndex !== state.selectedIndex) {
-            state.selectedIndex = targetIndex;
+        if (targetIndex !== state.scrollIndex) {
+            state.scrollIndex = targetIndex;
             scheduleRender();
         }
         
@@ -708,10 +706,10 @@ function startMomentumScroll() {
         
         if (Math.abs(accumulated) >= threshold) {
             const direction = accumulated > 0 ? 1 : -1;
-            const newIndex = Math.max(0, Math.min(maxScroll, state.selectedIndex + direction));
+            const newIndex = Math.max(0, Math.min(maxScroll, state.scrollIndex + direction));
             
-            if (newIndex !== state.selectedIndex) {
-                state.selectedIndex = newIndex;
+            if (newIndex !== state.scrollIndex) {
+                state.scrollIndex = newIndex;
                 scheduleRender();
             } else {
                 // 끝에 도달하면 멈춤
@@ -758,10 +756,10 @@ function handleMouseMove(e) {
     
     if (Math.abs(pcAccumulatedDrag) >= threshold) {
         const direction = pcAccumulatedDrag > 0 ? 1 : -1;
-        const newIndex = Math.max(0, Math.min(maxScroll, state.selectedIndex + direction));
+        const newIndex = Math.max(0, Math.min(maxScroll, state.scrollIndex + direction));
         
-        if (newIndex !== state.selectedIndex) {
-            state.selectedIndex = newIndex;
+        if (newIndex !== state.scrollIndex) {
+            state.scrollIndex = newIndex;
             scheduleRender();
         }
         

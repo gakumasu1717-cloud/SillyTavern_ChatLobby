@@ -6017,7 +6017,7 @@ ${message}` : message;
     isOpen: false,
     mode: "favorites",
     // 'favorites' | 'recent' | 'all'
-    selectedIndex: 0,
+    scrollIndex: 0,
     // 현재 선택된 인덱스
     favorites: [],
     allPersonas: [],
@@ -6055,12 +6055,10 @@ ${message}` : message;
     if (state2.mode === "favorites") return state2.favorites;
     if (state2.mode === "recent") {
       const queue = storage.getPersonaRecentUsage();
+      const orderMap = new Map(queue.map((k, i) => [k, i]));
       return [...state2.allPersonas].sort((a, b) => {
-        const ai = queue.indexOf(a.key);
-        const bi = queue.indexOf(b.key);
-        if (ai === -1 && bi === -1) return 0;
-        if (ai === -1) return 1;
-        if (bi === -1) return -1;
+        const ai = orderMap.get(a.key) ?? Infinity;
+        const bi = orderMap.get(b.key) ?? Infinity;
         return ai - bi;
       });
     }
@@ -6118,7 +6116,9 @@ ${message}` : message;
     `;
   }
   async function initPersonaRadialMenu() {
-    if (state2.isInitialized) return;
+    if (state2.isInitialized) {
+      cleanupPersonaRadialMenu();
+    }
     const existing = document.getElementById("persona-radial-container");
     if (existing) existing.remove();
     const lobbyContainer = document.getElementById("chat-lobby-container");
@@ -6185,9 +6185,9 @@ ${message}` : message;
       return;
     }
     const maxScroll = getMaxScroll();
-    state2.selectedIndex = Math.min(Math.max(0, state2.selectedIndex), maxScroll);
+    state2.scrollIndex = Math.min(Math.max(0, state2.scrollIndex), maxScroll);
     const visibleCount_ = getVisibleCount();
-    const visibleItems = items.slice(state2.selectedIndex, state2.selectedIndex + visibleCount_);
+    const visibleItems = items.slice(state2.scrollIndex, state2.scrollIndex + visibleCount_);
     updateCenterDisplay();
     let html = "";
     const radius = getRadius();
@@ -6246,7 +6246,7 @@ ${message}` : message;
     const modeText = state2.mode === "favorites" ? "\u2B50" : state2.mode === "recent" ? "\u{1F550}" : "\u{1F465}";
     const modeLabel = state2.mode === "favorites" ? "\uC990\uACA8\uCC3E\uAE30" : state2.mode === "recent" ? "\uCD5C\uADFC \uC0AC\uC6A9" : "\uC804\uCCB4";
     if (totalItems > visibleCount) {
-      centerMode.textContent = `${modeText} ${state2.selectedIndex + 1}/${totalItems}`;
+      centerMode.textContent = `${modeText} ${state2.scrollIndex + 1}/${totalItems}`;
     } else {
       centerMode.textContent = `${modeText} ${modeLabel}`;
     }
@@ -6255,14 +6255,14 @@ ${message}` : message;
     const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
     const idx = items.findIndex((p) => p.key === state2.currentPersona);
     if (idx >= 0) {
-      state2.selectedIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
+      state2.scrollIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
       renderItems();
     }
   }
   function preloadNearbyImages() {
     const items = getCurrentItems();
-    const start = Math.max(0, state2.selectedIndex - 3);
-    const end = Math.min(items.length, state2.selectedIndex + getVisibleCount() + 3);
+    const start = Math.max(0, state2.scrollIndex - 3);
+    const end = Math.min(items.length, state2.scrollIndex + getVisibleCount() + 3);
     for (let i = start; i < end; i++) {
       const url = `/User Avatars/${encodeURIComponent(items[i].key)}`;
       if (!preloadedUrls.has(url)) {
@@ -6283,17 +6283,23 @@ ${message}` : message;
       }
     }
   }
+  function setMode(nextMode) {
+    state2.mode = nextMode;
+    state2.scrollIndex = 0;
+    renderItems();
+    updateMode();
+  }
   function openMenu() {
     const arc = document.getElementById("persona-menu-arc");
     const overlay = document.getElementById("persona-menu-overlay");
     const fab = document.getElementById("persona-fab");
     if (!arc || !fab) return;
     state2.isOpen = true;
-    state2.selectedIndex = 0;
+    state2.scrollIndex = 0;
     const items = state2.mode === "favorites" ? state2.favorites : state2.allPersonas;
     const idx = items.findIndex((p) => p.key === state2.currentPersona);
     if (idx >= 0) {
-      state2.selectedIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
+      state2.scrollIndex = Math.max(0, idx - Math.floor(getVisibleCount() / 2));
     }
     arc.classList.add("open");
     if (overlay) overlay.classList.add("open");
@@ -6308,34 +6314,26 @@ ${message}` : message;
     if (!arc || !fab) return;
     state2.isOpen = false;
     state2.mode = "favorites";
-    state2.selectedIndex = 0;
+    state2.scrollIndex = 0;
     arc.classList.remove("open");
     if (overlay) overlay.classList.remove("open");
     fab.classList.remove("open");
   }
   function toggleMode() {
-    if (state2.mode === "favorites") {
-      state2.mode = "recent";
-    } else if (state2.mode === "recent") {
-      state2.mode = "all";
-    } else {
-      state2.mode = "favorites";
-    }
-    state2.selectedIndex = 0;
-    renderItems();
-    updateMode();
+    const next = state2.mode === "favorites" ? "recent" : state2.mode === "recent" ? "all" : "favorites";
+    setMode(next);
   }
   function scrollPrev() {
-    if (state2.selectedIndex > 0) {
-      state2.selectedIndex = Math.max(0, state2.selectedIndex - CONFIG2.SCROLL_STEP);
+    if (state2.scrollIndex > 0) {
+      state2.scrollIndex = Math.max(0, state2.scrollIndex - CONFIG2.SCROLL_STEP);
       scheduleRender();
       showIndicator();
     }
   }
   function scrollNext() {
     const maxScroll = getMaxScroll();
-    if (state2.selectedIndex < maxScroll) {
-      state2.selectedIndex = Math.min(maxScroll, state2.selectedIndex + CONFIG2.SCROLL_STEP);
+    if (state2.scrollIndex < maxScroll) {
+      state2.scrollIndex = Math.min(maxScroll, state2.scrollIndex + CONFIG2.SCROLL_STEP);
       scheduleRender();
       showIndicator();
     }
@@ -6346,15 +6344,9 @@ ${message}` : message;
     if (!state2.isOpen) {
       openMenu();
     } else if (state2.mode === "favorites") {
-      state2.mode = "recent";
-      state2.selectedIndex = 0;
-      renderItems();
-      updateMode();
+      setMode("recent");
     } else if (state2.mode === "recent") {
-      state2.mode = "all";
-      state2.selectedIndex = 0;
-      renderItems();
-      updateMode();
+      setMode("all");
     } else {
       closeMenu();
     }
@@ -6451,9 +6443,9 @@ ${message}` : message;
     e.preventDefault();
     const direction = e.deltaY > 0 ? 1 : -1;
     const maxScroll = getMaxScroll();
-    const newIndex = Math.max(0, Math.min(maxScroll, state2.selectedIndex + direction));
-    if (newIndex !== state2.selectedIndex) {
-      state2.selectedIndex = newIndex;
+    const newIndex = Math.max(0, Math.min(maxScroll, state2.scrollIndex + direction));
+    if (newIndex !== state2.scrollIndex) {
+      state2.scrollIndex = newIndex;
       scheduleRender();
       showIndicator();
     }
@@ -6497,10 +6489,10 @@ ${message}` : message;
       const direction = accumulatedDelta > 0 ? 1 : -1;
       const targetIndex = Math.max(0, Math.min(
         maxScroll,
-        state2.selectedIndex + direction * steps
+        state2.scrollIndex + direction * steps
       ));
-      if (targetIndex !== state2.selectedIndex) {
-        state2.selectedIndex = targetIndex;
+      if (targetIndex !== state2.scrollIndex) {
+        state2.scrollIndex = targetIndex;
         scheduleRender();
       }
       touchStartX = currentX;
@@ -6532,9 +6524,9 @@ ${message}` : message;
       const threshold = 30;
       if (Math.abs(accumulated) >= threshold) {
         const direction = accumulated > 0 ? 1 : -1;
-        const newIndex = Math.max(0, Math.min(maxScroll, state2.selectedIndex + direction));
-        if (newIndex !== state2.selectedIndex) {
-          state2.selectedIndex = newIndex;
+        const newIndex = Math.max(0, Math.min(maxScroll, state2.scrollIndex + direction));
+        if (newIndex !== state2.scrollIndex) {
+          state2.scrollIndex = newIndex;
           scheduleRender();
         } else {
           momentumTimer = null;
@@ -6566,9 +6558,9 @@ ${message}` : message;
     const maxScroll = getMaxScroll();
     if (Math.abs(pcAccumulatedDrag) >= threshold) {
       const direction = pcAccumulatedDrag > 0 ? 1 : -1;
-      const newIndex = Math.max(0, Math.min(maxScroll, state2.selectedIndex + direction));
-      if (newIndex !== state2.selectedIndex) {
-        state2.selectedIndex = newIndex;
+      const newIndex = Math.max(0, Math.min(maxScroll, state2.scrollIndex + direction));
+      if (newIndex !== state2.scrollIndex) {
+        state2.scrollIndex = newIndex;
         scheduleRender();
       }
       pcAccumulatedDrag = 0;
