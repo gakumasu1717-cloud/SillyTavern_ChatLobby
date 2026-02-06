@@ -2658,6 +2658,7 @@ ${message}` : message;
           if (content && content.length > 0) {
             const hash = createFingerprint(content, fn);
             const length = content.length;
+            console.debug(`[BranchDebug][Fingerprint] ${fn} \u2192 hash=${hash}, msgs=${length}`);
             batchEntries.push({ fileName: fn, hash, length });
             result[fn] = { hash, length };
           }
@@ -2766,17 +2767,17 @@ ${message}` : message;
           bestParent = candidate.fileName;
         }
       }
+      const debugLines = [];
+      for (let k = 0; k < i; k++) {
+        const cand = sorted[k];
+        const h = chatHashes[cand.fileName];
+        if (!h) continue;
+        const c = findCommonPrefixLengthFast(currentHashes, h);
+        const len = chatContents[cand.fileName]?.length || 0;
+        const marker = bestParent && cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
+        debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+      }
       if (bestParent) {
-        const debugLines = [];
-        for (let k = 0; k < i; k++) {
-          const cand = sorted[k];
-          const h = chatHashes[cand.fileName];
-          if (!h) continue;
-          const c = findCommonPrefixLengthFast(currentHashes, h);
-          const len = chatContents[cand.fileName]?.length || 0;
-          const marker = cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
-          debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
-        }
         console.debug(
           `[BranchDebug] ${current.fileName}
   \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
@@ -2787,6 +2788,12 @@ ${message}` : message;
           branchPoint: bestCommon,
           depth: 1
         };
+      } else {
+        console.debug(
+          `[BranchDebug][NoParent] ${current.fileName} (${currentContent.length}msgs) \u2014 \uBD80\uBAA8 \uBABB \uCC3E\uC74C!
+  \uD6C4\uBCF4 ${i}\uAC1C \uAC80\uC0AC \uACB0\uACFC:
+` + debugLines.join("\n")
+        );
       }
     }
     calculateDepths(result);
@@ -2816,17 +2823,17 @@ ${message}` : message;
           bestParent = candidate.fileName;
         }
       }
+      const debugLines = [];
+      for (const cand of group) {
+        if (cand.fileName === current.fileName) continue;
+        const h = chatHashes[cand.fileName];
+        if (!h) continue;
+        const c = findCommonPrefixLengthFast(currentHashes, h);
+        const len = chatContents[cand.fileName]?.length || 0;
+        const marker = bestParent && cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
+        debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+      }
       if (bestParent) {
-        const debugLines = [];
-        for (const cand of group) {
-          if (cand.fileName === current.fileName) continue;
-          const h = chatHashes[cand.fileName];
-          if (!h) continue;
-          const c = findCommonPrefixLengthFast(currentHashes, h);
-          const len = chatContents[cand.fileName]?.length || 0;
-          const marker = cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
-          debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
-        }
         console.debug(
           `[BranchDebug] ${current.fileName}
   \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
@@ -2837,6 +2844,12 @@ ${message}` : message;
           branchPoint: bestCommon,
           depth: 1
         };
+      } else {
+        console.debug(
+          `[BranchDebug][NoParent] ${current.fileName} (${currentContent.length}msgs) \u2014 \uBD80\uBAA8 \uBABB \uCC3E\uC74C!
+  \uD6C4\uBCF4 ${group.length - 1}\uAC1C \uAC80\uC0AC \uACB0\uACFC:
+` + debugLines.join("\n")
+        );
       }
     }
     calculateDepths(result);
@@ -2880,7 +2893,21 @@ ${message}` : message;
       }
       const groups = groupByFingerprint(fingerprints);
       const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
+      const singleGroups = Object.values(groups).filter((g) => g.length === 1);
       console.debug(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
+      const groupEntries = Object.entries(groups);
+      console.debug("[BranchDebug][GroupMap] \uC804\uCCB4 \uADF8\uB8F9 \uB9F5:");
+      for (const [hash, members] of groupEntries) {
+        const memberList = members.map((m) => `${m.fileName}(${m.length}msgs)`).join(", ");
+        console.debug(`  [${hash}] (${members.length}\uAC1C): ${memberList}`);
+      }
+      if (singleGroups.length > 0) {
+        console.debug(`[BranchDebug][Orphans] fingerprint \uBD88\uC77C\uCE58\uB85C \uBE44\uAD50 \uBD88\uAC00\uD55C \uCC44\uD305 ${singleGroups.length}\uAC1C:`);
+        for (const group of singleGroups) {
+          const fp = fingerprints[group[0].fileName];
+          console.debug(`  ${group[0].fileName} (${group[0].length}msgs, hash=${fp?.hash})`);
+        }
+      }
       const allBranches = {};
       const branchEntries = [];
       for (let i = 0; i < multiGroups.length; i++) {

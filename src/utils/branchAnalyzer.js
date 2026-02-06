@@ -249,6 +249,7 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
                 const hash = createFingerprint(content, fn);
                 const length = content.length;
                 
+                console.debug(`[BranchDebug][Fingerprint] ${fn} → hash=${hash}, msgs=${length}`);
                 batchEntries.push({ fileName: fn, hash, length });
                 result[fn] = { hash, length };
             }
@@ -432,18 +433,19 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
             }
         }
         
+        // 후보 전체 요약 테이블 (부모 찾든 못 찾든 항상 출력)
+        const debugLines = [];
+        for (let k = 0; k < i; k++) {
+            const cand = sorted[k];
+            const h = chatHashes[cand.fileName];
+            if (!h) continue;
+            const c = findCommonPrefixLengthFast(currentHashes, h);
+            const len = chatContents[cand.fileName]?.length || 0;
+            const marker = bestParent && cand.fileName === bestParent ? ' \u2190 선택됨' : '';
+            debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+        }
+        
         if (bestParent) {
-            // 후보 전체 요약 테이블
-            const debugLines = [];
-            for (let k = 0; k < i; k++) {
-                const cand = sorted[k];
-                const h = chatHashes[cand.fileName];
-                if (!h) continue;
-                const c = findCommonPrefixLengthFast(currentHashes, h);
-                const len = chatContents[cand.fileName]?.length || 0;
-                const marker = cand.fileName === bestParent ? ' \u2190 선택됨' : '';
-                debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
-            }
             console.debug(
                 `[BranchDebug] ${current.fileName}\n` +
                 `  \u2192 부모: ${bestParent} (common=${bestCommon})\n` +
@@ -454,6 +456,12 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
                 branchPoint: bestCommon,
                 depth: 1
             };
+        } else {
+            console.debug(
+                `[BranchDebug][NoParent] ${current.fileName} (${currentContent.length}msgs) — 부모 못 찾음!\n` +
+                `  후보 ${i}개 검사 결과:\n` +
+                debugLines.join('\n')
+            );
         }
     }
     
@@ -508,18 +516,19 @@ function analyzeByScore(group, chatContents, chatHashes) {
             }
         }
         
+        // 후보 전체 요약 테이블 (부모 찾든 못 찾든 항상 출력)
+        const debugLines = [];
+        for (const cand of group) {
+            if (cand.fileName === current.fileName) continue;
+            const h = chatHashes[cand.fileName];
+            if (!h) continue;
+            const c = findCommonPrefixLengthFast(currentHashes, h);
+            const len = chatContents[cand.fileName]?.length || 0;
+            const marker = bestParent && cand.fileName === bestParent ? ' \u2190 선택됨' : '';
+            debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+        }
+        
         if (bestParent) {
-            // 후보 전체 요약 테이블
-            const debugLines = [];
-            for (const cand of group) {
-                if (cand.fileName === current.fileName) continue;
-                const h = chatHashes[cand.fileName];
-                if (!h) continue;
-                const c = findCommonPrefixLengthFast(currentHashes, h);
-                const len = chatContents[cand.fileName]?.length || 0;
-                const marker = cand.fileName === bestParent ? ' \u2190 선택됨' : '';
-                debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
-            }
             console.debug(
                 `[BranchDebug] ${current.fileName}\n` +
                 `  \u2192 부모: ${bestParent} (common=${bestCommon})\n` +
@@ -530,6 +539,12 @@ function analyzeByScore(group, chatContents, chatHashes) {
                 branchPoint: bestCommon,
                 depth: 1
             };
+        } else {
+            console.debug(
+                `[BranchDebug][NoParent] ${current.fileName} (${currentContent.length}msgs) — 부모 못 찾음!\n` +
+                `  후보 ${group.length - 1}개 검사 결과:\n` +
+                debugLines.join('\n')
+            );
         }
     }
     
@@ -603,7 +618,25 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         
         // 3. 2개 이상인 그룹만 분석 (20~95%)
         const multiGroups = Object.values(groups).filter(g => g.length >= 2);
+        const singleGroups = Object.values(groups).filter(g => g.length === 1);
         console.debug(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
+        
+        // 디버그: 전체 그룹 맵 출력
+        const groupEntries = Object.entries(groups);
+        console.debug('[BranchDebug][GroupMap] 전체 그룹 맵:');
+        for (const [hash, members] of groupEntries) {
+            const memberList = members.map(m => `${m.fileName}(${m.length}msgs)`).join(', ');
+            console.debug(`  [${hash}] (${members.length}개): ${memberList}`);
+        }
+        
+        // 디버그: 고아 채팅 (1개짜리 그룹 = fingerprint 불일치로 비교 대상 없음)
+        if (singleGroups.length > 0) {
+            console.debug(`[BranchDebug][Orphans] fingerprint 불일치로 비교 불가한 채팅 ${singleGroups.length}개:`);
+            for (const group of singleGroups) {
+                const fp = fingerprints[group[0].fileName];
+                console.debug(`  ${group[0].fileName} (${group[0].length}msgs, hash=${fp?.hash})`);
+            }
+        }
         
         const allBranches = {};
         const branchEntries = []; // 배치 저장용
