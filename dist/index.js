@@ -2975,14 +2975,27 @@ ${message}` : message;
           if (!orphanHashes[orphanFn]) continue;
           if (allBranches[orphanFn]) continue;
           const orphanH = orphanHashes[orphanFn];
-          const orphanLen = orphanContents[orphanFn].length;
+          const orphanC = orphanContents[orphanFn];
+          const orphanLen = orphanC.length;
           let bestMatch = null;
           let bestCommon = 0;
-          let orphanIsParent = false;
           for (const item of nonOrphanFiles) {
             const h = nonOrphanHashes[item.fileName];
             if (!h) continue;
             const common = findCommonPrefixLengthFast(orphanH, h);
+            if (common === 0 && orphanLen >= 2 && h.length >= 2) {
+              const diffCount = Math.min(5, orphanLen, h.length);
+              const nonOrphanC = nonOrphanContents[item.fileName];
+              console.debug(`[BranchDebug][MsgDiff] ${orphanFn} vs ${item.fileName} \u2014 common=0, \uBA54\uC2DC\uC9C0\uBCC4 \uBE44\uAD50:`);
+              for (let d = 0; d < diffCount; d++) {
+                const oMsg = orphanC[d];
+                const nMsg = nonOrphanC?.[d];
+                const oKey = `${oMsg?.is_user ? "U" : "A"}:${(oMsg?.mes || "").length}:${(oMsg?.mes || "").substring(0, 40)}`;
+                const nKey = `${nMsg?.is_user ? "U" : "A"}:${(nMsg?.mes || "").length}:${(nMsg?.mes || "").substring(0, 40)}`;
+                const match = orphanH[d] === h[d] ? "\u2705" : "\u274C";
+                console.debug(`  [${d}] ${match} orphan="${oKey}" vs other="${nKey}"`);
+              }
+            }
             if (common === 0) continue;
             console.debug(`[BranchDebug][CrossGroup] ${orphanFn}(${orphanLen}msgs) vs ${item.fileName}(${h.length}msgs) \u2192 common=${common}`);
             if (common > bestCommon) {

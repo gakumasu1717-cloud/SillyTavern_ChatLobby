@@ -734,10 +734,10 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
                 if (allBranches[orphanFn]) continue;
                 
                 const orphanH = orphanHashes[orphanFn];
-                const orphanLen = orphanContents[orphanFn].length;
+                const orphanC = orphanContents[orphanFn];
+                const orphanLen = orphanC.length;
                 let bestMatch = null;
                 let bestCommon = 0;
-                let orphanIsParent = false;  // true면 고아가 부모, false면 고아가 자식
                 
                 // 비고아 채팅과 비교
                 for (const item of nonOrphanFiles) {
@@ -745,6 +745,22 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
                     if (!h) continue;
                     
                     const common = findCommonPrefixLengthFast(orphanH, h);
+                    
+                    // common=0 이면 메시지별 상세 diff (첫 5개만, 왜 다른지 확인용)
+                    if (common === 0 && orphanLen >= 2 && h.length >= 2) {
+                        const diffCount = Math.min(5, orphanLen, h.length);
+                        const nonOrphanC = nonOrphanContents[item.fileName];
+                        console.debug(`[BranchDebug][MsgDiff] ${orphanFn} vs ${item.fileName} — common=0, 메시지별 비교:`);
+                        for (let d = 0; d < diffCount; d++) {
+                            const oMsg = orphanC[d];
+                            const nMsg = nonOrphanC?.[d];
+                            const oKey = `${oMsg?.is_user ? 'U' : 'A'}:${(oMsg?.mes || '').length}:${(oMsg?.mes || '').substring(0, 40)}`;
+                            const nKey = `${nMsg?.is_user ? 'U' : 'A'}:${(nMsg?.mes || '').length}:${(nMsg?.mes || '').substring(0, 40)}`;
+                            const match = orphanH[d] === h[d] ? '✅' : '❌';
+                            console.debug(`  [${d}] ${match} orphan="${oKey}" vs other="${nKey}"`);
+                        }
+                    }
+                    
                     if (common === 0) continue;
                     
                     console.debug(`[BranchDebug][CrossGroup] ${orphanFn}(${orphanLen}msgs) vs ${item.fileName}(${h.length}msgs) → common=${common}`);
