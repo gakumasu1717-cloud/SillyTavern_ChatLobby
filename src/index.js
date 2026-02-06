@@ -311,6 +311,13 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             // 🔥 페르소나 변경 감지 (세팅 업데이트 시)
             onSettingsUpdated: async () => {
                 console.debug('[ChatLobby] Settings updated, refreshing persona FAB');
+                // 외부에서 페르소나 변경 시에도 사용 기록 저장
+                try {
+                    const currentPersona = await api.getCurrentPersona();
+                    if (currentPersona) {
+                        storage.recordPersonaUsage(currentPersona);
+                    }
+                } catch (e) { /* ignore */ }
                 await refreshPersonaRadialMenu();
                 await renderPersonaBar();
             }
@@ -1238,6 +1245,8 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 
         const success = await api.setPersona(personaKey);
         if (success) {
+            // 사용 기록 저장 (최근 사용순 정렬용)
+            storage.recordPersonaUsage(personaKey);
             // 🔥 FAB 아바타 직접 업데이트 (타이밍 문제 해결)
             const fabAvatar = document.getElementById('persona-fab-avatar');
             const fabIcon = document.getElementById('persona-fab-icon');

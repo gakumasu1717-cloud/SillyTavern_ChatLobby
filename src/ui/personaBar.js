@@ -173,8 +173,11 @@ async function selectPersona(container, item) {
         container.querySelectorAll('.persona-item').forEach(el => el.classList.remove('selected'));
         item.classList.add('selected');
         
-        const success = await api.setPersona(item.dataset.persona);
+        const personaKey = item.dataset.persona;
+        const success = await api.setPersona(personaKey);
         if (success) {
+            // 사용 기록 저장 (최근 사용순 정렬용)
+            storage.recordPersonaUsage(personaKey);
             showToast(`페르소나가 변경되었습니다.`, 'success');
         }
     } catch (error) {

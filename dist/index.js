@@ -5882,8 +5882,10 @@ ${message}` : message;
     try {
       container.querySelectorAll(".persona-item").forEach((el) => el.classList.remove("selected"));
       item.classList.add("selected");
-      const success = await api.setPersona(item.dataset.persona);
+      const personaKey = item.dataset.persona;
+      const success = await api.setPersona(personaKey);
       if (success) {
+        storage.recordPersonaUsage(personaKey);
         showToast(`\uD398\uB974\uC18C\uB098\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
       }
     } catch (error) {
@@ -8801,6 +8803,13 @@ ${message}` : message;
         // 🔥 페르소나 변경 감지 (세팅 업데이트 시)
         onSettingsUpdated: async () => {
           console.debug("[ChatLobby] Settings updated, refreshing persona FAB");
+          try {
+            const currentPersona = await api.getCurrentPersona();
+            if (currentPersona) {
+              storage.recordPersonaUsage(currentPersona);
+            }
+          } catch (e) {
+          }
           await refreshPersonaRadialMenu();
           await renderPersonaBar();
         }
@@ -9399,6 +9408,7 @@ ${message}` : message;
       }
       const success = await api.setPersona(personaKey);
       if (success) {
+        storage.recordPersonaUsage(personaKey);
         const fabAvatar = document.getElementById("persona-fab-avatar");
         const fabIcon = document.getElementById("persona-fab-icon");
         if (fabAvatar && fabIcon) {
