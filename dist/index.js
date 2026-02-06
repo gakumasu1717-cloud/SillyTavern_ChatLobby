@@ -2658,7 +2658,6 @@ ${message}` : message;
           if (content && content.length > 0) {
             const hash = createFingerprint(content, fn);
             const length = content.length;
-            console.debug(`[BranchDebug][Fingerprint] ${fn} \u2192 hash=${hash}, msgs=${length}`);
             batchEntries.push({ fileName: fn, hash, length });
             result[fn] = { hash, length };
           }
@@ -2760,40 +2759,18 @@ ${message}` : message;
         const candidateHashes = chatHashes[candidate.fileName];
         if (!candidateContent || !candidateHashes) continue;
         const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
-        console.debug(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
         if (common === 0) continue;
         if (common > bestCommon) {
           bestCommon = common;
           bestParent = candidate.fileName;
         }
       }
-      const debugLines = [];
-      for (let k = 0; k < i; k++) {
-        const cand = sorted[k];
-        const h = chatHashes[cand.fileName];
-        if (!h) continue;
-        const c = findCommonPrefixLengthFast(currentHashes, h);
-        const len = chatContents[cand.fileName]?.length || 0;
-        const marker = bestParent && cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
-        debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
-      }
       if (bestParent) {
-        console.debug(
-          `[BranchDebug] ${current.fileName}
-  \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
-` + debugLines.join("\n")
-        );
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
           depth: 1
         };
-      } else {
-        console.debug(
-          `[BranchDebug][NoParent] ${current.fileName} (${currentContent.length}msgs) \u2014 \uBD80\uBAA8 \uBABB \uCC3E\uC74C!
-  \uD6C4\uBCF4 ${i}\uAC1C \uAC80\uC0AC \uACB0\uACFC:
-` + debugLines.join("\n")
-        );
       }
     }
     calculateDepths(result);
@@ -2813,7 +2790,6 @@ ${message}` : message;
         const candidateHashes = chatHashes[candidate.fileName];
         if (!candidateContent || !candidateHashes) continue;
         const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
-        console.debug(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
         if (common === 0) continue;
         if (currentContent.length <= common) continue;
         if (candidateContent.length > currentContent.length) continue;
@@ -2823,33 +2799,12 @@ ${message}` : message;
           bestParent = candidate.fileName;
         }
       }
-      const debugLines = [];
-      for (const cand of group) {
-        if (cand.fileName === current.fileName) continue;
-        const h = chatHashes[cand.fileName];
-        if (!h) continue;
-        const c = findCommonPrefixLengthFast(currentHashes, h);
-        const len = chatContents[cand.fileName]?.length || 0;
-        const marker = bestParent && cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
-        debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
-      }
       if (bestParent) {
-        console.debug(
-          `[BranchDebug] ${current.fileName}
-  \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
-` + debugLines.join("\n")
-        );
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
           depth: 1
         };
-      } else {
-        console.debug(
-          `[BranchDebug][NoParent] ${current.fileName} (${currentContent.length}msgs) \u2014 \uBD80\uBAA8 \uBABB \uCC3E\uC74C!
-  \uD6C4\uBCF4 ${group.length - 1}\uAC1C \uAC80\uC0AC \uACB0\uACFC:
-` + debugLines.join("\n")
-        );
       }
     }
     calculateDepths(result);
@@ -2904,19 +2859,6 @@ ${message}` : message;
       const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
       const singleGroups = Object.values(groups).filter((g) => g.length === 1);
       console.debug(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
-      const groupEntries = Object.entries(groups);
-      console.debug("[BranchDebug][GroupMap] \uC804\uCCB4 \uADF8\uB8F9 \uB9F5:");
-      for (const [hash, members] of groupEntries) {
-        const memberList = members.map((m) => `${m.fileName}(${m.length}msgs)`).join(", ");
-        console.debug(`  [${hash}] (${members.length}\uAC1C): ${memberList}`);
-      }
-      if (singleGroups.length > 0) {
-        console.debug(`[BranchDebug][Orphans] fingerprint \uBD88\uC77C\uCE58\uB85C \uBE44\uAD50 \uBD88\uAC00\uD55C \uCC44\uD305 ${singleGroups.length}\uAC1C:`);
-        for (const group of singleGroups) {
-          const fp = fingerprints[group[0].fileName];
-          console.debug(`  ${group[0].fileName} (${group[0].length}msgs, hash=${fp?.hash})`);
-        }
-      }
       const allBranches = {};
       const branchEntries = [];
       for (let i = 0; i < multiGroups.length; i++) {
@@ -2946,7 +2888,6 @@ ${message}` : message;
         }
       }
       if (singleGroups.length > 0 && !ctx.aborted) {
-        console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 \uCC44\uD305 ${singleGroups.length}\uAC1C \uAD50\uCC28 \uBE44\uAD50 \uC2DC\uC791`);
         const allChats = Object.entries(fingerprints).map(([fn, fp]) => ({ fileName: fn, length: fp.length }));
         const orphanFiles = singleGroups.map((g) => g[0].fileName);
         const orphanContents = {};
@@ -2983,21 +2924,7 @@ ${message}` : message;
             const h = nonOrphanHashes[item.fileName];
             if (!h) continue;
             const common = findCommonPrefixLengthFast(orphanH, h);
-            if (common === 0 && orphanLen >= 2 && h.length >= 2) {
-              const diffCount = Math.min(5, orphanLen, h.length);
-              const nonOrphanC = nonOrphanContents[item.fileName];
-              console.debug(`[BranchDebug][MsgDiff] ${orphanFn} vs ${item.fileName} \u2014 common=0, \uBA54\uC2DC\uC9C0\uBCC4 \uBE44\uAD50:`);
-              for (let d = 0; d < diffCount; d++) {
-                const oMsg = orphanC[d];
-                const nMsg = nonOrphanC?.[d];
-                const oKey = `${oMsg?.is_user ? "U" : "A"}:${(oMsg?.mes || "").length}:${(oMsg?.mes || "").substring(0, 40)}`;
-                const nKey = `${nMsg?.is_user ? "U" : "A"}:${(nMsg?.mes || "").length}:${(nMsg?.mes || "").substring(0, 40)}`;
-                const match = orphanH[d] === h[d] ? "\u2705" : "\u274C";
-                console.debug(`  [${d}] ${match} orphan="${oKey}" vs other="${nKey}"`);
-              }
-            }
             if (common === 0) continue;
-            console.debug(`[BranchDebug][CrossGroup] ${orphanFn}(${orphanLen}msgs) vs ${item.fileName}(${h.length}msgs) \u2192 common=${common}`);
             if (common > bestCommon) {
               bestCommon = common;
               bestMatch = item.fileName;
@@ -3023,7 +2950,6 @@ ${message}` : message;
                 if (!rootH) continue;
                 const rootCommon = findCommonPrefixLengthFast(orphanH, rootH);
                 if (rootCommon > 0) {
-                  console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 ${orphanFn}(\uBD80\uBAA8) \u2192 ${rootFn}(\uC790\uC2DD) \uC5F0\uACB0, common=${rootCommon}`);
                   allBranches[rootFn] = {
                     parentChat: orphanFn,
                     branchPoint: rootCommon,
@@ -3038,7 +2964,6 @@ ${message}` : message;
                 }
               }
             } else {
-              console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 ${orphanFn}(\uC790\uC2DD) \u2192 ${bestMatch}(\uBD80\uBAA8) \uC5F0\uACB0, common=${bestCommon}`);
               allBranches[orphanFn] = {
                 parentChat: bestMatch,
                 branchPoint: bestCommon,
@@ -3051,8 +2976,6 @@ ${message}` : message;
                 depth: 1
               });
             }
-          } else {
-            console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 ${orphanFn} \u2014 \uAD50\uCC28 \uBE44\uAD50\uC5D0\uC11C\uB3C4 \uB9E4\uCE6D \uC5C6\uC74C`);
           }
         }
         calculateDepths(allBranches);
