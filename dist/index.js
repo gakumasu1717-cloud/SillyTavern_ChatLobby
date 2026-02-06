@@ -2714,7 +2714,21 @@ ${message}` : message;
         }
       }
       if (bestParent) {
-        console.log(`[BranchAnalyzer][Date] RESULT: ${current.fileName} \u2192 parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
+        const debugLines = [];
+        for (let k = 0; k < i; k++) {
+          const cand = sorted[k];
+          const h = chatHashes[cand.fileName];
+          if (!h) continue;
+          const c = findCommonPrefixLengthFast(currentHashes, h);
+          const len = chatContents[cand.fileName]?.length || 0;
+          const marker = cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
+          debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+        }
+        console.log(
+          `[BranchDebug] ${current.fileName}
+  \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
+` + debugLines.join("\n")
+        );
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,
@@ -2750,7 +2764,21 @@ ${message}` : message;
         }
       }
       if (bestParent) {
-        console.log(`[BranchAnalyzer][Score] RESULT: ${current.fileName} \u2192 parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
+        const debugLines = [];
+        for (const cand of group) {
+          if (cand.fileName === current.fileName) continue;
+          const h = chatHashes[cand.fileName];
+          if (!h) continue;
+          const c = findCommonPrefixLengthFast(currentHashes, h);
+          const len = chatContents[cand.fileName]?.length || 0;
+          const marker = cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
+          debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+        }
+        console.log(
+          `[BranchDebug] ${current.fileName}
+  \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
+` + debugLines.join("\n")
+        );
         result[current.fileName] = {
           parentChat: bestParent,
           branchPoint: bestCommon,

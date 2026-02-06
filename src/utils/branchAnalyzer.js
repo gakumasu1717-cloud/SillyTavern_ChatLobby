@@ -406,7 +406,22 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
         }
         
         if (bestParent) {
-            console.log(`[BranchAnalyzer][Date] RESULT: ${current.fileName} → parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
+            // 후보 전체 요약 테이블
+            const debugLines = [];
+            for (let k = 0; k < i; k++) {
+                const cand = sorted[k];
+                const h = chatHashes[cand.fileName];
+                if (!h) continue;
+                const c = findCommonPrefixLengthFast(currentHashes, h);
+                const len = chatContents[cand.fileName]?.length || 0;
+                const marker = cand.fileName === bestParent ? ' \u2190 선택됨' : '';
+                debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+            }
+            console.log(
+                `[BranchDebug] ${current.fileName}\n` +
+                `  \u2192 부모: ${bestParent} (common=${bestCommon})\n` +
+                debugLines.join('\n')
+            );
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommon,
@@ -467,7 +482,22 @@ function analyzeByScore(group, chatContents, chatHashes) {
         }
         
         if (bestParent) {
-            console.log(`[BranchAnalyzer][Score] RESULT: ${current.fileName} → parent: ${bestParent}, branchPoint: ${bestCommon}, current.length: ${currentContent.length}, parent.length: ${chatContents[bestParent].length}`);
+            // 후보 전체 요약 테이블
+            const debugLines = [];
+            for (const cand of group) {
+                if (cand.fileName === current.fileName) continue;
+                const h = chatHashes[cand.fileName];
+                if (!h) continue;
+                const c = findCommonPrefixLengthFast(currentHashes, h);
+                const len = chatContents[cand.fileName]?.length || 0;
+                const marker = cand.fileName === bestParent ? ' \u2190 선택됨' : '';
+                debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
+            }
+            console.log(
+                `[BranchDebug] ${current.fileName}\n` +
+                `  \u2192 부모: ${bestParent} (common=${bestCommon})\n` +
+                debugLines.join('\n')
+            );
             result[current.fileName] = {
                 parentChat: bestParent,
                 branchPoint: bestCommon,
