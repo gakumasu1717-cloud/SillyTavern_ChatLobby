@@ -9189,8 +9189,11 @@ ${message}` : message;
       if (typeof context?.getCharacters === "function") {
         await context.getCharacters();
       }
-      await renderPersonaBar();
-      await renderCharacterGrid();
+      await Promise.all([
+        renderPersonaBar(),
+        renderCharacterGrid(),
+        refreshPersonaRadialMenu()
+      ]);
     };
     window.chatLobbyRefresh = window.ChatLobby.refresh;
     let eventsInitialized = false;
@@ -9421,8 +9424,11 @@ ${message}` : message;
       cache.invalidateAll();
       await api.fetchPersonas();
       await api.fetchCharacters(true);
-      await renderPersonaBar();
-      await renderCharacterGrid();
+      await Promise.all([
+        renderPersonaBar(),
+        renderCharacterGrid(),
+        refreshPersonaRadialMenu()
+      ]);
       showToast("\uC0C8\uB85C\uACE0\uCE68 \uC644\uB8CC", "success");
     }
     async function handleSwitchPersona(el) {

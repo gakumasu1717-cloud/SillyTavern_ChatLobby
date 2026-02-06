@@ -871,8 +871,11 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             await context.getCharacters();
         }
         
-        await renderPersonaBar();
-        await renderCharacterGrid();
+        await Promise.all([
+            renderPersonaBar(),
+            renderCharacterGrid(),
+            refreshPersonaRadialMenu()
+        ]);
     };
     // 하위 호환성 유지
     window.chatLobbyRefresh = window.ChatLobby.refresh;
@@ -1221,8 +1224,11 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         await api.fetchPersonas();
         await api.fetchCharacters(true);
         
-        await renderPersonaBar();
-        await renderCharacterGrid();
+        await Promise.all([
+            renderPersonaBar(),
+            renderCharacterGrid(),
+            refreshPersonaRadialMenu()
+        ]);
         
         showToast('새로고침 완료', 'success');
     }
