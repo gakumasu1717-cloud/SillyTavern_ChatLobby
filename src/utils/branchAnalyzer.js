@@ -6,10 +6,7 @@
 import { api } from '../api/sillyTavern.js';
 import {
     createFingerprint,
-    findCommonPrefixLength,
-    setFingerprint,
     setFingerprintBatch,
-    setBranchInfo,
     setBranchInfoBatch,
     getAllFingerprints
 } from '../data/branchCache.js';
