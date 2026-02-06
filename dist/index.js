@@ -8756,7 +8756,8 @@ ${message}` : message;
           cache.invalidate("characters");
           if (eventData?.character?.avatar) {
             lastChatCache.remove(eventData.character.avatar);
-            console.log("[ChatLobby] Removed deleted character from lastChatCache:", eventData.character.avatar);
+            clearCharacterCache(eventData.character.avatar);
+            console.log("[ChatLobby] Removed deleted character from lastChatCache & branchCache:", eventData.character.avatar);
           }
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);

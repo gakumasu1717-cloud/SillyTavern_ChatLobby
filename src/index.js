@@ -247,7 +247,8 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 // eventData: { id: chid, character: characterObject }
                 if (eventData?.character?.avatar) {
                     lastChatCache.remove(eventData.character.avatar);
-                    console.log('[ChatLobby] Removed deleted character from lastChatCache:', eventData.character.avatar);
+                    clearBranchCache(eventData.character.avatar);
+                    console.log('[ChatLobby] Removed deleted character from lastChatCache & branchCache:', eventData.character.avatar);
                 }
                 
                 if (isLobbyOpen()) {
