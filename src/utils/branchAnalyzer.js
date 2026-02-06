@@ -81,52 +81,23 @@ function checkSafety(ctx) {
  * @returns {number|null} - timestamp 또는 null
  */
 function extractDateFromFileName(fileName) {
-    // 패턴1: 밀리초 포함 (공백 없는 표준 형식)
-    let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
-    if (match) {
-        const timestamp = new Date(
-            parseInt(match[1]),      // 년
-            parseInt(match[2]) - 1,  // 월 (0부터 시작)
-            parseInt(match[3]),      // 일
-            parseInt(match[4]),      // 시
-            parseInt(match[5]),      // 분
-            parseInt(match[6]),      // 초
-            parseInt(match[7])       // 밀리초
-        ).getTime();
-        return isNaN(timestamp) ? null : timestamp;
-    }
+    // 통합 패턴: 공백/밀리초 선택적 허용
+    // "2026-01-29@18h40m17s788ms" | "2026-01-26@01h29m56s" | "2026-1-23 @04h 07m 56s 422ms"
+    const match = fileName.match(
+        /(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s(?:\s*(\d+)ms)?/
+    );
+    if (!match) return null;
     
-    // 패턴2: 밀리초 없는 패턴 (Branch 파일 등)
-    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s/);
-    if (match) {
-        const timestamp = new Date(
-            parseInt(match[1]),      // 년
-            parseInt(match[2]) - 1,  // 월 (0부터 시작)
-            parseInt(match[3]),      // 일
-            parseInt(match[4]),      // 시
-            parseInt(match[5]),      // 분
-            parseInt(match[6]),      // 초
-            0                        // 밀리초 (없으면 0)
-        ).getTime();
-        return isNaN(timestamp) ? null : timestamp;
-    }
-    
-    // 패턴3: imported 파일 (공백 포함) - "2026-1-23 @04h 07m 56s 422ms"
-    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s\s*(\d+)ms/);
-    if (match) {
-        const timestamp = new Date(
-            parseInt(match[1]),      // 년
-            parseInt(match[2]) - 1,  // 월 (0부터 시작)
-            parseInt(match[3]),      // 일
-            parseInt(match[4]),      // 시
-            parseInt(match[5]),      // 분
-            parseInt(match[6]),      // 초
-            parseInt(match[7])       // 밀리초
-        ).getTime();
-        return isNaN(timestamp) ? null : timestamp;
-    }
-    
-    return null;
+    const timestamp = new Date(
+        parseInt(match[1]),
+        parseInt(match[2]) - 1,
+        parseInt(match[3]),
+        parseInt(match[4]),
+        parseInt(match[5]),
+        parseInt(match[6]),
+        match[7] ? parseInt(match[7]) : 0
+    ).getTime();
+    return isNaN(timestamp) ? null : timestamp;
 }
 
 /**
@@ -314,7 +285,9 @@ function hashMessageFast(msg) {
 }
 
 /**
- * 이진탐색으로 분기점 찾기 (순수 분기 구조 전용)
+ * 이진탐색으로 분기점 찾기 (순수 prefix 분기 구조 전용)
+ * 전제: 공통 prefix가 끝나면 그 뒤는 전부 다르다고 가정.
+ * 중간 메시지 수동 편집 시 부정확할 수 있음.
  * @param {Array<string>} chat1 - 해시 배열
  * @param {Array<string>} chat2 - 해시 배열
  * @returns {number} - 공통 메시지 수
@@ -350,6 +323,12 @@ function findCommonPrefixLengthFast(chat1, chat2) {
  */
 async function analyzeGroup(charAvatar, group, ctx = null) {
     if (group.length < 2) return {};
+    
+    // 그룹이 너무 크면 메모리 폭발 방지 (최대 30개, 날짜순 우선)
+    if (group.length > 30) {
+        console.warn(`[BranchAnalyzer] Large group (${group.length}), truncating to 30`);
+        group = group.slice(0, 30);
+    }
     
     const chatContents = {};  // 원본 데이터
     const chatHashes = {};    // 해시 전처리된 데이터
@@ -691,14 +670,9 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
                     const orphanDate = extractDateFromFileName(orphanFn);
                     const matchDate = extractDateFromFileName(bestMatch);
                     
+                    let orphanIsParent;
                     if (orphanDate && matchDate) {
-                        if (orphanDate < matchDate) {
-                            // 고아가 더 오래됨 → 고아가 부모
-                            orphanIsParent = true;
-                        } else {
-                            // 고아가 더 새로움 → 고아가 자식
-                            orphanIsParent = false;
-                        }
+                        orphanIsParent = orphanDate < matchDate;
                     } else {
                         // 날짜 없으면 메시지 수 기반 (짧은 쪽이 부모)
                         orphanIsParent = orphanLen <= matchLen;

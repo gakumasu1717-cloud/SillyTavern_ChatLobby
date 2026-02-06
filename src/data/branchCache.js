@@ -319,4 +319,4 @@ export function clearAllCache() {
 }
 
 // Export utilities
-export { createFingerprint, findCommonPrefixLength, hashString };
+export { createFingerprint };

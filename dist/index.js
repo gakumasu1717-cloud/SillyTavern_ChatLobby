@@ -986,19 +986,9 @@ ${message}` : message;
         if (idx !== -1) data.personaRecentUsage.splice(idx, 1);
         data.personaRecentUsage.unshift(personaKey);
         if (data.personaRecentUsage.length > 200) {
-          data.personaRecentUsage.length = 200;
+          data.personaRecentUsage.splice(200);
         }
       });
-    }
-    /**
-     * 특정 페르소나의 최근 사용 순위 반환
-     * @param {string} personaKey - 페르소나 키
-     * @returns {number} 순위 인덱스 (0=가장 최근, 없으면 -1)
-     */
-    getPersonaLastUsed(personaKey) {
-      if (!personaKey) return -1;
-      const queue = this.load().personaRecentUsage || [];
-      return Array.isArray(queue) ? queue.indexOf(personaKey) : -1;
     }
     /**
      * 최근 사용 순서 배열 반환 (앞=최근)
@@ -2520,67 +2510,20 @@ ${message}` : message;
     return true;
   }
   function extractDateFromFileName(fileName) {
-    let match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms/);
-    if (match) {
-      const timestamp = new Date(
-        parseInt(match[1]),
-        // 년
-        parseInt(match[2]) - 1,
-        // 월 (0부터 시작)
-        parseInt(match[3]),
-        // 일
-        parseInt(match[4]),
-        // 시
-        parseInt(match[5]),
-        // 분
-        parseInt(match[6]),
-        // 초
-        parseInt(match[7])
-        // 밀리초
-      ).getTime();
-      return isNaN(timestamp) ? null : timestamp;
-    }
-    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})@(\d{2})h(\d{2})m(\d{2})s/);
-    if (match) {
-      const timestamp = new Date(
-        parseInt(match[1]),
-        // 년
-        parseInt(match[2]) - 1,
-        // 월 (0부터 시작)
-        parseInt(match[3]),
-        // 일
-        parseInt(match[4]),
-        // 시
-        parseInt(match[5]),
-        // 분
-        parseInt(match[6]),
-        // 초
-        0
-        // 밀리초 (없으면 0)
-      ).getTime();
-      return isNaN(timestamp) ? null : timestamp;
-    }
-    match = fileName.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s\s*(\d+)ms/);
-    if (match) {
-      const timestamp = new Date(
-        parseInt(match[1]),
-        // 년
-        parseInt(match[2]) - 1,
-        // 월 (0부터 시작)
-        parseInt(match[3]),
-        // 일
-        parseInt(match[4]),
-        // 시
-        parseInt(match[5]),
-        // 분
-        parseInt(match[6]),
-        // 초
-        parseInt(match[7])
-        // 밀리초
-      ).getTime();
-      return isNaN(timestamp) ? null : timestamp;
-    }
-    return null;
+    const match = fileName.match(
+      /(\d{4})-(\d{1,2})-(\d{1,2})\s*@(\d{2})h\s*(\d{2})m\s*(\d{2})s(?:\s*(\d+)ms)?/
+    );
+    if (!match) return null;
+    const timestamp = new Date(
+      parseInt(match[1]),
+      parseInt(match[2]) - 1,
+      parseInt(match[3]),
+      parseInt(match[4]),
+      parseInt(match[5]),
+      parseInt(match[6]),
+      match[7] ? parseInt(match[7]) : 0
+    ).getTime();
+    return isNaN(timestamp) ? null : timestamp;
   }
   async function loadChatContent(charAvatar, fileName, ctx = null) {
     const cacheKey = `${charAvatar}:${fileName}`;
@@ -2721,6 +2664,10 @@ ${message}` : message;
   }
   async function analyzeGroup(charAvatar, group, ctx = null) {
     if (group.length < 2) return {};
+    if (group.length > 30) {
+      console.warn(`[BranchAnalyzer] Large group (${group.length}), truncating to 30`);
+      group = group.slice(0, 30);
+    }
     const chatContents = {};
     const chatHashes = {};
     await Promise.all(group.map(async (item) => {
@@ -2941,12 +2888,9 @@ ${message}` : message;
             const matchLen = nonOrphanContents[bestMatch]?.length || 0;
             const orphanDate = extractDateFromFileName(orphanFn);
             const matchDate = extractDateFromFileName(bestMatch);
+            let orphanIsParent;
             if (orphanDate && matchDate) {
-              if (orphanDate < matchDate) {
-                orphanIsParent = true;
-              } else {
-                orphanIsParent = false;
-              }
+              orphanIsParent = orphanDate < matchDate;
             } else {
               orphanIsParent = orphanLen <= matchLen;
             }

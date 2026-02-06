@@ -557,20 +557,9 @@ class StorageManager {
             if (idx !== -1) data.personaRecentUsage.splice(idx, 1);
             data.personaRecentUsage.unshift(personaKey);
             if (data.personaRecentUsage.length > 200) {
-                data.personaRecentUsage.length = 200;
+                data.personaRecentUsage.splice(200);
             }
         });
-    }
-    
-    /**
-     * 특정 페르소나의 최근 사용 순위 반환
-     * @param {string} personaKey - 페르소나 키
-     * @returns {number} 순위 인덱스 (0=가장 최근, 없으면 -1)
-     */
-    getPersonaLastUsed(personaKey) {
-        if (!personaKey) return -1;
-        const queue = this.load().personaRecentUsage || [];
-        return Array.isArray(queue) ? queue.indexOf(personaKey) : -1;
     }
     
     /**
