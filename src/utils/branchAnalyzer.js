@@ -19,6 +19,7 @@ const SAFETY = {
     TIMEOUT_MS: 30000,    // 전체 분석 30초 제한
     MAX_API_CALLS: 200,   // API 호출 최대 200회
     MAX_ERRORS: 5,        // 연속 에러 5회시 중단
+    REQUEST_TIMEOUT_MS: 10000,  // 개별 fetch 요청 10초 제한
 };
 
 // 채팅 내용 캐시 (중복 로드 방지)
@@ -149,20 +150,27 @@ async function loadChatContent(charAvatar, fileName, ctx = null) {
         const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
         const chatName = fileName.replace('.jsonl', '');
         
-        const response = await fetch('/api/chats/get', {
-            method: 'POST',
-            headers: api.getRequestHeaders(),
-            body: JSON.stringify({
-                ch_name: charDir,
-                file_name: chatName,
-                avatar_url: charAvatar
-            }),
-        });
+        // 개별 요청 타임아웃 (AbortController)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), SAFETY.REQUEST_TIMEOUT_MS);
         
-        if (!response.ok) {
-            if (ctx) ctx.errorCount++;
-            return null;
+        let response;
+        try {
+            response = await fetch('/api/chats/get', {
+                method: 'POST',
+                headers: api.getRequestHeaders(),
+                body: JSON.stringify({
+                    ch_name: charDir,
+                    file_name: chatName,
+                    avatar_url: charAvatar
+                }),
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeoutId);
         }
+        
+        if (!response.ok) return null;
         
         const data = await response.json();
         

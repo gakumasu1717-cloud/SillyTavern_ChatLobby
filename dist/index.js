@@ -2445,8 +2445,10 @@ ${message}` : message;
     // 전체 분석 30초 제한
     MAX_API_CALLS: 200,
     // API 호출 최대 200회
-    MAX_ERRORS: 5
+    MAX_ERRORS: 5,
     // 연속 에러 5회시 중단
+    REQUEST_TIMEOUT_MS: 1e4
+    // 개별 fetch 요청 10초 제한
   };
   var chatContentCache = /* @__PURE__ */ new Map();
   function clearContentCache() {
@@ -2555,19 +2557,24 @@ ${message}` : message;
     try {
       const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
       const chatName = fileName.replace(".jsonl", "");
-      const response = await fetch("/api/chats/get", {
-        method: "POST",
-        headers: api.getRequestHeaders(),
-        body: JSON.stringify({
-          ch_name: charDir,
-          file_name: chatName,
-          avatar_url: charAvatar
-        })
-      });
-      if (!response.ok) {
-        if (ctx) ctx.errorCount++;
-        return null;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SAFETY.REQUEST_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch("/api/chats/get", {
+          method: "POST",
+          headers: api.getRequestHeaders(),
+          body: JSON.stringify({
+            ch_name: charDir,
+            file_name: chatName,
+            avatar_url: charAvatar
+          }),
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
       }
+      if (!response.ok) return null;
       const data = await response.json();
       let content = null;
       if (Array.isArray(data) && data.length > 1) {
