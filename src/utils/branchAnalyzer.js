@@ -13,10 +13,11 @@ import {
 
 // 안전장치 상수
 const SAFETY = {
-    TIMEOUT_MS: 30000,    // 전체 분석 30초 제한
+    TIMEOUT_MS: 120000,   // 전체 분석 120초 제한 (채팅 많은 캐릭터 고려)
     MAX_API_CALLS: 200,   // API 호출 최대 200회
-    MAX_ERRORS: 15,       // 누적 에러 15회시 중단 (batch 5개 동시 실패 고려)
-    REQUEST_TIMEOUT_MS: 10000,  // 개별 fetch 요청 10초 제한
+    MAX_ERRORS: 15,       // 누적 에러 15회시 중단
+    REQUEST_TIMEOUT_MS: 15000,  // 개별 fetch 요청 15초 제한
+    RETRY_DELAY_MS: 1000,       // 재시도 전 대기 시간
 };
 
 // 채팅 내용 캐시 (중복 로드 방지)
@@ -143,54 +144,67 @@ async function loadChatContent(charAvatar, fileName, ctx = null) {
     
     if (ctx) ctx.apiCalls++;
     
-    try {
-        const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
-        const chatName = fileName.replace('.jsonl', '');
-        
-        // 개별 요청 타임아웃 (AbortController)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), SAFETY.REQUEST_TIMEOUT_MS);
-        
-        let response;
+    const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, '');
+    const chatName = fileName.replace('.jsonl', '');
+    
+    // 최대 2회 시도 (1회 실패 시 1회 재시도)
+    for (let attempt = 0; attempt < 2; attempt++) {
         try {
-            response = await fetch('/api/chats/get', {
-                method: 'POST',
-                headers: api.getRequestHeaders(),
-                body: JSON.stringify({
-                    ch_name: charDir,
-                    file_name: chatName,
-                    avatar_url: charAvatar
-                }),
-                signal: controller.signal,
-            });
-        } finally {
-            clearTimeout(timeoutId);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), SAFETY.REQUEST_TIMEOUT_MS);
+            
+            let response;
+            try {
+                response = await fetch('/api/chats/get', {
+                    method: 'POST',
+                    headers: api.getRequestHeaders(),
+                    body: JSON.stringify({
+                        ch_name: charDir,
+                        file_name: chatName,
+                        avatar_url: charAvatar
+                    }),
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timeoutId);
+            }
+            
+            if (!response.ok) {
+                if (attempt === 0) {
+                    console.warn(`[BranchAnalyzer] HTTP ${response.status} loading ${fileName}, retrying...`);
+                    await new Promise(r => setTimeout(r, SAFETY.RETRY_DELAY_MS));
+                    continue;
+                }
+                return null;
+            }
+            
+            const data = await response.json();
+            
+            let content = null;
+            if (Array.isArray(data) && data.length > 1) {
+                content = data.slice(1);
+            } else {
+                content = data;
+            }
+            
+            chatContentCache.set(cacheKey, content);
+            return content;
+        } catch (e) {
+            const reason = e.name === 'AbortError' ? 'TIMEOUT' : e.message || e;
+            if (attempt === 0) {
+                console.warn(`[BranchAnalyzer] ${reason} loading ${fileName}, retrying...`);
+                await new Promise(r => setTimeout(r, SAFETY.RETRY_DELAY_MS));
+                continue;
+            }
+            console.error(`[BranchAnalyzer] Failed to load chat: ${fileName} (${reason}) after retry`);
+            if (ctx) {
+                ctx.errorCount++;
+                console.warn(`[BranchAnalyzer] Error count: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`);
+            }
+            return null;
         }
-        
-        if (!response.ok) return null;
-        
-        const data = await response.json();
-        
-        let content = null;
-        // 첫 번째는 메타데이터이므로 제외
-        if (Array.isArray(data) && data.length > 1) {
-            content = data.slice(1);
-        } else {
-            content = data;
-        }
-        
-        // 캐시에 저장
-        chatContentCache.set(cacheKey, content);
-        return content;
-    } catch (e) {
-        const reason = e.name === 'AbortError' ? 'TIMEOUT' : e.message || e;
-        console.error(`[BranchAnalyzer] Failed to load chat: ${fileName} (${reason})`);
-        if (ctx) {
-            ctx.errorCount++;
-            console.warn(`[BranchAnalyzer] Error count: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`);
-        }
-        return null;
     }
+    return null;
 }
 
 /**
@@ -214,8 +228,8 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
         return !cached || cached.length !== chatLength;
     });
     
-    // 병렬로 처리 (최대 5개씩)
-    const BATCH_SIZE = 5;
+    // 병렬로 처리 (최대 3개씩 - 서버 부하 방지)
+    const BATCH_SIZE = 3;
     const batchEntries = []; // 배치 저장용
     
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
@@ -241,8 +255,8 @@ export async function ensureFingerprints(charAvatar, chats, onProgress = null, f
             onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
         }
         
-        // UI 블로킹 방지
-        await new Promise(r => setTimeout(r, 10));
+        // UI 블로킹 방지 + 서버 부하 분산
+        await new Promise(r => setTimeout(r, 200));
     }
     
     // 마지막에 한 번만 저장

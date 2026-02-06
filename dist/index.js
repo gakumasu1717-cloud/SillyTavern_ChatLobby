@@ -2441,14 +2441,16 @@ ${message}` : message;
 
   // src/utils/branchAnalyzer.js
   var SAFETY = {
-    TIMEOUT_MS: 3e4,
-    // 전체 분석 30초 제한
+    TIMEOUT_MS: 12e4,
+    // 전체 분석 120초 제한 (채팅 많은 캐릭터 고려)
     MAX_API_CALLS: 200,
     // API 호출 최대 200회
     MAX_ERRORS: 15,
-    // 누적 에러 15회시 중단 (batch 5개 동시 실패 고려)
-    REQUEST_TIMEOUT_MS: 1e4
-    // 개별 fetch 요청 10초 제한
+    // 누적 에러 15회시 중단
+    REQUEST_TIMEOUT_MS: 15e3,
+    // 개별 fetch 요청 15초 제한
+    RETRY_DELAY_MS: 1e3
+    // 재시도 전 대기 시간
   };
   var chatContentCache = /* @__PURE__ */ new Map();
   function clearContentCache() {
@@ -2554,45 +2556,60 @@ ${message}` : message;
       return chatContentCache.get(cacheKey);
     }
     if (ctx) ctx.apiCalls++;
-    try {
-      const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
-      const chatName = fileName.replace(".jsonl", "");
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), SAFETY.REQUEST_TIMEOUT_MS);
-      let response;
+    const charDir = charAvatar.replace(/\.(png|jpg|webp)$/i, "");
+    const chatName = fileName.replace(".jsonl", "");
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        response = await fetch("/api/chats/get", {
-          method: "POST",
-          headers: api.getRequestHeaders(),
-          body: JSON.stringify({
-            ch_name: charDir,
-            file_name: chatName,
-            avatar_url: charAvatar
-          }),
-          signal: controller.signal
-        });
-      } finally {
-        clearTimeout(timeoutId);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), SAFETY.REQUEST_TIMEOUT_MS);
+        let response;
+        try {
+          response = await fetch("/api/chats/get", {
+            method: "POST",
+            headers: api.getRequestHeaders(),
+            body: JSON.stringify({
+              ch_name: charDir,
+              file_name: chatName,
+              avatar_url: charAvatar
+            }),
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        if (!response.ok) {
+          if (attempt === 0) {
+            console.warn(`[BranchAnalyzer] HTTP ${response.status} loading ${fileName}, retrying...`);
+            await new Promise((r) => setTimeout(r, SAFETY.RETRY_DELAY_MS));
+            continue;
+          }
+          return null;
+        }
+        const data = await response.json();
+        let content = null;
+        if (Array.isArray(data) && data.length > 1) {
+          content = data.slice(1);
+        } else {
+          content = data;
+        }
+        chatContentCache.set(cacheKey, content);
+        return content;
+      } catch (e) {
+        const reason = e.name === "AbortError" ? "TIMEOUT" : e.message || e;
+        if (attempt === 0) {
+          console.warn(`[BranchAnalyzer] ${reason} loading ${fileName}, retrying...`);
+          await new Promise((r) => setTimeout(r, SAFETY.RETRY_DELAY_MS));
+          continue;
+        }
+        console.error(`[BranchAnalyzer] Failed to load chat: ${fileName} (${reason}) after retry`);
+        if (ctx) {
+          ctx.errorCount++;
+          console.warn(`[BranchAnalyzer] Error count: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`);
+        }
+        return null;
       }
-      if (!response.ok) return null;
-      const data = await response.json();
-      let content = null;
-      if (Array.isArray(data) && data.length > 1) {
-        content = data.slice(1);
-      } else {
-        content = data;
-      }
-      chatContentCache.set(cacheKey, content);
-      return content;
-    } catch (e) {
-      const reason = e.name === "AbortError" ? "TIMEOUT" : e.message || e;
-      console.error(`[BranchAnalyzer] Failed to load chat: ${fileName} (${reason})`);
-      if (ctx) {
-        ctx.errorCount++;
-        console.warn(`[BranchAnalyzer] Error count: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`);
-      }
-      return null;
     }
+    return null;
   }
   async function ensureFingerprints(charAvatar, chats, onProgress = null, forceRefresh = false, ctx = null) {
     const existing = forceRefresh ? {} : getAllFingerprints(charAvatar);
@@ -2603,7 +2620,7 @@ ${message}` : message;
       const chatLength = chat.chat_items || chat.message_count || 0;
       return !cached || cached.length !== chatLength;
     });
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 3;
     const batchEntries = [];
     for (let i = 0; i < needsUpdate.length; i += BATCH_SIZE) {
       if (ctx && !checkSafety(ctx)) break;
@@ -2621,7 +2638,7 @@ ${message}` : message;
       if (onProgress) {
         onProgress(Math.min(1, (i + batch.length) / needsUpdate.length));
       }
-      await new Promise((r) => setTimeout(r, 10));
+      await new Promise((r) => setTimeout(r, 200));
     }
     if (batchEntries.length > 0) {
       setFingerprintBatch(charAvatar, batchEntries);
