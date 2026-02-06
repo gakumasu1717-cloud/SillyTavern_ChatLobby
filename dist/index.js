@@ -2955,6 +2955,7 @@ ${message}` : message;
     }
   }
   function needsBranchAnalysis(charAvatar, chats) {
+    if (chats.length < 2) return false;
     const fingerprints = getAllFingerprints(charAvatar);
     for (const chat of chats) {
       const fn = chat.file_name || "";
@@ -3295,6 +3296,7 @@ ${message}` : message;
     return count;
   }
   async function autoAnalyzeBranches(container, charAvatar, chats) {
+    if (chats.length < 2) return;
     try {
       await analyzeBranches(charAvatar, chats);
       const cachedChats = cache.get("chats", charAvatar);

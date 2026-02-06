@@ -762,6 +762,8 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
  * @returns {boolean}
  */
 export function needsBranchAnalysis(charAvatar, chats) {
+    if (chats.length < 2) return false;
+    
     const fingerprints = getAllFingerprints(charAvatar);
     
     // fingerprint가 없는 채팅이 있으면 분석 필요

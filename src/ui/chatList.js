@@ -550,6 +550,7 @@ function countNewChatsForAnalysis(charAvatar, chats) {
  * @param {Array} chats
  */
 async function autoAnalyzeBranches(container, charAvatar, chats) {
+    if (chats.length < 2) return;
     try {
         await analyzeBranches(charAvatar, chats);
         
