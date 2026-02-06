@@ -3286,20 +3286,6 @@ ${message}` : message;
       return getTimestamp(b) - getTimestamp(a);
     });
   }
-  function parseBranchInfoFromName(fileName) {
-    const cleanName = fileName.replace(".jsonl", "");
-    const branchMatch = cleanName.match(/^Branch\s*#(\d+(?:-\d+)*)\s*-/i);
-    if (!branchMatch) {
-      return { branch: null, depth: 0, isOriginal: true };
-    }
-    const branchPart = branchMatch[1];
-    const branchSegments = branchPart.split("-");
-    return {
-      branch: branchPart,
-      depth: branchSegments.length,
-      isOriginal: false
-    };
-  }
   function sortByBranchTreeCached(chats, charAvatar, data) {
     const branches = getAllBranches(charAvatar);
     const chatsWithBranch = chats.map((chat) => {
@@ -3311,19 +3297,18 @@ ${message}` : message;
           _branchInfo: {
             parentChat: branchInfo.parentChat,
             branchPoint: branchInfo.branchPoint,
-            depth: branchInfo.depth,
+            depth: branchInfo.depth || 1,
             isOriginal: false
           }
         };
       } else {
-        const nameInfo = parseBranchInfoFromName(fileName);
         return {
           ...chat,
           _branchInfo: {
             parentChat: null,
             branchPoint: 0,
-            depth: nameInfo.depth,
-            isOriginal: nameInfo.isOriginal
+            depth: 0,
+            isOriginal: true
           }
         };
       }

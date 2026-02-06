@@ -726,20 +726,20 @@ function sortChats(chats, charAvatar, sortOption) {
                     _branchInfo: {
                         parentChat: branchInfo.parentChat,
                         branchPoint: branchInfo.branchPoint,
-                        depth: branchInfo.depth,
+                        depth: branchInfo.depth || 1,
                         isOriginal: false
                     }
                 };
             } else {
-                // 캐시 없음 - 파일명 기반 판단
-                const nameInfo = parseBranchInfoFromName(fileName);
+                // 캐시 없음 → 그룹 루트이거나 미분석 채팅 → 항상 original 취급
+                // (분석된 브랜치는 반드시 캐시에 존재하므로, 캐시 미스 = 루트)
                 return {
                     ...chat,
                     _branchInfo: {
                         parentChat: null,
                         branchPoint: 0,
-                        depth: nameInfo.depth,
-                        isOriginal: nameInfo.isOriginal
+                        depth: 0,
+                        isOriginal: true
                     }
                 };
             }
