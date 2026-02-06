@@ -306,7 +306,7 @@ export function clearCharacterCache(charAvatar) {
     const cache = loadCache();
     delete cache.characters[charAvatar];
     saveCache();
-    console.log('[BranchCache] Cleared cache for:', charAvatar);
+    console.debug('[BranchCache] Cleared cache for:', charAvatar);
 }
 
 /**
@@ -315,7 +315,7 @@ export function clearCharacterCache(charAvatar) {
 export function clearAllCache() {
     cacheData = { version: 1, characters: {} };
     saveCache();
-    console.log('[BranchCache] Cleared ALL cache');
+    console.debug('[BranchCache] Cleared ALL cache');
 }
 
 // Export utilities

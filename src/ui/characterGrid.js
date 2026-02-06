@@ -491,7 +491,7 @@ async function saveTodaySnapshotFromCache() {
         }
         
         saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
-        console.log('[CharacterGrid] Snapshot saved from cache');
+        console.debug('[CharacterGrid] Snapshot saved from cache');
         
     } catch (e) {
         console.error('[CharacterGrid] Failed to save snapshot:', e);
@@ -721,7 +721,7 @@ async function sortCharacters(characters, sortOption) {
 function bindCharacterEvents(container) {
     // 그룹 카드는 제외 (.lobby-group-card는 별도로 바인딩)
     const cards = container.querySelectorAll('.lobby-char-card:not(.lobby-group-card)');
-    console.log('[CharacterGrid] bindCharacterEvents: found', cards.length, 'cards');
+    console.debug('[CharacterGrid] bindCharacterEvents: found', cards.length, 'cards');
     
     cards.forEach((card, index) => {
         // data-char-name 사용 (시간 span 포함 방지)
@@ -1095,10 +1095,10 @@ function bindGroupEvents(container) {
                 const isPanelVisible = chatsPanel?.classList.contains('visible');
                 const isSameGroup = store.currentGroup?.id === groupId;
                 
-                console.log('[CharacterGrid] Group click:', { groupId, isSameGroup, isPanelVisible });
+                console.debug('[CharacterGrid] Group click:', { groupId, isSameGroup, isPanelVisible });
                 
                 if (isPanelVisible && isSameGroup) {
-                    console.log('[CharacterGrid] Same group, toggling off');
+                    console.debug('[CharacterGrid] Same group, toggling off');
                     card.classList.remove('selected');
                     closeChatPanel();
                     return;

@@ -296,7 +296,7 @@ export function getCurrentCharacter() {
  * @returns {Promise<void>}
  */
 export async function renderChatList(character) {
-    console.log('[ChatList] renderChatList called:', character?.avatar);
+    console.debug('[ChatList] renderChatList called:', character?.avatar);
     
     if (!character || !character.avatar) {
         console.error('[ChatList] Invalid character data:', character);
@@ -306,13 +306,13 @@ export async function renderChatList(character) {
     const chatsPanel = document.getElementById('chat-lobby-chats');
     const chatsList = document.getElementById('chat-lobby-chats-list');
     
-    console.log('[ChatList] chatsPanel:', !!chatsPanel, 'chatsList:', !!chatsList);
-    console.log('[ChatList] currentCharacter:', store.currentCharacter?.avatar);
-    console.log('[ChatList] panelVisible:', chatsPanel?.classList.contains('visible'));
+    console.debug('[ChatList] chatsPanel:', !!chatsPanel, 'chatsList:', !!chatsList);
+    console.debug('[ChatList] currentCharacter:', store.currentCharacter?.avatar);
+    console.debug('[ChatList] panelVisible:', chatsPanel?.classList.contains('visible'));
     
     // 이미 같은 캐릭터의 채팅 패널이 열려있으면 렌더 스킵
     if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains('visible')) {
-        console.log('[ChatList] Skipping - same character already visible');
+        console.debug('[ChatList] Skipping - same character already visible');
         return;
     }
     
@@ -336,7 +336,7 @@ export async function renderChatList(character) {
     }
 
     // 페르소나 퀵버튼 업데이트
-    console.log('[ChatList] Updating persona quick button for:', character.avatar);
+    console.debug('[ChatList] Updating persona quick button for:', character.avatar);
     updatePersonaQuickButton(character.avatar);
     
     // 캐시된 데이터가 있고 유효하면 즉시 렌더링 (번첩임 방지)
@@ -398,7 +398,7 @@ function renderChats(container, rawChats, charAvatar) {
     updateHasChats(totalChatCount);
     
     if (chatArray.length === 0) {
-        console.log('[renderChats] No valid chats, showing empty state');
+        console.debug('[renderChats] No valid chats, showing empty state');
         updateChatCount(0);
         container.innerHTML = `
             <div class="lobby-empty-state">
@@ -896,7 +896,7 @@ function renderChatItem(chat, charAvatar, index) {
  */
 function bindChatEvents(container, charAvatar) {
     const items = container.querySelectorAll('.lobby-chat-item');
-    console.log('[ChatList] bindChatEvents: items count =', items.length, 'charAvatar =', charAvatar);
+    console.debug('[ChatList] bindChatEvents: items count =', items.length, 'charAvatar =', charAvatar);
     
     items.forEach((item, index) => {
         const chatContent = item.querySelector('.chat-content');
@@ -904,7 +904,7 @@ function bindChatEvents(container, charAvatar) {
         const delBtn = item.querySelector('.chat-delete-btn');
         const fileName = item.dataset.fileName;
         
-        console.log('[ChatList] Binding item', index, ':', { fileName, hasChatContent: !!chatContent });
+        console.debug('[ChatList] Binding item', index, ':', { fileName, hasChatContent: !!chatContent });
         
         if (!chatContent) {
             console.error('[ChatList] chatContent not found for item', index);
@@ -913,7 +913,7 @@ function bindChatEvents(container, charAvatar) {
         
         // 채팅 열기
         createTouchClickHandler(chatContent, () => {
-            console.log('[ChatList] Chat item clicked!', { fileName, charAvatar: item.dataset.charAvatar });
+            console.debug('[ChatList] Chat item clicked!', { fileName, charAvatar: item.dataset.charAvatar });
             
             if (store.batchModeActive) {
                 const cb = item.querySelector('.chat-select-cb');
@@ -925,7 +925,7 @@ function bindChatEvents(container, charAvatar) {
             }
             
             const handlers = store.chatHandlers;
-            console.log('[ChatList] handlers =', handlers, 'onOpen =', !!handlers?.onOpen);
+            console.debug('[ChatList] handlers =', handlers, 'onOpen =', !!handlers?.onOpen);
             
             if (handlers?.onOpen) {
                 // currentCharacter가 null인 경우 dataset에서 가져오기
@@ -937,7 +937,7 @@ function bindChatEvents(container, charAvatar) {
                     charIndex: charIndex
                 };
                 
-                console.log('[ChatList] Calling onOpen:', chatInfo);
+                console.debug('[ChatList] Calling onOpen:', chatInfo);
                 handlers.onOpen(chatInfo);
             } else {
                 console.error('[ChatList] onOpen handler not available!');
@@ -1386,7 +1386,7 @@ export function closeChatPanel() {
  * @returns {Promise<void>}
  */
 export async function renderGroupChatList(group) {
-    console.log('[ChatList] renderGroupChatList called:', { 
+    console.debug('[ChatList] renderGroupChatList called:', { 
         groupId: group?.id, 
         groupName: group?.name,
         currentGroupId: store.currentGroup?.id,
@@ -1403,7 +1403,7 @@ export async function renderGroupChatList(group) {
     
     // 이미 같은 그룹의 채팅 패널이 열려있으면 렌더 스킵 (토글 동작)
     if (store.currentGroup?.id === group.id && chatsPanel?.classList.contains('visible')) {
-        console.log('[ChatList] Same group already visible, toggling off');
+        console.debug('[ChatList] Same group already visible, toggling off');
         chatsPanel.classList.remove('visible');
         store.setCurrentGroup(null);
         return;
@@ -1642,19 +1642,19 @@ function bindGroupChatEvents(container, group) {
         createTouchClickHandler(chatContent, async () => {
             // Race Condition 방지: 이미 처리 중이면 무시
             if (isOpeningGroupChat) {
-                console.log('[ChatList] Already opening group chat, ignoring...');
+                console.debug('[ChatList] Already opening group chat, ignoring...');
                 return;
             }
             isOpeningGroupChat = true;
             
             try {
-                console.log('[ChatList] Opening group chat:', { groupId: group.id, chatFile });
+                console.debug('[ChatList] Opening group chat:', { groupId: group.id, chatFile });
                 
                 const context = api.getContext();
                 const chatFileName = chatFile.replace('.jsonl', '');
                 
                 // 1. 로비 먼저 닫기
-                console.log('[ChatList] Closing lobby first...');
+                console.debug('[ChatList] Closing lobby first...');
                 const overlay = document.getElementById('chat-lobby-overlay');
                 const lobbyContainer = document.getElementById('chat-lobby-container');
                 const fab = document.getElementById('chat-lobby-fab');
@@ -1670,7 +1670,7 @@ function bindGroupChatEvents(container, group) {
                 store.setLobbyOpen(false);
                 
                 // 2. 그룹 카드 클릭하여 그룹 선택 (이때 최근 채팅이 열림)
-                console.log('[ChatList] Selecting group via UI click...');
+                console.debug('[ChatList] Selecting group via UI click...');
                 const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
                 
                 if (!groupCard) {
@@ -1692,15 +1692,15 @@ function bindGroupChatEvents(container, group) {
                 // 3. 현재 열린 채팅이 원하는 채팅인지 확인
                 const currentContext = api.getContext();
                 const currentChat = currentContext?.chatId || '';
-                console.log('[ChatList] Current chat after group select:', currentChat, 'Target:', chatFileName);
+                console.debug('[ChatList] Current chat after group select:', currentChat, 'Target:', chatFileName);
                 
                 if (currentChat === chatFileName || currentChat.includes(chatFileName)) {
-                    console.log('[ChatList] Target chat is already open');
+                    console.debug('[ChatList] Target chat is already open');
                     return;
                 }
                 
                 // 4. 원하는 채팅이 아니면 채팅 관리 패널을 통해 선택
-                console.log('[ChatList] Opening chat management panel...');
+                console.debug('[ChatList] Opening chat management panel...');
                 const manageChatsBtn = document.getElementById('option_select_chat');
                 if (!manageChatsBtn) {
                     console.error('[ChatList] Chat management button not found');
@@ -1713,7 +1713,7 @@ function bindGroupChatEvents(container, group) {
                 
                 // 5. 채팅 목록에서 원하는 채팅 찾아 클릭
                 const chatItems = document.querySelectorAll('.select_chat_block');
-                console.log('[ChatList] Found', chatItems.length, 'chat items');
+                console.debug('[ChatList] Found', chatItems.length, 'chat items');
                 
                 for (const chatItem of chatItems) {
                     const itemFileName = chatItem.getAttribute('file_name') || '';
@@ -1721,13 +1721,13 @@ function bindGroupChatEvents(container, group) {
                     const cleanTargetName = chatFileName.replace('.jsonl', '').trim();
                     
                     if (cleanItemName === cleanTargetName) {
-                        console.log('[ChatList] Found target chat, clicking...');
+                        console.debug('[ChatList] Found target chat, clicking...');
                         if (window.$) {
                             window.$(chatItem).trigger('click');
                         } else {
                             chatItem.click();
                         }
-                        console.log('[ChatList] Group chat opened successfully');
+                        console.debug('[ChatList] Group chat opened successfully');
                         return;
                     }
                 }
@@ -1791,10 +1791,10 @@ function bindGroupChatEvents(container, group) {
  * @param {string} charAvatar - 캐릭터 아바타
  */
 export function updatePersonaQuickButton(charAvatar) {
-    console.log('[ChatList] updatePersonaQuickButton called:', charAvatar);
+    console.debug('[ChatList] updatePersonaQuickButton called:', charAvatar);
     const btn = document.getElementById('chat-lobby-persona-quick');
     const img = btn ? btn.querySelector('.persona-quick-avatar') : null;
-    console.log('[ChatList] Button found:', !!btn, 'Image found:', !!img);
+    console.debug('[ChatList] Button found:', !!btn, 'Image found:', !!img);
     if (!btn || !img) return;
     
     // lastChatCache에서 마지막 페르소나 가져오기 (동적 import 방지를 위해 전역에서 가져옴)

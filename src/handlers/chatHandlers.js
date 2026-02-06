@@ -30,14 +30,14 @@ import { startRecentDomObserver } from '../ui/tabView.js';
 export async function openChat(chatInfo) {
     // Race Condition 방지: 이미 처리 중이면 무시
     if (isOpeningChat) {
-        console.log('[ChatHandlers] Already opening a chat, ignoring...');
+        console.debug('[ChatHandlers] Already opening a chat, ignoring...');
         return;
     }
     isOpeningChat = true;
     
     const { fileName, charAvatar, charIndex } = chatInfo;
     
-    console.log('[ChatHandlers] openChat called:', { fileName, charAvatar, charIndex });
+    console.debug('[ChatHandlers] openChat called:', { fileName, charAvatar, charIndex });
     
     try {
         if (!charAvatar || !fileName) {
@@ -50,7 +50,7 @@ export async function openChat(chatInfo) {
         const characters = context?.characters || [];
         const index = characters.findIndex(c => c.avatar === charAvatar);
         
-        console.log('[ChatHandlers] Character index:', index);
+        console.debug('[ChatHandlers] Character index:', index);
         
         if (index === -1) {
             console.error('[ChatHandlers] Character not found');
@@ -65,12 +65,12 @@ export async function openChat(chatInfo) {
         // 채팅 열기만으로는 갱신하지 않음 - "최근 채팅순"은 실제 대화한 순서를 의미
         
         // 1. 캐릭터 선택
-        console.log('[ChatHandlers] Selecting character...');
+        console.debug('[ChatHandlers] Selecting character...');
         await api.selectCharacterById(index);
         
         // 2. 캐릭터 선택 완료 대기 (조건 확인 방식)
         const charSelected = await waitForCharacterSelect(charAvatar, 2000);
-        console.log('[ChatHandlers] Character selected:', charSelected);
+        console.debug('[ChatHandlers] Character selected:', charSelected);
         if (!charSelected) {
             showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
             return;
@@ -80,11 +80,11 @@ export async function openChat(chatInfo) {
         closeLobbyKeepState();
         
         // 4. SillyTavern openCharacterChat 함수 사용
-        console.log('[ChatHandlers] Opening chat:', chatFileName);
+        console.debug('[ChatHandlers] Opening chat:', chatFileName);
         if (typeof context?.openCharacterChat === 'function') {
             try {
                 await context.openCharacterChat(chatFileName);
-                console.log('[ChatHandlers] Chat opened successfully');
+                console.debug('[ChatHandlers] Chat opened successfully');
                 return;
             } catch (err) {
                 console.warn('[ChatHandlers] context.openCharacterChat failed:', err);
@@ -92,7 +92,7 @@ export async function openChat(chatInfo) {
         }
         
         // 5. Fallback: 채팅 선택 UI 클릭
-        console.log('[ChatHandlers] Using fallback method...');
+        console.debug('[ChatHandlers] Using fallback method...');
         await openChatByFileName(fileName);
         
     } catch (error) {
@@ -291,7 +291,7 @@ function updateChatCountAfterDelete() {
 export async function startNewChat() {
     // Race Condition 방지: 이미 처리 중이면 무시
     if (isStartingNewChat) {
-        console.log('[ChatHandlers] Already starting new chat, ignoring...');
+        console.debug('[ChatHandlers] Already starting new chat, ignoring...');
         return;
     }
     isStartingNewChat = true;
@@ -334,7 +334,7 @@ async function startNewCharacterChat(btn) {
     try {
         const chats = await api.fetchChatsForCharacter(charAvatar);
         actualChatCount = Array.isArray(chats) ? chats.length : 0;
-        console.log('[ChatHandlers] Actual chat count:', actualChatCount);
+        console.debug('[ChatHandlers] Actual chat count:', actualChatCount);
     } catch (e) {
         console.warn('[ChatHandlers] Failed to get chat count, using dataset fallback');
         actualChatCount = btn?.dataset.hasChats === 'true' ? 1 : 0;
@@ -379,7 +379,7 @@ async function startNewGroupChat(btn) {
         return;
     }
     
-    console.log('[ChatHandlers] Starting new group chat:', { groupId, groupName });
+    console.debug('[ChatHandlers] Starting new group chat:', { groupId, groupName });
     
     try {
         // 1. 그룹 선택 (UI 클릭 방식 - 정확한 선택자 사용)
@@ -391,7 +391,7 @@ async function startNewGroupChat(btn) {
             return;
         }
         
-        console.log('[ChatHandlers] Found group card, clicking...');
+        console.debug('[ChatHandlers] Found group card, clicking...');
         if (window.$) {
             window.$(groupCard).trigger('click');
         } else {
@@ -407,7 +407,7 @@ async function startNewGroupChat(btn) {
         // 4. 새 채팅 버튼 클릭
         const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
         if (newChatBtn) {
-            console.log('[ChatHandlers] Clicking new chat button');
+            console.debug('[ChatHandlers] Clicking new chat button');
             newChatBtn.click();
         } else {
             console.error('[ChatHandlers] New chat button not found');

@@ -5,6 +5,7 @@
 import { cache } from '../data/cache.js';
 import { CONFIG } from '../config.js';
 import { sortPersonas } from '../utils/sortUtils.js';
+import { waitFor } from '../utils/waitFor.js';
 
 /**
  * @typedef {Object} ApiResponse
@@ -140,7 +141,7 @@ class SillyTavernAPI {
                         personaNames = powerUserModule.power_user?.personas || {};
                     }
                 } catch (e) {
-                    console.warn('[API] Could not get personas from context or import:', e.message);
+                    console.debug('[API] Could not get personas from context or import:', e.message);
                 }
                 
                 const personas = avatars.map(avatarId => ({
@@ -175,7 +176,7 @@ class SillyTavernAPI {
             const personasModule = await import('../../../../personas.js');
             return personasModule.user_avatar || '';
         } catch (e) {
-            console.warn('[API] Failed to get current persona:', e.message);
+            console.debug('[API] Failed to get current persona:', e.message);
             return '';
         }
     }
@@ -200,7 +201,7 @@ class SillyTavernAPI {
                 return true;
             }
         } catch (e) {
-            console.warn('[API] Failed to set persona:', e.message);
+            console.debug('[API] Failed to set persona:', e.message);
         }
         return false;
     }
@@ -749,7 +750,7 @@ class SillyTavernAPI {
             const context = this.getContext();
             const chatFileName = chatId.replace('.jsonl', '');
             
-            console.log('[API] openGroupChat:', { groupId, chatFileName });
+            console.debug('[API] openGroupChat:', { groupId, chatFileName });
             
             // 1. 그룹 선택 - 여러 방법 시도
             let groupSelected = false;
@@ -759,7 +760,7 @@ class SillyTavernAPI {
                 try {
                     await context.selectGroupById(groupId);
                     groupSelected = true;
-                    console.log('[API] Group selected via selectGroupById');
+                    console.debug('[API] Group selected via selectGroupById');
                 } catch (e) {
                     console.warn('[API] selectGroupById failed:', e);
                 }
@@ -770,7 +771,7 @@ class SillyTavernAPI {
                 try {
                     await context.openGroupById(groupId, false);
                     groupSelected = true;
-                    console.log('[API] Group selected via openGroupById');
+                    console.debug('[API] Group selected via openGroupById');
                 } catch (e) {
                     console.warn('[API] openGroupById failed:', e);
                 }
@@ -787,7 +788,7 @@ class SillyTavernAPI {
                         groupCard.click();
                     }
                     groupSelected = true;
-                    console.log('[API] Group selected via UI click');
+                    console.debug('[API] Group selected via UI click');
                 }
             }
             
@@ -804,7 +805,7 @@ class SillyTavernAPI {
             if (typeof context?.openGroupChat === 'function') {
                 try {
                     await context.openGroupChat(chatFileName);
-                    console.log('[API] Chat opened via context.openGroupChat');
+                    console.debug('[API] Chat opened via context.openGroupChat');
                     return true;
                 } catch (e) {
                     console.warn('[API] context.openGroupChat failed:', e);
@@ -816,7 +817,7 @@ class SillyTavernAPI {
                 const groupChatsModule = await import('../../../../group-chats.js');
                 if (typeof groupChatsModule.openGroupChat === 'function') {
                     await groupChatsModule.openGroupChat(chatFileName);
-                    console.log('[API] Chat opened via group-chats module');
+                    console.debug('[API] Chat opened via group-chats module');
                     return true;
                 }
             } catch (e) {
@@ -840,7 +841,7 @@ class SillyTavernAPI {
      */
     async openGroupChatByUI(groupId, chatFileName) {
         try {
-            console.log('[API] openGroupChatByUI:', { groupId, chatFileName });
+            console.debug('[API] openGroupChatByUI:', { groupId, chatFileName });
             
             // 채팅 관리 버튼 클릭
             const manageChatsBtn = document.getElementById('option_select_chat');
@@ -852,13 +853,7 @@ class SillyTavernAPI {
             manageChatsBtn.click();
             
             // 채팅 목록 로드 대기 (최대 3초)
-            let attempts = 0;
-            while (attempts < 30) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                const chatItems = document.querySelectorAll('.select_chat_block');
-                if (chatItems.length > 0) break;
-                attempts++;
-            }
+            await waitFor(() => document.querySelectorAll('.select_chat_block').length > 0, 3000, 100);
             
             // 채팅 목록에서 해당 채팅 찾기
             const chatItems = document.querySelectorAll('.select_chat_block');
@@ -874,7 +869,7 @@ class SillyTavernAPI {
                     } else {
                         item.click();
                     }
-                    console.log('[API] Chat opened via UI click');
+                    console.debug('[API] Chat opened via UI click');
                     return true;
                 }
             }
@@ -918,7 +913,7 @@ class SillyTavernAPI {
     async deleteGroupChat(groupId, chatFileName) {
         try {
             const fileName = chatFileName.replace('.jsonl', '');
-            console.log('[API] deleteGroupChat:', { groupId, fileName });
+            console.debug('[API] deleteGroupChat:', { groupId, fileName });
             
             // SillyTavern API는 id 파라미터에 채팅 파일명을 기대함
             const response = await this.fetchWithRetry('/api/chats/group/delete', {
@@ -930,7 +925,7 @@ class SillyTavernAPI {
             });
             
             if (response.ok) {
-                console.log('[API] Group chat deleted successfully');
+                console.debug('[API] Group chat deleted successfully');
                 // 그룹 캐시 무효화
                 cache.invalidate('groups');
                 return true;

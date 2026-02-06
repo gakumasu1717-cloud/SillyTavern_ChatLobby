@@ -420,7 +420,7 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
             // 이진탐색으로 분기점 찾기 (해시 비교)
             const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
             
-            console.log(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) → common=${common}`);
+            console.debug(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) → common=${common}`);
             
             // 공통 메시지가 없으면 스킵
             if (common === 0) continue;
@@ -444,7 +444,7 @@ function analyzeByDate(group, dates, chatContents, chatHashes) {
                 const marker = cand.fileName === bestParent ? ' \u2190 선택됨' : '';
                 debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
             }
-            console.log(
+            console.debug(
                 `[BranchDebug] ${current.fileName}\n` +
                 `  \u2192 부모: ${bestParent} (common=${bestCommon})\n` +
                 debugLines.join('\n')
@@ -488,7 +488,7 @@ function analyzeByScore(group, chatContents, chatHashes) {
             // 이진탐색으로 분기점 찾기 (해시 비교)
             const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
             
-            console.log(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) → common=${common}`);
+            console.debug(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) → common=${common}`);
             
             // 공통 메시지가 없으면 스킵
             if (common === 0) continue;
@@ -520,7 +520,7 @@ function analyzeByScore(group, chatContents, chatHashes) {
                 const marker = cand.fileName === bestParent ? ' \u2190 선택됨' : '';
                 debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
             }
-            console.log(
+            console.debug(
                 `[BranchDebug] ${current.fileName}\n` +
                 `  \u2192 부모: ${bestParent} (common=${bestCommon})\n` +
                 debugLines.join('\n')
@@ -578,10 +578,10 @@ function calculateDepths(result) {
  * @returns {Promise<Object>} - { [fileName]: { parentChat, branchPoint, depth } }
  */
 export async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
-    console.log('[BranchAnalyzer] Starting analysis for', charAvatar, 'forceRefresh:', forceRefresh, 'chats:', chats.length);
+    console.debug('[BranchAnalyzer] Starting analysis for', charAvatar, 'forceRefresh:', forceRefresh, 'chats:', chats.length);
     
     if (chats.length < 2) {
-        console.log('[BranchAnalyzer] Not enough chats to analyze');
+        console.debug('[BranchAnalyzer] Not enough chats to analyze');
         return {};
     }
     
@@ -603,7 +603,7 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         
         // 3. 2개 이상인 그룹만 분석 (20~95%)
         const multiGroups = Object.values(groups).filter(g => g.length >= 2);
-        console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
+        console.debug(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
         
         const allBranches = {};
         const branchEntries = []; // 배치 저장용
@@ -613,7 +613,7 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
             if (!checkSafety(ctx)) break;
             
             const group = multiGroups[i];
-            console.log(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
+            console.debug(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
             
             const groupResult = await analyzeGroup(charAvatar, group, ctx);
             
@@ -626,7 +626,7 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
                     depth: info.depth
                 });
                 
-                console.log('[BranchAnalyzer] Branch found:', fileName, 
+                console.debug('[BranchAnalyzer] Branch found:', fileName, 
                     '→ parent:', info.parentChat, 
                     'branchPoint:', info.branchPoint);
             }
@@ -658,8 +658,8 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
         if (ctx.aborted) {
             console.warn(`[BranchAnalyzer] Analysis aborted: ${ctx.abortReason}`);
         }
-        console.log(`[BranchAnalyzer] Safety report: apiCalls=${ctx.apiCalls}, errors=${ctx.errorCount}, elapsed=${Date.now() - ctx.startTime}ms, aborted=${ctx.aborted}`);
-        console.log('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
+        console.debug(`[BranchAnalyzer] Safety report: apiCalls=${ctx.apiCalls}, errors=${ctx.errorCount}, elapsed=${Date.now() - ctx.startTime}ms, aborted=${ctx.aborted}`);
+        console.debug('[BranchAnalyzer] Analysis complete:', Object.keys(allBranches).length, 'branches found');
         return allBranches;
         
     } finally {

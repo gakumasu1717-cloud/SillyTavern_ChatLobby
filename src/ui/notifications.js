@@ -22,7 +22,7 @@ let notificationPermission = 'default';
  */
 async function requestNotificationPermission() {
     if (!('Notification' in window)) {
-        console.log('[Notification] Browser does not support notifications');
+        console.debug('[Notification] Browser does not support notifications');
         return 'denied';
     }
     

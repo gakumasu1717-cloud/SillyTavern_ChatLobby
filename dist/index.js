@@ -110,7 +110,7 @@
   });
   async function requestNotificationPermission() {
     if (!("Notification" in window)) {
-      console.log("[Notification] Browser does not support notifications");
+      console.debug("[Notification] Browser does not support notifications");
       return "denied";
     }
     if (Notification.permission === "granted") {
@@ -585,7 +585,7 @@ ${message}` : message;
           this.cleanup(data);
           try {
             localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
-            console.log("[Storage] Saved after cleanup");
+            console.debug("[Storage] Saved after cleanup");
             return;
           } catch (e2) {
             console.error("[Storage] Still failed after cleanup:", e2);
@@ -609,22 +609,22 @@ ${message}` : message;
       if (assignments.length > 1e4) {
         const toKeep = assignments.slice(-1e4);
         data.chatAssignments = Object.fromEntries(toKeep);
-        console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} \u2192 10000`);
+        console.debug(`[Storage] Cleaned chatAssignments: ${assignments.length} \u2192 10000`);
       }
       if (data.favorites && data.favorites.length > 2e3) {
         data.favorites = data.favorites.slice(-2e3);
-        console.log(`[Storage] Cleaned favorites`);
+        console.debug(`[Storage] Cleaned favorites`);
       }
       if (data.characterFavorites && data.characterFavorites.length > 1e3) {
         data.characterFavorites = data.characterFavorites.slice(-1e3);
-        console.log(`[Storage] Cleaned characterFavorites`);
+        console.debug(`[Storage] Cleaned characterFavorites`);
       }
       if (data.personaRecentUsage) {
         const entries = Object.entries(data.personaRecentUsage);
         if (entries.length > 200) {
           entries.sort((a, b) => b[1] - a[1]);
           data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
-          console.log(`[Storage] Cleaned personaRecentUsage`);
+          console.debug(`[Storage] Cleaned personaRecentUsage`);
         }
       }
       this._data = data;
@@ -656,7 +656,7 @@ ${message}` : message;
      * @returns {string}
      */
     getChatKey(charAvatar, chatFileName) {
-      return `${charAvatar}_${chatFileName}`;
+      return `${charAvatar}::${chatFileName}`;
     }
     // ============================================
     // 폴더 관련
@@ -1159,6 +1159,31 @@ ${message}` : message;
     return [...personas].sort((a, b) => koreanSort(a.name, b.name));
   }
 
+  // src/utils/waitFor.js
+  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      try {
+        if (conditionFn()) return true;
+      } catch (e) {
+      }
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    return false;
+  }
+  async function waitForElement(selector, timeout = 3e3) {
+    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
+    return found ? document.querySelector(selector) : null;
+  }
+  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
+    return waitFor(() => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context) return false;
+      const currentChar = context.characters?.[context.characterId];
+      return currentChar?.avatar === expectedAvatar;
+    }, timeout);
+  }
+
   // src/api/sillyTavern.js
   var SillyTavernAPI = class {
     constructor() {
@@ -1261,7 +1286,7 @@ ${message}` : message;
               personaNames = powerUserModule.power_user?.personas || {};
             }
           } catch (e) {
-            console.warn("[API] Could not get personas from context or import:", e.message);
+            console.debug("[API] Could not get personas from context or import:", e.message);
           }
           const personas = avatars.map((avatarId) => ({
             key: avatarId,
@@ -1289,7 +1314,7 @@ ${message}` : message;
         const personasModule = await import("../../../../personas.js");
         return personasModule.user_avatar || "";
       } catch (e) {
-        console.warn("[API] Failed to get current persona:", e.message);
+        console.debug("[API] Failed to get current persona:", e.message);
         return "";
       }
     }
@@ -1311,7 +1336,7 @@ ${message}` : message;
           return true;
         }
       } catch (e) {
-        console.warn("[API] Failed to set persona:", e.message);
+        console.debug("[API] Failed to set persona:", e.message);
       }
       return false;
     }
@@ -1754,13 +1779,13 @@ ${message}` : message;
       try {
         const context = this.getContext();
         const chatFileName = chatId.replace(".jsonl", "");
-        console.log("[API] openGroupChat:", { groupId, chatFileName });
+        console.debug("[API] openGroupChat:", { groupId, chatFileName });
         let groupSelected = false;
         if (typeof context?.selectGroupById === "function") {
           try {
             await context.selectGroupById(groupId);
             groupSelected = true;
-            console.log("[API] Group selected via selectGroupById");
+            console.debug("[API] Group selected via selectGroupById");
           } catch (e) {
             console.warn("[API] selectGroupById failed:", e);
           }
@@ -1769,7 +1794,7 @@ ${message}` : message;
           try {
             await context.openGroupById(groupId, false);
             groupSelected = true;
-            console.log("[API] Group selected via openGroupById");
+            console.debug("[API] Group selected via openGroupById");
           } catch (e) {
             console.warn("[API] openGroupById failed:", e);
           }
@@ -1783,7 +1808,7 @@ ${message}` : message;
               groupCard.click();
             }
             groupSelected = true;
-            console.log("[API] Group selected via UI click");
+            console.debug("[API] Group selected via UI click");
           }
         }
         if (!groupSelected) {
@@ -1794,7 +1819,7 @@ ${message}` : message;
         if (typeof context?.openGroupChat === "function") {
           try {
             await context.openGroupChat(chatFileName);
-            console.log("[API] Chat opened via context.openGroupChat");
+            console.debug("[API] Chat opened via context.openGroupChat");
             return true;
           } catch (e) {
             console.warn("[API] context.openGroupChat failed:", e);
@@ -1804,7 +1829,7 @@ ${message}` : message;
           const groupChatsModule = await import("../../../../group-chats.js");
           if (typeof groupChatsModule.openGroupChat === "function") {
             await groupChatsModule.openGroupChat(chatFileName);
-            console.log("[API] Chat opened via group-chats module");
+            console.debug("[API] Chat opened via group-chats module");
             return true;
           }
         } catch (e) {
@@ -1824,20 +1849,14 @@ ${message}` : message;
      */
     async openGroupChatByUI(groupId, chatFileName) {
       try {
-        console.log("[API] openGroupChatByUI:", { groupId, chatFileName });
+        console.debug("[API] openGroupChatByUI:", { groupId, chatFileName });
         const manageChatsBtn = document.getElementById("option_select_chat");
         if (!manageChatsBtn) {
           console.error("[API] option_select_chat not found");
           return false;
         }
         manageChatsBtn.click();
-        let attempts = 0;
-        while (attempts < 30) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          const chatItems2 = document.querySelectorAll(".select_chat_block");
-          if (chatItems2.length > 0) break;
-          attempts++;
-        }
+        await waitFor(() => document.querySelectorAll(".select_chat_block").length > 0, 3e3, 100);
         const chatItems = document.querySelectorAll(".select_chat_block");
         for (const item of chatItems) {
           const itemFileName = item.getAttribute("file_name") || "";
@@ -1848,7 +1867,7 @@ ${message}` : message;
             } else {
               item.click();
             }
-            console.log("[API] Chat opened via UI click");
+            console.debug("[API] Chat opened via UI click");
             return true;
           }
         }
@@ -1884,7 +1903,7 @@ ${message}` : message;
     async deleteGroupChat(groupId, chatFileName) {
       try {
         const fileName = chatFileName.replace(".jsonl", "");
-        console.log("[API] deleteGroupChat:", { groupId, fileName });
+        console.debug("[API] deleteGroupChat:", { groupId, fileName });
         const response = await this.fetchWithRetry("/api/chats/group/delete", {
           method: "POST",
           headers: this.getRequestHeaders(),
@@ -1894,7 +1913,7 @@ ${message}` : message;
           })
         });
         if (response.ok) {
-          console.log("[API] Group chat deleted successfully");
+          console.debug("[API] Group chat deleted successfully");
           cache.invalidate("groups");
           return true;
         }
@@ -1938,7 +1957,7 @@ ${message}` : message;
                 });
               }
             });
-            console.log("[LastChatCache] Restored", this.lastChatTimes.size, "entries from storage");
+            console.debug("[LastChatCache] Restored", this.lastChatTimes.size, "entries from storage");
           }
         }
       } catch (e) {
@@ -2018,7 +2037,7 @@ ${message}` : message;
         persona: currentPersona || null
       });
       this._scheduleSave();
-      console.log("[LastChatCache] Updated to now:", charAvatar, "persona:", currentPersona);
+      console.debug("[LastChatCache] Updated to now:", charAvatar, "persona:", currentPersona);
     }
     /**
      * 채팅 목록에서 마지막 채팅 시간 추출
@@ -2090,6 +2109,7 @@ ${message}` : message;
                 const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
                 if (lastMsgDate > 0) return lastMsgDate;
               } catch (e) {
+                console.debug("[LastChatCache] getChatLastMessageDate failed:", e.message);
               }
             }
             return 0;
@@ -2109,7 +2129,7 @@ ${message}` : message;
      */
     async initializeAll(characters, batchSize = 5) {
       if (this._initPromise) {
-        console.log("[LastChatCache] Already initializing, waiting for existing...");
+        console.debug("[LastChatCache] Already initializing, waiting for existing...");
         return this._initPromise;
       }
       this._initPromise = this._doInitializeAll(characters, batchSize).finally(() => {
@@ -2118,7 +2138,7 @@ ${message}` : message;
       return this._initPromise;
     }
     async _doInitializeAll(characters, batchSize) {
-      console.log("[LastChatCache] Initializing for", characters.length, "characters");
+      console.debug("[LastChatCache] Initializing for", characters.length, "characters");
       try {
         for (let i = 0; i < characters.length; i += batchSize) {
           const batch = characters.slice(i, i + batchSize);
@@ -2136,7 +2156,7 @@ ${message}` : message;
         }
         this.initialized = true;
         this._saveToStorage();
-        console.log("[LastChatCache] Initialized with", this.lastChatTimes.size, "entries");
+        console.debug("[LastChatCache] Initialized with", this.lastChatTimes.size, "entries");
       } catch (e) {
         console.error("[LastChatCache] Initialization failed:", e);
         this.initialized = true;
@@ -2161,7 +2181,7 @@ ${message}` : message;
      * 채팅 열기만으로는 캐시를 갱신하지 않음
      */
     markViewed(charAvatar) {
-      console.log("[LastChatCache] markViewed (no update):", charAvatar);
+      console.debug("[LastChatCache] markViewed (no update):", charAvatar);
     }
     /**
      * 캐시 클리어
@@ -2186,7 +2206,7 @@ ${message}` : message;
       if (this.lastChatTimes.has(charAvatar)) {
         this.lastChatTimes.delete(charAvatar);
         this._scheduleSave();
-        console.log("[LastChatCache] Removed:", charAvatar);
+        console.debug("[LastChatCache] Removed:", charAvatar);
       }
     }
     /**
@@ -2203,7 +2223,7 @@ ${message}` : message;
         }
       }
       if (cleaned > 0) {
-        console.log("[LastChatCache] Cleaned", cleaned, "deleted characters");
+        console.debug("[LastChatCache] Cleaned", cleaned, "deleted characters");
         this._scheduleSave();
       }
     }
@@ -2441,7 +2461,7 @@ ${message}` : message;
     const cache2 = loadCache();
     delete cache2.characters[charAvatar];
     saveCache();
-    console.log("[BranchCache] Cleared cache for:", charAvatar);
+    console.debug("[BranchCache] Cleared cache for:", charAvatar);
   }
 
   // src/utils/branchAnalyzer.js
@@ -2739,7 +2759,7 @@ ${message}` : message;
         const candidateHashes = chatHashes[candidate.fileName];
         if (!candidateContent || !candidateHashes) continue;
         const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
-        console.log(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
+        console.debug(`[BranchAnalyzer][Date] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
         if (common === 0) continue;
         if (common > bestCommon) {
           bestCommon = common;
@@ -2757,7 +2777,7 @@ ${message}` : message;
           const marker = cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
           debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
         }
-        console.log(
+        console.debug(
           `[BranchDebug] ${current.fileName}
   \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
 ` + debugLines.join("\n")
@@ -2786,7 +2806,7 @@ ${message}` : message;
         const candidateHashes = chatHashes[candidate.fileName];
         if (!candidateContent || !candidateHashes) continue;
         const common = findCommonPrefixLengthFast(currentHashes, candidateHashes);
-        console.log(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
+        console.debug(`[BranchAnalyzer][Score] Comparing: ${current.fileName}(${currentContent.length}msgs) vs ${candidate.fileName}(${candidateContent.length}msgs) \u2192 common=${common}`);
         if (common === 0) continue;
         if (currentContent.length <= common) continue;
         if (candidateContent.length > currentContent.length) continue;
@@ -2807,7 +2827,7 @@ ${message}` : message;
           const marker = cand.fileName === bestParent ? " \u2190 \uC120\uD0DD\uB428" : "";
           debugLines.push(`  ${cand.fileName}: common=${c}, len=${len}${marker}`);
         }
-        console.log(
+        console.debug(
           `[BranchDebug] ${current.fileName}
   \u2192 \uBD80\uBAA8: ${bestParent} (common=${bestCommon})
 ` + debugLines.join("\n")
@@ -2844,9 +2864,9 @@ ${message}` : message;
     }
   }
   async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
-    console.log("[BranchAnalyzer] Starting analysis for", charAvatar, "forceRefresh:", forceRefresh, "chats:", chats.length);
+    console.debug("[BranchAnalyzer] Starting analysis for", charAvatar, "forceRefresh:", forceRefresh, "chats:", chats.length);
     if (chats.length < 2) {
-      console.log("[BranchAnalyzer] Not enough chats to analyze");
+      console.debug("[BranchAnalyzer] Not enough chats to analyze");
       return {};
     }
     const ctx = createAnalysisContext();
@@ -2860,13 +2880,13 @@ ${message}` : message;
       }
       const groups = groupByFingerprint(fingerprints);
       const multiGroups = Object.values(groups).filter((g) => g.length >= 2);
-      console.log(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
+      console.debug(`[BranchAnalyzer] Found ${multiGroups.length} groups with 2+ chats (total ${Object.keys(groups).length} groups)`);
       const allBranches = {};
       const branchEntries = [];
       for (let i = 0; i < multiGroups.length; i++) {
         if (!checkSafety(ctx)) break;
         const group = multiGroups[i];
-        console.log(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
+        console.debug(`[BranchAnalyzer] Analyzing group ${i + 1}/${multiGroups.length} with ${group.length} chats`);
         const groupResult = await analyzeGroup(charAvatar, group, ctx);
         for (const [fileName, info] of Object.entries(groupResult)) {
           allBranches[fileName] = info;
@@ -2876,7 +2896,7 @@ ${message}` : message;
             branchPoint: info.branchPoint,
             depth: info.depth
           });
-          console.log(
+          console.debug(
             "[BranchAnalyzer] Branch found:",
             fileName,
             "\u2192 parent:",
@@ -2905,8 +2925,8 @@ ${message}` : message;
       if (ctx.aborted) {
         console.warn(`[BranchAnalyzer] Analysis aborted: ${ctx.abortReason}`);
       }
-      console.log(`[BranchAnalyzer] Safety report: apiCalls=${ctx.apiCalls}, errors=${ctx.errorCount}, elapsed=${Date.now() - ctx.startTime}ms, aborted=${ctx.aborted}`);
-      console.log("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");
+      console.debug(`[BranchAnalyzer] Safety report: apiCalls=${ctx.apiCalls}, errors=${ctx.errorCount}, elapsed=${Date.now() - ctx.startTime}ms, aborted=${ctx.aborted}`);
+      console.debug("[BranchAnalyzer] Analysis complete:", Object.keys(allBranches).length, "branches found");
       return allBranches;
     } finally {
       clearContentCache();
@@ -3085,18 +3105,18 @@ ${message}` : message;
     store.setChatHandlers(handlers);
   }
   async function renderChatList(character) {
-    console.log("[ChatList] renderChatList called:", character?.avatar);
+    console.debug("[ChatList] renderChatList called:", character?.avatar);
     if (!character || !character.avatar) {
       console.error("[ChatList] Invalid character data:", character);
       return;
     }
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
-    console.log("[ChatList] chatsPanel:", !!chatsPanel, "chatsList:", !!chatsList);
-    console.log("[ChatList] currentCharacter:", store.currentCharacter?.avatar);
-    console.log("[ChatList] panelVisible:", chatsPanel?.classList.contains("visible"));
+    console.debug("[ChatList] chatsPanel:", !!chatsPanel, "chatsList:", !!chatsList);
+    console.debug("[ChatList] currentCharacter:", store.currentCharacter?.avatar);
+    console.debug("[ChatList] panelVisible:", chatsPanel?.classList.contains("visible"));
     if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains("visible")) {
-      console.log("[ChatList] Skipping - same character already visible");
+      console.debug("[ChatList] Skipping - same character already visible");
       return;
     }
     store.setCurrentCharacter(character);
@@ -3112,7 +3132,7 @@ ${message}` : message;
     if (branchRefreshBtn) {
       branchRefreshBtn.style.display = savedSortOption === "branch" ? "flex" : "none";
     }
-    console.log("[ChatList] Updating persona quick button for:", character.avatar);
+    console.debug("[ChatList] Updating persona quick button for:", character.avatar);
     updatePersonaQuickButton(character.avatar);
     const cachedChats = cache.get("chats", character.avatar);
     if (cachedChats && cachedChats.length > 0 && cache.isValid("chats", character.avatar)) {
@@ -3152,7 +3172,7 @@ ${message}` : message;
     const totalChatCount = chatArray.length;
     updateHasChats(totalChatCount);
     if (chatArray.length === 0) {
-      console.log("[renderChats] No valid chats, showing empty state");
+      console.debug("[renderChats] No valid chats, showing empty state");
       updateChatCount(0);
       container.innerHTML = `
             <div class="lobby-empty-state">
@@ -3450,19 +3470,19 @@ ${message}` : message;
   }
   function bindChatEvents(container, charAvatar) {
     const items = container.querySelectorAll(".lobby-chat-item");
-    console.log("[ChatList] bindChatEvents: items count =", items.length, "charAvatar =", charAvatar);
+    console.debug("[ChatList] bindChatEvents: items count =", items.length, "charAvatar =", charAvatar);
     items.forEach((item, index) => {
       const chatContent = item.querySelector(".chat-content");
       const favBtn = item.querySelector(".chat-fav-btn");
       const delBtn = item.querySelector(".chat-delete-btn");
       const fileName = item.dataset.fileName;
-      console.log("[ChatList] Binding item", index, ":", { fileName, hasChatContent: !!chatContent });
+      console.debug("[ChatList] Binding item", index, ":", { fileName, hasChatContent: !!chatContent });
       if (!chatContent) {
         console.error("[ChatList] chatContent not found for item", index);
         return;
       }
       createTouchClickHandler(chatContent, () => {
-        console.log("[ChatList] Chat item clicked!", { fileName, charAvatar: item.dataset.charAvatar });
+        console.debug("[ChatList] Chat item clicked!", { fileName, charAvatar: item.dataset.charAvatar });
         if (store.batchModeActive) {
           const cb = item.querySelector(".chat-select-cb");
           if (cb) {
@@ -3472,7 +3492,7 @@ ${message}` : message;
           return;
         }
         const handlers = store.chatHandlers;
-        console.log("[ChatList] handlers =", handlers, "onOpen =", !!handlers?.onOpen);
+        console.debug("[ChatList] handlers =", handlers, "onOpen =", !!handlers?.onOpen);
         if (handlers?.onOpen) {
           const charIndex = store.currentCharacter?.index || item.dataset.charIndex || null;
           const chatInfo = {
@@ -3480,7 +3500,7 @@ ${message}` : message;
             charAvatar: item.dataset.charAvatar,
             charIndex
           };
-          console.log("[ChatList] Calling onOpen:", chatInfo);
+          console.debug("[ChatList] Calling onOpen:", chatInfo);
           handlers.onOpen(chatInfo);
         } else {
           console.error("[ChatList] onOpen handler not available!");
@@ -3759,7 +3779,7 @@ ${message}` : message;
     store.setCurrentGroup(null);
   }
   async function renderGroupChatList(group) {
-    console.log("[ChatList] renderGroupChatList called:", {
+    console.debug("[ChatList] renderGroupChatList called:", {
       groupId: group?.id,
       groupName: group?.name,
       currentGroupId: store.currentGroup?.id,
@@ -3772,7 +3792,7 @@ ${message}` : message;
     const chatsPanel = document.getElementById("chat-lobby-chats");
     const chatsList = document.getElementById("chat-lobby-chats-list");
     if (store.currentGroup?.id === group.id && chatsPanel?.classList.contains("visible")) {
-      console.log("[ChatList] Same group already visible, toggling off");
+      console.debug("[ChatList] Same group already visible, toggling off");
       chatsPanel.classList.remove("visible");
       store.setCurrentGroup(null);
       return;
@@ -3936,15 +3956,15 @@ ${message}` : message;
       }
       createTouchClickHandler(chatContent, async () => {
         if (isOpeningGroupChat) {
-          console.log("[ChatList] Already opening group chat, ignoring...");
+          console.debug("[ChatList] Already opening group chat, ignoring...");
           return;
         }
         isOpeningGroupChat = true;
         try {
-          console.log("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
+          console.debug("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
           const context = api.getContext();
           const chatFileName = chatFile.replace(".jsonl", "");
-          console.log("[ChatList] Closing lobby first...");
+          console.debug("[ChatList] Closing lobby first...");
           const overlay = document.getElementById("chat-lobby-overlay");
           const lobbyContainer = document.getElementById("chat-lobby-container");
           const fab = document.getElementById("chat-lobby-fab");
@@ -3956,7 +3976,7 @@ ${message}` : message;
           store.setCurrentGroup(null);
           store.setCurrentCharacter(null);
           store.setLobbyOpen(false);
-          console.log("[ChatList] Selecting group via UI click...");
+          console.debug("[ChatList] Selecting group via UI click...");
           const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
           if (!groupCard) {
             console.error("[ChatList] Group card not found:", `.group_select[data-grid="${group.id}"]`);
@@ -3971,12 +3991,12 @@ ${message}` : message;
           await new Promise((resolve) => setTimeout(resolve, 600));
           const currentContext = api.getContext();
           const currentChat = currentContext?.chatId || "";
-          console.log("[ChatList] Current chat after group select:", currentChat, "Target:", chatFileName);
+          console.debug("[ChatList] Current chat after group select:", currentChat, "Target:", chatFileName);
           if (currentChat === chatFileName || currentChat.includes(chatFileName)) {
-            console.log("[ChatList] Target chat is already open");
+            console.debug("[ChatList] Target chat is already open");
             return;
           }
-          console.log("[ChatList] Opening chat management panel...");
+          console.debug("[ChatList] Opening chat management panel...");
           const manageChatsBtn = document.getElementById("option_select_chat");
           if (!manageChatsBtn) {
             console.error("[ChatList] Chat management button not found");
@@ -3986,19 +4006,19 @@ ${message}` : message;
           manageChatsBtn.click();
           await new Promise((resolve) => setTimeout(resolve, 500));
           const chatItems = document.querySelectorAll(".select_chat_block");
-          console.log("[ChatList] Found", chatItems.length, "chat items");
+          console.debug("[ChatList] Found", chatItems.length, "chat items");
           for (const chatItem of chatItems) {
             const itemFileName = chatItem.getAttribute("file_name") || "";
             const cleanItemName = itemFileName.replace(".jsonl", "").trim();
             const cleanTargetName = chatFileName.replace(".jsonl", "").trim();
             if (cleanItemName === cleanTargetName) {
-              console.log("[ChatList] Found target chat, clicking...");
+              console.debug("[ChatList] Found target chat, clicking...");
               if (window.$) {
                 window.$(chatItem).trigger("click");
               } else {
                 chatItem.click();
               }
-              console.log("[ChatList] Group chat opened successfully");
+              console.debug("[ChatList] Group chat opened successfully");
               return;
             }
           }
@@ -4042,10 +4062,10 @@ ${message}` : message;
     });
   }
   function updatePersonaQuickButton(charAvatar) {
-    console.log("[ChatList] updatePersonaQuickButton called:", charAvatar);
+    console.debug("[ChatList] updatePersonaQuickButton called:", charAvatar);
     const btn = document.getElementById("chat-lobby-persona-quick");
     const img = btn ? btn.querySelector(".persona-quick-avatar") : null;
-    console.log("[ChatList] Button found:", !!btn, "Image found:", !!img);
+    console.debug("[ChatList] Button found:", !!btn, "Image found:", !!img);
     if (!btn || !img) return;
     const lastPersona = window._chatLobbyLastChatCache ? window._chatLobbyLastChatCache.getPersona(charAvatar) : null;
     if (lastPersona) {
@@ -4067,43 +4087,16 @@ ${message}` : message;
   // src/handlers/chatHandlers.js
   init_notifications();
   init_config();
-
-  // src/utils/waitFor.js
-  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-      try {
-        if (conditionFn()) return true;
-      } catch (e) {
-      }
-      await new Promise((r) => setTimeout(r, interval));
-    }
-    return false;
-  }
-  async function waitForElement(selector, timeout = 3e3) {
-    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
-    return found ? document.querySelector(selector) : null;
-  }
-  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
-    return waitFor(() => {
-      const context = window.SillyTavern?.getContext?.();
-      if (!context) return false;
-      const currentChar = context.characters?.[context.characterId];
-      return currentChar?.avatar === expectedAvatar;
-    }, timeout);
-  }
-
-  // src/handlers/chatHandlers.js
   var isOpeningChat = false;
   var isStartingNewChat = false;
   async function openChat(chatInfo) {
     if (isOpeningChat) {
-      console.log("[ChatHandlers] Already opening a chat, ignoring...");
+      console.debug("[ChatHandlers] Already opening a chat, ignoring...");
       return;
     }
     isOpeningChat = true;
     const { fileName, charAvatar, charIndex } = chatInfo;
-    console.log("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
+    console.debug("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
     try {
       if (!charAvatar || !fileName) {
         console.error("[ChatHandlers] Missing chat data");
@@ -4113,33 +4106,33 @@ ${message}` : message;
       const context = api.getContext();
       const characters = context?.characters || [];
       const index = characters.findIndex((c) => c.avatar === charAvatar);
-      console.log("[ChatHandlers] Character index:", index);
+      console.debug("[ChatHandlers] Character index:", index);
       if (index === -1) {
         console.error("[ChatHandlers] Character not found");
         showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
       const chatFileName = fileName.replace(".jsonl", "");
-      console.log("[ChatHandlers] Selecting character...");
+      console.debug("[ChatHandlers] Selecting character...");
       await api.selectCharacterById(index);
       const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
-      console.log("[ChatHandlers] Character selected:", charSelected);
+      console.debug("[ChatHandlers] Character selected:", charSelected);
       if (!charSelected) {
         showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
         return;
       }
       closeLobbyKeepState();
-      console.log("[ChatHandlers] Opening chat:", chatFileName);
+      console.debug("[ChatHandlers] Opening chat:", chatFileName);
       if (typeof context?.openCharacterChat === "function") {
         try {
           await context.openCharacterChat(chatFileName);
-          console.log("[ChatHandlers] Chat opened successfully");
+          console.debug("[ChatHandlers] Chat opened successfully");
           return;
         } catch (err) {
           console.warn("[ChatHandlers] context.openCharacterChat failed:", err);
         }
       }
-      console.log("[ChatHandlers] Using fallback method...");
+      console.debug("[ChatHandlers] Using fallback method...");
       await openChatByFileName(fileName);
     } catch (error) {
       console.error("[ChatHandlers] Failed to open chat:", error);
@@ -4268,7 +4261,7 @@ ${message}` : message;
   }
   async function startNewChat() {
     if (isStartingNewChat) {
-      console.log("[ChatHandlers] Already starting new chat, ignoring...");
+      console.debug("[ChatHandlers] Already starting new chat, ignoring...");
       return;
     }
     isStartingNewChat = true;
@@ -4297,7 +4290,7 @@ ${message}` : message;
     try {
       const chats = await api.fetchChatsForCharacter(charAvatar);
       actualChatCount = Array.isArray(chats) ? chats.length : 0;
-      console.log("[ChatHandlers] Actual chat count:", actualChatCount);
+      console.debug("[ChatHandlers] Actual chat count:", actualChatCount);
     } catch (e) {
       console.warn("[ChatHandlers] Failed to get chat count, using dataset fallback");
       actualChatCount = btn?.dataset.hasChats === "true" ? 1 : 0;
@@ -4324,7 +4317,7 @@ ${message}` : message;
       showToast("\uADF8\uB8F9\uC774 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    console.log("[ChatHandlers] Starting new group chat:", { groupId, groupName });
+    console.debug("[ChatHandlers] Starting new group chat:", { groupId, groupName });
     try {
       const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
       if (!groupCard) {
@@ -4332,7 +4325,7 @@ ${message}` : message;
         showToast("\uADF8\uB8F9\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
         return;
       }
-      console.log("[ChatHandlers] Found group card, clicking...");
+      console.debug("[ChatHandlers] Found group card, clicking...");
       if (window.$) {
         window.$(groupCard).trigger("click");
       } else {
@@ -4342,7 +4335,7 @@ ${message}` : message;
       closeLobbyKeepState();
       const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
       if (newChatBtn) {
-        console.log("[ChatHandlers] Clicking new chat button");
+        console.debug("[ChatHandlers] Clicking new chat button");
         newChatBtn.click();
       } else {
         console.error("[ChatHandlers] New chat button not found");
@@ -4454,7 +4447,7 @@ ${message}` : message;
         const parsed = JSON.parse(data);
         const version = parsed.version || 0;
         if (version < CURRENT_VERSION) {
-          console.log("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
+          console.debug("[Calendar] Migrating data from version", version, "to", CURRENT_VERSION);
           const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
           localStorage.setItem(STORAGE_KEY3, JSON.stringify(migrated));
         }
@@ -4472,7 +4465,7 @@ ${message}` : message;
     return snapshots[date] || null;
   }
   function cleanOldSnapshots() {
-    console.log("[Calendar] Cleaning old snapshots (2 years+)");
+    console.debug("[Calendar] Cleaning old snapshots (2 years+)");
     const snapshots = loadSnapshots(true);
     const twoYearsAgo = /* @__PURE__ */ new Date();
     twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
@@ -4485,7 +4478,7 @@ ${message}` : message;
       }
     }
     if (deleted > 0) {
-      console.log("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
+      console.debug("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
       localStorage.setItem(STORAGE_KEY3, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
     }
   }
@@ -4500,7 +4493,7 @@ ${message}` : message;
       const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
       snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
       localStorage.setItem(STORAGE_KEY3, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-      console.log("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
+      console.debug("[Calendar] saveSnapshot:", date, "| total:", total, "| topChar:", topChar, "| lastChatTimes count:", Object.keys(mergedLastChatTimes).length);
     } catch (e) {
       if (e.name === "QuotaExceededError") {
         console.warn("[Calendar] QuotaExceededError - cleaning old data");
@@ -4531,7 +4524,7 @@ ${message}` : message;
   // src/ui/tabView.js
   var DEBUG = true;
   function log(...args) {
-    if (DEBUG) console.log("[TabView]", ...args);
+    if (DEBUG) console.debug("[TabView]", ...args);
   }
   function logError(...args) {
     console.error("[TabView]", ...args);
@@ -6054,7 +6047,7 @@ ${message}` : message;
     await loadPersonas();
     await updateFabAvatar();
     state2.isInitialized = true;
-    console.log("[PersonaMenu] Initialized");
+    console.debug("[PersonaMenu] Initialized");
   }
   async function loadPersonas() {
     try {
@@ -6878,7 +6871,7 @@ ${message}` : message;
         topChar = sorted[0]?.[0] || "";
       }
       saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
-      console.log("[CharacterGrid] Snapshot saved from cache");
+      console.debug("[CharacterGrid] Snapshot saved from cache");
     } catch (e) {
       console.error("[CharacterGrid] Failed to save snapshot:", e);
     }
@@ -6957,7 +6950,7 @@ ${message}` : message;
   }
   function bindCharacterEvents(container) {
     const cards = container.querySelectorAll(".lobby-char-card:not(.lobby-group-card)");
-    console.log("[CharacterGrid] bindCharacterEvents: found", cards.length, "cards");
+    console.debug("[CharacterGrid] bindCharacterEvents: found", cards.length, "cards");
     cards.forEach((card, index) => {
       const charName = card.dataset.charName || "Unknown";
       const charAvatar = card.dataset.charAvatar;
@@ -7179,9 +7172,9 @@ ${message}` : message;
           const chatsPanel = document.getElementById("chat-lobby-chats");
           const isPanelVisible = chatsPanel?.classList.contains("visible");
           const isSameGroup = store.currentGroup?.id === groupId;
-          console.log("[CharacterGrid] Group click:", { groupId, isSameGroup, isPanelVisible });
+          console.debug("[CharacterGrid] Group click:", { groupId, isSameGroup, isPanelVisible });
           if (isPanelVisible && isSameGroup) {
-            console.log("[CharacterGrid] Same group, toggling off");
+            console.debug("[CharacterGrid] Same group, toggling off");
             card.classList.remove("selected");
             closeChatPanel();
             return;
@@ -8406,7 +8399,7 @@ ${message}` : message;
     const topChars = [];
     for (const [avatar, time] of allSortedByTime) {
       if (!isCharacterExists(avatar)) {
-        console.log("[LastMessage] Skipping deleted character:", avatar);
+        console.debug("[LastMessage] Skipping deleted character:", avatar);
         continue;
       }
       topChars.push({ avatar, lastChatTime: time });
@@ -8636,6 +8629,7 @@ ${message}` : message;
   }
 
   // src/index.js
+  init_textUtils();
   (function() {
     "use strict";
     let chatChangedCooldownTimer = null;
@@ -8705,7 +8699,7 @@ ${message}` : message;
         return;
       }
       window._chatLobbyInitialized = true;
-      console.log("[ChatLobby] \u{1F680} Initializing...");
+      console.info("[ChatLobby] \u{1F680} Initializing...");
       removeExistingUI();
       document.body.insertAdjacentHTML("beforeend", createLobbyHTML());
       const fab = document.getElementById("chat-lobby-fab");
@@ -8757,7 +8751,7 @@ ${message}` : message;
           if (eventData?.character?.avatar) {
             lastChatCache.remove(eventData.character.avatar);
             clearCharacterCache(eventData.character.avatar);
-            console.log("[ChatLobby] Removed deleted character from lastChatCache & branchCache:", eventData.character.avatar);
+            console.debug("[ChatLobby] Removed deleted character from lastChatCache & branchCache:", eventData.character.avatar);
           }
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
@@ -8777,36 +8771,36 @@ ${message}` : message;
         onMessageSent: () => {
           const context2 = api.getContext();
           if (context2?.groupId) {
-            console.log("[ChatLobby] Skipping group chat for lastChatCache");
+            console.debug("[ChatLobby] Skipping group chat for lastChatCache");
             return;
           }
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
-            console.log("[ChatLobby] Message sent, updated lastChatCache:", charAvatar);
+            console.debug("[ChatLobby] Message sent, updated lastChatCache:", charAvatar);
             updateFabPreview();
           }
         },
         onMessageReceived: (chatId, type) => {
           if (type === "first_message") {
-            console.log("[ChatLobby] Skipping first_message for lastChatCache");
+            console.debug("[ChatLobby] Skipping first_message for lastChatCache");
             return;
           }
           const context2 = api.getContext();
           if (context2?.groupId) {
-            console.log("[ChatLobby] Skipping group chat for lastChatCache");
+            console.debug("[ChatLobby] Skipping group chat for lastChatCache");
             return;
           }
           const charAvatar = getCurrentCharacterAvatar();
           if (charAvatar) {
             lastChatCache.updateNow(charAvatar);
-            console.log("[ChatLobby] Message received, updated lastChatCache:", charAvatar);
+            console.debug("[ChatLobby] Message received, updated lastChatCache:", charAvatar);
             updateFabPreview();
           }
         },
         // 🔥 페르소나 변경 감지 (세팅 업데이트 시)
         onSettingsUpdated: async () => {
-          console.log("[ChatLobby] Settings updated, refreshing persona FAB");
+          console.debug("[ChatLobby] Settings updated, refreshing persona FAB");
           await refreshPersonaRadialMenu();
           await renderPersonaBar();
         }
@@ -8880,12 +8874,12 @@ ${message}` : message;
     }
     async function startBackgroundPreload() {
       setTimeout(async () => {
-        console.log("[ChatLobby] Starting background preload...");
+        console.debug("[ChatLobby] Starting background preload...");
         try {
           await cache.preloadPersonas(api);
           await new Promise((r) => setTimeout(r, 100));
           await cache.preloadCharacters(api);
-          console.log("[ChatLobby] Basic preload completed");
+          console.debug("[ChatLobby] Basic preload completed");
         } catch (e) {
           console.error("[ChatLobby] Preload failed:", e);
           return;
@@ -8894,7 +8888,7 @@ ${message}` : message;
           const characters = cache.get("characters");
           if (!characters || characters.length === 0) return;
           const recent = [...characters].sort((a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0)).slice(0, 3);
-          console.log("[ChatLobby] Preloading chats for", recent.length, "characters");
+          console.debug("[ChatLobby] Preloading chats for", recent.length, "characters");
           for (const char of recent) {
             if (cache.isValid("chats", char.avatar)) continue;
             try {
@@ -8905,7 +8899,7 @@ ${message}` : message;
               console.error("[ChatLobby] Chat preload failed:", char.name, e);
             }
           }
-          console.log("[ChatLobby] Chat preload completed");
+          console.debug("[ChatLobby] Chat preload completed");
         }, 3e3);
       }, CONFIG.timing.preloadDelay);
     }
@@ -8923,7 +8917,7 @@ ${message}` : message;
       const currentCharBeforeOpen = getCurrentCharacterAvatar();
       if (currentCharBeforeOpen) {
         lastChatCache.updateNow(currentCharBeforeOpen);
-        console.log("[ChatLobby] Updated lastChatCache for current chat:", currentCharBeforeOpen);
+        console.debug("[ChatLobby] Updated lastChatCache for current chat:", currentCharBeforeOpen);
       }
       isOpeningLobby = true;
       store.setLobbyOpen(true);
@@ -8947,7 +8941,7 @@ ${message}` : message;
           cache.invalidate("chats", currentChar);
           cache.invalidate("chatCounts", currentChar);
           cache.invalidate("messageCounts", currentChar);
-          console.log("[ChatLobby] Invalidated cache for current character:", currentChar);
+          console.debug("[ChatLobby] Invalidated cache for current character:", currentChar);
         }
         store.resetSelection();
         resetCharacterSelectLock();
@@ -9094,7 +9088,7 @@ ${message}` : message;
                 </div>
             </div>
             <div class="debug-panel-body">
-                <pre class="debug-panel-pre">${JSON.stringify(debugData, null, 2)}</pre>
+                <pre class="debug-panel-pre">${escapeHtml(JSON.stringify(debugData, null, 2))}</pre>
             </div>
         `;
       const container = document.getElementById("chat-lobby-container");
@@ -9110,8 +9104,9 @@ ${message}` : message;
       panel.querySelector("#debug-copy-btn")?.addEventListener("click", () => {
         navigator.clipboard.writeText(JSON.stringify(debugData, null, 2)).then(() => showToast("\uD074\uB9BD\uBCF4\uB4DC\uC5D0 \uBCF5\uC0AC\uB428", "success")).catch(() => showToast("\uBCF5\uC0AC \uC2E4\uD328", "error"));
       });
-      panel.querySelector("#debug-clear-lastchat")?.addEventListener("click", () => {
-        if (confirm("LastChatCache \uB370\uC774\uD130\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) {
+      panel.querySelector("#debug-clear-lastchat")?.addEventListener("click", async () => {
+        const confirmed = await showConfirm("LastChatCache \uB370\uC774\uD130\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?");
+        if (confirmed) {
           lastChatCache.clear();
           showToast("LastChatCache \uC0AD\uC81C\uB428", "success");
           closeDebugModal();
@@ -9132,7 +9127,7 @@ ${message}` : message;
     window.ChatLobby = window.ChatLobby || {};
     window._chatLobbyLastChatCache = lastChatCache;
     function cleanup() {
-      console.log("[ChatLobby] \u{1F9F9} Cleanup started");
+      console.info("[ChatLobby] \u{1F9F9} Cleanup started");
       cleanupSillyTavernEvents();
       cleanupEventDelegation();
       cleanupIntegration();
@@ -9146,7 +9141,7 @@ ${message}` : message;
       eventsRegistered = false;
       window._chatLobbyInitialized = false;
       removeExistingUI();
-      console.log("[ChatLobby] \u2705 Cleanup completed");
+      console.info("[ChatLobby] \u2705 Cleanup completed");
     }
     if (window.ChatLobby._cleanup) {
       window.ChatLobby._cleanup();
@@ -9395,9 +9390,9 @@ ${message}` : message;
       showToast("\uC0C8\uB85C\uACE0\uCE68 \uC644\uB8CC", "success");
     }
     async function handleSwitchPersona(el) {
-      console.log("[ChatLobby] handleSwitchPersona called:", el);
+      console.debug("[ChatLobby] handleSwitchPersona called:", el);
       const personaKey = el?.dataset?.persona;
-      console.log("[ChatLobby] Persona key:", personaKey);
+      console.debug("[ChatLobby] Persona key:", personaKey);
       if (!personaKey) {
         console.warn("[ChatLobby] No persona key found");
         return;
@@ -9546,9 +9541,6 @@ ${message}` : message;
           const isOpen = drawer?.classList.contains("openDrawer") || drawer?.querySelector(".drawer-icon.openIcon");
           if (!isOpen || checkCount >= maxChecks) {
             intervalManager.clear(checkDrawerClosed);
-            if (checkCount >= maxChecks) {
-            } else {
-            }
             cache.invalidate("personas");
             if (isLobbyOpen()) {
               renderPersonaBar();

@@ -20,7 +20,7 @@ import { getLocalDateString } from '../data/calendarStorage.js';
 const DEBUG = true;
 
 function log(...args) {
-    if (DEBUG) console.log('[TabView]', ...args);
+    if (DEBUG) console.debug('[TabView]', ...args);
 }
 
 function logError(...args) {

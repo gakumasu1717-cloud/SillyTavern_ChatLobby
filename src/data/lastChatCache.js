@@ -47,7 +47,7 @@ class LastChatCache {
                             });
                         }
                     });
-                    console.log('[LastChatCache] Restored', this.lastChatTimes.size, 'entries from storage');
+                    console.debug('[LastChatCache] Restored', this.lastChatTimes.size, 'entries from storage');
                 }
             }
         } catch (e) {
@@ -138,7 +138,7 @@ class LastChatCache {
             persona: currentPersona || null
         });
         this._scheduleSave();
-        console.log('[LastChatCache] Updated to now:', charAvatar, 'persona:', currentPersona);
+        console.debug('[LastChatCache] Updated to now:', charAvatar, 'persona:', currentPersona);
     }
 
     /**
@@ -213,7 +213,9 @@ class LastChatCache {
                         try {
                             const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
                             if (lastMsgDate > 0) return lastMsgDate;
-                        } catch (e) {}
+                        } catch (e) {
+                            console.debug('[LastChatCache] getChatLastMessageDate failed:', e.message);
+                        }
                     }
                     return 0;
                 });
@@ -233,7 +235,7 @@ class LastChatCache {
      */
     async initializeAll(characters, batchSize = 5) {
         if (this._initPromise) {
-            console.log('[LastChatCache] Already initializing, waiting for existing...');
+            console.debug('[LastChatCache] Already initializing, waiting for existing...');
             return this._initPromise;
         }
         this._initPromise = this._doInitializeAll(characters, batchSize)
@@ -242,7 +244,7 @@ class LastChatCache {
     }
 
     async _doInitializeAll(characters, batchSize) {
-        console.log('[LastChatCache] Initializing for', characters.length, 'characters');
+        console.debug('[LastChatCache] Initializing for', characters.length, 'characters');
         try {
             for (let i = 0; i < characters.length; i += batchSize) {
                 const batch = characters.slice(i, i + batchSize);
@@ -260,7 +262,7 @@ class LastChatCache {
             }
             this.initialized = true;
             this._saveToStorage();
-            console.log('[LastChatCache] Initialized with', this.lastChatTimes.size, 'entries');
+            console.debug('[LastChatCache] Initialized with', this.lastChatTimes.size, 'entries');
         } catch (e) {
             console.error('[LastChatCache] Initialization failed:', e);
             this.initialized = true;
@@ -288,7 +290,7 @@ class LastChatCache {
      * 채팅 열기만으로는 캐시를 갱신하지 않음
      */
     markViewed(charAvatar) {
-        console.log('[LastChatCache] markViewed (no update):', charAvatar);
+        console.debug('[LastChatCache] markViewed (no update):', charAvatar);
     }
 
     /**
@@ -315,7 +317,7 @@ class LastChatCache {
         if (this.lastChatTimes.has(charAvatar)) {
             this.lastChatTimes.delete(charAvatar);
             this._scheduleSave();
-            console.log('[LastChatCache] Removed:', charAvatar);
+            console.debug('[LastChatCache] Removed:', charAvatar);
         }
     }
 
@@ -333,7 +335,7 @@ class LastChatCache {
             }
         }
         if (cleaned > 0) {
-            console.log('[LastChatCache] Cleaned', cleaned, 'deleted characters');
+            console.debug('[LastChatCache] Cleaned', cleaned, 'deleted characters');
             this._scheduleSave();
         }
     }

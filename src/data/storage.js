@@ -104,7 +104,7 @@ class StorageManager {
                 // 정리 후 다시 저장 시도
                 try {
                     localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
-                    console.log('[Storage] Saved after cleanup');
+                    console.debug('[Storage] Saved after cleanup');
                     return;
                 } catch (e2) {
                     console.error('[Storage] Still failed after cleanup:', e2);
@@ -131,19 +131,19 @@ class StorageManager {
         if (assignments.length > 10000) {
             const toKeep = assignments.slice(-10000);  // 최근 10000개만 유지
             data.chatAssignments = Object.fromEntries(toKeep);
-            console.log(`[Storage] Cleaned chatAssignments: ${assignments.length} → 10000`);
+            console.debug(`[Storage] Cleaned chatAssignments: ${assignments.length} → 10000`);
         }
         
         // 2. favorites 크기 제한 (최대 2000개)
         if (data.favorites && data.favorites.length > 2000) {
             data.favorites = data.favorites.slice(-2000);
-            console.log(`[Storage] Cleaned favorites`);
+            console.debug(`[Storage] Cleaned favorites`);
         }
         
         // 3. characterFavorites 크기 제한 (최대 1000개)
         if (data.characterFavorites && data.characterFavorites.length > 1000) {
             data.characterFavorites = data.characterFavorites.slice(-1000);
-            console.log(`[Storage] Cleaned characterFavorites`);
+            console.debug(`[Storage] Cleaned characterFavorites`);
         }
         
         // 4. personaRecentUsage 크기 제한 (최대 200개)
@@ -152,7 +152,7 @@ class StorageManager {
             if (entries.length > 200) {
                 entries.sort((a, b) => b[1] - a[1]); // 최신순
                 data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
-                console.log(`[Storage] Cleaned personaRecentUsage`);
+                console.debug(`[Storage] Cleaned personaRecentUsage`);
             }
         }
         
@@ -189,7 +189,7 @@ class StorageManager {
      * @returns {string}
      */
     getChatKey(charAvatar, chatFileName) {
-        return `${charAvatar}_${chatFileName}`;
+        return `${charAvatar}::${chatFileName}`;
     }
     
     // ============================================

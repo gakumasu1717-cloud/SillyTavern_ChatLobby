@@ -460,7 +460,7 @@ async function saveTodaySnapshot() {
                 savedTimeCount++;
             }
         });
-        console.log('[Calendar] Saving lastChatTimes for', savedTimeCount, 'characters (today only)');
+        console.debug('[Calendar] Saving lastChatTimes for', savedTimeCount, 'characters (today only)');
         
         // 가장 증가한 캐릭터 찾기 (메시지 수 기준)
         let topChar = '';
@@ -644,7 +644,7 @@ function showLastMessagePanel(date) {
     for (const [avatar, time] of allSortedByTime) {
         // 🛡️ 방어로직: 캐릭터가 존재하는지 확인
         if (!isCharacterExists(avatar)) {
-            console.log('[LastMessage] Skipping deleted character:', avatar);
+            console.debug('[LastMessage] Skipping deleted character:', avatar);
             continue; // 삭제된 캐릭터는 스킵, 다음 캐릭터로
         }
         

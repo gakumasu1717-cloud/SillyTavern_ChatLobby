@@ -164,7 +164,7 @@ export async function initPersonaRadialMenu() {
     await updateFabAvatar();
     
     state.isInitialized = true;
-    console.log('[PersonaMenu] Initialized');
+    console.debug('[PersonaMenu] Initialized');
 }
 
 // ============================================

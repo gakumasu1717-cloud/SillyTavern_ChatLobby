@@ -34,7 +34,7 @@ export function loadSnapshots(forceRefresh = false) {
             
             // 버전 마이그레이션 (필요시)
             if (version < CURRENT_VERSION) {
-                console.log('[Calendar] Migrating data from version', version, 'to', CURRENT_VERSION);
+                console.debug('[Calendar] Migrating data from version', version, 'to', CURRENT_VERSION);
                 // 현재는 v0 -> v1: 구조 동일, 버전 필드만 추가
                 const migrated = { version: CURRENT_VERSION, snapshots: parsed.snapshots || {} };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
@@ -65,7 +65,7 @@ export function getSnapshot(date) {
  * 캘린더는 1년치 볼 수 있도록 보관
  */
 function cleanOldSnapshots() {
-    console.log('[Calendar] Cleaning old snapshots (2 years+)');
+    console.debug('[Calendar] Cleaning old snapshots (2 years+)');
     const snapshots = loadSnapshots(true);
     const twoYearsAgo = new Date();
     twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
@@ -80,7 +80,7 @@ function cleanOldSnapshots() {
     }
     
     if (deleted > 0) {
-        console.log('[Calendar] Deleted', deleted, 'old snapshots (2+ years)');
+        console.debug('[Calendar] Deleted', deleted, 'old snapshots (2+ years)');
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
     }
 }
@@ -112,7 +112,7 @@ export function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = 
         
         snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CURRENT_VERSION, snapshots }));
-        console.log('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', topChar, '| lastChatTimes count:', Object.keys(mergedLastChatTimes).length);
+        console.debug('[Calendar] saveSnapshot:', date, '| total:', total, '| topChar:', topChar, '| lastChatTimes count:', Object.keys(mergedLastChatTimes).length);
     } catch (e) {
         // 용량 초과 시 오래된 데이터 정리
         if (e.name === 'QuotaExceededError') {

@@ -14,7 +14,7 @@ import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSor
 import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
-import { showToast } from './ui/notifications.js';
+import { showToast, showConfirm } from './ui/notifications.js';
 import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
 import { openCalendarView, closeCalendarView } from './ui/calendarView.js';
 import { bindTabEvents, switchTab, getCurrentTab, refreshCurrentTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen, loadRecentChats, startRecentDomObserver, stopRecentDomObserver } from './ui/tabView.js';
@@ -25,6 +25,7 @@ import { waitFor, waitForCharacterSelect, waitForElement } from './utils/waitFor
 import { intervalManager } from './utils/intervalManager.js';
 import { openDrawerSafely } from './utils/drawerHelper.js';
 import { initCustomThemeIntegration, cleanupCustomThemeIntegration } from './integration/customTheme.js';
+import { escapeHtml } from './utils/textUtils.js';
 import { analyzeBranches } from './utils/branchAnalyzer.js';
 import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 
@@ -152,7 +153,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             return;
         }
         window._chatLobbyInitialized = true;
-        console.log('[ChatLobby] 🚀 Initializing...');
+        console.info('[ChatLobby] 🚀 Initializing...');
         
         // 기존 UI 제거
         removeExistingUI();
@@ -248,7 +249,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 if (eventData?.character?.avatar) {
                     lastChatCache.remove(eventData.character.avatar);
                     clearBranchCache(eventData.character.avatar);
-                    console.log('[ChatLobby] Removed deleted character from lastChatCache & branchCache:', eventData.character.avatar);
+                    console.debug('[ChatLobby] Removed deleted character from lastChatCache & branchCache:', eventData.character.avatar);
                 }
                 
                 if (isLobbyOpen()) {
@@ -270,14 +271,14 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 // 🔥 그룹 채팅은 통계에서 제외
                 const context = api.getContext();
                 if (context?.groupId) {
-                    console.log('[ChatLobby] Skipping group chat for lastChatCache');
+                    console.debug('[ChatLobby] Skipping group chat for lastChatCache');
                     return;
                 }
                 
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
-                    console.log('[ChatLobby] Message sent, updated lastChatCache:', charAvatar);
+                    console.debug('[ChatLobby] Message sent, updated lastChatCache:', charAvatar);
                     // FAB 프리뷰 갱신
                     updateFabPreview();
                 }
@@ -288,28 +289,28 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 // CHARACTER_MESSAGE_RENDERED에서는 type이 전달되지 않을 수 있으므로
                 // type이 정확히 'first_message'인 경우에만 스킵
                 if (type === 'first_message') {
-                    console.log('[ChatLobby] Skipping first_message for lastChatCache');
+                    console.debug('[ChatLobby] Skipping first_message for lastChatCache');
                     return;
                 }
                 
                 // 🔥 그룹 채팅은 통계에서 제외
                 const context = api.getContext();
                 if (context?.groupId) {
-                    console.log('[ChatLobby] Skipping group chat for lastChatCache');
+                    console.debug('[ChatLobby] Skipping group chat for lastChatCache');
                     return;
                 }
                 
                 const charAvatar = getCurrentCharacterAvatar();
                 if (charAvatar) {
                     lastChatCache.updateNow(charAvatar);
-                    console.log('[ChatLobby] Message received, updated lastChatCache:', charAvatar);
+                    console.debug('[ChatLobby] Message received, updated lastChatCache:', charAvatar);
                     // FAB 프리뷰 갱신
                     updateFabPreview();
                 }
             },
             // 🔥 페르소나 변경 감지 (세팅 업데이트 시)
             onSettingsUpdated: async () => {
-                console.log('[ChatLobby] Settings updated, refreshing persona FAB');
+                console.debug('[ChatLobby] Settings updated, refreshing persona FAB');
                 await refreshPersonaRadialMenu();
                 await renderPersonaBar();
             }
@@ -431,7 +432,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
     async function startBackgroundPreload() {
         // 약간의 딜레이 후 프리로딩 (메인 스레드 블로킹 방지)
         setTimeout(async () => {
-            console.log('[ChatLobby] Starting background preload...');
+            console.debug('[ChatLobby] Starting background preload...');
             
             try {
                 // 1단계: 기본 데이터만 순차 로드
@@ -439,7 +440,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 await new Promise(r => setTimeout(r, 100)); // 100ms 간격
                 await cache.preloadCharacters(api);
                 
-                console.log('[ChatLobby] Basic preload completed');
+                console.debug('[ChatLobby] Basic preload completed');
             } catch (e) {
                 console.error('[ChatLobby] Preload failed:', e);
                 return;
@@ -455,7 +456,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                     .sort((a, b) => (b.date_last_chat || 0) - (a.date_last_chat || 0))
                     .slice(0, 3);
                 
-                console.log('[ChatLobby] Preloading chats for', recent.length, 'characters');
+                console.debug('[ChatLobby] Preloading chats for', recent.length, 'characters');
                 
                 // 순차 로딩 (동시 부하 방지)
                 for (const char of recent) {
@@ -469,7 +470,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                     }
                 }
                 
-                console.log('[ChatLobby] Chat preload completed');
+                console.debug('[ChatLobby] Chat preload completed');
             }, 3000);
         }, CONFIG.timing.preloadDelay);
     }
@@ -509,7 +510,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         const currentCharBeforeOpen = getCurrentCharacterAvatar();
         if (currentCharBeforeOpen) {
             lastChatCache.updateNow(currentCharBeforeOpen);
-            console.log('[ChatLobby] Updated lastChatCache for current chat:', currentCharBeforeOpen);
+            console.debug('[ChatLobby] Updated lastChatCache for current chat:', currentCharBeforeOpen);
         }
         
         // 열기 시작 - 즉시 락 (CHAT_CHANGED settle까지 유지)
@@ -541,7 +542,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 cache.invalidate('chats', currentChar);
                 cache.invalidate('chatCounts', currentChar);
                 cache.invalidate('messageCounts', currentChar);
-                console.log('[ChatLobby] Invalidated cache for current character:', currentChar);
+                console.debug('[ChatLobby] Invalidated cache for current character:', currentChar);
             }
             
             // 상태 초기화 (이전 선택 정보 클리어, 핸들러/isLobbyOpen 절대 불변)
@@ -762,7 +763,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 </div>
             </div>
             <div class="debug-panel-body">
-                <pre class="debug-panel-pre">${JSON.stringify(debugData, null, 2)}</pre>
+                <pre class="debug-panel-pre">${escapeHtml(JSON.stringify(debugData, null, 2))}</pre>
             </div>
         `;
         
@@ -788,8 +789,9 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 .catch(() => showToast('복사 실패', 'error'));
         });
         
-        panel.querySelector('#debug-clear-lastchat')?.addEventListener('click', () => {
-            if (confirm('LastChatCache 데이터를 삭제하시겠습니까?')) {
+        panel.querySelector('#debug-clear-lastchat')?.addEventListener('click', async () => {
+            const confirmed = await showConfirm('LastChatCache 데이터를 삭제하시겠습니까?');
+            if (confirmed) {
                 lastChatCache.clear();
                 showToast('LastChatCache 삭제됨', 'success');
                 closeDebugModal();
@@ -823,7 +825,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
      * ⚠️ idempotent: 여러 번 호출해도 안전해야 함
      */
     function cleanup() {
-        console.log('[ChatLobby] 🧹 Cleanup started');
+        console.info('[ChatLobby] 🧹 Cleanup started');
         
         cleanupSillyTavernEvents();
         cleanupEventDelegation();
@@ -844,7 +846,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         
         removeExistingUI();
         
-        console.log('[ChatLobby] ✅ Cleanup completed');
+        console.info('[ChatLobby] ✅ Cleanup completed');
     }
     
     // 기존 인스턴스 정리 (확장 재로드 대비)
@@ -1226,9 +1228,9 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
      * @param {HTMLElement} el - 클릭된 버튼 요소
      */
     async function handleSwitchPersona(el) {
-        console.log('[ChatLobby] handleSwitchPersona called:', el);
+        console.debug('[ChatLobby] handleSwitchPersona called:', el);
         const personaKey = el?.dataset?.persona;
-        console.log('[ChatLobby] Persona key:', personaKey);
+        console.debug('[ChatLobby] Persona key:', personaKey);
         if (!personaKey) {
             console.warn('[ChatLobby] No persona key found');
             return;
@@ -1455,11 +1457,6 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 
                 if (!isOpen || checkCount >= maxChecks) {
                     intervalManager.clear(checkDrawerClosed);
-                    
-                    if (checkCount >= maxChecks) {
-                    } else {
-                    }
-                    
                     cache.invalidate('personas');
                     if (isLobbyOpen()) {
                         renderPersonaBar();
