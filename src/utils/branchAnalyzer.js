@@ -584,6 +584,25 @@ function calculateDepths(result) {
 }
 
 /**
+ * 특정 채팅이 속한 그룹의 루트(부모 없는) 채팅들 찾기
+ * @param {string} fileName - 기준 채팅
+ * @param {Object} branches - 현재 분석 결과
+ * @returns {string[]} - 루트 채팅 파일명 배열
+ */
+function findGroupRoots(fileName, branches) {
+    // fileName의 최상위 부모 찾기
+    let root = fileName;
+    const visited = new Set();
+    while (branches[root]?.parentChat && !visited.has(root)) {
+        visited.add(root);
+        root = branches[root].parentChat;
+    }
+    // root가 부모 없는 채팅이면 그게 루트
+    // 같은 루트를 공유하는 채팅 중 부모가 없는 것들 반환
+    return [root];
+}
+
+/**
  * 캐릭터의 전체 브랜치 구조 분석
  * fingerprint 그룹핑으로 O(N²) 방지 + 그룹 내 엄격한 조건
  * @param {string} charAvatar
@@ -667,6 +686,145 @@ export async function analyzeBranches(charAvatar, chats, onProgress = null, forc
             if (onProgress) {
                 onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.75);
             }
+        }
+        
+        // ============================================
+        // 4. 고아 채팅 교차 비교 (fingerprint 불일치 → 내용 직접 비교)
+        // 부모 채팅이 스와이프/리제너로 수정되어 fingerprint가 달라진 경우 대응
+        // ============================================
+        if (singleGroups.length > 0 && !ctx.aborted) {
+            console.debug(`[BranchDebug][CrossGroup] 고아 채팅 ${singleGroups.length}개 교차 비교 시작`);
+            
+            // 모든 채팅 목록 (고아 + 나머지)
+            const allChats = Object.entries(fingerprints).map(([fn, fp]) => ({ fileName: fn, length: fp.length }));
+            const orphanFiles = singleGroups.map(g => g[0].fileName);
+            
+            // 고아 채팅 내용 로드 + 해시 전처리
+            const orphanContents = {};
+            const orphanHashes = {};
+            
+            for (const orphanFn of orphanFiles) {
+                if (!checkSafety(ctx)) break;
+                const content = await loadChatContent(charAvatar, orphanFn, ctx);
+                if (content && content.length >= 2) {
+                    orphanContents[orphanFn] = content;
+                    orphanHashes[orphanFn] = content.map(msg => hashMessageFast(msg));
+                }
+            }
+            
+            // 비고아 채팅 내용 로드 + 해시 전처리 (고아가 아닌 채팅들)
+            const nonOrphanFiles = allChats.filter(c => !orphanFiles.includes(c.fileName));
+            const nonOrphanContents = {};
+            const nonOrphanHashes = {};
+            
+            for (const item of nonOrphanFiles) {
+                if (!checkSafety(ctx)) break;
+                const content = await loadChatContent(charAvatar, item.fileName, ctx);
+                if (content && content.length >= 2) {
+                    nonOrphanContents[item.fileName] = content;
+                    nonOrphanHashes[item.fileName] = content.map(msg => hashMessageFast(msg));
+                }
+            }
+            
+            // 각 고아 채팅에 대해 교차 비교
+            for (const orphanFn of orphanFiles) {
+                if (!checkSafety(ctx)) break;
+                if (!orphanHashes[orphanFn]) continue;
+                // 이미 부모가 있으면 스킵
+                if (allBranches[orphanFn]) continue;
+                
+                const orphanH = orphanHashes[orphanFn];
+                const orphanLen = orphanContents[orphanFn].length;
+                let bestMatch = null;
+                let bestCommon = 0;
+                let orphanIsParent = false;  // true면 고아가 부모, false면 고아가 자식
+                
+                // 비고아 채팅과 비교
+                for (const item of nonOrphanFiles) {
+                    const h = nonOrphanHashes[item.fileName];
+                    if (!h) continue;
+                    
+                    const common = findCommonPrefixLengthFast(orphanH, h);
+                    if (common === 0) continue;
+                    
+                    console.debug(`[BranchDebug][CrossGroup] ${orphanFn}(${orphanLen}msgs) vs ${item.fileName}(${h.length}msgs) → common=${common}`);
+                    
+                    if (common > bestCommon) {
+                        bestCommon = common;
+                        bestMatch = item.fileName;
+                    }
+                }
+                
+                if (bestMatch && bestCommon > 0) {
+                    const matchLen = nonOrphanContents[bestMatch]?.length || 0;
+                    
+                    // 날짜 기반으로 부모 결정
+                    const orphanDate = extractDateFromFileName(orphanFn);
+                    const matchDate = extractDateFromFileName(bestMatch);
+                    
+                    if (orphanDate && matchDate) {
+                        if (orphanDate < matchDate) {
+                            // 고아가 더 오래됨 → 고아가 부모
+                            orphanIsParent = true;
+                        } else {
+                            // 고아가 더 새로움 → 고아가 자식
+                            orphanIsParent = false;
+                        }
+                    } else {
+                        // 날짜 없으면 메시지 수 기반 (짧은 쪽이 부모)
+                        orphanIsParent = orphanLen <= matchLen;
+                    }
+                    
+                    if (orphanIsParent) {
+                        // 고아가 부모 → bestMatch의 기존 부모보다 더 상위 부모인지 확인
+                        // bestMatch가 이미 부모 없는 루트이면 고아를 부모로 설정
+                        // bestMatch의 그룹에서 루트(부모 없는) 채팅을 찾아 고아를 부모로 연결
+                        const rootChats = findGroupRoots(bestMatch, allBranches);
+                        
+                        for (const rootFn of rootChats) {
+                            const rootH = nonOrphanHashes[rootFn];
+                            if (!rootH) continue;
+                            const rootCommon = findCommonPrefixLengthFast(orphanH, rootH);
+                            
+                            if (rootCommon > 0) {
+                                console.debug(`[BranchDebug][CrossGroup] 고아 ${orphanFn}(부모) → ${rootFn}(자식) 연결, common=${rootCommon}`);
+                                
+                                allBranches[rootFn] = {
+                                    parentChat: orphanFn,
+                                    branchPoint: rootCommon,
+                                    depth: 1
+                                };
+                                branchEntries.push({
+                                    fileName: rootFn,
+                                    parentChat: orphanFn,
+                                    branchPoint: rootCommon,
+                                    depth: 1
+                                });
+                            }
+                        }
+                    } else {
+                        // 고아가 자식
+                        console.debug(`[BranchDebug][CrossGroup] 고아 ${orphanFn}(자식) → ${bestMatch}(부모) 연결, common=${bestCommon}`);
+                        
+                        allBranches[orphanFn] = {
+                            parentChat: bestMatch,
+                            branchPoint: bestCommon,
+                            depth: 1
+                        };
+                        branchEntries.push({
+                            fileName: orphanFn,
+                            parentChat: bestMatch,
+                            branchPoint: bestCommon,
+                            depth: 1
+                        });
+                    }
+                } else {
+                    console.debug(`[BranchDebug][CrossGroup] 고아 ${orphanFn} — 교차 비교에서도 매칭 없음`);
+                }
+            }
+            
+            // depth 재계산
+            calculateDepths(allBranches);
         }
         
         // branchPoint 유효성 검증 (Step 3)

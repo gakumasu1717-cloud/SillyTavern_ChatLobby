@@ -2876,6 +2876,15 @@ ${message}` : message;
       getDepth(fileName);
     }
   }
+  function findGroupRoots(fileName, branches) {
+    let root = fileName;
+    const visited = /* @__PURE__ */ new Set();
+    while (branches[root]?.parentChat && !visited.has(root)) {
+      visited.add(root);
+      root = branches[root].parentChat;
+    }
+    return [root];
+  }
   async function analyzeBranches(charAvatar, chats, onProgress = null, forceRefresh = false) {
     console.debug("[BranchAnalyzer] Starting analysis for", charAvatar, "forceRefresh:", forceRefresh, "chats:", chats.length);
     if (chats.length < 2) {
@@ -2935,6 +2944,105 @@ ${message}` : message;
         if (onProgress) {
           onProgress(0.2 + (i + 1) / Math.max(1, multiGroups.length) * 0.75);
         }
+      }
+      if (singleGroups.length > 0 && !ctx.aborted) {
+        console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 \uCC44\uD305 ${singleGroups.length}\uAC1C \uAD50\uCC28 \uBE44\uAD50 \uC2DC\uC791`);
+        const allChats = Object.entries(fingerprints).map(([fn, fp]) => ({ fileName: fn, length: fp.length }));
+        const orphanFiles = singleGroups.map((g) => g[0].fileName);
+        const orphanContents = {};
+        const orphanHashes = {};
+        for (const orphanFn of orphanFiles) {
+          if (!checkSafety(ctx)) break;
+          const content = await loadChatContent(charAvatar, orphanFn, ctx);
+          if (content && content.length >= 2) {
+            orphanContents[orphanFn] = content;
+            orphanHashes[orphanFn] = content.map((msg) => hashMessageFast(msg));
+          }
+        }
+        const nonOrphanFiles = allChats.filter((c) => !orphanFiles.includes(c.fileName));
+        const nonOrphanContents = {};
+        const nonOrphanHashes = {};
+        for (const item of nonOrphanFiles) {
+          if (!checkSafety(ctx)) break;
+          const content = await loadChatContent(charAvatar, item.fileName, ctx);
+          if (content && content.length >= 2) {
+            nonOrphanContents[item.fileName] = content;
+            nonOrphanHashes[item.fileName] = content.map((msg) => hashMessageFast(msg));
+          }
+        }
+        for (const orphanFn of orphanFiles) {
+          if (!checkSafety(ctx)) break;
+          if (!orphanHashes[orphanFn]) continue;
+          if (allBranches[orphanFn]) continue;
+          const orphanH = orphanHashes[orphanFn];
+          const orphanLen = orphanContents[orphanFn].length;
+          let bestMatch = null;
+          let bestCommon = 0;
+          let orphanIsParent = false;
+          for (const item of nonOrphanFiles) {
+            const h = nonOrphanHashes[item.fileName];
+            if (!h) continue;
+            const common = findCommonPrefixLengthFast(orphanH, h);
+            if (common === 0) continue;
+            console.debug(`[BranchDebug][CrossGroup] ${orphanFn}(${orphanLen}msgs) vs ${item.fileName}(${h.length}msgs) \u2192 common=${common}`);
+            if (common > bestCommon) {
+              bestCommon = common;
+              bestMatch = item.fileName;
+            }
+          }
+          if (bestMatch && bestCommon > 0) {
+            const matchLen = nonOrphanContents[bestMatch]?.length || 0;
+            const orphanDate = extractDateFromFileName(orphanFn);
+            const matchDate = extractDateFromFileName(bestMatch);
+            if (orphanDate && matchDate) {
+              if (orphanDate < matchDate) {
+                orphanIsParent = true;
+              } else {
+                orphanIsParent = false;
+              }
+            } else {
+              orphanIsParent = orphanLen <= matchLen;
+            }
+            if (orphanIsParent) {
+              const rootChats = findGroupRoots(bestMatch, allBranches);
+              for (const rootFn of rootChats) {
+                const rootH = nonOrphanHashes[rootFn];
+                if (!rootH) continue;
+                const rootCommon = findCommonPrefixLengthFast(orphanH, rootH);
+                if (rootCommon > 0) {
+                  console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 ${orphanFn}(\uBD80\uBAA8) \u2192 ${rootFn}(\uC790\uC2DD) \uC5F0\uACB0, common=${rootCommon}`);
+                  allBranches[rootFn] = {
+                    parentChat: orphanFn,
+                    branchPoint: rootCommon,
+                    depth: 1
+                  };
+                  branchEntries.push({
+                    fileName: rootFn,
+                    parentChat: orphanFn,
+                    branchPoint: rootCommon,
+                    depth: 1
+                  });
+                }
+              }
+            } else {
+              console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 ${orphanFn}(\uC790\uC2DD) \u2192 ${bestMatch}(\uBD80\uBAA8) \uC5F0\uACB0, common=${bestCommon}`);
+              allBranches[orphanFn] = {
+                parentChat: bestMatch,
+                branchPoint: bestCommon,
+                depth: 1
+              };
+              branchEntries.push({
+                fileName: orphanFn,
+                parentChat: bestMatch,
+                branchPoint: bestCommon,
+                depth: 1
+              });
+            }
+          } else {
+            console.debug(`[BranchDebug][CrossGroup] \uACE0\uC544 ${orphanFn} \u2014 \uAD50\uCC28 \uBE44\uAD50\uC5D0\uC11C\uB3C4 \uB9E4\uCE6D \uC5C6\uC74C`);
+          }
+        }
+        calculateDepths(allBranches);
       }
       for (const [fileName, info] of Object.entries(allBranches)) {
         const parentFp = fingerprints[info.parentChat];
