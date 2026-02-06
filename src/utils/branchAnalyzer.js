@@ -15,7 +15,7 @@ import {
 const SAFETY = {
     TIMEOUT_MS: 30000,    // 전체 분석 30초 제한
     MAX_API_CALLS: 200,   // API 호출 최대 200회
-    MAX_ERRORS: 5,        // 연속 에러 5회시 중단
+    MAX_ERRORS: 15,       // 누적 에러 15회시 중단 (batch 5개 동시 실패 고려)
     REQUEST_TIMEOUT_MS: 10000,  // 개별 fetch 요청 10초 제한
 };
 
@@ -183,8 +183,12 @@ async function loadChatContent(charAvatar, fileName, ctx = null) {
         chatContentCache.set(cacheKey, content);
         return content;
     } catch (e) {
-        console.error('[BranchAnalyzer] Failed to load chat:', fileName, e);
-        if (ctx) ctx.errorCount++;
+        const reason = e.name === 'AbortError' ? 'TIMEOUT' : e.message || e;
+        console.error(`[BranchAnalyzer] Failed to load chat: ${fileName} (${reason})`);
+        if (ctx) {
+            ctx.errorCount++;
+            console.warn(`[BranchAnalyzer] Error count: ${ctx.errorCount}/${SAFETY.MAX_ERRORS}`);
+        }
         return null;
     }
 }
