@@ -46,9 +46,16 @@ const preloadedUrls = new Set();
 function getCurrentItems() {
     if (state.mode === 'favorites') return state.favorites;
     if (state.mode === 'recent') {
-        const usage = storage.getPersonaRecentUsage();
-        return [...state.allPersonas].sort((a, b) => 
-            (usage[b.key] || 0) - (usage[a.key] || 0));
+        const queue = storage.getPersonaRecentUsage();
+        return [...state.allPersonas].sort((a, b) => {
+            const ai = queue.indexOf(a.key);
+            const bi = queue.indexOf(b.key);
+            // 사용 기록 없으면(-1) 뒤로
+            if (ai === -1 && bi === -1) return 0;
+            if (ai === -1) return 1;
+            if (bi === -1) return -1;
+            return ai - bi; // 인덱스 작을수록(=최근) 앞으로
+        });
     }
     return state.allPersonas;
 }

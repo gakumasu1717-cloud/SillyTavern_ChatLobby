@@ -23,7 +23,7 @@ const DEFAULT_DATA = {
     autoFavoriteRules: {
         recentDays: 0,
     },
-    personaRecentUsage: {}  // { [personaKey]: timestamp(number) } - 최근 사용순 정렬용
+    personaRecentUsage: []  // [personaKey, ...] - 최근 사용순 (앞=최근, LRU 큐)
 };
 
 /**
@@ -148,10 +148,14 @@ class StorageManager {
         
         // 4. personaRecentUsage 크기 제한 (최대 200개)
         if (data.personaRecentUsage) {
-            const entries = Object.entries(data.personaRecentUsage);
-            if (entries.length > 200) {
-                entries.sort((a, b) => b[1] - a[1]); // 최신순
-                data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
+            // 마이그레이션: 구 Object 형식 → 신 Array(LRU) 형식
+            if (!Array.isArray(data.personaRecentUsage)) {
+                const entries = Object.entries(data.personaRecentUsage);
+                entries.sort((a, b) => b[1] - a[1]);
+                data.personaRecentUsage = entries.map(([key]) => key);
+            }
+            if (data.personaRecentUsage.length > 200) {
+                data.personaRecentUsage = data.personaRecentUsage.slice(0, 200);
                 console.debug(`[Storage] Cleaned personaRecentUsage`);
             }
         }
@@ -541,39 +545,41 @@ class StorageManager {
     // ============================================
     
     /**
-     * 페르소나 사용 기록 저장
+     * 페르소나 사용 기록 저장 (LRU 큐)
+     * 이미 있으면 제거 후 맨 앞에 추가, 최대 200개 유지
      * @param {string} personaKey - 페르소나 키
      */
     recordPersonaUsage(personaKey) {
+        if (!personaKey) return;
         this.update((data) => {
-            if (!data.personaRecentUsage) data.personaRecentUsage = {};
-            data.personaRecentUsage[personaKey] = Date.now();
-            
-            // 무한 증가 방지: 최대 200개 유지
-            const entries = Object.entries(data.personaRecentUsage);
-            if (entries.length > 200) {
-                entries.sort((a, b) => b[1] - a[1]); // 최신순
-                data.personaRecentUsage = Object.fromEntries(entries.slice(0, 200));
+            if (!Array.isArray(data.personaRecentUsage)) data.personaRecentUsage = [];
+            const idx = data.personaRecentUsage.indexOf(personaKey);
+            if (idx !== -1) data.personaRecentUsage.splice(idx, 1);
+            data.personaRecentUsage.unshift(personaKey);
+            if (data.personaRecentUsage.length > 200) {
+                data.personaRecentUsage.length = 200;
             }
         });
     }
     
     /**
-     * 특정 페르소나의 마지막 사용 시간 반환
+     * 특정 페르소나의 최근 사용 순위 반환
      * @param {string} personaKey - 페르소나 키
-     * @returns {number} timestamp (없으면 0)
+     * @returns {number} 순위 인덱스 (0=가장 최근, 없으면 -1)
      */
     getPersonaLastUsed(personaKey) {
-        const data = this.load();
-        return (data.personaRecentUsage || {})[personaKey] || 0;
+        if (!personaKey) return -1;
+        const queue = this.load().personaRecentUsage || [];
+        return Array.isArray(queue) ? queue.indexOf(personaKey) : -1;
     }
     
     /**
-     * 전체 사용 기록 반환 (정렬용)
-     * @returns {Object<string, number>}
+     * 최근 사용 순서 배열 반환 (앞=최근)
+     * @returns {string[]}
      */
     getPersonaRecentUsage() {
-        return this.load().personaRecentUsage || {};
+        const queue = this.load().personaRecentUsage || [];
+        return Array.isArray(queue) ? queue : [];
     }
 }
 
