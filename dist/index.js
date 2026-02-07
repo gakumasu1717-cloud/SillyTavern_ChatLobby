@@ -4439,8 +4439,10 @@ ${message}` : message;
     }
   }
   function closeLobbyKeepState() {
+    const overlay = document.getElementById("chat-lobby-overlay");
     const container = document.getElementById("chat-lobby-container");
     const fab = document.getElementById("chat-lobby-fab");
+    if (overlay) overlay.style.display = "none";
     if (container) container.style.display = "none";
     if (fab) fab.style.display = "flex";
     const sidebarBtn = document.getElementById("st-chatlobby-sidebar-btn");
@@ -8573,10 +8575,11 @@ ${message}` : message;
   // src/integration/customTheme.js
   init_config();
   var hamburgerObserver = null;
+  var captureClickHandler = null;
   function initCustomThemeIntegration(openLobbyFn) {
     if (window._chatLobbyCustomThemeInit) return true;
     window._chatLobbyCustomThemeInit = true;
-    document.addEventListener("click", (e) => {
+    captureClickHandler = (e) => {
       const customTavernBtn = e.target.closest('[data-drawer-id="st-chatlobby-sidebar-btn"]');
       if (customTavernBtn) {
         e.preventDefault();
@@ -8584,7 +8587,8 @@ ${message}` : message;
         openLobbyFn();
         return;
       }
-    }, true);
+    };
+    document.addEventListener("click", captureClickHandler, true);
     const addSidebarButton = () => {
       const container = document.getElementById("st-sidebar-top-container");
       if (!container) return false;
@@ -8652,6 +8656,17 @@ ${message}` : message;
     }
     setupHamburgerObserver();
     return true;
+  }
+  function cleanupCustomThemeIntegration() {
+    if (captureClickHandler) {
+      document.removeEventListener("click", captureClickHandler, true);
+      captureClickHandler = null;
+    }
+    if (hamburgerObserver) {
+      hamburgerObserver.disconnect();
+      hamburgerObserver = null;
+    }
+    window._chatLobbyCustomThemeInit = false;
   }
 
   // src/index.js
@@ -9165,7 +9180,7 @@ ${message}` : message;
       console.info("[ChatLobby] \u{1F9F9} Cleanup started");
       cleanupSillyTavernEvents();
       cleanupEventDelegation();
-      cleanupIntegration();
+      cleanupCustomThemeIntegration();
       cleanupTooltip();
       cleanupPersonaRadialMenu();
       intervalManager.clearAll();
@@ -9294,7 +9309,7 @@ ${message}` : message;
     async function handleAction(action, el, e) {
       switch (action) {
         case "open-lobby":
-          openLobby();
+          await openLobby();
           break;
         case "close-lobby":
           await closeLobby2();
@@ -9306,16 +9321,16 @@ ${message}` : message;
           closeStatsView();
           break;
         case "refresh":
-          handleRefresh();
+          await handleRefresh();
           break;
         case "new-chat":
-          startNewChat();
+          await startNewChat();
           break;
         case "delete-char":
-          deleteCharacter();
+          await deleteCharacter();
           break;
         case "add-persona":
-          handleAddPersona();
+          await handleAddPersona();
           break;
         case "import-char":
           handleImportCharacter();
@@ -9339,7 +9354,7 @@ ${message}` : message;
           closeChatPanel();
           break;
         case "go-to-character":
-          handleGoToCharacter();
+          await handleGoToCharacter();
           break;
         case "toggle-collapse":
           toggleCollapse();
@@ -9348,7 +9363,7 @@ ${message}` : message;
           toggleTheme();
           break;
         case "random-char":
-          handleRandomCharacter();
+          await handleRandomCharacter();
           break;
         case "toggle-header-menu":
           toggleHeaderMenu();
@@ -9369,10 +9384,10 @@ ${message}` : message;
           closeDebugModal();
           break;
         case "switch-persona":
-          handleSwitchPersona(el);
+          await handleSwitchPersona(el);
           break;
         case "refresh-branches":
-          handleRefreshBranches();
+          await handleRefreshBranches();
           break;
       }
     }
@@ -9520,7 +9535,7 @@ ${message}` : message;
             index: randomIndex,
             avatar: randomChar.avatar,
             name: randomChar.name,
-            avatarSrc: `/characters/${randomChar.avatar}`
+            avatarSrc: `/characters/${encodeURIComponent(randomChar.avatar)}`
           });
         }
       }

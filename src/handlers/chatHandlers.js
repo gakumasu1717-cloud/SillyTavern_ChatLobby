@@ -536,9 +536,11 @@ export async function deleteCharacter() {
  * - store.reset()을 호출하지 않음
  */
 function closeLobbyKeepState() {
+    const overlay = document.getElementById('chat-lobby-overlay');
     const container = document.getElementById('chat-lobby-container');
     const fab = document.getElementById('chat-lobby-fab');
     
+    if (overlay) overlay.style.display = 'none';
     if (container) container.style.display = 'none';
     if (fab) fab.style.display = 'flex';
     

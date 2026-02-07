@@ -7,6 +7,7 @@ import { CONFIG } from '../config.js';
 
 // MutationObserver 참조 (cleanup용)
 let hamburgerObserver = null;
+let captureClickHandler = null;
 
 /**
  * CustomTheme 사이드바/햄버거 메뉴에 Chat Lobby 버튼 추가
@@ -21,7 +22,7 @@ export function initCustomThemeIntegration(openLobbyFn) {
     window._chatLobbyCustomThemeInit = true;
     
     // Custom Tavern 이벤트 위임 (document에서 캡처)
-    document.addEventListener('click', (e) => {
+    captureClickHandler = (e) => {
         const customTavernBtn = e.target.closest('[data-drawer-id="st-chatlobby-sidebar-btn"]');
         if (customTavernBtn) {
             e.preventDefault();
@@ -29,7 +30,8 @@ export function initCustomThemeIntegration(openLobbyFn) {
             openLobbyFn();
             return;
         }
-    }, true); // capture phase
+    };
+    document.addEventListener('click', captureClickHandler, true);
     
     // 1. 사이드바 버튼 추가 (PC) - CustomTheme drawer 구조 사용
     const addSidebarButton = () => {
@@ -125,6 +127,12 @@ export function initCustomThemeIntegration(openLobbyFn) {
  * 통합 UI 정리 (MutationObserver 등)
  */
 export function cleanupCustomThemeIntegration() {
+    // capture-phase 리스너 정리
+    if (captureClickHandler) {
+        document.removeEventListener('click', captureClickHandler, true);
+        captureClickHandler = null;
+    }
+    
     // MutationObserver 정리
     if (hamburgerObserver) {
         hamburgerObserver.disconnect();

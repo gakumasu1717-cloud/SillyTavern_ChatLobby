@@ -838,7 +838,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         
         cleanupSillyTavernEvents();
         cleanupEventDelegation();
-        cleanupIntegration();
+        cleanupCustomThemeIntegration();
         cleanupTooltip();
         cleanupPersonaRadialMenu();
         intervalManager.clearAll();
@@ -1059,7 +1059,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
     async function handleAction(action, el, e) {
         switch (action) {
             case 'open-lobby':
-                openLobby();
+                await openLobby();
                 break;
             case 'close-lobby':
                 await closeLobby();
@@ -1071,16 +1071,16 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 closeStatsView();
                 break;
             case 'refresh':
-                handleRefresh();
+                await handleRefresh();
                 break;
             case 'new-chat':
-                startNewChat();
+                await startNewChat();
                 break;
             case 'delete-char':
-                deleteCharacter();
+                await deleteCharacter();
                 break;
             case 'add-persona':
-                handleAddPersona();
+                await handleAddPersona();
                 break;
             case 'import-char':
                 handleImportCharacter();
@@ -1105,7 +1105,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 closeChatPanel();
                 break;
             case 'go-to-character':
-                handleGoToCharacter();
+                await handleGoToCharacter();
                 break;
             case 'toggle-collapse':
                 toggleCollapse();
@@ -1114,7 +1114,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 toggleTheme();
                 break;
             case 'random-char':
-                handleRandomCharacter();
+                await handleRandomCharacter();
                 break;
             case 'toggle-header-menu':
                 toggleHeaderMenu();
@@ -1135,10 +1135,10 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                 closeDebugModal();
                 break;
             case 'switch-persona':
-                handleSwitchPersona(el);
+                await handleSwitchPersona(el);
                 break;
             case 'refresh-branches':
-                handleRefreshBranches();
+                await handleRefreshBranches();
                 break;
         }
     }
@@ -1370,7 +1370,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
                     index: randomIndex,
                     avatar: randomChar.avatar,
                     name: randomChar.name,
-                    avatarSrc: `/characters/${randomChar.avatar}`
+                    avatarSrc: `/characters/${encodeURIComponent(randomChar.avatar)}`
                 });
             }
         }
