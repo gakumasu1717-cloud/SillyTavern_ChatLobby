@@ -461,7 +461,7 @@ export async function deleteCharacter() {
     try {
         // 로비 데이터 먼저 정리
         const data = storage.load();
-        const prefix = char.avatar + '_';
+        const prefix = char.avatar + '::';
         
         Object.keys(data.chatAssignments).forEach(key => {
             if (key.startsWith(prefix)) {

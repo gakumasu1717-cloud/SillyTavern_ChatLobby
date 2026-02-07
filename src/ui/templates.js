@@ -4,6 +4,7 @@
 
 import { storage } from '../data/storage.js';
 import { createTabBarHTML } from './tabView.js';
+import { escapeHtml } from '../utils/textUtils.js';
 
 // 메인 로비 HTML - 넷플릭스 스타일
 export function createLobbyHTML() {
@@ -160,7 +161,7 @@ export function getFoldersOptionsHTML(selectedValue = 'all') {
     sorted.forEach(f => {
         if (f.id !== 'favorites') {
             const selected = f.id === selectedValue ? 'selected' : '';
-            html += `<option value="${f.id}" ${selected}>${f.name}</option>`;
+            html += `<option value="${f.id}" ${selected}>${escapeHtml(f.name)}</option>`;
         }
     });
     
@@ -175,7 +176,7 @@ export function getBatchFoldersHTML() {
     let html = '<option value="">이동할 폴더...</option>';
     sorted.forEach(f => {
         if (f.id !== 'favorites') {
-            html += `<option value="${f.id}">${f.name}</option>`;
+            html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
         }
     });
     

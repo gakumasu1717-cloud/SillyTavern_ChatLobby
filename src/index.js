@@ -641,9 +641,11 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
      * - ESC 키, 닫기 버튼, 오버레이 클릭 시 사용
      */
     async function closeLobby() {
+        const overlay = document.getElementById('chat-lobby-overlay');
         const container = document.getElementById('chat-lobby-container');
         const fab = document.getElementById('chat-lobby-fab');
         
+        if (overlay) overlay.style.display = 'none';
         if (container) container.style.display = 'none';
         if (fab) fab.style.display = 'flex';
         
@@ -1043,7 +1045,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         // data-action 속성으로 액션 분기
         const actionEl = target.closest('[data-action]');
         if (actionEl) {
-            handleAction(actionEl.dataset.action, actionEl, e);
+            handleAction(actionEl.dataset.action, actionEl, e).catch(err => console.error('[ChatLobby] Action error:', err));
             return;
         }
     }
@@ -1587,10 +1589,12 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
     /**
      * 옵션 메뉴에 Chat Lobby 버튼 추가
      */
-    function addLobbyToOptionsMenu() {
+    function addLobbyToOptionsMenu(retries = 0) {
         const optionsMenu = document.getElementById('options');
         if (!optionsMenu) {
-            setTimeout(addLobbyToOptionsMenu, CONFIG.timing.initDelay);
+            if (retries < 50) {
+                setTimeout(() => addLobbyToOptionsMenu(retries + 1), CONFIG.timing.initDelay);
+            }
             return;
         }
         

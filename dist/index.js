@@ -4395,7 +4395,7 @@ ${message}` : message;
     }
     try {
       const data = storage.load();
-      const prefix = char.avatar + "_";
+      const prefix = char.avatar + "::";
       Object.keys(data.chatAssignments).forEach((key) => {
         if (key.startsWith(prefix)) {
           delete data.chatAssignments[key];
@@ -5595,6 +5595,7 @@ ${message}` : message;
   }
 
   // src/ui/templates.js
+  init_textUtils();
   function createLobbyHTML() {
     const savedTheme = localStorage.getItem("chatlobby-theme") || "dark";
     const isCollapsed = localStorage.getItem("chatlobby-collapsed") === "true";
@@ -5743,7 +5744,7 @@ ${message}` : message;
     sorted.forEach((f) => {
       if (f.id !== "favorites") {
         const selected = f.id === selectedValue ? "selected" : "";
-        html += `<option value="${f.id}" ${selected}>${f.name}</option>`;
+        html += `<option value="${f.id}" ${selected}>${escapeHtml(f.name)}</option>`;
       }
     });
     return html;
@@ -5754,7 +5755,7 @@ ${message}` : message;
     let html = '<option value="">\uC774\uB3D9\uD560 \uD3F4\uB354...</option>';
     sorted.forEach((f) => {
       if (f.id !== "favorites") {
-        html += `<option value="${f.id}">${f.name}</option>`;
+        html += `<option value="${f.id}">${escapeHtml(f.name)}</option>`;
       }
     });
     return html;
@@ -9030,8 +9031,10 @@ ${message}` : message;
       }
     }
     async function closeLobby2() {
+      const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
+      if (overlay) overlay.style.display = "none";
       if (container) container.style.display = "none";
       if (fab) fab.style.display = "flex";
       if (chatChangedCooldownTimer) {
@@ -9284,7 +9287,7 @@ ${message}` : message;
       }
       const actionEl = target.closest("[data-action]");
       if (actionEl) {
-        handleAction(actionEl.dataset.action, actionEl, e);
+        handleAction(actionEl.dataset.action, actionEl, e).catch((err) => console.error("[ChatLobby] Action error:", err));
         return;
       }
     }
@@ -9649,10 +9652,12 @@ ${message}` : message;
         if (rightNavIcon) rightNavIcon.click();
       }
     }
-    function addLobbyToOptionsMenu() {
+    function addLobbyToOptionsMenu(retries = 0) {
       const optionsMenu = document.getElementById("options");
       if (!optionsMenu) {
-        setTimeout(addLobbyToOptionsMenu, CONFIG.timing.initDelay);
+        if (retries < 50) {
+          setTimeout(() => addLobbyToOptionsMenu(retries + 1), CONFIG.timing.initDelay);
+        }
         return;
       }
       if (document.getElementById("option_chat_lobby")) return;
