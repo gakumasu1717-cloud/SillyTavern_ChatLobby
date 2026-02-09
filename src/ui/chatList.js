@@ -437,7 +437,7 @@ function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
     
     // 브랜치 모드면 분석 버튼 추가 또는 자동 분석
     let branchAnalyzeBtn = '';
-    if (sortOption === 'branch') {
+    if (sortOption === 'branch' && chatArray.length >= 2) {
         const needsAnalysis = needsBranchAnalysis(charAvatar, chatArray);
         if (needsAnalysis && !skipAutoAnalyze) {
             // 새 채팅이 적으면 자동 분석, 많으면 버튼 표시
@@ -512,10 +512,10 @@ function bindBranchAnalyzeEvents(container, charAvatar, chats) {
             const analyzeBar = container.querySelector('.branch-analyze-bar');
             if (analyzeBar) analyzeBar.remove();
             
-            // 현재 캐릭터 채팅 목록 다시 렌더링
+            // 현재 캐릭터 채팅 목록 다시 렌더링 (skipAutoAnalyze=true로 재귀 방지)
             const cachedChats = cache.get('chats', charAvatar);
             if (cachedChats) {
-                renderChats(container, cachedChats, charAvatar);
+                renderChats(container, cachedChats, charAvatar, true);
             }
         } catch (e) {
             console.error('[BranchAnalyze] Error:', e);

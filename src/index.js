@@ -1322,8 +1322,8 @@ import { operationLock } from './utils/operationLock.js';
             
             // 채팅 목록 가져오기
             const chats = await api.fetchChatsForCharacter(charAvatar, true);  // 🔥 강제 새로고침
-            if (!chats || chats.length === 0) {
-                showToast('채팅이 없습니다', 'warning');
+            if (!chats || chats.length < 2) {
+                showToast('분기 분석에는 2개 이상의 채팅이 필요합니다', 'warning');
                 return;
             }
             

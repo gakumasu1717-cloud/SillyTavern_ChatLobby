@@ -3275,7 +3275,7 @@ ${message}` : message;
       return;
     }
     let branchAnalyzeBtn = "";
-    if (sortOption === "branch") {
+    if (sortOption === "branch" && chatArray.length >= 2) {
       const needsAnalysis = needsBranchAnalysis(charAvatar, chatArray);
       if (needsAnalysis && !skipAutoAnalyze) {
         const newCount = countNewChatsForAnalysis(charAvatar, chatArray);
@@ -3327,7 +3327,7 @@ ${message}` : message;
         if (analyzeBar) analyzeBar.remove();
         const cachedChats = cache.get("chats", charAvatar);
         if (cachedChats) {
-          renderChats(container, cachedChats, charAvatar);
+          renderChats(container, cachedChats, charAvatar, true);
         }
       } catch (e) {
         console.error("[BranchAnalyze] Error:", e);
@@ -9539,8 +9539,8 @@ ${message}` : message;
         showToast("\uBD84\uAE30 \uBD84\uC11D \uC911...", "info");
         clearCharacterCache(charAvatar);
         const chats = await api.fetchChatsForCharacter(charAvatar, true);
-        if (!chats || chats.length === 0) {
-          showToast("\uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4", "warning");
+        if (!chats || chats.length < 2) {
+          showToast("\uBD84\uAE30 \uBD84\uC11D\uC5D0\uB294 2\uAC1C \uC774\uC0C1\uC758 \uCC44\uD305\uC774 \uD544\uC694\uD569\uB2C8\uB2E4", "warning");
           return;
         }
         const branches = await analyzeBranches(charAvatar, chats, null, true);
