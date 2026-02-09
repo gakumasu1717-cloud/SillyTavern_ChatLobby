@@ -36,6 +36,10 @@ export function debounce(func, wait = CONFIG.ui.debounceWait) {
     };
 }
 
+// 전역 클릭 쿨다운 (모든 채팅/캐릭터 아이템 공유)
+let globalLastClickTime = 0;
+const GLOBAL_CLICK_COOLDOWN = 500;
+
 /**
  * 터치/클릭 통합 핸들러 생성
  * 모바일에서 터치 이벤트와 클릭 이벤트 중복 방지
@@ -66,7 +70,12 @@ export function createTouchClickHandler(element, handler, options = {}) {
     const wrappedHandler = (e, source) => {
         const now = Date.now();
         
-        // 중복 실행 방지 (300ms 내 중복 무시 - 빠른 클릭 방지)
+        // 전역 쿨다운 체크 (다른 요소의 핸들러도 포함)
+        if (now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) {
+            return;
+        }
+        
+        // 요소별 중복 실행 방지 (300ms 내 중복 무시 - 빠른 클릭 방지)
         if (now - lastHandleTime < 300) {
             return;
         }
@@ -75,6 +84,7 @@ export function createTouchClickHandler(element, handler, options = {}) {
             return;
         }
         
+        globalLastClickTime = now;
         lastHandleTime = now;
         
         if (preventDefault) e.preventDefault();

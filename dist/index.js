@@ -2231,6 +2231,54 @@ ${message}` : message;
   init_textUtils();
   init_notifications();
 
+  // src/utils/operationLock.js
+  var OperationLock = class {
+    constructor() {
+      this._locked = false;
+      this._currentOp = null;
+      this._safetyTimer = null;
+    }
+    /** 현재 잠금 상태 */
+    get isLocked() {
+      return this._locked;
+    }
+    /** 현재 실행 중인 작업명 */
+    get currentOp() {
+      return this._currentOp;
+    }
+    /**
+     * Lock 획득 시도
+     * @param {string} opName - 작업 이름 (디버그용)
+     * @param {number} timeout - 안전 해제 타임아웃 (ms)
+     * @returns {boolean} - 획득 성공 여부
+     */
+    acquire(opName, timeout = 8e3) {
+      if (this._locked) {
+        console.warn(`[OperationLock] Blocked: "${opName}" (running: "${this._currentOp}")`);
+        return false;
+      }
+      this._locked = true;
+      this._currentOp = opName;
+      this._safetyTimer = setTimeout(() => {
+        console.warn(`[OperationLock] Safety release: "${opName}" timed out (${timeout}ms)`);
+        this.release();
+      }, timeout);
+      return true;
+    }
+    /**
+     * Lock 해제
+     */
+    release() {
+      this._locked = false;
+      this._currentOp = null;
+      if (this._safetyTimer) {
+        clearTimeout(this._safetyTimer);
+        this._safetyTimer = null;
+      }
+    }
+  };
+  var operationLock = new OperationLock();
+
   // src/ui/chatList.js
   init_textUtils();
 
@@ -2299,6 +2347,8 @@ ${message}` : message;
       timeout = setTimeout(later, wait);
     };
   }
+  var globalLastClickTime = 0;
+  var GLOBAL_CLICK_COOLDOWN = 500;
   function createTouchClickHandler(element, handler, options = {}) {
     const {
       preventDefault = true,
@@ -2313,12 +2363,16 @@ ${message}` : message;
     let lastHandleTime = 0;
     const wrappedHandler = (e, source) => {
       const now = Date.now();
+      if (now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) {
+        return;
+      }
       if (now - lastHandleTime < 300) {
         return;
       }
       if (isScrolling) {
         return;
       }
+      globalLastClickTime = now;
       lastHandleTime = now;
       if (preventDefault) e.preventDefault();
       if (stopPropagation) e.stopPropagation();
@@ -2967,7 +3021,6 @@ ${message}` : message;
   }
 
   // src/ui/chatList.js
-  var isOpeningGroupChat = false;
   var tooltipElement = null;
   var tooltipTimeout = null;
   var currentTooltipTarget = null;
@@ -3138,8 +3191,8 @@ ${message}` : message;
     console.debug("[ChatList] chatsPanel:", !!chatsPanel, "chatsList:", !!chatsList);
     console.debug("[ChatList] currentCharacter:", store.currentCharacter?.avatar);
     console.debug("[ChatList] panelVisible:", chatsPanel?.classList.contains("visible"));
-    if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains("visible")) {
-      console.debug("[ChatList] Skipping - same character already visible");
+    if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains("visible") && cache.isValid("chats", character.avatar)) {
+      console.debug("[ChatList] Skipping - same character already visible with valid cache");
       return;
     }
     store.setCurrentCharacter(character);
@@ -3189,7 +3242,7 @@ ${message}` : message;
         `;
     }
   }
-  function renderChats(container, rawChats, charAvatar) {
+  function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
     let chatArray = normalizeChats(rawChats);
     chatArray = filterValidChats(chatArray);
     const totalChatCount = chatArray.length;
@@ -3224,7 +3277,7 @@ ${message}` : message;
     let branchAnalyzeBtn = "";
     if (sortOption === "branch") {
       const needsAnalysis = needsBranchAnalysis(charAvatar, chatArray);
-      if (needsAnalysis) {
+      if (needsAnalysis && !skipAutoAnalyze) {
         const newCount = countNewChatsForAnalysis(charAvatar, chatArray);
         if (newCount > 0 && newCount <= 3) {
           setTimeout(() => {
@@ -3301,7 +3354,7 @@ ${message}` : message;
       await analyzeBranches(charAvatar, chats);
       const cachedChats = cache.get("chats", charAvatar);
       if (cachedChats) {
-        renderChats(container, cachedChats, charAvatar);
+        renderChats(container, cachedChats, charAvatar, true);
       }
     } catch (e) {
       console.error("[AutoBranchAnalyze] Error:", e);
@@ -3979,11 +4032,7 @@ ${message}` : message;
         }, { debugName: `group-fav-${index}` });
       }
       createTouchClickHandler(chatContent, async () => {
-        if (isOpeningGroupChat) {
-          console.debug("[ChatList] Already opening group chat, ignoring...");
-          return;
-        }
-        isOpeningGroupChat = true;
+        if (!operationLock.acquire("openGroupChat")) return;
         try {
           console.debug("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
           const context = api.getContext();
@@ -4052,7 +4101,7 @@ ${message}` : message;
           console.error("[ChatList] Failed to open group chat:", error);
           showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
         } finally {
-          isOpeningGroupChat = false;
+          operationLock.release();
         }
       }, { preventDefault: true, stopPropagation: true, debugName: `group-chat-${index}` });
       if (delBtn) {
@@ -4111,14 +4160,8 @@ ${message}` : message;
   // src/handlers/chatHandlers.js
   init_notifications();
   init_config();
-  var isOpeningChat = false;
-  var isStartingNewChat = false;
   async function openChat(chatInfo) {
-    if (isOpeningChat) {
-      console.debug("[ChatHandlers] Already opening a chat, ignoring...");
-      return;
-    }
-    isOpeningChat = true;
+    if (!operationLock.acquire("openChat")) return;
     const { fileName, charAvatar, charIndex } = chatInfo;
     console.debug("[ChatHandlers] openChat called:", { fileName, charAvatar, charIndex });
     try {
@@ -4162,7 +4205,7 @@ ${message}` : message;
       console.error("[ChatHandlers] Failed to open chat:", error);
       showToast("\uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
     } finally {
-      isOpeningChat = false;
+      operationLock.release();
     }
   }
   async function openChatByFileName(fileName) {
@@ -4284,11 +4327,7 @@ ${message}` : message;
     }
   }
   async function startNewChat() {
-    if (isStartingNewChat) {
-      console.debug("[ChatHandlers] Already starting new chat, ignoring...");
-      return;
-    }
-    isStartingNewChat = true;
+    if (!operationLock.acquire("startNewChat")) return;
     try {
       const btn = document.getElementById("chat-lobby-new-chat");
       const isGroup = btn?.dataset.isGroup === "true";
@@ -4298,7 +4337,7 @@ ${message}` : message;
         await startNewCharacterChat(btn);
       }
     } finally {
-      isStartingNewChat = false;
+      operationLock.release();
     }
   }
   async function startNewCharacterChat(btn) {
@@ -5226,20 +5265,28 @@ ${message}` : message;
     }
   }
   async function openRecentChat(chat, idx) {
-    log("Opening recent chat:", chat.file, chat.avatar);
-    closeLobby();
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const selector = chat.isGroup ? `.recentChat[data-group="${chat.avatar}"]` : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
-    const recentEl = document.querySelector(selector);
-    if (recentEl) {
-      log("Found element via selector, clicking");
-      recentEl.click();
-    } else {
-      log("Element not found, using character select");
-      const event = new CustomEvent("lobby:select-character", {
-        detail: { avatar: chat.avatar }
-      });
-      document.dispatchEvent(event);
+    if (!operationLock.acquire("openRecentChat")) return;
+    try {
+      log("Opening recent chat:", chat.file, chat.avatar);
+      window.dispatchEvent(new CustomEvent("chatlobby:close"));
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const selector = chat.isGroup ? `.recentChat[data-group="${chat.avatar}"]` : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
+      const recentEl = document.querySelector(selector);
+      if (recentEl) {
+        log("Found element via selector, clicking");
+        recentEl.click();
+      } else {
+        log("Element not found, using character select");
+        const event = new CustomEvent("lobby:select-character", {
+          detail: { avatar: chat.avatar }
+        });
+        document.dispatchEvent(event);
+      }
+    } catch (e) {
+      logError("openRecentChat failed:", e);
+      showToast("\uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release();
     }
   }
   async function openLibraryChat(avatar, fileName) {
@@ -5260,15 +5307,6 @@ ${message}` : message;
       charAvatar: avatar,
       charIndex: String(charIndex)
     });
-  }
-  function closeLobby() {
-    const overlay = document.getElementById("chat-lobby-overlay");
-    const lobbyContainer = document.getElementById("chat-lobby-container");
-    const fab = document.getElementById("chat-lobby-fab");
-    if (overlay) overlay.style.display = "none";
-    if (lobbyContainer) lobbyContainer.style.display = "none";
-    if (fab) fab.style.display = "flex";
-    store.setLobbyOpen(false);
   }
   function closeContextMenu() {
     if (state.activeContextMenu) {
@@ -8674,6 +8712,7 @@ ${message}` : message;
   (function() {
     "use strict";
     let chatChangedCooldownTimer = null;
+    let closeLobbyHandler = null;
     let eventHandlers = null;
     let eventsRegistered = false;
     function getCurrentCharacterAvatar() {
@@ -8767,6 +8806,10 @@ ${message}` : message;
       }
       const { eventSource, eventTypes } = context;
       const onChatChanged = () => {
+        if (operationLock.isLocked) {
+          console.debug("[ChatLobby] CHAT_CHANGED ignored (operation in progress:", operationLock.currentOp, ")");
+          return;
+        }
         if (!isLobbyOpen()) {
           cache.invalidate("characters");
           cache.invalidate("chats");
@@ -8959,9 +9002,9 @@ ${message}` : message;
       if (store.isLobbyOpen) {
         return;
       }
+      stopRecentDomObserver();
       await cacheRecentChatsBeforeOpen();
       loadRecentChats();
-      stopRecentDomObserver();
       const currentCharBeforeOpen = getCurrentCharacterAvatar();
       if (currentCharBeforeOpen) {
         lastChatCache.updateNow(currentCharBeforeOpen);
@@ -9045,7 +9088,7 @@ ${message}` : message;
         }
       }
     }
-    async function closeLobby2() {
+    async function closeLobby() {
       const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
@@ -9226,6 +9269,8 @@ ${message}` : message;
         renderCharacterGrid(store.searchTerm);
       };
       window.addEventListener("chatlobby:refresh-grid", refreshGridHandler);
+      closeLobbyHandler = () => closeLobby();
+      window.addEventListener("chatlobby:close", closeLobbyHandler);
       document.addEventListener("lobby:select-character", async (e) => {
         const { avatar } = e.detail;
         if (!avatar) return;
@@ -9246,6 +9291,10 @@ ${message}` : message;
       if (refreshGridHandler) {
         window.removeEventListener("chatlobby:refresh-grid", refreshGridHandler);
         refreshGridHandler = null;
+      }
+      if (closeLobbyHandler) {
+        window.removeEventListener("chatlobby:close", closeLobbyHandler);
+        closeLobbyHandler = null;
       }
       eventsInitialized = false;
     }
@@ -9312,7 +9361,7 @@ ${message}` : message;
           await openLobby();
           break;
         case "close-lobby":
-          await closeLobby2();
+          await closeLobby();
           break;
         case "open-stats":
           openStatsView();
@@ -9411,7 +9460,7 @@ ${message}` : message;
         if (folderModal?.style.display === "flex") {
           closeFolderModal();
         } else if (store.isLobbyOpen) {
-          closeLobby2();
+          closeLobby();
         }
       }
       if (e.key === "Enter" && e.target.id === "new-folder-name") {
@@ -9626,7 +9675,7 @@ ${message}` : message;
         console.error("[ChatLobby] Character not found:", character.avatar);
         return;
       }
-      closeLobby2();
+      closeLobby();
       const isAlreadySelected = context.characterId === index;
       if (!isAlreadySelected) {
         await api.selectCharacterById(index);
@@ -9650,7 +9699,7 @@ ${message}` : message;
         console.warn("[ChatLobby] No group selected");
         return;
       }
-      closeLobby2();
+      closeLobby();
       const groupItem = document.querySelector(`.group_select[data-grid="${group.id}"]`);
       if (groupItem) {
         if (window.$) {

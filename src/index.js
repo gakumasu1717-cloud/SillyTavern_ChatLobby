@@ -28,12 +28,14 @@ import { initCustomThemeIntegration, cleanupCustomThemeIntegration } from './int
 import { escapeHtml } from './utils/textUtils.js';
 import { analyzeBranches } from './utils/branchAnalyzer.js';
 import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
+import { operationLock } from './utils/operationLock.js';
 
 (function() {
     'use strict';
     
     // CHAT_CHANGED cooldown 타이머 (모듈 스코프)
     let chatChangedCooldownTimer = null;
+    let closeLobbyHandler = null;
     
     // ============================================
     // 이벤트 핸들러 참조 저장 (cleanup용)
@@ -212,6 +214,12 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         
         // CHAT_CHANGED cooldown 패턴 (마지막 이벤트 후 500ms 대기)
         const onChatChanged = () => {
+            // 채팅 열기 작업 중이면 무시 (우리가 트리거한 CHAT_CHANGED)
+            if (operationLock.isLocked) {
+                console.debug('[ChatLobby] CHAT_CHANGED ignored (operation in progress:', operationLock.currentOp, ')');
+                return;
+            }
+            
             // 로비 안 열려있으면 캐시만 무효화
             if (!isLobbyOpen()) {
                 cache.invalidate('characters');
@@ -504,14 +512,14 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
             return;
         }
         
+        // 🔥 DOM 감시 중지 (로비 열림) - 캐싱 전에 먼저!
+        stopRecentDomObserver();
+        
         // 🔥 최근 채팅 DOM 캐싱 (로비가 열리기 전에!)
         await cacheRecentChatsBeforeOpen();
         
         // 🔥 캐싱 완료 후 바로 state.recentChats에 반영
         loadRecentChats();
-        
-        // 🔥 DOM 감시 중지 (로비 열림)
-        stopRecentDomObserver();
         
         // 🔥 현재 채팅 중인 캐릭터를 lastChatCache에 즉시 갱신 (채팅 화면에서 로비 열 때)
         const currentCharBeforeOpen = getCurrentCharacterAvatar();
@@ -920,6 +928,10 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         };
         window.addEventListener('chatlobby:refresh-grid', refreshGridHandler);
         
+        // tabView 등 외부에서 closeLobby 호출용 이벤트
+        closeLobbyHandler = () => closeLobby();
+        window.addEventListener('chatlobby:close', closeLobbyHandler);
+        
         // 탭 뷰에서 캐릭터 선택 이벤트
         document.addEventListener('lobby:select-character', async (e) => {
             const { avatar } = e.detail;
@@ -953,6 +965,11 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
         if (refreshGridHandler) {
             window.removeEventListener('chatlobby:refresh-grid', refreshGridHandler);
             refreshGridHandler = null;
+        }
+        
+        if (closeLobbyHandler) {
+            window.removeEventListener('chatlobby:close', closeLobbyHandler);
+            closeLobbyHandler = null;
         }
         
         eventsInitialized = false;

@@ -13,6 +13,7 @@ import { showToast, showAlert, showConfirm } from './notifications.js';
 import { CONFIG } from '../config.js';
 import { getFoldersOptionsHTML } from './templates.js';
 import { lastChatCache } from '../data/lastChatCache.js';
+import { operationLock } from '../utils/operationLock.js';
 import { 
     analyzeBranches, 
     needsBranchAnalysis 
@@ -23,8 +24,7 @@ import { getAllBranches, getAllFingerprints } from '../data/branchCache.js';
 // 툴팁 관련 변수
 // ============================================
 
-// Race Condition 방지용 플래그
-let isOpeningGroupChat = false;
+// Race Condition 방지는 operationLock으로 처리
 
 let tooltipElement = null;
 let tooltipTimeout = null;
@@ -310,9 +310,11 @@ export async function renderChatList(character) {
     console.debug('[ChatList] currentCharacter:', store.currentCharacter?.avatar);
     console.debug('[ChatList] panelVisible:', chatsPanel?.classList.contains('visible'));
     
-    // 이미 같은 캐릭터의 채팅 패널이 열려있으면 렌더 스킵
-    if (store.currentCharacter?.avatar === character.avatar && chatsPanel?.classList.contains('visible')) {
-        console.debug('[ChatList] Skipping - same character already visible');
+    // 이미 같은 캐릭터의 채팅 패널이 열려있고 캐시도 유효하면 렌더 스킵
+    if (store.currentCharacter?.avatar === character.avatar 
+        && chatsPanel?.classList.contains('visible')
+        && cache.isValid('chats', character.avatar)) {
+        console.debug('[ChatList] Skipping - same character already visible with valid cache');
         return;
     }
     
@@ -385,8 +387,9 @@ export async function renderChatList(character) {
  * @param {HTMLElement} container
  * @param {Array|Object} rawChats
  * @param {string} charAvatar
+ * @param {boolean} [skipAutoAnalyze=false] - 재귀 방지용
  */
-function renderChats(container, rawChats, charAvatar) {
+function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
     // 배열로 변환
     let chatArray = normalizeChats(rawChats);
     
@@ -436,7 +439,7 @@ function renderChats(container, rawChats, charAvatar) {
     let branchAnalyzeBtn = '';
     if (sortOption === 'branch') {
         const needsAnalysis = needsBranchAnalysis(charAvatar, chatArray);
-        if (needsAnalysis) {
+        if (needsAnalysis && !skipAutoAnalyze) {
             // 새 채팅이 적으면 자동 분석, 많으면 버튼 표시
             const newCount = countNewChatsForAnalysis(charAvatar, chatArray);
             
@@ -554,10 +557,10 @@ async function autoAnalyzeBranches(container, charAvatar, chats) {
     try {
         await analyzeBranches(charAvatar, chats);
         
-        // 분석 완료 후 다시 렌더링
+        // 분석 완료 후 다시 렌더링 (skipAutoAnalyze=true로 재귀 방지)
         const cachedChats = cache.get('chats', charAvatar);
         if (cachedChats) {
-            renderChats(container, cachedChats, charAvatar);
+            renderChats(container, cachedChats, charAvatar, true);
         }
     } catch (e) {
         console.error('[AutoBranchAnalyze] Error:', e);
@@ -1641,12 +1644,8 @@ function bindGroupChatEvents(container, group) {
         // 채팅 열기 - 그룹은 UI 클릭 시 최근 채팅이 자동으로 열리므로
         // 채팅 관리 패널을 통해 원하는 채팅을 선택하는 방식 사용
         createTouchClickHandler(chatContent, async () => {
-            // Race Condition 방지: 이미 처리 중이면 무시
-            if (isOpeningGroupChat) {
-                console.debug('[ChatList] Already opening group chat, ignoring...');
-                return;
-            }
-            isOpeningGroupChat = true;
+            // 전역 OperationLock으로 Race Condition 방지
+            if (!operationLock.acquire('openGroupChat')) return;
             
             try {
                 console.debug('[ChatList] Opening group chat:', { groupId: group.id, chatFile });
@@ -1740,7 +1739,7 @@ function bindGroupChatEvents(container, group) {
                 console.error('[ChatList] Failed to open group chat:', error);
                 showToast('그룹 채팅을 열지 못했습니다.', 'error');
             } finally {
-                isOpeningGroupChat = false;
+                operationLock.release();
             }
         }, { preventDefault: true, stopPropagation: true, debugName: `group-chat-${index}` });
         

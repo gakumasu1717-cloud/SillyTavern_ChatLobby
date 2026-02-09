@@ -11,6 +11,7 @@ import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { showToast, showConfirm } from './notifications.js';
 import { openChat } from '../handlers/chatHandlers.js';
+import { operationLock } from '../utils/operationLock.js';
 import { getLocalDateString } from '../data/calendarStorage.js';
 
 // ============================================
@@ -978,30 +979,39 @@ async function handleDeleteChat(avatar, fileName, itemElement) {
 // ============================================
 
 async function openRecentChat(chat, idx) {
-    log('Opening recent chat:', chat.file, chat.avatar);
+    if (!operationLock.acquire('openRecentChat')) return;
     
-    // 로비 닫기
-    closeLobby();
-    
-    // DOM이 다시 보이도록 대기 (rAF 2회 체이닝이 더 안정적)
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    
-    // selector로 원본 DOM 요소 찾기 (isGroup 처리 포함)
-    const selector = chat.isGroup
-        ? `.recentChat[data-group="${chat.avatar}"]`
-        : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
-    const recentEl = document.querySelector(selector);
-    
-    if (recentEl) {
-        log('Found element via selector, clicking');
-        recentEl.click();
-    } else {
-        // 최후 수단: 캐릭터 선택
-        log('Element not found, using character select');
-        const event = new CustomEvent('lobby:select-character', { 
-            detail: { avatar: chat.avatar } 
-        });
-        document.dispatchEvent(event);
+    try {
+        log('Opening recent chat:', chat.file, chat.avatar);
+        
+        // index.js의 완전한 closeLobby 호출
+        window.dispatchEvent(new CustomEvent('chatlobby:close'));
+        
+        // DOM이 다시 보이도록 대기 (rAF 2회 체이닝이 더 안정적)
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        
+        // selector로 원본 DOM 요소 찾기 (isGroup 처리 포함)
+        const selector = chat.isGroup
+            ? `.recentChat[data-group="${chat.avatar}"]`
+            : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
+        const recentEl = document.querySelector(selector);
+        
+        if (recentEl) {
+            log('Found element via selector, clicking');
+            recentEl.click();
+        } else {
+            // 최후 수단: 캐릭터 선택
+            log('Element not found, using character select');
+            const event = new CustomEvent('lobby:select-character', { 
+                detail: { avatar: chat.avatar } 
+            });
+            document.dispatchEvent(event);
+        }
+    } catch (e) {
+        logError('openRecentChat failed:', e);
+        showToast('채팅을 열지 못했습니다.', 'error');
+    } finally {
+        operationLock.release();
     }
 }
 
@@ -1032,16 +1042,8 @@ async function openLibraryChat(avatar, fileName) {
 }
 
 function closeLobby() {
-    const overlay = document.getElementById('chat-lobby-overlay');
-    const lobbyContainer = document.getElementById('chat-lobby-container');
-    const fab = document.getElementById('chat-lobby-fab');
-    
-    if (overlay) overlay.style.display = 'none';
-    if (lobbyContainer) lobbyContainer.style.display = 'none';
-    if (fab) fab.style.display = 'flex';
-    
-    // 🔥 store 상태 업데이트 필수! (FAB 클릭 시 다시 열리도록)
-    store.setLobbyOpen(false);
+    // index.js의 완전한 closeLobby 호출 (상태 정리 포함)
+    window.dispatchEvent(new CustomEvent('chatlobby:close'));
 }
 
 // ============================================

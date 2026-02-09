@@ -3,10 +3,7 @@
 // ============================================
 
 import { api } from '../api/sillyTavern.js';
-
-// Race Condition 방지용 플래그
-let isOpeningChat = false;
-let isStartingNewChat = false;
+import { operationLock } from '../utils/operationLock.js';
 import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
@@ -28,12 +25,7 @@ import { startRecentDomObserver } from '../ui/tabView.js';
  * @returns {Promise<void>}
  */
 export async function openChat(chatInfo) {
-    // Race Condition 방지: 이미 처리 중이면 무시
-    if (isOpeningChat) {
-        console.debug('[ChatHandlers] Already opening a chat, ignoring...');
-        return;
-    }
-    isOpeningChat = true;
+    if (!operationLock.acquire('openChat')) return;
     
     const { fileName, charAvatar, charIndex } = chatInfo;
     
@@ -99,7 +91,7 @@ export async function openChat(chatInfo) {
         console.error('[ChatHandlers] Failed to open chat:', error);
         showToast('채팅을 열지 못했습니다.', 'error');
     } finally {
-        isOpeningChat = false;
+        operationLock.release();
     }
 }
 
@@ -289,12 +281,7 @@ function updateChatCountAfterDelete() {
  * @returns {Promise<void>}
  */
 export async function startNewChat() {
-    // Race Condition 방지: 이미 처리 중이면 무시
-    if (isStartingNewChat) {
-        console.debug('[ChatHandlers] Already starting new chat, ignoring...');
-        return;
-    }
-    isStartingNewChat = true;
+    if (!operationLock.acquire('startNewChat')) return;
     
     try {
         const btn = document.getElementById('chat-lobby-new-chat');
@@ -308,7 +295,7 @@ export async function startNewChat() {
             await startNewCharacterChat(btn);
         }
     } finally {
-        isStartingNewChat = false;
+        operationLock.release();
     }
 }
 
