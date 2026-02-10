@@ -512,6 +512,10 @@ import { operationLock } from './utils/operationLock.js';
             return;
         }
         
+        // 열기 시작 - 즉시 락 (첫 await 전에 설정하여 이중 실행 방지)
+        isOpeningLobby = true;
+        store.setLobbyOpen(true);  // 다른 호출 차단을 위해 즉시 설정
+        
         // 🔥 DOM 감시 중지 (로비 열림) - 캐싱 전에 먼저!
         stopRecentDomObserver();
         
@@ -527,11 +531,7 @@ import { operationLock } from './utils/operationLock.js';
             lastChatCache.updateNow(currentCharBeforeOpen);
             console.debug('[ChatLobby] Updated lastChatCache for current chat:', currentCharBeforeOpen);
         }
-        
-        // 열기 시작 - 즉시 락 (CHAT_CHANGED settle까지 유지)
-        isOpeningLobby = true;
-        store.setLobbyOpen(true);  // 다른 호출 차단을 위해 즉시 설정
-        store.setLobbyLocked(true);  // 로비 열릴 때부터 락
+        store.setLobbyLocked(true);  // CHAT_CHANGED settle까지 유지
         
         const overlay = document.getElementById('chat-lobby-overlay');
         const container = document.getElementById('chat-lobby-container');
@@ -1331,6 +1331,12 @@ import { operationLock } from './utils/operationLock.js';
             const branches = await analyzeBranches(charAvatar, chats, null, true);
             
             showToast(`분기 분석 완료: ${Object.keys(branches).length}개 분기 발견`, 'success');
+            
+            // 분석 중 캐릭터가 변경됐으면 새로고침 생략
+            if (store.currentCharacter?.avatar !== charAvatar) {
+                console.debug('[ChatLobby] Character changed during branch analysis, skipping refresh');
+                return;
+            }
             
             // 채팅 목록 강제 새로고침 (분기 정렬 적용)
             await refreshCurrentChatList(true);

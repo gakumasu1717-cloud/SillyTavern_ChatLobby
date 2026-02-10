@@ -3216,8 +3216,13 @@ ${message}` : message;
       return;
     }
     chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
+    const requestedAvatar = character.avatar;
     try {
       const chats = await api.fetchChatsForCharacter(character.avatar);
+      if (store.currentCharacter?.avatar !== requestedAvatar) {
+        console.debug("[ChatList] Character changed during fetch, discarding result for:", requestedAvatar);
+        return;
+      }
       if (!chats || chats.length === 0) {
         updateChatCount(0);
         chatsList.innerHTML = `
@@ -4279,6 +4284,10 @@ ${message}` : message;
       true
     );
     if (!confirmed) return;
+    if (!operationLock.acquire("deleteChat")) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
     try {
       const success = await api.deleteChat(fileName, charAvatar);
       if (success) {
@@ -4317,6 +4326,8 @@ ${message}` : message;
     } catch (error) {
       console.error("[ChatHandlers] Error deleting chat:", error);
       showToast("\uCC44\uD305 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release();
     }
   }
   function updateChatCountAfterDelete() {
@@ -4449,6 +4460,10 @@ ${message}` : message;
     if (!confirmed) {
       return;
     }
+    if (!operationLock.acquire("deleteCharacter")) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
     try {
       const data = storage.load();
       const prefix = char.avatar + "::";
@@ -4492,6 +4507,8 @@ ${message}` : message;
     } catch (error) {
       console.error("[ChatHandlers] Failed to delete character:", error);
       showToast("\uCE90\uB9AD\uD130 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release();
     }
   }
   function closeLobbyKeepState() {
@@ -5252,6 +5269,10 @@ ${message}` : message;
       true
     );
     if (!confirmed) return;
+    if (!operationLock.acquire("handleDeleteChat")) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
     try {
       const success = await api.deleteChat(fileName, avatar);
       if (success) {
@@ -5279,6 +5300,8 @@ ${message}` : message;
     } catch (e) {
       logError("Delete chat failed:", e);
       showToast("\uCC44\uD305 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release();
     }
   }
   async function openRecentChat(chat, idx) {
@@ -5292,12 +5315,14 @@ ${message}` : message;
       if (recentEl) {
         log("Found element via selector, clicking");
         recentEl.click();
+        await new Promise((r) => setTimeout(r, 800));
       } else {
         log("Element not found, using character select");
         const event = new CustomEvent("lobby:select-character", {
           detail: { avatar: chat.avatar }
         });
         document.dispatchEvent(event);
+        await new Promise((r) => setTimeout(r, 800));
       }
     } catch (e) {
       logError("openRecentChat failed:", e);
@@ -9019,6 +9044,8 @@ ${message}` : message;
       if (store.isLobbyOpen) {
         return;
       }
+      isOpeningLobby = true;
+      store.setLobbyOpen(true);
       stopRecentDomObserver();
       await cacheRecentChatsBeforeOpen();
       loadRecentChats();
@@ -9027,8 +9054,6 @@ ${message}` : message;
         lastChatCache.updateNow(currentCharBeforeOpen);
         console.debug("[ChatLobby] Updated lastChatCache for current chat:", currentCharBeforeOpen);
       }
-      isOpeningLobby = true;
-      store.setLobbyOpen(true);
       store.setLobbyLocked(true);
       const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
@@ -9562,6 +9587,10 @@ ${message}` : message;
         }
         const branches = await analyzeBranches(charAvatar, chats, null, true);
         showToast(`\uBD84\uAE30 \uBD84\uC11D \uC644\uB8CC: ${Object.keys(branches).length}\uAC1C \uBD84\uAE30 \uBC1C\uACAC`, "success");
+        if (store.currentCharacter?.avatar !== charAvatar) {
+          console.debug("[ChatLobby] Character changed during branch analysis, skipping refresh");
+          return;
+        }
         await refreshCurrentChatList(true);
       } catch (error) {
         console.error("[ChatLobby] Failed to refresh branches:", error);

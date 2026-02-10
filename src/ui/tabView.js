@@ -937,6 +937,12 @@ async function handleDeleteChat(avatar, fileName, itemElement) {
     
     if (!confirmed) return;
     
+    // 확인 후 락 획득
+    if (!operationLock.acquire('handleDeleteChat')) {
+        showToast('다른 작업이 진행 중입니다.', 'warning');
+        return;
+    }
+    
     try {
         const success = await api.deleteChat(fileName, avatar);
         
@@ -971,6 +977,8 @@ async function handleDeleteChat(avatar, fileName, itemElement) {
     } catch (e) {
         logError('Delete chat failed:', e);
         showToast('채팅 삭제 중 오류가 발생했습니다.', 'error');
+    } finally {
+        operationLock.release();
     }
 }
 
@@ -999,6 +1007,9 @@ async function openRecentChat(chat, idx) {
         if (recentEl) {
             log('Found element via selector, clicking');
             recentEl.click();
+            
+            // SillyTavern의 비동기 채팅 로드 완료 대기 (lock 조기 해제 방지)
+            await new Promise(r => setTimeout(r, 800));
         } else {
             // 최후 수단: 캐릭터 선택
             log('Element not found, using character select');
@@ -1006,6 +1017,8 @@ async function openRecentChat(chat, idx) {
                 detail: { avatar: chat.avatar } 
             });
             document.dispatchEvent(event);
+            
+            await new Promise(r => setTimeout(r, 800));
         }
     } catch (e) {
         logError('openRecentChat failed:', e);

@@ -198,7 +198,7 @@ export async function deleteChat(chatInfo) {
         return;
     }
     
-    // 삭제 확인
+    // 삭제 확인 (락 획득 전 — 대화상자 동안 락 점유 방지)
     const displayName = fileName.replace('.jsonl', '');
     const confirmed = await showConfirm(
         `"${displayName}" 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,
@@ -207,6 +207,12 @@ export async function deleteChat(chatInfo) {
     );
     
     if (!confirmed) return;
+    
+    // 확인 후 락 획득 (다른 채팅 작업과 동시 실행 방지)
+    if (!operationLock.acquire('deleteChat')) {
+        showToast('다른 작업이 진행 중입니다.', 'warning');
+        return;
+    }
     
     try {
         const success = await api.deleteChat(fileName, charAvatar);
@@ -255,6 +261,8 @@ export async function deleteChat(chatInfo) {
     } catch (error) {
         console.error('[ChatHandlers] Error deleting chat:', error);
         showToast('채팅 삭제 중 오류가 발생했습니다.', 'error');
+    } finally {
+        operationLock.release();
     }
 }
 
@@ -457,12 +465,18 @@ export async function deleteCharacter() {
         return;
     }
     
-    // 사용자 확인
+    // 사용자 확인 (락 획득 전)
     const confirmed = await showConfirm(
         `"${char.name}" 캐릭터와 모든 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`
     );
     
     if (!confirmed) {
+        return;
+    }
+    
+    // 확인 후 락 획득
+    if (!operationLock.acquire('deleteCharacter')) {
+        showToast('다른 작업이 진행 중입니다.', 'warning');
         return;
     }
     
@@ -530,6 +544,8 @@ export async function deleteCharacter() {
     } catch (error) {
         console.error('[ChatHandlers] Failed to delete character:', error);
         showToast('캐릭터 삭제 중 오류가 발생했습니다.', 'error');
+    } finally {
+        operationLock.release();
     }
 }
 

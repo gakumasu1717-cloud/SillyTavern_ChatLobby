@@ -352,9 +352,18 @@ export async function renderChatList(character) {
     // 캐시 없으면 로딩 표시 후 API 호출
     chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
     
+    // API 호출 전 현재 캐릭터 아바타 저장 (stale guard용)
+    const requestedAvatar = character.avatar;
+    
     try {
         // 최신 데이터 가져오기
         const chats = await api.fetchChatsForCharacter(character.avatar);
+        
+        // API 응답 후 캐릭터가 변경됐으면 폐기 (stale data 방지)
+        if (store.currentCharacter?.avatar !== requestedAvatar) {
+            console.debug('[ChatList] Character changed during fetch, discarding result for:', requestedAvatar);
+            return;
+        }
         
         if (!chats || chats.length === 0) {
             updateChatCount(0);
