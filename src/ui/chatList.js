@@ -391,6 +391,9 @@ export async function renderChatList(character) {
     }
 }
 
+// autoAnalyzeBranches 타이머 ID (취소 가능)
+let autoAnalyzeTimerId = null;
+
 /**
  * 채팅 목록 내부 렌더링
  * @param {HTMLElement} container
@@ -399,6 +402,18 @@ export async function renderChatList(character) {
  * @param {boolean} [skipAutoAnalyze=false] - 재귀 방지용
  */
 function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
+    // 이전 autoAnalyze 타이머 취소 (캐릭터 변경 시 stale 데이터 방지)
+    if (autoAnalyzeTimerId) {
+        clearTimeout(autoAnalyzeTimerId);
+        autoAnalyzeTimerId = null;
+    }
+    
+    // stale guard: 현재 캐릭터와 일치하지 않으면 렌더링 중단
+    if (store.currentCharacter && store.currentCharacter.avatar !== charAvatar) {
+        console.debug('[renderChats] Stale render blocked:', charAvatar, '(current:', store.currentCharacter.avatar, ')');
+        return;
+    }
+    
     // 배열로 변환
     let chatArray = normalizeChats(rawChats);
     
@@ -454,7 +469,8 @@ function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
             
             if (newCount > 0 && newCount <= 3) {
                 // 자동 백그라운드 분석 (3개 이하)
-                setTimeout(() => {
+                autoAnalyzeTimerId = setTimeout(() => {
+                    autoAnalyzeTimerId = null;
                     autoAnalyzeBranches(container, charAvatar, chatArray);
                 }, 100);
                 branchAnalyzeBtn = `
@@ -563,6 +579,13 @@ function countNewChatsForAnalysis(charAvatar, chats) {
  */
 async function autoAnalyzeBranches(container, charAvatar, chats) {
     if (chats.length < 2) return;
+    
+    // 함수 진입 시 캐릭터 stale 검사
+    if (store.currentCharacter?.avatar !== charAvatar) {
+        console.debug('[AutoBranchAnalyze] Stale entry blocked:', charAvatar);
+        return;
+    }
+    
     try {
         await analyzeBranches(charAvatar, chats);
         
@@ -1248,9 +1271,17 @@ export async function refreshCurrentChatList(forceReload = false) {
     
     // 강제 새로고침이면 API에서 다시 가져오기
     if (forceReload) {
+        const requestedAvatar = character.avatar;
         chatsList.innerHTML = '<div class="lobby-loading">채팅 로딩 중...</div>';
         try {
             const chats = await api.fetchChatsForCharacter(character.avatar, true);
+            
+            // API 응답 후 캐릭터가 변경됐으면 폐기
+            if (store.currentCharacter?.avatar !== requestedAvatar) {
+                console.debug('[ChatList] Character changed during force reload, discarding');
+                return;
+            }
+            
             if (chats && chats.length > 0) {
                 renderChats(chatsList, chats, character.avatar);
             } else {
@@ -1389,6 +1420,12 @@ export async function refreshChatList() {
  * 채팅 패널 닫기
  */
 export function closeChatPanel() {
+    // autoAnalyze 타이머 취소
+    if (autoAnalyzeTimerId) {
+        clearTimeout(autoAnalyzeTimerId);
+        autoAnalyzeTimerId = null;
+    }
+    
     const chatsPanel = document.getElementById('chat-lobby-chats');
     if (chatsPanel) chatsPanel.classList.remove('visible');
     store.setCurrentCharacter(null);

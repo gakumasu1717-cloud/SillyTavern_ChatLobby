@@ -11,7 +11,7 @@ import { lastChatCache } from '../data/lastChatCache.js';
 import { refreshChatList, getCurrentCharacter, closeChatPanel } from '../ui/chatList.js';
 import { showToast, showConfirm, showAlert } from '../ui/notifications.js';
 import { CONFIG } from '../config.js';
-import { waitFor, waitForCharacterSelect, waitForElement } from '../utils/waitFor.js';
+import { waitFor, waitForCharacterSelect, waitForElement, waitForChatChanged } from '../utils/waitFor.js';
 import { isMobile } from '../utils/eventHelpers.js';
 import { startRecentDomObserver } from '../ui/tabView.js';
 
@@ -65,15 +65,21 @@ export async function openChat(chatInfo) {
             console.debug('[ChatHandlers] Different character, selecting...');
             await api.selectCharacterById(index);
             
-            const charSelected = await waitForCharacterSelect(charAvatar, 2000);
-            console.debug('[ChatHandlers] Character selected:', charSelected);
-            if (!charSelected) {
-                showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
-                return;
+            // CHAT_CHANGED 이벤트 대기 (ST의 save/load 완료 확인)
+            const chatChanged = await waitForChatChanged(5000);
+            console.debug('[ChatHandlers] Chat changed event received:', chatChanged);
+            
+            if (!chatChanged) {
+                // 타임아웃된 경우 avatar만이라도 확인
+                const charSelected = await waitForCharacterSelect(charAvatar, 2000);
+                if (!charSelected) {
+                    showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
+                    return;
+                }
             }
             
-            // 캐릭터 전환 후 안정화 대기 (채팅 저장/로드 완료)
-            await new Promise(r => setTimeout(r, 500));
+            // 추가 안정화 마진 (save flush 대기)
+            await new Promise(r => setTimeout(r, 200));
         } else {
             console.debug('[ChatHandlers] Same character already selected, skipping selectCharacterById');
         }
@@ -361,11 +367,14 @@ async function startNewCharacterChat(btn) {
             // 다른 캐릭터인 경우에만 selectCharacterById 호출
             await api.selectCharacterById(charIndexNum);
             
-            // 캐릭터 선택 완료 대기
-            await waitForCharacterSelect(charAvatar, 2000);
+            // CHAT_CHANGED 이벤트 대기 (ST의 save/load 완료 확인)
+            const chatChanged = await waitForChatChanged(5000);
+            if (!chatChanged) {
+                await waitForCharacterSelect(charAvatar, 2000);
+            }
             
-            // 캐릭터 전환 후 안정화 대기
-            await new Promise(r => setTimeout(r, 500));
+            // 추가 안정화 마진
+            await new Promise(r => setTimeout(r, 200));
         }
         
         // 🔥 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭

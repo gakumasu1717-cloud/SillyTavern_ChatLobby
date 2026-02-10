@@ -62,3 +62,42 @@ export async function waitForChatUI(timeout = 3000) {
                document.querySelectorAll('.select_chat_block').length > 0;
     }, timeout);
 }
+
+/**
+ * SillyTavern의 CHAT_CHANGED 이벤트를 대기
+ * selectCharacterById 후 채팅 save/load가 완료되었음을 확인하는 가장 신뢰할 수 있는 방법
+ * @param {number} [timeout=5000] - 최대 대기 시간 (ms)
+ * @returns {Promise<boolean>} - 이벤트 수신 여부 (timeout 시 false)
+ */
+export function waitForChatChanged(timeout = 5000) {
+    return new Promise(resolve => {
+        const context = window.SillyTavern?.getContext?.();
+        if (!context?.eventSource || !context?.eventTypes?.CHAT_CHANGED) {
+            // 이벤트 시스템 사용 불가 → fallback 딜레이
+            setTimeout(() => resolve(false), 1000);
+            return;
+        }
+
+        let settled = false;
+
+        const timer = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+                console.warn('[waitForChatChanged] Timed out after', timeout, 'ms');
+                resolve(false);
+            }
+        }, timeout);
+
+        const handler = () => {
+            if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+                resolve(true);
+            }
+        };
+
+        context.eventSource.on(context.eventTypes.CHAT_CHANGED, handler);
+    });
+}

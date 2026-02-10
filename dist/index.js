@@ -1180,6 +1180,33 @@ ${message}` : message;
       return currentChar?.avatar === expectedAvatar;
     }, timeout);
   }
+  function waitForChatChanged(timeout = 5e3) {
+    return new Promise((resolve) => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context?.eventSource || !context?.eventTypes?.CHAT_CHANGED) {
+        setTimeout(() => resolve(false), 1e3);
+        return;
+      }
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+          console.warn("[waitForChatChanged] Timed out after", timeout, "ms");
+          resolve(false);
+        }
+      }, timeout);
+      const handler = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+          resolve(true);
+        }
+      };
+      context.eventSource.on(context.eventTypes.CHAT_CHANGED, handler);
+    });
+  }
 
   // src/api/sillyTavern.js
   var SillyTavernAPI = class {
@@ -3247,7 +3274,16 @@ ${message}` : message;
         `;
     }
   }
+  var autoAnalyzeTimerId = null;
   function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
+    if (autoAnalyzeTimerId) {
+      clearTimeout(autoAnalyzeTimerId);
+      autoAnalyzeTimerId = null;
+    }
+    if (store.currentCharacter && store.currentCharacter.avatar !== charAvatar) {
+      console.debug("[renderChats] Stale render blocked:", charAvatar, "(current:", store.currentCharacter.avatar, ")");
+      return;
+    }
     let chatArray = normalizeChats(rawChats);
     chatArray = filterValidChats(chatArray);
     const totalChatCount = chatArray.length;
@@ -3285,7 +3321,8 @@ ${message}` : message;
       if (needsAnalysis && !skipAutoAnalyze) {
         const newCount = countNewChatsForAnalysis(charAvatar, chatArray);
         if (newCount > 0 && newCount <= 3) {
-          setTimeout(() => {
+          autoAnalyzeTimerId = setTimeout(() => {
+            autoAnalyzeTimerId = null;
             autoAnalyzeBranches(container, charAvatar, chatArray);
           }, 100);
           branchAnalyzeBtn = `
@@ -3355,6 +3392,10 @@ ${message}` : message;
   }
   async function autoAnalyzeBranches(container, charAvatar, chats) {
     if (chats.length < 2) return;
+    if (store.currentCharacter?.avatar !== charAvatar) {
+      console.debug("[AutoBranchAnalyze] Stale entry blocked:", charAvatar);
+      return;
+    }
     try {
       await analyzeBranches(charAvatar, chats);
       if (store.currentCharacter?.avatar !== charAvatar) {
@@ -3774,9 +3815,14 @@ ${message}` : message;
     const chatsList = document.getElementById("chat-lobby-chats-list");
     if (!chatsList) return;
     if (forceReload) {
+      const requestedAvatar = character.avatar;
       chatsList.innerHTML = '<div class="lobby-loading">\uCC44\uD305 \uB85C\uB529 \uC911...</div>';
       try {
         const chats = await api.fetchChatsForCharacter(character.avatar, true);
+        if (store.currentCharacter?.avatar !== requestedAvatar) {
+          console.debug("[ChatList] Character changed during force reload, discarding");
+          return;
+        }
         if (chats && chats.length > 0) {
           renderChats(chatsList, chats, character.avatar);
         } else {
@@ -3859,6 +3905,10 @@ ${message}` : message;
     }
   }
   function closeChatPanel() {
+    if (autoAnalyzeTimerId) {
+      clearTimeout(autoAnalyzeTimerId);
+      autoAnalyzeTimerId = null;
+    }
     const chatsPanel = document.getElementById("chat-lobby-chats");
     if (chatsPanel) chatsPanel.classList.remove("visible");
     store.setCurrentCharacter(null);
@@ -4194,13 +4244,16 @@ ${message}` : message;
       if (!isSameCharacter) {
         console.debug("[ChatHandlers] Different character, selecting...");
         await api.selectCharacterById(index);
-        const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
-        console.debug("[ChatHandlers] Character selected:", charSelected);
-        if (!charSelected) {
-          showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
-          return;
+        const chatChanged = await waitForChatChanged(5e3);
+        console.debug("[ChatHandlers] Chat changed event received:", chatChanged);
+        if (!chatChanged) {
+          const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
+          if (!charSelected) {
+            showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
+            return;
+          }
         }
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 200));
       } else {
         console.debug("[ChatHandlers] Same character already selected, skipping selectCharacterById");
       }
@@ -4388,8 +4441,11 @@ ${message}` : message;
       const isSameCharacter = currentChar?.avatar === charAvatar;
       if (!isSameCharacter) {
         await api.selectCharacterById(charIndexNum);
-        await waitForCharacterSelect(charAvatar, 2e3);
-        await new Promise((r) => setTimeout(r, 500));
+        const chatChanged = await waitForChatChanged(5e3);
+        if (!chatChanged) {
+          await waitForCharacterSelect(charAvatar, 2e3);
+        }
+        await new Promise((r) => setTimeout(r, 200));
       }
       if (actualChatCount > 0) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
