@@ -63,10 +63,14 @@ export async function openChat(chatInfo) {
         if (!isSameCharacter) {
             // 다른 캐릭터인 경우에만 selectCharacterById 호출
             console.debug('[ChatHandlers] Different character, selecting...');
+            
+            // ⚠️ 리스너 먼저 등록 → 그 다음 selectCharacterById 호출
+            // (selectCharacterById가 완료되면 CHAT_CHANGED는 이미 발행된 뒤)
+            const chatChangedPromise = waitForChatChanged(5000);
             await api.selectCharacterById(index);
             
             // CHAT_CHANGED 이벤트 대기 (ST의 save/load 완료 확인)
-            const chatChanged = await waitForChatChanged(5000);
+            const chatChanged = await chatChangedPromise;
             console.debug('[ChatHandlers] Chat changed event received:', chatChanged);
             
             if (!chatChanged) {
@@ -79,7 +83,7 @@ export async function openChat(chatInfo) {
             }
             
             // 추가 안정화 마진 (save flush 대기)
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 300));
         } else {
             console.debug('[ChatHandlers] Same character already selected, skipping selectCharacterById');
         }
@@ -91,8 +95,12 @@ export async function openChat(chatInfo) {
         console.debug('[ChatHandlers] Opening chat:', chatFileName);
         if (typeof context?.openCharacterChat === 'function') {
             try {
+                // ⚠️ openCharacterChat은 내부적으로 현재 채팅 저장 → 대상 채팅 로드를 수행
+                // 리스너를 먼저 등록하여 save/load 완료를 확인
+                const openChatChangedPromise = waitForChatChanged(5000);
                 await context.openCharacterChat(chatFileName);
-                console.debug('[ChatHandlers] Chat opened successfully');
+                await openChatChangedPromise;
+                console.debug('[ChatHandlers] Chat opened and CHAT_CHANGED confirmed');
                 return;
             } catch (err) {
                 console.warn('[ChatHandlers] context.openCharacterChat failed:', err);
@@ -365,16 +373,18 @@ async function startNewCharacterChat(btn) {
         
         if (!isSameCharacter) {
             // 다른 캐릭터인 경우에만 selectCharacterById 호출
+            // ⚠️ 리스너 먼저 등록 → 그 다음 호출
+            const chatChangedPromise = waitForChatChanged(5000);
             await api.selectCharacterById(charIndexNum);
             
             // CHAT_CHANGED 이벤트 대기 (ST의 save/load 완료 확인)
-            const chatChanged = await waitForChatChanged(5000);
+            const chatChanged = await chatChangedPromise;
             if (!chatChanged) {
                 await waitForCharacterSelect(charAvatar, 2000);
             }
             
             // 추가 안정화 마진
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 300));
         }
         
         // 🔥 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭

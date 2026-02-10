@@ -4243,8 +4243,9 @@ ${message}` : message;
       const isSameCharacter = currentChar?.avatar === charAvatar;
       if (!isSameCharacter) {
         console.debug("[ChatHandlers] Different character, selecting...");
+        const chatChangedPromise = waitForChatChanged(5e3);
         await api.selectCharacterById(index);
-        const chatChanged = await waitForChatChanged(5e3);
+        const chatChanged = await chatChangedPromise;
         console.debug("[ChatHandlers] Chat changed event received:", chatChanged);
         if (!chatChanged) {
           const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
@@ -4253,7 +4254,7 @@ ${message}` : message;
             return;
           }
         }
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 300));
       } else {
         console.debug("[ChatHandlers] Same character already selected, skipping selectCharacterById");
       }
@@ -4261,8 +4262,10 @@ ${message}` : message;
       console.debug("[ChatHandlers] Opening chat:", chatFileName);
       if (typeof context?.openCharacterChat === "function") {
         try {
+          const openChatChangedPromise = waitForChatChanged(5e3);
           await context.openCharacterChat(chatFileName);
-          console.debug("[ChatHandlers] Chat opened successfully");
+          await openChatChangedPromise;
+          console.debug("[ChatHandlers] Chat opened and CHAT_CHANGED confirmed");
           return;
         } catch (err) {
           console.warn("[ChatHandlers] context.openCharacterChat failed:", err);
@@ -4440,12 +4443,13 @@ ${message}` : message;
       const currentChar = context?.characters?.[context.characterId];
       const isSameCharacter = currentChar?.avatar === charAvatar;
       if (!isSameCharacter) {
+        const chatChangedPromise = waitForChatChanged(5e3);
         await api.selectCharacterById(charIndexNum);
-        const chatChanged = await waitForChatChanged(5e3);
+        const chatChanged = await chatChangedPromise;
         if (!chatChanged) {
           await waitForCharacterSelect(charAvatar, 2e3);
         }
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 300));
       }
       if (actualChatCount > 0) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
