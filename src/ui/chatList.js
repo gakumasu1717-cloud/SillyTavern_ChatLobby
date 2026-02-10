@@ -557,6 +557,12 @@ async function autoAnalyzeBranches(container, charAvatar, chats) {
     try {
         await analyzeBranches(charAvatar, chats);
         
+        // 분석 완료 후 캐릭터가 바뀌었는지 확인 (stale data 방지)
+        if (store.currentCharacter?.avatar !== charAvatar) {
+            console.debug('[AutoBranchAnalyze] Character changed during analysis, skipping re-render');
+            return;
+        }
+        
         // 분석 완료 후 다시 렌더링 (skipAutoAnalyze=true로 재귀 방지)
         const cachedChats = cache.get('chats', charAvatar);
         if (cachedChats) {
@@ -579,7 +585,7 @@ async function autoAnalyzeBranches(container, charAvatar, chats) {
  * @returns {Array}
  */
 function normalizeChats(chats) {
-    if (Array.isArray(chats)) return chats;
+    if (Array.isArray(chats)) return [...chats];
     
     if (typeof chats === 'object') {
         return Object.entries(chats).map(([key, value]) => {

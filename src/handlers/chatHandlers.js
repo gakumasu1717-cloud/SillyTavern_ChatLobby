@@ -56,22 +56,32 @@ export async function openChat(chatInfo) {
         // ★ 마지막 채팅 시간 갱신은 실제 메시지 송수신 시에만 (index.js의 MESSAGE_SENT/RECEIVED 이벤트)
         // 채팅 열기만으로는 갱신하지 않음 - "최근 채팅순"은 실제 대화한 순서를 의미
         
-        // 1. 캐릭터 선택
-        console.debug('[ChatHandlers] Selecting character...');
-        await api.selectCharacterById(index);
+        // 이미 같은 캐릭터가 선택되어 있는지 확인
+        const currentChar = context.characters?.[context.characterId];
+        const isSameCharacter = currentChar?.avatar === charAvatar;
         
-        // 2. 캐릭터 선택 완료 대기 (조건 확인 방식)
-        const charSelected = await waitForCharacterSelect(charAvatar, 2000);
-        console.debug('[ChatHandlers] Character selected:', charSelected);
-        if (!charSelected) {
-            showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
-            return;
+        if (!isSameCharacter) {
+            // 다른 캐릭터인 경우에만 selectCharacterById 호출
+            console.debug('[ChatHandlers] Different character, selecting...');
+            await api.selectCharacterById(index);
+            
+            const charSelected = await waitForCharacterSelect(charAvatar, 2000);
+            console.debug('[ChatHandlers] Character selected:', charSelected);
+            if (!charSelected) {
+                showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
+                return;
+            }
+            
+            // 캐릭터 전환 후 안정화 대기 (채팅 저장/로드 완료)
+            await new Promise(r => setTimeout(r, 500));
+        } else {
+            console.debug('[ChatHandlers] Same character already selected, skipping selectCharacterById');
         }
         
-        // 3. 로비 닫기 (상태 유지하면서)
+        // 로비 닫기 (상태 유지하면서)
         closeLobbyKeepState();
         
-        // 4. SillyTavern openCharacterChat 함수 사용
+        // SillyTavern openCharacterChat 함수 사용
         console.debug('[ChatHandlers] Opening chat:', chatFileName);
         if (typeof context?.openCharacterChat === 'function') {
             try {
@@ -83,7 +93,7 @@ export async function openChat(chatInfo) {
             }
         }
         
-        // 5. Fallback: 채팅 선택 UI 클릭
+        // Fallback: 채팅 선택 UI 클릭
         console.debug('[ChatHandlers] Using fallback method...');
         await openChatByFileName(fileName);
         
@@ -334,10 +344,21 @@ async function startNewCharacterChat(btn) {
         // 로비 닫기 (상태 유지)
         closeLobbyKeepState();
         
-        await api.selectCharacterById(charIndexNum);
+        // 이미 같은 캐릭터가 선택되어 있는지 확인
+        const context = api.getContext();
+        const currentChar = context?.characters?.[context.characterId];
+        const isSameCharacter = currentChar?.avatar === charAvatar;
         
-        // 캐릭터 선택 완료 대기
-        await waitForCharacterSelect(charAvatar, 2000);
+        if (!isSameCharacter) {
+            // 다른 캐릭터인 경우에만 selectCharacterById 호출
+            await api.selectCharacterById(charIndexNum);
+            
+            // 캐릭터 선택 완료 대기
+            await waitForCharacterSelect(charAvatar, 2000);
+            
+            // 캐릭터 전환 후 안정화 대기
+            await new Promise(r => setTimeout(r, 500));
+        }
         
         // 🔥 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
         // 채팅이 0개면 SillyTavern이 자동으로 첫 채팅을 생성하므로 추가 동작 불필요

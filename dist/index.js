@@ -3352,6 +3352,10 @@ ${message}` : message;
     if (chats.length < 2) return;
     try {
       await analyzeBranches(charAvatar, chats);
+      if (store.currentCharacter?.avatar !== charAvatar) {
+        console.debug("[AutoBranchAnalyze] Character changed during analysis, skipping re-render");
+        return;
+      }
       const cachedChats = cache.get("chats", charAvatar);
       if (cachedChats) {
         renderChats(container, cachedChats, charAvatar, true);
@@ -3366,7 +3370,7 @@ ${message}` : message;
     }
   }
   function normalizeChats(chats) {
-    if (Array.isArray(chats)) return chats;
+    if (Array.isArray(chats)) return [...chats];
     if (typeof chats === "object") {
       return Object.entries(chats).map(([key, value]) => {
         if (typeof value === "object") {
@@ -4180,13 +4184,20 @@ ${message}` : message;
         return;
       }
       const chatFileName = fileName.replace(".jsonl", "");
-      console.debug("[ChatHandlers] Selecting character...");
-      await api.selectCharacterById(index);
-      const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
-      console.debug("[ChatHandlers] Character selected:", charSelected);
-      if (!charSelected) {
-        showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
-        return;
+      const currentChar = context.characters?.[context.characterId];
+      const isSameCharacter = currentChar?.avatar === charAvatar;
+      if (!isSameCharacter) {
+        console.debug("[ChatHandlers] Different character, selecting...");
+        await api.selectCharacterById(index);
+        const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
+        console.debug("[ChatHandlers] Character selected:", charSelected);
+        if (!charSelected) {
+          showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      } else {
+        console.debug("[ChatHandlers] Same character already selected, skipping selectCharacterById");
       }
       closeLobbyKeepState();
       console.debug("[ChatHandlers] Opening chat:", chatFileName);
@@ -4361,8 +4372,14 @@ ${message}` : message;
     try {
       cache.invalidate("chats", charAvatar);
       closeLobbyKeepState();
-      await api.selectCharacterById(charIndexNum);
-      await waitForCharacterSelect(charAvatar, 2e3);
+      const context = api.getContext();
+      const currentChar = context?.characters?.[context.characterId];
+      const isSameCharacter = currentChar?.avatar === charAvatar;
+      if (!isSameCharacter) {
+        await api.selectCharacterById(charIndexNum);
+        await waitForCharacterSelect(charAvatar, 2e3);
+        await new Promise((r) => setTimeout(r, 500));
+      }
       if (actualChatCount > 0) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
         if (newChatBtn) newChatBtn.click();
