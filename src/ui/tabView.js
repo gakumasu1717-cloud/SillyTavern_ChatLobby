@@ -425,7 +425,7 @@ function renderRecentView() {
 // ============================================
 
 async function loadLibrary() {
-    log('Loading library...');
+    console.warn('[TabView] Loading library...');
     
     const data = storage.load();
     const context = api.getContext();
@@ -471,6 +471,7 @@ async function loadLibrary() {
     const chatsByAvatar = new Map();
     for (const key of keysToLoad) {
         const parsed = parseKeyBasic(key);
+        console.warn(`[TabView] parseKeyBasic("${key}") =>`, parsed);
         if (parsed) {
             if (!chatsByAvatar.has(parsed.avatar)) {
                 chatsByAvatar.set(parsed.avatar, []);
@@ -478,12 +479,14 @@ async function loadLibrary() {
             chatsByAvatar.get(parsed.avatar).push({ key, fileName: parsed.fileName });
         }
     }
+    console.warn(`[TabView] chatsByAvatar: ${chatsByAvatar.size} avatars`);
     
     // API로 채팅 정보 가져오기 (병렬 처리)
     await Promise.allSettled(
         [...chatsByAvatar.entries()].map(async ([avatar, chats]) => {
             try {
                 const apiChats = await api.fetchChatsForCharacter(avatar);
+                console.warn(`[TabView] API chats for ${avatar}:`, apiChats?.length, 'items');
                 const entityInfo = characters.find(c => c.avatar === avatar);
                 const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, '');
                 
@@ -495,6 +498,7 @@ async function loadLibrary() {
                             apiName === `${fileName}.jsonl` ||
                             apiName.replace(/\.jsonl$/i, '') === fileName;
                     });
+                    console.warn(`[TabView] Match for "${fileName}":`, apiChat ? `found (${apiChat.file_name})` : 'NOT found');
                     
                     const cachedTime = lastChatCache.lastChatTimes.get(avatar);
                     const lastChatTime = typeof cachedTime === 'number' ? cachedTime : cachedTime?.time || 0;
@@ -522,7 +526,7 @@ async function loadLibrary() {
     );
     
     state.libraryChats.sort((a, b) => b.lastChatTime - a.lastChatTime);
-    log(`Loaded ${state.libraryChats.length} library chats`);
+    console.warn(`[TabView] Loaded ${state.libraryChats.length} library chats`);
 }
 
 // 키에서 avatar와 fileName만 추출 (확장자 기반 파싱 - _ 포함 아바타명 지원)
@@ -543,24 +547,16 @@ function parseKeyBasic(key) {
 }
 
 function parseChatKey(key, characters, groups) {
-    // 키 형식: avatar.png_chatfile.jsonl (아바타에 _가 있을 수 있음)
-    // 확장자 기반 파싱으로 정확하게 분리 (이미지 확장자 명시)
-    let avatar, fileName;
-    
-    const avatarMatch = key.match(/^((?:group:)?.+\.(?:png|jpg|jpeg|gif|webp))_(.+)$/i);
-    if (avatarMatch) {
-        avatar = avatarMatch[1];
-        fileName = avatarMatch[2];
-    } else {
-        // 폴백: lastIndexOf (확장자 없는 특이 케이스)
-        const lastUnderscoreIdx = key.lastIndexOf('_');
-        if (lastUnderscoreIdx === -1) {
-            log(`Invalid key format (no underscore): ${key}`);
-            return null;
-        }
-        avatar = key.substring(0, lastUnderscoreIdx);
-        fileName = key.substring(lastUnderscoreIdx + 1);
+    // getChatKey 형식: "avatar::fileName" (:: 구분자)
+    const sepIdx = key.indexOf('::');
+    if (sepIdx === -1) {
+        log(`Invalid key format (no :: separator): ${key}`);
+        return null;
     }
+    const avatar = key.substring(0, sepIdx);
+    const fileName = key.substring(sepIdx + 2);
+    
+    if (!avatar || !fileName) return null;
     
     const isGroup = avatar.startsWith('group:');
     const actualAvatar = isGroup ? avatar.replace('group:', '') : avatar;
@@ -608,6 +604,7 @@ function parseChatKey(key, characters, groups) {
 
 function renderLibraryView() {
     const container = document.querySelector('.tab-content[data-tab="library"]');
+    console.warn('[TabView] renderLibraryView:', { container: !!container, mode: state.libraryMode, chats: state.libraryChats.length, folderId: state.currentFolderId });
     if (!container) return;
     
     if (state.currentFolderId) {
@@ -1096,7 +1093,7 @@ function showFolderMenu(targetBtn, avatar, fileName) {
     // 위치 설정 (화면 경계 체크)
     const rect = targetBtn.getBoundingClientRect();
     menu.style.position = 'fixed';
-    menu.style.zIndex = '10001';
+    menu.style.zIndex = 'var(--z-modal, 60000)';
     
     document.body.appendChild(menu);
     

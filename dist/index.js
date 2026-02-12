@@ -5078,7 +5078,7 @@ ${message}` : message;
     });
   }
   async function loadLibrary() {
-    log("Loading library...");
+    console.warn("[TabView] Loading library...");
     const data = storage.load();
     const context = api.getContext();
     const characters = context?.characters || [];
@@ -5109,6 +5109,7 @@ ${message}` : message;
     const chatsByAvatar = /* @__PURE__ */ new Map();
     for (const key of keysToLoad) {
       const parsed = parseKeyBasic(key);
+      console.warn(`[TabView] parseKeyBasic("${key}") =>`, parsed);
       if (parsed) {
         if (!chatsByAvatar.has(parsed.avatar)) {
           chatsByAvatar.set(parsed.avatar, []);
@@ -5116,10 +5117,12 @@ ${message}` : message;
         chatsByAvatar.get(parsed.avatar).push({ key, fileName: parsed.fileName });
       }
     }
+    console.warn(`[TabView] chatsByAvatar: ${chatsByAvatar.size} avatars`);
     await Promise.allSettled(
       [...chatsByAvatar.entries()].map(async ([avatar, chats]) => {
         try {
           const apiChats = await api.fetchChatsForCharacter(avatar);
+          console.warn(`[TabView] API chats for ${avatar}:`, apiChats?.length, "items");
           const entityInfo = characters.find((c) => c.avatar === avatar);
           const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, "");
           for (const { key, fileName } of chats) {
@@ -5127,6 +5130,7 @@ ${message}` : message;
               const apiName = c.file_name || "";
               return apiName === fileName || apiName === `${fileName}.jsonl` || apiName.replace(/\.jsonl$/i, "") === fileName;
             });
+            console.warn(`[TabView] Match for "${fileName}":`, apiChat ? `found (${apiChat.file_name})` : "NOT found");
             const cachedTime = lastChatCache.lastChatTimes.get(avatar);
             const lastChatTime = typeof cachedTime === "number" ? cachedTime : cachedTime?.time || 0;
             state.libraryChats.push({
@@ -5151,7 +5155,7 @@ ${message}` : message;
       })
     );
     state.libraryChats.sort((a, b) => b.lastChatTime - a.lastChatTime);
-    log(`Loaded ${state.libraryChats.length} library chats`);
+    console.warn(`[TabView] Loaded ${state.libraryChats.length} library chats`);
   }
   function parseKeyBasic(key) {
     const sepIdx = key.indexOf("::");
@@ -5164,6 +5168,7 @@ ${message}` : message;
   }
   function renderLibraryView() {
     const container = document.querySelector('.tab-content[data-tab="library"]');
+    console.warn("[TabView] renderLibraryView:", { container: !!container, mode: state.libraryMode, chats: state.libraryChats.length, folderId: state.currentFolderId });
     if (!container) return;
     if (state.currentFolderId) {
       renderFolderDetail(container);
@@ -5527,7 +5532,7 @@ ${message}` : message;
     `;
     const rect = targetBtn.getBoundingClientRect();
     menu.style.position = "fixed";
-    menu.style.zIndex = "10001";
+    menu.style.zIndex = "var(--z-modal, 60000)";
     document.body.appendChild(menu);
     const menuRect = menu.getBoundingClientRect();
     if (rect.bottom + menuRect.height > window.innerHeight - 10) {
