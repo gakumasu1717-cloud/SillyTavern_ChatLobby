@@ -956,6 +956,12 @@
     border-color: rgba(0, 0, 0, 0.15);
 }
 
+#chat-lobby-container.light-mode #batch-cancel-btn,
+#chat-lobby-container.light-mode #batch-move-btn {
+    border-color: rgba(0, 0, 0, 0.2) !important;
+    color: var(--text-primary) !important;
+}
+
 /* ?�더 모달 */
 #chat-lobby-container.light-mode ~ #chat-lobby-folder-modal .folder-modal-content {
     border-color: rgba(0, 0, 0, 0.15);
@@ -1503,6 +1509,42 @@
     cursor: pointer;
 }
 
+#batch-select-all-btn {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: var(--text-primary) !important;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+#batch-select-all-btn:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+#batch-delete-btn {
+    background: #E50914 !important;
+    border: none !important;
+    color: #ffffff !important;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: var(--font-weight-semibold);
+}
+
+#batch-delete-btn:hover {
+    background: #c4070f !important;
+}
+
+#batch-move-btn {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: var(--text-primary) !important;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
 /* ============================================
    채팅 목록
    ============================================ */
@@ -1776,6 +1818,16 @@
 }
 
 /* 체크박스 */
+.chat-checkbox {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
 .chat-checkbox input {
     width: 20px;
     height: 20px;

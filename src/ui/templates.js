@@ -114,11 +114,22 @@ export function createLobbyHTML() {
                             <div class="filter-group-buttons">
                                 <button id="chat-lobby-persona-quick" class="icon-btn persona-quick-btn" data-action="switch-persona" title="퀸 페르소나" style="display:none;"><img class="persona-quick-avatar" src="" alt="persona" /></button>
                                 <button id="chat-lobby-branch-refresh" class="icon-btn" data-action="refresh-branches" title="분기 분석 새로고침" style="display:none;"><span class="icon">🔍</span></button>
+                                <button id="chat-lobby-batch-mode" class="icon-btn" data-action="toggle-batch" title="배치 선택 모드"><span class="icon">☑️</span></button>
                                 <button id="chat-lobby-folder-manage" class="icon-btn" data-action="open-folder-modal" title="폴더 관리"><span class="icon">📁</span></button>
                             </div>
                         </div>
                     </section>
                     
+                    <!-- 배치 모드 툴바 -->
+                    <div id="chat-lobby-batch-toolbar">
+                        <span id="batch-selected-count">0개 선택</span>
+                        <button id="batch-select-all-btn" data-action="batch-select-all" title="전체 선택/해제">☑ 전체</button>
+                        <span id="batch-help-text">채팅을 선택하세요</span>
+                        <button id="batch-delete-btn" data-action="batch-delete" title="선택한 채팅 삭제">🗑️ 삭제</button>
+                        <button id="batch-move-btn" data-action="open-folder-modal" title="선택한 채팅 폴더 이동">📁 이동</button>
+                        <button id="batch-cancel-btn" data-action="batch-cancel">취소</button>
+                    </div>
+
                     <!-- 채팅 목록 -->
                     <div id="chat-lobby-chats-list">
                         <div class="lobby-empty-state">

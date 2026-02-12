@@ -914,6 +914,7 @@ function renderChatItem(chat, charAvatar, index) {
          data-branch-point="${branchPoint}"
          data-full-preview-encoded="${safeFullPreview}"
          style="${indentStyle}">
+        <label class="chat-checkbox" style="display:none;"><input type="checkbox" class="chat-select-cb"></label>
         <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
         <div class="chat-content">
             <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
@@ -995,7 +996,9 @@ function bindChatEvents(container, charAvatar) {
         // 즐겨찾기 토글
         createTouchClickHandler(favBtn, () => {
             const fn = item.dataset.fileName;
+            console.debug('[ChatList] ⭐ Fav toggle:', { charAvatar, fileName: fn, key: storage.getChatKey(charAvatar, fn) });
             const isNowFav = storage.toggleFavorite(charAvatar, fn);
+            console.debug('[ChatList] ⭐ Fav result:', isNowFav, 'favorites:', storage.load().favorites);
             favBtn.textContent = isNowFav ? '★' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
         }, { debugName: `fav-${index}` });
@@ -1005,6 +1008,7 @@ function bindChatEvents(container, charAvatar) {
         if (folderBtn) {
             createTouchClickHandler(folderBtn, (e) => {
                 e.stopPropagation();
+                console.debug('[ChatList] 📁 Folder menu:', { charAvatar, fileName });
                 showChatFolderMenu(folderBtn, charAvatar, fileName);
             }, { debugName: `folder-${index}` });
         }
@@ -1353,6 +1357,20 @@ export function updateBatchCount() {
 }
 
 /**
+ * 배치 전체 선택/해제
+ */
+export function batchSelectAll() {
+    const checkboxes = document.querySelectorAll('.chat-select-cb');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+    });
+    
+    updateBatchCount();
+}
+
+/**
  * 배치 이동 실행
  * @param {string} targetFolder
  */
@@ -1396,6 +1414,111 @@ export async function executeBatchMove(targetFolder) {
     // 채팅 목록만 재렌더 (캐시된 채팅 데이터로 필터/정렬만 다시 적용)
     await refreshCurrentChatList();
     
+}
+
+/**
+ * 배치 삭제 실행
+ */
+export async function executeBatchDelete() {
+    const checked = document.querySelectorAll('.chat-select-cb:checked');
+    
+    if (checked.length === 0) {
+        await showAlert('삭제할 채팅을 선택하세요.');
+        return;
+    }
+    
+    // 현재 열린 채팅 확인
+    const context = api.getContext();
+    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+    
+    // 선택된 채팅 정보 수집
+    const chatItems = [];
+    checked.forEach(cb => {
+        const item = cb.closest('.lobby-chat-item');
+        if (item) {
+            chatItems.push({
+                fileName: item.dataset.fileName,
+                charAvatar: item.dataset.charAvatar,
+                element: item
+            });
+        }
+    });
+    
+    // 현재 열린 채팅이 포함되어 있는지 확인
+    const hasCurrentChat = chatItems.some(c => {
+        const nameWithoutExt = c.fileName.replace('.jsonl', '');
+        return currentChatFile === nameWithoutExt;
+    });
+    
+    if (hasCurrentChat) {
+        await showAlert('현재 열린 채팅이 선택에 포함되어 있습니다.\n현재 채팅은 삭제할 수 없으니 선택을 해제하세요.');
+        return;
+    }
+    
+    // 삭제 확인
+    const confirmed = await showConfirm(
+        `선택한 ${chatItems.length}개 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,
+        '배치 삭제',
+        true
+    );
+    
+    if (!confirmed) return;
+    
+    if (!operationLock.acquire('batchDelete')) {
+        showToast('다른 작업이 진행 중입니다.', 'warning');
+        return;
+    }
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    try {
+        for (const chat of chatItems) {
+            try {
+                const success = await api.deleteChat(chat.fileName, chat.charAvatar);
+                if (success) {
+                    successCount++;
+                    
+                    // 로컬 데이터 정리
+                    const data = storage.load();
+                    const key = storage.getChatKey(chat.charAvatar, chat.fileName);
+                    delete data.chatAssignments[key];
+                    const favIndex = data.favorites.indexOf(key);
+                    if (favIndex > -1) {
+                        data.favorites.splice(favIndex, 1);
+                    }
+                    storage.save(data);
+                } else {
+                    failCount++;
+                }
+            } catch (e) {
+                console.error('[BatchDelete] Failed to delete:', chat.fileName, e);
+                failCount++;
+            }
+        }
+        
+        // 캐시 무효화 (관련 캐릭터들)
+        const avatarSet = new Set(chatItems.map(c => c.charAvatar));
+        avatarSet.forEach(avatar => cache.invalidate('chats', avatar));
+        
+        // 배치 모드 종료
+        toggleBatchMode();
+        
+        if (failCount === 0) {
+            showToast(`${successCount}개 채팅이 삭제되었습니다.`, 'success');
+        } else {
+            showToast(`${successCount}개 삭제 완료, ${failCount}개 실패`, 'warning');
+        }
+        
+        // 채팅 목록 새로고침
+        await refreshCurrentChatList(true);
+        
+    } catch (error) {
+        console.error('[BatchDelete] Error:', error);
+        showToast('배치 삭제 중 오류가 발생했습니다.', 'error');
+    } finally {
+        operationLock.release();
+    }
 }
 
 /**

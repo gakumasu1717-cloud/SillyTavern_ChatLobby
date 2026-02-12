@@ -11,7 +11,7 @@ import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
 import { initPersonaRadialMenu, refreshPersonaRadialMenu, cleanupPersonaRadialMenu } from './ui/personaRadialMenu.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange, resetCharacterSelectLock, setGroupSelectHandler } from './ui/characterGrid.js';
-import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, closeChatPanel, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
+import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, executeBatchDelete, batchSelectAll, closeChatPanel, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
 import { openChat, deleteChat, startNewChat, deleteCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast, showConfirm } from './ui/notifications.js';
@@ -1107,6 +1107,12 @@ import { operationLock } from './utils/operationLock.js';
                 break;
             case 'batch-cancel':
                 toggleBatchMode();
+                break;
+            case 'batch-delete':
+                await executeBatchDelete();
+                break;
+            case 'batch-select-all':
+                batchSelectAll();
                 break;
             case 'open-folder-modal':
                 openFolderModal();

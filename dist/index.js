@@ -3607,6 +3607,7 @@ ${message}` : message;
          data-branch-point="${branchPoint}"
          data-full-preview-encoded="${safeFullPreview}"
          style="${indentStyle}">
+        <label class="chat-checkbox" style="display:none;"><input type="checkbox" class="chat-select-cb"></label>
         <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
         <div class="chat-content">
             <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
@@ -3667,7 +3668,9 @@ ${message}` : message;
       }, { preventDefault: true, stopPropagation: true, debugName: `chat-${index}` });
       createTouchClickHandler(favBtn, () => {
         const fn = item.dataset.fileName;
+        console.debug("[ChatList] \u2B50 Fav toggle:", { charAvatar, fileName: fn, key: storage.getChatKey(charAvatar, fn) });
         const isNowFav = storage.toggleFavorite(charAvatar, fn);
+        console.debug("[ChatList] \u2B50 Fav result:", isNowFav, "favorites:", storage.load().favorites);
         favBtn.textContent = isNowFav ? "\u2605" : "\u2606";
         item.classList.toggle("is-favorite", isNowFav);
       }, { debugName: `fav-${index}` });
@@ -3675,6 +3678,7 @@ ${message}` : message;
       if (folderBtn) {
         createTouchClickHandler(folderBtn, (e) => {
           e.stopPropagation();
+          console.debug("[ChatList] \u{1F4C1} Folder menu:", { charAvatar, fileName });
           showChatFolderMenu(folderBtn, charAvatar, fileName);
         }, { debugName: `folder-${index}` });
       }
@@ -3898,6 +3902,14 @@ ${message}` : message;
     const countSpan = document.getElementById("batch-selected-count");
     if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
   }
+  function batchSelectAll() {
+    const checkboxes = document.querySelectorAll(".chat-select-cb");
+    const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
+    checkboxes.forEach((cb) => {
+      cb.checked = !allChecked;
+    });
+    updateBatchCount();
+  }
   async function executeBatchMove(targetFolder) {
     if (!targetFolder) {
       await showAlert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
@@ -3925,6 +3937,85 @@ ${message}` : message;
       filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
     }
     await refreshCurrentChatList();
+  }
+  async function executeBatchDelete() {
+    const checked = document.querySelectorAll(".chat-select-cb:checked");
+    if (checked.length === 0) {
+      await showAlert("\uC0AD\uC81C\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    const context = api.getContext();
+    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+    const chatItems = [];
+    checked.forEach((cb) => {
+      const item = cb.closest(".lobby-chat-item");
+      if (item) {
+        chatItems.push({
+          fileName: item.dataset.fileName,
+          charAvatar: item.dataset.charAvatar,
+          element: item
+        });
+      }
+    });
+    const hasCurrentChat = chatItems.some((c) => {
+      const nameWithoutExt = c.fileName.replace(".jsonl", "");
+      return currentChatFile === nameWithoutExt;
+    });
+    if (hasCurrentChat) {
+      await showAlert("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC774 \uC120\uD0DD\uC5D0 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.\n\uD604\uC7AC \uCC44\uD305\uC740 \uC0AD\uC81C\uD560 \uC218 \uC5C6\uC73C\uB2C8 \uC120\uD0DD\uC744 \uD574\uC81C\uD558\uC138\uC694.");
+      return;
+    }
+    const confirmed = await showConfirm(
+      `\uC120\uD0DD\uD55C ${chatItems.length}\uAC1C \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+      "\uBC30\uCE58 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    if (!operationLock.acquire("batchDelete")) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    let successCount = 0;
+    let failCount = 0;
+    try {
+      for (const chat of chatItems) {
+        try {
+          const success = await api.deleteChat(chat.fileName, chat.charAvatar);
+          if (success) {
+            successCount++;
+            const data = storage.load();
+            const key = storage.getChatKey(chat.charAvatar, chat.fileName);
+            delete data.chatAssignments[key];
+            const favIndex = data.favorites.indexOf(key);
+            if (favIndex > -1) {
+              data.favorites.splice(favIndex, 1);
+            }
+            storage.save(data);
+          } else {
+            failCount++;
+          }
+        } catch (e) {
+          console.error("[BatchDelete] Failed to delete:", chat.fileName, e);
+          failCount++;
+        }
+      }
+      const avatarSet = new Set(chatItems.map((c) => c.charAvatar));
+      avatarSet.forEach((avatar) => cache.invalidate("chats", avatar));
+      toggleBatchMode();
+      if (failCount === 0) {
+        showToast(`${successCount}\uAC1C \uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+      } else {
+        showToast(`${successCount}\uAC1C \uC0AD\uC81C \uC644\uB8CC, ${failCount}\uAC1C \uC2E4\uD328`, "warning");
+      }
+      await refreshCurrentChatList(true);
+    } catch (error) {
+      console.error("[BatchDelete] Error:", error);
+      showToast("\uBC30\uCE58 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release();
+    }
   }
   function isBatchMode() {
     return store.batchModeActive;
@@ -5875,11 +5966,22 @@ ${message}` : message;
                             <div class="filter-group-buttons">
                                 <button id="chat-lobby-persona-quick" class="icon-btn persona-quick-btn" data-action="switch-persona" title="\uD038 \uD398\uB974\uC18C\uB098" style="display:none;"><img class="persona-quick-avatar" src="" alt="persona" /></button>
                                 <button id="chat-lobby-branch-refresh" class="icon-btn" data-action="refresh-branches" title="\uBD84\uAE30 \uBD84\uC11D \uC0C8\uB85C\uACE0\uCE68" style="display:none;"><span class="icon">\u{1F50D}</span></button>
+                                <button id="chat-lobby-batch-mode" class="icon-btn" data-action="toggle-batch" title="\uBC30\uCE58 \uC120\uD0DD \uBAA8\uB4DC"><span class="icon">\u2611\uFE0F</span></button>
                                 <button id="chat-lobby-folder-manage" class="icon-btn" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC"><span class="icon">\u{1F4C1}</span></button>
                             </div>
                         </div>
                     </section>
                     
+                    <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
+                    <div id="chat-lobby-batch-toolbar">
+                        <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
+                        <button id="batch-select-all-btn" data-action="batch-select-all" title="\uC804\uCCB4 \uC120\uD0DD/\uD574\uC81C">\u2611 \uC804\uCCB4</button>
+                        <span id="batch-help-text">\uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694</span>
+                        <button id="batch-delete-btn" data-action="batch-delete" title="\uC120\uD0DD\uD55C \uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F \uC0AD\uC81C</button>
+                        <button id="batch-move-btn" data-action="open-folder-modal" title="\uC120\uD0DD\uD55C \uCC44\uD305 \uD3F4\uB354 \uC774\uB3D9">\u{1F4C1} \uC774\uB3D9</button>
+                        <button id="batch-cancel-btn" data-action="batch-cancel">\uCDE8\uC18C</button>
+                    </div>
+
                     <!-- \uCC44\uD305 \uBAA9\uB85D -->
                     <div id="chat-lobby-chats-list">
                         <div class="lobby-empty-state">
@@ -9523,6 +9625,12 @@ ${message}` : message;
           break;
         case "batch-cancel":
           toggleBatchMode();
+          break;
+        case "batch-delete":
+          await executeBatchDelete();
+          break;
+        case "batch-select-all":
+          batchSelectAll();
           break;
         case "open-folder-modal":
           openFolderModal();
