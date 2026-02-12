@@ -3433,12 +3433,10 @@ ${message}` : message;
       const fn = chat.file_name || chat.fileName || "";
       const key = storage.getChatKey(charAvatar, fn);
       if (filterFolder === "favorites") {
-        const isFav = data.favorites.includes(key);
-        return isFav;
+        return data.favorites.includes(key);
       }
       const assigned = data.chatAssignments[key] || "uncategorized";
-      const match = assigned === filterFolder;
-      return match;
+      return assigned === filterFolder;
     });
     return result;
   }
@@ -3633,20 +3631,15 @@ ${message}` : message;
       }, { preventDefault: true, stopPropagation: true, debugName: `chat-${index}` });
       createTouchClickHandler(favBtn, () => {
         const fn = item.dataset.fileName;
-        const key = storage.getChatKey(charAvatar, fn);
-        console.warn("[ChatList] \u2B50 Fav toggle:", { charAvatar, fileName: fn, key });
         const isNowFav = storage.toggleFavorite(charAvatar, fn);
-        console.warn("[ChatList] \u2B50 Fav result:", isNowFav, "stored favorites:", storage.load().favorites);
         favBtn.textContent = isNowFav ? "\u2605" : "\u2606";
         item.classList.toggle("is-favorite", isNowFav);
-        console.warn("[ChatList] \u2B50 DOM updated: btn text =", favBtn.textContent, "has is-favorite =", item.classList.contains("is-favorite"));
         showToast(isNowFav ? "\u2B50 \uC990\uACA8\uCC3E\uAE30 \uCD94\uAC00" : "\u2B50 \uC990\uACA8\uCC3E\uAE30 \uD574\uC81C", "success");
       }, { debugName: `fav-${index}` });
       const folderBtn = item.querySelector(".chat-folder-btn");
       if (folderBtn) {
         createTouchClickHandler(folderBtn, (e) => {
           e.stopPropagation();
-          console.warn("[ChatList] \u{1F4C1} Folder menu:", { charAvatar, fileName });
           showChatFolderMenu(folderBtn, charAvatar, fileName);
         }, { debugName: `folder-${index}` });
       }
@@ -3740,8 +3733,11 @@ ${message}` : message;
   var activeFolderMenu = null;
   function showChatFolderMenu(targetBtn, charAvatar, fileName) {
     if (activeFolderMenu) {
+      const prevBtn = activeFolderMenu._targetBtn;
       activeFolderMenu.remove();
       activeFolderMenu = null;
+      document.removeEventListener("click", closeFolderMenuOnClickOutside);
+      if (prevBtn === targetBtn) return;
     }
     const data = storage.load();
     const folders = (data.folders || []).filter((f) => f.id !== "favorites" && f.id !== "uncategorized");
@@ -3775,6 +3771,7 @@ ${message}` : message;
     const lobbyContainer = document.getElementById("chat-lobby-container") || document.body;
     lobbyContainer.appendChild(menu);
     activeFolderMenu = menu;
+    activeFolderMenu._targetBtn = targetBtn;
     menu.querySelectorAll(".folder-menu-item").forEach((item) => {
       item.addEventListener("click", async () => {
         const folderId = item.dataset.folderId;
@@ -5126,9 +5123,10 @@ ${message}` : message;
           const entityInfo = characters.find((c) => c.avatar === avatar);
           const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, "");
           for (const { key, fileName } of chats) {
-            const apiChat = apiChats.find(
-              (c) => c.file_name === fileName || c.file_name === fileName.replace(".jsonl", "") || `${c.file_name}.jsonl` === fileName
-            );
+            const apiChat = apiChats.find((c) => {
+              const apiName = c.file_name || "";
+              return apiName === fileName || apiName === `${fileName}.jsonl` || apiName.replace(/\.jsonl$/i, "") === fileName;
+            });
             const cachedTime = lastChatCache.lastChatTimes.get(avatar);
             const lastChatTime = typeof cachedTime === "number" ? cachedTime : cachedTime?.time || 0;
             state.libraryChats.push({
@@ -5156,17 +5154,11 @@ ${message}` : message;
     log(`Loaded ${state.libraryChats.length} library chats`);
   }
   function parseKeyBasic(key) {
-    const avatarMatch = key.match(/^(.+?\.(png|jpg|jpeg|gif|webp))_(.+)$/i);
-    if (!avatarMatch) {
-      const lastUnderscoreIdx = key.lastIndexOf("_");
-      if (lastUnderscoreIdx === -1) return null;
-      const avatar2 = key.substring(0, lastUnderscoreIdx);
-      const fileName2 = key.substring(lastUnderscoreIdx + 1);
-      if (avatar2.startsWith("group:")) return null;
-      return { avatar: avatar2, fileName: fileName2 };
-    }
-    const avatar = avatarMatch[1];
-    const fileName = avatarMatch[3];
+    const sepIdx = key.indexOf("::");
+    if (sepIdx === -1) return null;
+    const avatar = key.substring(0, sepIdx);
+    const fileName = key.substring(sepIdx + 2);
+    if (!avatar || !fileName) return null;
     if (avatar.startsWith("group:")) return null;
     return { avatar, fileName };
   }

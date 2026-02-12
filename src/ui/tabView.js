@@ -488,12 +488,13 @@ async function loadLibrary() {
                 const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, '');
                 
                 for (const { key, fileName } of chats) {
-                    // API 응답에서 해당 채팅 찾기
-                    const apiChat = apiChats.find(c => 
-                        c.file_name === fileName || 
-                        c.file_name === fileName.replace('.jsonl', '') ||
-                        `${c.file_name}.jsonl` === fileName
-                    );
+                    // API 응답에서 해당 채팅 찾기 (키는 .jsonl 없음, API는 .jsonl 있음)
+                    const apiChat = apiChats.find(c => {
+                        const apiName = c.file_name || '';
+                        return apiName === fileName || 
+                            apiName === `${fileName}.jsonl` ||
+                            apiName.replace(/\.jsonl$/i, '') === fileName;
+                    });
                     
                     const cachedTime = lastChatCache.lastChatTimes.get(avatar);
                     const lastChatTime = typeof cachedTime === 'number' ? cachedTime : cachedTime?.time || 0;
@@ -526,21 +527,14 @@ async function loadLibrary() {
 
 // 키에서 avatar와 fileName만 추출 (확장자 기반 파싱 - _ 포함 아바타명 지원)
 function parseKeyBasic(key) {
-    // avatar는 항상 .png, .jpg, .webp 등으로 끝남
-    const avatarMatch = key.match(/^(.+?\.(png|jpg|jpeg|gif|webp))_(.+)$/i);
-    if (!avatarMatch) {
-        // 기존 폴백: lastIndexOf
-        const lastUnderscoreIdx = key.lastIndexOf('_');
-        if (lastUnderscoreIdx === -1) return null;
-        
-        const avatar = key.substring(0, lastUnderscoreIdx);
-        const fileName = key.substring(lastUnderscoreIdx + 1);
-        if (avatar.startsWith('group:')) return null;
-        return { avatar, fileName };
-    }
+    // getChatKey 형식: "avatar::fileName" (:: 구분자)
+    const sepIdx = key.indexOf('::');
+    if (sepIdx === -1) return null;
     
-    const avatar = avatarMatch[1];
-    const fileName = avatarMatch[3];
+    const avatar = key.substring(0, sepIdx);
+    const fileName = key.substring(sepIdx + 2);
+    
+    if (!avatar || !fileName) return null;
     
     // 그룹은 일단 제외 (API 다름)
     if (avatar.startsWith('group:')) return null;

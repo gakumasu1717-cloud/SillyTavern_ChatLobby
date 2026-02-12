@@ -664,13 +664,11 @@ function filterByFolder(chats, charAvatar, filterFolder) {
         const key = storage.getChatKey(charAvatar, fn);
         
         if (filterFolder === 'favorites') {
-            const isFav = data.favorites.includes(key);
-            return isFav;
+            return data.favorites.includes(key);
         }
         
         const assigned = data.chatAssignments[key] || 'uncategorized';
-        const match = assigned === filterFolder;
-        return match;
+        return assigned === filterFolder;
     });
     
     return result;
@@ -996,13 +994,9 @@ function bindChatEvents(container, charAvatar) {
         // 즐겨찾기 토글
         createTouchClickHandler(favBtn, () => {
             const fn = item.dataset.fileName;
-            const key = storage.getChatKey(charAvatar, fn);
-            console.warn('[ChatList] ⭐ Fav toggle:', { charAvatar, fileName: fn, key });
             const isNowFav = storage.toggleFavorite(charAvatar, fn);
-            console.warn('[ChatList] ⭐ Fav result:', isNowFav, 'stored favorites:', storage.load().favorites);
             favBtn.textContent = isNowFav ? '★' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
-            console.warn('[ChatList] ⭐ DOM updated: btn text =', favBtn.textContent, 'has is-favorite =', item.classList.contains('is-favorite'));
             showToast(isNowFav ? '⭐ 즐겨찾기 추가' : '⭐ 즐겨찾기 해제', 'success');
         }, { debugName: `fav-${index}` });
         
@@ -1011,7 +1005,6 @@ function bindChatEvents(container, charAvatar) {
         if (folderBtn) {
             createTouchClickHandler(folderBtn, (e) => {
                 e.stopPropagation();
-                console.warn('[ChatList] 📁 Folder menu:', { charAvatar, fileName });
                 showChatFolderMenu(folderBtn, charAvatar, fileName);
             }, { debugName: `folder-${index}` });
         }
@@ -1176,10 +1169,13 @@ let activeFolderMenu = null;
  * 채팅 폴더 이동 메뉴 표시
  */
 function showChatFolderMenu(targetBtn, charAvatar, fileName) {
-    // 기존 메뉴 닫기
+    // 같은 버튼 다시 클릭하면 닫기 (토글)
     if (activeFolderMenu) {
+        const prevBtn = activeFolderMenu._targetBtn;
         activeFolderMenu.remove();
         activeFolderMenu = null;
+        document.removeEventListener('click', closeFolderMenuOnClickOutside);
+        if (prevBtn === targetBtn) return; // 같은 버튼이면 닫기만
     }
     
     const data = storage.load();
@@ -1219,6 +1215,7 @@ function showChatFolderMenu(targetBtn, charAvatar, fileName) {
     const lobbyContainer = document.getElementById('chat-lobby-container') || document.body;
     lobbyContainer.appendChild(menu);
     activeFolderMenu = menu;
+    activeFolderMenu._targetBtn = targetBtn; // 토글용 참조 저장
     
     // 이벤트
     menu.querySelectorAll('.folder-menu-item').forEach(item => {
