@@ -1563,6 +1563,8 @@
     padding: 10px 12px;
     scrollbar-width: thin;
     scrollbar-color: var(--lobby-bg-hover) transparent;
+    display: flex;
+    flex-direction: column;
 }
 
 #chat-lobby-chats-list::-webkit-scrollbar {
@@ -1910,7 +1912,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    flex: 1;
     height: 100%;
+    min-height: 200px;
     color: var(--text-muted);
     text-align: center;
     padding: 40px;
