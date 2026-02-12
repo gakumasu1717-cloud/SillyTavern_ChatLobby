@@ -562,6 +562,33 @@ ${message}` : message;
               this.save(this._data);
             }
           }
+          if (!this._data._keysMigrated) {
+            let changed = false;
+            if (this._data.favorites) {
+              this._data.favorites = this._data.favorites.map((key) => {
+                if (key.includes(".jsonl")) {
+                  changed = true;
+                  return key.replace(/\.jsonl/gi, "");
+                }
+                return key;
+              });
+              this._data.favorites = [...new Set(this._data.favorites)];
+            }
+            if (this._data.chatAssignments) {
+              const newAssignments = {};
+              for (const [key, value] of Object.entries(this._data.chatAssignments)) {
+                const normalizedKey = key.replace(/\.jsonl/gi, "");
+                if (normalizedKey !== key) changed = true;
+                newAssignments[normalizedKey] = value;
+              }
+              this._data.chatAssignments = newAssignments;
+            }
+            this._data._keysMigrated = true;
+            if (changed) {
+              console.debug("[Storage] Migrated .jsonl keys");
+              this.save(this._data);
+            }
+          }
           return this._data;
         }
       } catch (e) {
@@ -653,13 +680,14 @@ ${message}` : message;
     // 헬퍼 메서드
     // ============================================
     /**
-     * 채팅 키 생성
+     * 채팅 키 생성 (.jsonl 확장자 정규화)
      * @param {string} charAvatar - 캐릭터 아바타
      * @param {string} chatFileName - 채팅 파일명
      * @returns {string}
      */
     getChatKey(charAvatar, chatFileName) {
-      return `${charAvatar}::${chatFileName}`;
+      const normalizedFileName = (chatFileName || "").replace(/\.jsonl$/i, "");
+      return `${charAvatar}::${normalizedFileName}`;
     }
     // ============================================
     // 폴더 관련
@@ -3750,7 +3778,7 @@ ${message}` : message;
     menu.className = "chat-folder-menu";
     menu.innerHTML = `
         <div class="folder-menu-title">\uD3F4\uB354 \uC774\uB3D9</div>
-        <div class="folder-menu-item ${!currentFolderId ? "active" : ""}" data-folder-id="">
+        <div class="folder-menu-item ${!currentFolderId || currentFolderId === "uncategorized" ? "active" : ""}" data-folder-id="">
             \u{1F4E4} \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70
         </div>
         ${folders.map((f) => `

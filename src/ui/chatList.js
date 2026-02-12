@@ -1183,7 +1183,7 @@ function showChatFolderMenu(targetBtn, charAvatar, fileName) {
     menu.className = 'chat-folder-menu';
     menu.innerHTML = `
         <div class="folder-menu-title">폴더 이동</div>
-        <div class="folder-menu-item ${!currentFolderId ? 'active' : ''}" data-folder-id="">
+        <div class="folder-menu-item ${!currentFolderId || currentFolderId === 'uncategorized' ? 'active' : ''}" data-folder-id="">
             📤 폴더에서 제거
         </div>
         ${folders.map(f => `

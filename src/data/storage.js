@@ -75,6 +75,38 @@ class StorageManager {
                     }
                 }
                 
+                // 마이그레이션: .jsonl 확장자 포함된 키 정규화
+                if (!this._data._keysMigrated) {
+                    let changed = false;
+                    
+                    // favorites 키 정규화
+                    if (this._data.favorites) {
+                        this._data.favorites = this._data.favorites.map(key => {
+                            if (key.includes('.jsonl')) { changed = true; return key.replace(/\.jsonl/gi, ''); }
+                            return key;
+                        });
+                        // 중복 제거
+                        this._data.favorites = [...new Set(this._data.favorites)];
+                    }
+                    
+                    // chatAssignments 키 정규화
+                    if (this._data.chatAssignments) {
+                        const newAssignments = {};
+                        for (const [key, value] of Object.entries(this._data.chatAssignments)) {
+                            const normalizedKey = key.replace(/\.jsonl/gi, '');
+                            if (normalizedKey !== key) changed = true;
+                            newAssignments[normalizedKey] = value;
+                        }
+                        this._data.chatAssignments = newAssignments;
+                    }
+                    
+                    this._data._keysMigrated = true;
+                    if (changed) {
+                        console.debug('[Storage] Migrated .jsonl keys');
+                        this.save(this._data);
+                    }
+                }
+                
                 return this._data;
             }
         } catch (e) {
@@ -187,13 +219,15 @@ class StorageManager {
     // ============================================
     
     /**
-     * 채팅 키 생성
+     * 채팅 키 생성 (.jsonl 확장자 정규화)
      * @param {string} charAvatar - 캐릭터 아바타
      * @param {string} chatFileName - 채팅 파일명
      * @returns {string}
      */
     getChatKey(charAvatar, chatFileName) {
-        return `${charAvatar}::${chatFileName}`;
+        // .jsonl 확장자 제거하여 키 정규화 (API마다 확장자 포함 여부가 다름)
+        const normalizedFileName = (chatFileName || '').replace(/\.jsonl$/i, '');
+        return `${charAvatar}::${normalizedFileName}`;
     }
     
     // ============================================
