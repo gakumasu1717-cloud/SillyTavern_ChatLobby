@@ -996,11 +996,13 @@ function bindChatEvents(container, charAvatar) {
         // 즐겨찾기 토글
         createTouchClickHandler(favBtn, () => {
             const fn = item.dataset.fileName;
-            console.debug('[ChatList] ⭐ Fav toggle:', { charAvatar, fileName: fn, key: storage.getChatKey(charAvatar, fn) });
+            const key = storage.getChatKey(charAvatar, fn);
+            console.warn('[ChatList] ⭐ Fav toggle:', { charAvatar, fileName: fn, key });
             const isNowFav = storage.toggleFavorite(charAvatar, fn);
-            console.debug('[ChatList] ⭐ Fav result:', isNowFav, 'favorites:', storage.load().favorites);
+            console.warn('[ChatList] ⭐ Fav result:', isNowFav, 'stored favorites:', storage.load().favorites);
             favBtn.textContent = isNowFav ? '★' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
+            showToast(isNowFav ? '⭐ 즐겨찾기 추가' : '⭐ 즐겨찾기 해제', 'success');
         }, { debugName: `fav-${index}` });
         
         // 폴더 이동 버튼
@@ -1008,7 +1010,7 @@ function bindChatEvents(container, charAvatar) {
         if (folderBtn) {
             createTouchClickHandler(folderBtn, (e) => {
                 e.stopPropagation();
-                console.debug('[ChatList] 📁 Folder menu:', { charAvatar, fileName });
+                console.warn('[ChatList] 📁 Folder menu:', { charAvatar, fileName });
                 showChatFolderMenu(folderBtn, charAvatar, fileName);
             }, { debugName: `folder-${index}` });
         }

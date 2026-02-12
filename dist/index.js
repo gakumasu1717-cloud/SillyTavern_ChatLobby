@@ -3668,17 +3668,19 @@ ${message}` : message;
       }, { preventDefault: true, stopPropagation: true, debugName: `chat-${index}` });
       createTouchClickHandler(favBtn, () => {
         const fn = item.dataset.fileName;
-        console.debug("[ChatList] \u2B50 Fav toggle:", { charAvatar, fileName: fn, key: storage.getChatKey(charAvatar, fn) });
+        const key = storage.getChatKey(charAvatar, fn);
+        console.warn("[ChatList] \u2B50 Fav toggle:", { charAvatar, fileName: fn, key });
         const isNowFav = storage.toggleFavorite(charAvatar, fn);
-        console.debug("[ChatList] \u2B50 Fav result:", isNowFav, "favorites:", storage.load().favorites);
+        console.warn("[ChatList] \u2B50 Fav result:", isNowFav, "stored favorites:", storage.load().favorites);
         favBtn.textContent = isNowFav ? "\u2605" : "\u2606";
         item.classList.toggle("is-favorite", isNowFav);
+        showToast(isNowFav ? "\u2B50 \uC990\uACA8\uCC3E\uAE30 \uCD94\uAC00" : "\u2B50 \uC990\uACA8\uCC3E\uAE30 \uD574\uC81C", "success");
       }, { debugName: `fav-${index}` });
       const folderBtn = item.querySelector(".chat-folder-btn");
       if (folderBtn) {
         createTouchClickHandler(folderBtn, (e) => {
           e.stopPropagation();
-          console.debug("[ChatList] \u{1F4C1} Folder menu:", { charAvatar, fileName });
+          console.warn("[ChatList] \u{1F4C1} Folder menu:", { charAvatar, fileName });
           showChatFolderMenu(folderBtn, charAvatar, fileName);
         }, { debugName: `folder-${index}` });
       }
