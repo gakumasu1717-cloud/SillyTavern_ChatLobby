@@ -1565,8 +1565,7 @@
     padding: 10px 12px;
     scrollbar-width: thin;
     scrollbar-color: var(--lobby-bg-hover) transparent;
-    display: flex;
-    flex-direction: column;
+    position: relative;
 }
 
 #chat-lobby-chats-list::-webkit-scrollbar {
@@ -1910,16 +1909,19 @@
 }
    ============================================ */
 .lobby-empty-state {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    flex: 1;
-    height: 100%;
-    min-height: 200px;
     color: var(--text-muted);
     text-align: center;
     padding: 40px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .lobby-empty-state i {
