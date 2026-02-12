@@ -1206,7 +1206,7 @@ function showChatFolderMenu(targetBtn, charAvatar, fileName) {
         position: fixed;
         top: ${rect.bottom + 4}px;
         right: ${window.innerWidth - rect.right}px;
-        z-index: 10001;
+        z-index: 60000;
         background: var(--lobby-bg-card, #1a1a2e);
         border: 1px solid var(--lobby-border, #333);
         border-radius: 10px;
@@ -1215,7 +1215,9 @@ function showChatFolderMenu(targetBtn, charAvatar, fileName) {
         overflow: hidden;
     `;
     
-    document.body.appendChild(menu);
+    // 로비 컨테이너 안에 추가 (z-index 스택 컨텍스트 안에서 표시)
+    const lobbyContainer = document.getElementById('chat-lobby-container') || document.body;
+    lobbyContainer.appendChild(menu);
     activeFolderMenu = menu;
     
     // 이벤트

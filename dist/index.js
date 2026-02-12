@@ -140,7 +140,7 @@
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                z-index: 10002;
+                z-index: 60001;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
@@ -3764,7 +3764,7 @@ ${message}` : message;
         position: fixed;
         top: ${rect.bottom + 4}px;
         right: ${window.innerWidth - rect.right}px;
-        z-index: 10001;
+        z-index: 60000;
         background: var(--lobby-bg-card, #1a1a2e);
         border: 1px solid var(--lobby-border, #333);
         border-radius: 10px;
@@ -3772,7 +3772,8 @@ ${message}` : message;
         min-width: 150px;
         overflow: hidden;
     `;
-    document.body.appendChild(menu);
+    const lobbyContainer = document.getElementById("chat-lobby-container") || document.body;
+    lobbyContainer.appendChild(menu);
     activeFolderMenu = menu;
     menu.querySelectorAll(".folder-menu-item").forEach((item) => {
       item.addEventListener("click", async () => {

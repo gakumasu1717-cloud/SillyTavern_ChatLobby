@@ -104,7 +104,7 @@ function initToastContainer() {
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                z-index: 10002;
+                z-index: 60001;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
