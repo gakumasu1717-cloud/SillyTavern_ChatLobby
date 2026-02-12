@@ -4803,7 +4803,9 @@ ${message}` : message;
     currentFolderId: null,
     libraryChats: [],
     folders: [],
-    activeContextMenu: null
+    activeContextMenu: null,
+    libraryBatchMode: false
+    // 보관함 배치 모드
   };
   var loading = {
     characters: false,
@@ -4921,6 +4923,7 @@ ${message}` : message;
     log("Switching tab:", state.currentTab, "->", tabId);
     state.currentTab = tabId;
     deactivateBatchMode();
+    state.libraryBatchMode = false;
     document.querySelectorAll(".lobby-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -5202,7 +5205,19 @@ ${message}` : message;
             <button class="library-filter-btn folder-manage-btn" id="tab-folder-manage-btn" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC">
                 \u{1F4C1}
             </button>
+            ${state.libraryMode === "favorites" && state.libraryChats.length > 0 ? `
+                <button class="library-filter-btn library-batch-btn ${state.libraryBatchMode ? "active" : ""}" id="library-batch-toggle" title="\uBC30\uCE58 \uBAA8\uB4DC">\u2611\uFE0F</button>
+            ` : ""}
         </div>
+        ${state.libraryBatchMode ? `
+            <div class="library-batch-toolbar">
+                <span class="library-batch-count">0\uAC1C \uC120\uD0DD</span>
+                <button class="library-batch-btn-action" id="library-batch-select-all">\u2611 \uC804\uCCB4</button>
+                <button class="library-batch-btn-action library-batch-delete" id="library-batch-delete">\u{1F5D1}\uFE0F \uC0AD\uC81C</button>
+                <button class="library-batch-btn-action library-batch-move" id="library-batch-move">\u{1F4C1} \uC774\uB3D9</button>
+                <button class="library-batch-btn-action library-batch-cancel" id="library-batch-cancel">\uCDE8\uC18C</button>
+            </div>
+        ` : ""}
         <div class="library-content" id="library-content">
             ${state.libraryMode === "favorites" ? renderFavoritesContent() : renderFoldersContent()}
         </div>
@@ -5213,6 +5228,7 @@ ${message}` : message;
         if (mode && state.libraryMode !== mode) {
           state.libraryMode = mode;
           state.currentFolderId = null;
+          state.libraryBatchMode = false;
           loadLibrary().then(() => renderLibraryView());
         }
       });
@@ -5226,6 +5242,17 @@ ${message}` : message;
     container.querySelector("#tab-folder-manage-btn")?.addEventListener("click", () => {
       const event = new CustomEvent("lobby:open-folder-modal");
       document.dispatchEvent(event);
+    });
+    container.querySelector("#library-batch-toggle")?.addEventListener("click", () => {
+      state.libraryBatchMode = !state.libraryBatchMode;
+      renderLibraryView();
+    });
+    container.querySelector("#library-batch-select-all")?.addEventListener("click", libraryBatchSelectAll);
+    container.querySelector("#library-batch-delete")?.addEventListener("click", libraryBatchDelete);
+    container.querySelector("#library-batch-move")?.addEventListener("click", () => libraryBatchShowMoveMenu(container.querySelector("#library-batch-move")));
+    container.querySelector("#library-batch-cancel")?.addEventListener("click", () => {
+      state.libraryBatchMode = false;
+      renderLibraryView();
     });
     bindLibraryChatEvents(container);
   }
@@ -5277,7 +5304,19 @@ ${message}` : message;
             <button class="tab-back-btn">\u2190 \uB4A4\uB85C</button>
             <h3>\u{1F4C1} ${escapeHtml(folderName)} (${state.libraryChats.length})</h3>
             <button class="library-filter-btn folder-manage-btn" id="tab-folder-manage-btn-detail" title="\uD3F4\uB354 \uAD00\uB9AC">\u{1F4C1}</button>
+            ${state.libraryChats.length > 0 ? `
+                <button class="library-filter-btn library-batch-btn ${state.libraryBatchMode ? "active" : ""}" id="library-batch-toggle-detail" title="\uBC30\uCE58 \uBAA8\uB4DC">\u2611\uFE0F</button>
+            ` : ""}
         </div>
+        ${state.libraryBatchMode ? `
+            <div class="library-batch-toolbar">
+                <span class="library-batch-count">0\uAC1C \uC120\uD0DD</span>
+                <button class="library-batch-btn-action" id="library-batch-select-all">\u2611 \uC804\uCCB4</button>
+                <button class="library-batch-btn-action library-batch-delete" id="library-batch-delete">\u{1F5D1}\uFE0F \uC0AD\uC81C</button>
+                <button class="library-batch-btn-action library-batch-move" id="library-batch-move">\u{1F4C1} \uC774\uB3D9</button>
+                <button class="library-batch-btn-action library-batch-cancel" id="library-batch-cancel">\uCDE8\uC18C</button>
+            </div>
+        ` : ""}
         <div class="tab-chat-list">
             ${state.libraryChats.length > 0 ? state.libraryChats.map((chat, idx) => createChatItemHTML(chat, idx, "library")).join("") : '<div class="tab-empty-small">\uC774 \uD3F4\uB354\uC5D0 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>'}
         </div>
@@ -5290,6 +5329,17 @@ ${message}` : message;
     container.querySelector("#tab-folder-manage-btn-detail")?.addEventListener("click", () => {
       const event = new CustomEvent("lobby:open-folder-modal");
       document.dispatchEvent(event);
+    });
+    container.querySelector("#library-batch-toggle-detail")?.addEventListener("click", () => {
+      state.libraryBatchMode = !state.libraryBatchMode;
+      renderLibraryView();
+    });
+    container.querySelector("#library-batch-select-all")?.addEventListener("click", libraryBatchSelectAll);
+    container.querySelector("#library-batch-delete")?.addEventListener("click", libraryBatchDelete);
+    container.querySelector("#library-batch-move")?.addEventListener("click", () => libraryBatchShowMoveMenu(container.querySelector("#library-batch-move")));
+    container.querySelector("#library-batch-cancel")?.addEventListener("click", () => {
+      state.libraryBatchMode = false;
+      renderLibraryView();
     });
     bindLibraryChatEvents(container);
   }
@@ -5370,6 +5420,7 @@ ${message}` : message;
              data-idx="${idx}"
              data-source="${source}"
              data-full-preview-encoded="${encodedPreview}">
+            ${state.libraryBatchMode ? `<label class="chat-checkbox" style="display:flex;"><input type="checkbox" class="library-select-cb"></label>` : ""}
             <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
             ${avatarHTML}
             <div class="chat-content">
@@ -5392,7 +5443,18 @@ ${message}` : message;
       const avatar = item.dataset.avatar;
       const fileName = item.dataset.file;
       const idx = parseInt(item.dataset.idx) || 0;
+      item.querySelector(".library-select-cb")?.addEventListener("change", () => {
+        updateLibraryBatchCount();
+      });
       item.querySelector(".chat-content")?.addEventListener("click", () => {
+        if (state.libraryBatchMode) {
+          const cb = item.querySelector(".library-select-cb");
+          if (cb) {
+            cb.checked = !cb.checked;
+            updateLibraryBatchCount();
+          }
+          return;
+        }
         log("Opening library chat:", avatar, fileName);
         openLibraryChat(avatar, fileName);
       });
@@ -5415,6 +5477,160 @@ ${message}` : message;
         showFolderMenu(e.target, avatar, fileName);
       });
     });
+  }
+  function updateLibraryBatchCount() {
+    const count = document.querySelectorAll(".library-select-cb:checked").length;
+    const countEl = document.querySelector(".library-batch-count");
+    if (countEl) countEl.textContent = `${count}\uAC1C \uC120\uD0DD`;
+  }
+  function libraryBatchSelectAll() {
+    const checkboxes = document.querySelectorAll(".library-select-cb");
+    const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
+    checkboxes.forEach((cb) => {
+      cb.checked = !allChecked;
+    });
+    updateLibraryBatchCount();
+  }
+  async function libraryBatchDelete() {
+    const checked = document.querySelectorAll(".library-select-cb:checked");
+    if (checked.length === 0) {
+      showToast("\uC0AD\uC81C\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.", "warning");
+      return;
+    }
+    const confirmed = await showConfirm(
+      `\uC120\uD0DD\uD55C ${checked.length}\uAC1C \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+      "\uBC30\uCE58 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    if (!operationLock.acquire("libraryBatchDelete")) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    try {
+      const context = api.getContext();
+      const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+      const items = [];
+      checked.forEach((cb) => {
+        const item = cb.closest(".lobby-chat-item");
+        if (item) {
+          items.push({
+            avatar: item.dataset.avatar,
+            fileName: item.dataset.file,
+            element: item
+          });
+        }
+      });
+      let successCount = 0;
+      let skipCount = 0;
+      for (const { avatar, fileName, element } of items) {
+        const fileNameWithoutExt = fileName.replace(".jsonl", "");
+        if (currentChatFile === fileNameWithoutExt) {
+          skipCount++;
+          continue;
+        }
+        try {
+          const success = await api.deleteChat(fileName, avatar);
+          if (success) {
+            const data = storage.load();
+            const key = storage.getChatKey(avatar, fileName);
+            delete data.chatAssignments[key];
+            const favIndex = data.favorites.indexOf(key);
+            if (favIndex > -1) data.favorites.splice(favIndex, 1);
+            storage.save(data);
+            cache.invalidate("chats", avatar);
+            successCount++;
+          }
+        } catch (e) {
+          logError("Batch delete failed for:", fileName, e);
+        }
+      }
+      let msg = `${successCount}\uAC1C \uCC44\uD305 \uC0AD\uC81C \uC644\uB8CC`;
+      if (skipCount > 0) msg += ` (${skipCount}\uAC1C \uC2A4\uD0B5: \uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305)`;
+      showToast(msg, successCount > 0 ? "success" : "warning");
+      state.libraryBatchMode = false;
+      await loadLibrary();
+      renderLibraryView();
+    } finally {
+      operationLock.release();
+    }
+  }
+  function libraryBatchShowMoveMenu(targetBtn) {
+    if (!targetBtn) return;
+    closeContextMenu();
+    const checked = document.querySelectorAll(".library-select-cb:checked");
+    if (checked.length === 0) {
+      showToast("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.", "warning");
+      return;
+    }
+    const data = storage.load();
+    const folders = (data.folders || []).filter((f) => f.id !== "favorites" && f.id !== "uncategorized");
+    if (folders.length === 0) {
+      showToast("\uC774\uB3D9\uD560 \uD3F4\uB354\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uD3F4\uB354\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694.", "warning");
+      return;
+    }
+    const menu = document.createElement("div");
+    menu.className = "folder-context-menu";
+    menu.innerHTML = `
+        <div class="folder-menu-title">${checked.length}\uAC1C \uCC44\uD305 \uC774\uB3D9</div>
+        <div class="folder-menu-item" data-folder-id="">
+            \u{1F4E4} \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70
+        </div>
+        ${folders.map((f) => `
+            <div class="folder-menu-item" data-folder-id="${f.id}">
+                \u{1F4C1} ${escapeHtml(f.name)}
+            </div>
+        `).join("")}
+    `;
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.position = "fixed";
+    menu.style.zIndex = "var(--z-modal, 60000)";
+    document.body.appendChild(menu);
+    const menuRect = menu.getBoundingClientRect();
+    if (rect.bottom + menuRect.height > window.innerHeight - 10) {
+      menu.style.top = `${Math.max(10, rect.top - menuRect.height - 4)}px`;
+    } else {
+      menu.style.top = `${rect.bottom + 4}px`;
+    }
+    if (rect.right > window.innerWidth - menuRect.width - 10) {
+      menu.style.left = `${Math.max(10, rect.left - menuRect.width + rect.width)}px`;
+    } else {
+      menu.style.left = `${rect.left}px`;
+    }
+    state.activeContextMenu = menu;
+    menu.querySelectorAll(".folder-menu-item").forEach((item) => {
+      item.addEventListener("click", async () => {
+        const folderId = item.dataset.folderId;
+        const checkedNow = document.querySelectorAll(".library-select-cb:checked");
+        checkedNow.forEach((cb) => {
+          const chatItem = cb.closest(".lobby-chat-item");
+          if (chatItem) {
+            const avatar = chatItem.dataset.avatar;
+            const fileName = chatItem.dataset.file;
+            if (folderId) {
+              storage.setChatFolder(avatar, fileName, folderId);
+            } else {
+              storage.setChatFolder(avatar, fileName, null);
+            }
+          }
+        });
+        const folder = folders.find((f) => f.id === folderId);
+        const msg = folderId ? `${checkedNow.length}\uAC1C \uCC44\uD305\uC774 \u{1F4C1} ${folder?.name || "\uD3F4\uB354"}\uB85C \uC774\uB3D9` : `${checkedNow.length}\uAC1C \uCC44\uD305\uC774 \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428`;
+        showToast(msg, "success");
+        closeContextMenu();
+        state.libraryBatchMode = false;
+        await loadLibrary();
+        renderLibraryView();
+      });
+    });
+    setTimeout(() => {
+      contextMenuCloseHandler = function(e) {
+        if (!menu.contains(e.target)) closeContextMenu();
+      };
+      document.addEventListener("click", contextMenuCloseHandler);
+    }, 10);
   }
   async function handleDeleteChat(avatar, fileName, itemElement) {
     const context = api.getContext();

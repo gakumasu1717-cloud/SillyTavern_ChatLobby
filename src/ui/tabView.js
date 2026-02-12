@@ -42,6 +42,7 @@ const state = {
     libraryChats: [],
     folders: [],
     activeContextMenu: null,
+    libraryBatchMode: false,  // 보관함 배치 모드
 };
 
 // 탭별 로딩 가드 (전역 isLoading 대신)
@@ -206,6 +207,7 @@ export function switchTab(tabId) {
     
     // 탭 전환 시 배치 모드 자동 해제
     deactivateBatchMode();
+    state.libraryBatchMode = false;
     
     document.querySelectorAll('.lobby-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabId);
@@ -628,7 +630,19 @@ function renderLibraryView() {
             <button class="library-filter-btn folder-manage-btn" id="tab-folder-manage-btn" data-action="open-folder-modal" title="폴더 관리">
                 📁
             </button>
+            ${state.libraryMode === 'favorites' && state.libraryChats.length > 0 ? `
+                <button class="library-filter-btn library-batch-btn ${state.libraryBatchMode ? 'active' : ''}" id="library-batch-toggle" title="배치 모드">☑️</button>
+            ` : ''}
         </div>
+        ${state.libraryBatchMode ? `
+            <div class="library-batch-toolbar">
+                <span class="library-batch-count">0개 선택</span>
+                <button class="library-batch-btn-action" id="library-batch-select-all">☑ 전체</button>
+                <button class="library-batch-btn-action library-batch-delete" id="library-batch-delete">🗑️ 삭제</button>
+                <button class="library-batch-btn-action library-batch-move" id="library-batch-move">📁 이동</button>
+                <button class="library-batch-btn-action library-batch-cancel" id="library-batch-cancel">취소</button>
+            </div>
+        ` : ''}
         <div class="library-content" id="library-content">
             ${state.libraryMode === 'favorites' ? renderFavoritesContent() : renderFoldersContent()}
         </div>
@@ -641,6 +655,7 @@ function renderLibraryView() {
             if (mode && state.libraryMode !== mode) {
                 state.libraryMode = mode;
                 state.currentFolderId = null;
+                state.libraryBatchMode = false;
                 loadLibrary().then(() => renderLibraryView());
             }
         });
@@ -657,6 +672,21 @@ function renderLibraryView() {
     container.querySelector('#tab-folder-manage-btn')?.addEventListener('click', () => {
         const event = new CustomEvent('lobby:open-folder-modal');
         document.dispatchEvent(event);
+    });
+    
+    // 배치 모드 토글
+    container.querySelector('#library-batch-toggle')?.addEventListener('click', () => {
+        state.libraryBatchMode = !state.libraryBatchMode;
+        renderLibraryView();
+    });
+    
+    // 배치 모드 버튼들
+    container.querySelector('#library-batch-select-all')?.addEventListener('click', libraryBatchSelectAll);
+    container.querySelector('#library-batch-delete')?.addEventListener('click', libraryBatchDelete);
+    container.querySelector('#library-batch-move')?.addEventListener('click', () => libraryBatchShowMoveMenu(container.querySelector('#library-batch-move')));
+    container.querySelector('#library-batch-cancel')?.addEventListener('click', () => {
+        state.libraryBatchMode = false;
+        renderLibraryView();
     });
     
     bindLibraryChatEvents(container);
@@ -714,7 +744,19 @@ function renderFolderDetail(container) {
             <button class="tab-back-btn">← 뒤로</button>
             <h3>📁 ${escapeHtml(folderName)} (${state.libraryChats.length})</h3>
             <button class="library-filter-btn folder-manage-btn" id="tab-folder-manage-btn-detail" title="폴더 관리">📁</button>
+            ${state.libraryChats.length > 0 ? `
+                <button class="library-filter-btn library-batch-btn ${state.libraryBatchMode ? 'active' : ''}" id="library-batch-toggle-detail" title="배치 모드">☑️</button>
+            ` : ''}
         </div>
+        ${state.libraryBatchMode ? `
+            <div class="library-batch-toolbar">
+                <span class="library-batch-count">0개 선택</span>
+                <button class="library-batch-btn-action" id="library-batch-select-all">☑ 전체</button>
+                <button class="library-batch-btn-action library-batch-delete" id="library-batch-delete">🗑️ 삭제</button>
+                <button class="library-batch-btn-action library-batch-move" id="library-batch-move">📁 이동</button>
+                <button class="library-batch-btn-action library-batch-cancel" id="library-batch-cancel">취소</button>
+            </div>
+        ` : ''}
         <div class="tab-chat-list">
             ${state.libraryChats.length > 0 
                 ? state.libraryChats.map((chat, idx) => createChatItemHTML(chat, idx, 'library')).join('')
@@ -733,6 +775,21 @@ function renderFolderDetail(container) {
     container.querySelector('#tab-folder-manage-btn-detail')?.addEventListener('click', () => {
         const event = new CustomEvent('lobby:open-folder-modal');
         document.dispatchEvent(event);
+    });
+    
+    // 배치 모드 토글
+    container.querySelector('#library-batch-toggle-detail')?.addEventListener('click', () => {
+        state.libraryBatchMode = !state.libraryBatchMode;
+        renderLibraryView();
+    });
+    
+    // 배치 모드 버튼들
+    container.querySelector('#library-batch-select-all')?.addEventListener('click', libraryBatchSelectAll);
+    container.querySelector('#library-batch-delete')?.addEventListener('click', libraryBatchDelete);
+    container.querySelector('#library-batch-move')?.addEventListener('click', () => libraryBatchShowMoveMenu(container.querySelector('#library-batch-move')));
+    container.querySelector('#library-batch-cancel')?.addEventListener('click', () => {
+        state.libraryBatchMode = false;
+        renderLibraryView();
     });
     
     bindLibraryChatEvents(container);
@@ -848,6 +905,7 @@ function createChatItemHTML(chat, idx, source) {
              data-idx="${idx}"
              data-source="${source}"
              data-full-preview-encoded="${encodedPreview}">
+            ${state.libraryBatchMode ? `<label class="chat-checkbox" style="display:flex;"><input type="checkbox" class="library-select-cb"></label>` : ''}
             <button class="chat-fav-btn" title="즐겨찾기">${isFav ? '★' : '☆'}</button>
             ${avatarHTML}
             <div class="chat-content">
@@ -872,8 +930,18 @@ function bindLibraryChatEvents(container) {
         const fileName = item.dataset.file;
         const idx = parseInt(item.dataset.idx) || 0;
         
-        // 채팅 열기
+        // 배치 모드: 체크박스 변경 시 카운트 업데이트
+        item.querySelector('.library-select-cb')?.addEventListener('change', () => {
+            updateLibraryBatchCount();
+        });
+        
+        // 채팅 열기 (배치 모드에서는 체크박스 토글)
         item.querySelector('.chat-content')?.addEventListener('click', () => {
+            if (state.libraryBatchMode) {
+                const cb = item.querySelector('.library-select-cb');
+                if (cb) { cb.checked = !cb.checked; updateLibraryBatchCount(); }
+                return;
+            }
             log('Opening library chat:', avatar, fileName);
             openLibraryChat(avatar, fileName);
         });
@@ -904,6 +972,190 @@ function bindLibraryChatEvents(container) {
             showFolderMenu(e.target, avatar, fileName);
         });
     });
+}
+
+// ============================================
+// 보관함 배치 모드
+// ============================================
+
+function updateLibraryBatchCount() {
+    const count = document.querySelectorAll('.library-select-cb:checked').length;
+    const countEl = document.querySelector('.library-batch-count');
+    if (countEl) countEl.textContent = `${count}개 선택`;
+}
+
+function libraryBatchSelectAll() {
+    const checkboxes = document.querySelectorAll('.library-select-cb');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => { cb.checked = !allChecked; });
+    updateLibraryBatchCount();
+}
+
+async function libraryBatchDelete() {
+    const checked = document.querySelectorAll('.library-select-cb:checked');
+    if (checked.length === 0) {
+        showToast('삭제할 채팅을 선택하세요.', 'warning');
+        return;
+    }
+    
+    const confirmed = await showConfirm(
+        `선택한 ${checked.length}개 채팅을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`,
+        '배치 삭제',
+        true
+    );
+    if (!confirmed) return;
+    
+    if (!operationLock.acquire('libraryBatchDelete')) {
+        showToast('다른 작업이 진행 중입니다.', 'warning');
+        return;
+    }
+    
+    try {
+        // 현재 열린 채팅 확인
+        const context = api.getContext();
+        const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+        
+        const items = [];
+        checked.forEach(cb => {
+            const item = cb.closest('.lobby-chat-item');
+            if (item) {
+                items.push({
+                    avatar: item.dataset.avatar,
+                    fileName: item.dataset.file,
+                    element: item,
+                });
+            }
+        });
+        
+        let successCount = 0;
+        let skipCount = 0;
+        
+        for (const { avatar, fileName, element } of items) {
+            const fileNameWithoutExt = fileName.replace('.jsonl', '');
+            if (currentChatFile === fileNameWithoutExt) {
+                skipCount++;
+                continue;
+            }
+            
+            try {
+                const success = await api.deleteChat(fileName, avatar);
+                if (success) {
+                    // 로컬 데이터 정리
+                    const data = storage.load();
+                    const key = storage.getChatKey(avatar, fileName);
+                    delete data.chatAssignments[key];
+                    const favIndex = data.favorites.indexOf(key);
+                    if (favIndex > -1) data.favorites.splice(favIndex, 1);
+                    storage.save(data);
+                    cache.invalidate('chats', avatar);
+                    successCount++;
+                }
+            } catch (e) {
+                logError('Batch delete failed for:', fileName, e);
+            }
+        }
+        
+        let msg = `${successCount}개 채팅 삭제 완료`;
+        if (skipCount > 0) msg += ` (${skipCount}개 스킵: 현재 열린 채팅)`;
+        showToast(msg, successCount > 0 ? 'success' : 'warning');
+        
+        state.libraryBatchMode = false;
+        await loadLibrary();
+        renderLibraryView();
+    } finally {
+        operationLock.release();
+    }
+}
+
+function libraryBatchShowMoveMenu(targetBtn) {
+    if (!targetBtn) return;
+    closeContextMenu();
+    
+    const checked = document.querySelectorAll('.library-select-cb:checked');
+    if (checked.length === 0) {
+        showToast('이동할 채팅을 선택하세요.', 'warning');
+        return;
+    }
+    
+    const data = storage.load();
+    const folders = (data.folders || []).filter(f => f.id !== 'favorites' && f.id !== 'uncategorized');
+    
+    if (folders.length === 0) {
+        showToast('이동할 폴더가 없습니다. 폴더를 먼저 만들어주세요.', 'warning');
+        return;
+    }
+    
+    const menu = document.createElement('div');
+    menu.className = 'folder-context-menu';
+    menu.innerHTML = `
+        <div class="folder-menu-title">${checked.length}개 채팅 이동</div>
+        <div class="folder-menu-item" data-folder-id="">
+            📤 폴더에서 제거
+        </div>
+        ${folders.map(f => `
+            <div class="folder-menu-item" data-folder-id="${f.id}">
+                📁 ${escapeHtml(f.name)}
+            </div>
+        `).join('')}
+    `;
+    
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.zIndex = 'var(--z-modal, 60000)';
+    
+    document.body.appendChild(menu);
+    
+    const menuRect = menu.getBoundingClientRect();
+    if (rect.bottom + menuRect.height > window.innerHeight - 10) {
+        menu.style.top = `${Math.max(10, rect.top - menuRect.height - 4)}px`;
+    } else {
+        menu.style.top = `${rect.bottom + 4}px`;
+    }
+    if (rect.right > window.innerWidth - menuRect.width - 10) {
+        menu.style.left = `${Math.max(10, rect.left - menuRect.width + rect.width)}px`;
+    } else {
+        menu.style.left = `${rect.left}px`;
+    }
+    
+    state.activeContextMenu = menu;
+    
+    menu.querySelectorAll('.folder-menu-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const folderId = item.dataset.folderId;
+            const checkedNow = document.querySelectorAll('.library-select-cb:checked');
+            
+            checkedNow.forEach(cb => {
+                const chatItem = cb.closest('.lobby-chat-item');
+                if (chatItem) {
+                    const avatar = chatItem.dataset.avatar;
+                    const fileName = chatItem.dataset.file;
+                    if (folderId) {
+                        storage.setChatFolder(avatar, fileName, folderId);
+                    } else {
+                        storage.setChatFolder(avatar, fileName, null);
+                    }
+                }
+            });
+            
+            const folder = folders.find(f => f.id === folderId);
+            const msg = folderId
+                ? `${checkedNow.length}개 채팅이 📁 ${folder?.name || '폴더'}로 이동`
+                : `${checkedNow.length}개 채팅이 폴더에서 제거됨`;
+            showToast(msg, 'success');
+            
+            closeContextMenu();
+            state.libraryBatchMode = false;
+            await loadLibrary();
+            renderLibraryView();
+        });
+    });
+    
+    setTimeout(() => {
+        contextMenuCloseHandler = function(e) {
+            if (!menu.contains(e.target)) closeContextMenu();
+        };
+        document.addEventListener('click', contextMenuCloseHandler);
+    }, 10);
 }
 
 // ============================================
