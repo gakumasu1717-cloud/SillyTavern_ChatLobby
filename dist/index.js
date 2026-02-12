@@ -3246,7 +3246,7 @@ ${message}` : message;
       if (!chats || chats.length === 0) {
         updateChatCount(0);
         chatsList.innerHTML = `
-                <div class="lobby-empty-state">
+                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                     <i>\u{1F4AC}</i>
                     <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
                     <div style="font-size: 0.9em; margin-top: 5px;">\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD574\uBCF4\uC138\uC694!</div>
@@ -3259,7 +3259,7 @@ ${message}` : message;
       console.error("[ChatList] Failed to load chats:", error);
       showToast("\uCC44\uD305 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
       chatsList.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>\u26A0\uFE0F</i>
                 <div>\uCC44\uD305 \uBAA9\uB85D \uB85C\uB529 \uC2E4\uD328</div>
                 <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">\uB2E4\uC2DC \uC2DC\uB3C4</button>
@@ -3285,7 +3285,7 @@ ${message}` : message;
       console.debug("[renderChats] No valid chats, showing empty state");
       updateChatCount(0);
       container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>\u{1F4AC}</i>
                 <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
             </div>
@@ -3301,7 +3301,7 @@ ${message}` : message;
     updateChatCount(chatArray.length);
     if (chatArray.length === 0) {
       container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>\u{1F4C1}</i>
                 <div>\uC774 \uD3F4\uB354\uC5D0\uB294 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
             </div>
@@ -3828,7 +3828,7 @@ ${message}` : message;
         if (chats && chats.length > 0) {
           renderChats(chatsList, chats, character.avatar);
         } else {
-          chatsList.innerHTML = '<div class="lobby-empty-state"><i>\u{1F4AC}</i><div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div></div>';
+          chatsList.innerHTML = '<div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;"><i>\u{1F4AC}</i><div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div></div>';
         }
       } catch (error) {
         console.error("[ChatList] Failed to reload chats:", error);
@@ -4055,7 +4055,7 @@ ${message}` : message;
       if (!chats || chats.length === 0) {
         updateChatCount(0);
         chatsList.innerHTML = `
-                <div class="lobby-empty-state">
+                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                     <i>\u{1F4AC}</i>
                     <div>\uADF8\uB8F9 \uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
                     <div style="font-size: 0.9em; margin-top: 5px;">\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD574\uBCF4\uC138\uC694!</div>
@@ -4068,7 +4068,7 @@ ${message}` : message;
       console.error("[ChatList] Failed to load group chats:", error);
       showToast("\uADF8\uB8F9 \uCC44\uD305 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
       chatsList.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>\u26A0\uFE0F</i>
                 <div>\uADF8\uB8F9 \uCC44\uD305 \uBAA9\uB85D \uB85C\uB529 \uC2E4\uD328</div>
             </div>
@@ -4107,7 +4107,7 @@ ${message}` : message;
     if (chats.length === 0) {
       updateChatCount(0);
       container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>\u{1F4AC}</i>
                 <div>\uADF8\uB8F9 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
             </div>
@@ -4124,7 +4124,7 @@ ${message}` : message;
     updateChatCount(filteredChats.length);
     if (filteredChats.length === 0) {
       container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>\u{1F4C1}</i>
                 <div>\uC774 \uD3F4\uB354\uC5D0\uB294 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
             </div>
@@ -4165,7 +4165,7 @@ ${message}` : message;
         `;
     }
     container.innerHTML = html || `
-        <div class="lobby-empty-state">
+        <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
             <i>\u{1F4AC}</i>
             <div>\uADF8\uB8F9 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
         </div>
@@ -4282,7 +4282,7 @@ ${message}` : message;
               updateChatCount(remaining);
               if (remaining === 0) {
                 container.innerHTML = `
-                                <div class="lobby-empty-state">
+                                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                                     <i>\u{1F4AC}</i>
                                     <div>\uADF8\uB8F9 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
                                 </div>
@@ -4502,7 +4502,7 @@ ${message}` : message;
       const chatsList = document.getElementById("chat-lobby-chats-list");
       if (chatsList) {
         chatsList.innerHTML = `
-                <div class="lobby-empty-state">
+                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                     <i>\u{1F4AC}</i>
                     <div>\uCC44\uD305 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>
                 </div>
@@ -6180,7 +6180,7 @@ ${message}` : message;
 
                     <!-- \uCC44\uD305 \uBAA9\uB85D -->
                     <div id="chat-lobby-chats-list">
-                        <div class="lobby-empty-state">
+                        <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                             <i>\u{1F4AC}</i>
                             <div>\uCE90\uB9AD\uD130\uB97C \uC120\uD0DD\uD558\uC138\uC694</div>
                         </div>

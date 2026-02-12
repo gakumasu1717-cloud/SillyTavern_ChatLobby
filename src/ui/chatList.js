@@ -368,7 +368,7 @@ export async function renderChatList(character) {
         if (!chats || chats.length === 0) {
             updateChatCount(0);
             chatsList.innerHTML = `
-                <div class="lobby-empty-state">
+                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                     <i>💬</i>
                     <div>채팅 기록이 없습니다</div>
                     <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
@@ -382,7 +382,7 @@ export async function renderChatList(character) {
         console.error('[ChatList] Failed to load chats:', error);
         showToast('채팅 목록을 불러오지 못했습니다.', 'error');
         chatsList.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>⚠️</i>
                 <div>채팅 목록 로딩 실패</div>
                 <button onclick="window.chatLobbyRefresh()" style="margin-top:10px;padding:8px 16px;cursor:pointer;">다시 시도</button>
@@ -428,7 +428,7 @@ function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
         console.debug('[renderChats] No valid chats, showing empty state');
         updateChatCount(0);
         container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>💬</i>
                 <div>채팅 기록이 없습니다</div>
             </div>
@@ -451,7 +451,7 @@ function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
     // 필터 결과가 0이면 빈 상태 표시
     if (chatArray.length === 0) {
         container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>📁</i>
                 <div>이 폴더에는 채팅이 없습니다</div>
             </div>
@@ -1297,7 +1297,7 @@ export async function refreshCurrentChatList(forceReload = false) {
             if (chats && chats.length > 0) {
                 renderChats(chatsList, chats, character.avatar);
             } else {
-                chatsList.innerHTML = '<div class="lobby-empty-state"><i>💬</i><div>채팅 기록이 없습니다</div></div>';
+                chatsList.innerHTML = '<div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;"><i>💬</i><div>채팅 기록이 없습니다</div></div>';
             }
         } catch (error) {
             console.error('[ChatList] Failed to reload chats:', error);
@@ -1647,7 +1647,7 @@ export async function renderGroupChatList(group) {
         if (!chats || chats.length === 0) {
             updateChatCount(0);
             chatsList.innerHTML = `
-                <div class="lobby-empty-state">
+                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                     <i>💬</i>
                     <div>그룹 채팅 기록이 없습니다</div>
                     <div style="font-size: 0.9em; margin-top: 5px;">새 채팅을 시작해보세요!</div>
@@ -1661,7 +1661,7 @@ export async function renderGroupChatList(group) {
         console.error('[ChatList] Failed to load group chats:', error);
         showToast('그룹 채팅 목록을 불러오지 못했습니다.', 'error');
         chatsList.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>⚠️</i>
                 <div>그룹 채팅 목록 로딩 실패</div>
             </div>
@@ -1723,7 +1723,7 @@ function renderGroupChats(container, chats, group) {
     if (chats.length === 0) {
         updateChatCount(0);
         container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>💬</i>
                 <div>그룹 채팅이 없습니다</div>
             </div>
@@ -1747,7 +1747,7 @@ function renderGroupChats(container, chats, group) {
     // 필터 결과가 0이면 빈 상태 표시
     if (filteredChats.length === 0) {
         container.innerHTML = `
-            <div class="lobby-empty-state">
+            <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                 <i>📁</i>
                 <div>이 폴더에는 채팅이 없습니다</div>
             </div>
@@ -1794,7 +1794,7 @@ function renderGroupChats(container, chats, group) {
     }
     
     container.innerHTML = html || `
-        <div class="lobby-empty-state">
+        <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
             <i>💬</i>
             <div>그룹 채팅이 없습니다</div>
         </div>
@@ -1968,7 +1968,7 @@ function bindGroupChatEvents(container, group) {
                         updateChatCount(remaining);
                         if (remaining === 0) {
                             container.innerHTML = `
-                                <div class="lobby-empty-state">
+                                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                                     <i>💬</i>
                                     <div>그룹 채팅이 없습니다</div>
                                 </div>

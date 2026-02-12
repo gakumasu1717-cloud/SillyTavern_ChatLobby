@@ -295,7 +295,7 @@ function updateChatCountAfterDelete() {
         const chatsList = document.getElementById('chat-lobby-chats-list');
         if (chatsList) {
             chatsList.innerHTML = `
-                <div class="lobby-empty-state">
+                <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                     <i>💬</i>
                     <div>채팅 기록이 없습니다</div>
                 </div>

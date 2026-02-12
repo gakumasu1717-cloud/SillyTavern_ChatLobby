@@ -131,7 +131,7 @@ export function createLobbyHTML() {
 
                     <!-- 채팅 목록 -->
                     <div id="chat-lobby-chats-list">
-                        <div class="lobby-empty-state">
+                        <div class="lobby-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--text-muted,#888);padding:40px;">
                             <i>💬</i>
                             <div>캐릭터를 선택하세요</div>
                         </div>
