@@ -1002,6 +1002,7 @@ function bindChatEvents(container, charAvatar) {
             console.warn('[ChatList] ⭐ Fav result:', isNowFav, 'stored favorites:', storage.load().favorites);
             favBtn.textContent = isNowFav ? '★' : '☆';
             item.classList.toggle('is-favorite', isNowFav);
+            console.warn('[ChatList] ⭐ DOM updated: btn text =', favBtn.textContent, 'has is-favorite =', item.classList.contains('is-favorite'));
             showToast(isNowFav ? '⭐ 즐겨찾기 추가' : '⭐ 즐겨찾기 해제', 'success');
         }, { debugName: `fav-${index}` });
         

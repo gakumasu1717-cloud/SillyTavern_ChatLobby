@@ -216,16 +216,8 @@ function showDOMToast(message, type, duration) {
  * @param {number} [duration] - 표시 시간 (ms)
  */
 export function showToast(message, type = 'info', duration = CONFIG.timing.toastDuration) {
-    // 모바일 감지
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    // 브라우저 알림 시도 (권한이 있는 경우)
-    const notificationShown = showBrowserNotification(message, type);
-    
-    // 모바일이거나 브라우저 알림 실패 시 DOM 토스트도 표시
-    if (isMobile || !notificationShown) {
-        showDOMToast(message, type, duration);
-    }
+    // DOM 토스트는 항상 표시 (화면에 보이는 범용 피드백)
+    showDOMToast(message, type, duration);
 }
 
 /**

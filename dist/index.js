@@ -130,37 +130,6 @@
     notificationPermission = Notification.permission;
     return Notification.permission;
   }
-  function showBrowserNotification(message, type) {
-    if (!("Notification" in window) || Notification.permission !== "granted") {
-      return false;
-    }
-    const icons = {
-      success: "\u2705",
-      error: "\u274C",
-      warning: "\u26A0\uFE0F",
-      info: "\u2139\uFE0F"
-    };
-    const titles = {
-      success: "Success",
-      error: "Error",
-      warning: "Warning",
-      info: "Info"
-    };
-    try {
-      const notification = new Notification(`${icons[type]} ${titles[type]}`, {
-        body: message,
-        icon: "/favicon.ico",
-        tag: `chatlobby-${type}-${Date.now()}`,
-        requireInteraction: false,
-        silent: type !== "error"
-      });
-      setTimeout(() => notification.close(), 3e3);
-      return true;
-    } catch (e) {
-      console.warn("[Notification] Failed to show notification:", e);
-      return false;
-    }
-  }
   function initToastContainer() {
     if (toastContainer) return;
     toastContainer = document.createElement("div");
@@ -259,11 +228,7 @@
     setTimeout(() => removeToast(toast), duration);
   }
   function showToast(message, type = "info", duration = CONFIG.timing.toastDuration) {
-    const isMobile2 = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const notificationShown = showBrowserNotification(message, type);
-    if (isMobile2 || !notificationShown) {
-      showDOMToast(message, type, duration);
-    }
+    showDOMToast(message, type, duration);
   }
   async function initNotifications() {
     await requestNotificationPermission();
@@ -3674,6 +3639,7 @@ ${message}` : message;
         console.warn("[ChatList] \u2B50 Fav result:", isNowFav, "stored favorites:", storage.load().favorites);
         favBtn.textContent = isNowFav ? "\u2605" : "\u2606";
         item.classList.toggle("is-favorite", isNowFav);
+        console.warn("[ChatList] \u2B50 DOM updated: btn text =", favBtn.textContent, "has is-favorite =", item.classList.contains("is-favorite"));
         showToast(isNowFav ? "\u2B50 \uC990\uACA8\uCC3E\uAE30 \uCD94\uAC00" : "\u2B50 \uC990\uACA8\uCC3E\uAE30 \uD574\uC81C", "success");
       }, { debugName: `fav-${index}` });
       const folderBtn = item.querySelector(".chat-folder-btn");
