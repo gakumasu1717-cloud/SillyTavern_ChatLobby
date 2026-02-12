@@ -2393,13 +2393,13 @@ ${message}` : message;
       if (now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) {
         return;
       }
+      globalLastClickTime = now;
       if (now - lastHandleTime < 300) {
         return;
       }
       if (isScrolling) {
         return;
       }
-      globalLastClickTime = now;
       lastHandleTime = now;
       if (preventDefault) e.preventDefault();
       if (stopPropagation) e.stopPropagation();
@@ -3616,6 +3616,10 @@ ${message}` : message;
             cb.checked = !cb.checked;
             updateBatchCount();
           }
+          return;
+        }
+        if (operationLock.isLocked) {
+          console.debug("[ChatList] Operation in progress, ignoring click:", operationLock.currentOp);
           return;
         }
         const handlers = store.chatHandlers;

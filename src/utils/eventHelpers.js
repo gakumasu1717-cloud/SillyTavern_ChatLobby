@@ -75,6 +75,9 @@ export function createTouchClickHandler(element, handler, options = {}) {
             return;
         }
         
+        // 즉시 전역 시간 갱신 (다른 요소의 동시 클릭 차단)
+        globalLastClickTime = now;
+        
         // 요소별 중복 실행 방지 (300ms 내 중복 무시 - 빠른 클릭 방지)
         if (now - lastHandleTime < 300) {
             return;
@@ -84,7 +87,6 @@ export function createTouchClickHandler(element, handler, options = {}) {
             return;
         }
         
-        globalLastClickTime = now;
         lastHandleTime = now;
         
         if (preventDefault) e.preventDefault();

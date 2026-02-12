@@ -966,6 +966,12 @@ function bindChatEvents(container, charAvatar) {
                 return;
             }
             
+            // operationLock 사전 체크 (다른 채팅이 이미 열리는 중이면 무시)
+            if (operationLock.isLocked) {
+                console.debug('[ChatList] Operation in progress, ignoring click:', operationLock.currentOp);
+                return;
+            }
+            
             const handlers = store.chatHandlers;
             console.debug('[ChatList] handlers =', handlers, 'onOpen =', !!handlers?.onOpen);
             
