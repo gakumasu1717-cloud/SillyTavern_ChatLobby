@@ -3998,10 +3998,27 @@ ${message}` : message;
       clearTimeout(autoAnalyzeTimerId);
       autoAnalyzeTimerId = null;
     }
+    deactivateBatchMode();
     const chatsPanel = document.getElementById("chat-lobby-chats");
     if (chatsPanel) chatsPanel.classList.remove("visible");
     store.setCurrentCharacter(null);
     store.setCurrentGroup(null);
+  }
+  function deactivateBatchMode() {
+    if (!store.batchModeActive) return;
+    store.setBatchMode(false);
+    const chatsList = document.getElementById("chat-lobby-chats-list");
+    const toolbar = document.getElementById("chat-lobby-batch-toolbar");
+    const batchBtn = document.getElementById("chat-lobby-batch-mode");
+    chatsList?.classList.remove("batch-mode");
+    toolbar?.classList.remove("visible");
+    batchBtn?.classList.remove("active");
+    chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => {
+      cb.style.display = "none";
+      const input = cb.querySelector("input");
+      if (input) input.checked = false;
+    });
+    updateBatchCount();
   }
   async function renderGroupChatList(group) {
     console.debug("[ChatList] renderGroupChatList called:", {
@@ -4903,6 +4920,7 @@ ${message}` : message;
     if (state.currentTab === tabId) return;
     log("Switching tab:", state.currentTab, "->", tabId);
     state.currentTab = tabId;
+    deactivateBatchMode();
     document.querySelectorAll(".lobby-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -5078,7 +5096,7 @@ ${message}` : message;
     });
   }
   async function loadLibrary() {
-    console.warn("[TabView] Loading library...");
+    log("Loading library...");
     const data = storage.load();
     const context = api.getContext();
     const characters = context?.characters || [];
@@ -5109,7 +5127,7 @@ ${message}` : message;
     const chatsByAvatar = /* @__PURE__ */ new Map();
     for (const key of keysToLoad) {
       const parsed = parseKeyBasic(key);
-      console.warn(`[TabView] parseKeyBasic("${key}") =>`, parsed);
+      log(`parseKeyBasic("${key}") =>`, parsed);
       if (parsed) {
         if (!chatsByAvatar.has(parsed.avatar)) {
           chatsByAvatar.set(parsed.avatar, []);
@@ -5117,12 +5135,11 @@ ${message}` : message;
         chatsByAvatar.get(parsed.avatar).push({ key, fileName: parsed.fileName });
       }
     }
-    console.warn(`[TabView] chatsByAvatar: ${chatsByAvatar.size} avatars`);
+    log(`chatsByAvatar: ${chatsByAvatar.size} avatars`);
     await Promise.allSettled(
       [...chatsByAvatar.entries()].map(async ([avatar, chats]) => {
         try {
           const apiChats = await api.fetchChatsForCharacter(avatar);
-          console.warn(`[TabView] API chats for ${avatar}:`, apiChats?.length, "items");
           const entityInfo = characters.find((c) => c.avatar === avatar);
           const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, "");
           for (const { key, fileName } of chats) {
@@ -5130,7 +5147,6 @@ ${message}` : message;
               const apiName = c.file_name || "";
               return apiName === fileName || apiName === `${fileName}.jsonl` || apiName.replace(/\.jsonl$/i, "") === fileName;
             });
-            console.warn(`[TabView] Match for "${fileName}":`, apiChat ? `found (${apiChat.file_name})` : "NOT found");
             const cachedTime = lastChatCache.lastChatTimes.get(avatar);
             const lastChatTime = typeof cachedTime === "number" ? cachedTime : cachedTime?.time || 0;
             state.libraryChats.push({
@@ -5155,7 +5171,7 @@ ${message}` : message;
       })
     );
     state.libraryChats.sort((a, b) => b.lastChatTime - a.lastChatTime);
-    console.warn(`[TabView] Loaded ${state.libraryChats.length} library chats`);
+    log(`Loaded ${state.libraryChats.length} library chats`);
   }
   function parseKeyBasic(key) {
     const sepIdx = key.indexOf("::");
@@ -5168,7 +5184,6 @@ ${message}` : message;
   }
   function renderLibraryView() {
     const container = document.querySelector('.tab-content[data-tab="library"]');
-    console.warn("[TabView] renderLibraryView:", { container: !!container, mode: state.libraryMode, chats: state.libraryChats.length, folderId: state.currentFolderId });
     if (!container) return;
     if (state.currentFolderId) {
       renderFolderDetail(container);
@@ -5942,7 +5957,6 @@ ${message}` : message;
                     <div id="chat-lobby-batch-toolbar">
                         <span id="batch-selected-count">0\uAC1C \uC120\uD0DD</span>
                         <button id="batch-select-all-btn" data-action="batch-select-all" title="\uC804\uCCB4 \uC120\uD0DD/\uD574\uC81C">\u2611 \uC804\uCCB4</button>
-                        <span id="batch-help-text">\uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694</span>
                         <button id="batch-delete-btn" data-action="batch-delete" title="\uC120\uD0DD\uD55C \uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F \uC0AD\uC81C</button>
                         <button id="batch-move-btn" data-action="open-folder-modal" title="\uC120\uD0DD\uD55C \uCC44\uD305 \uD3F4\uB354 \uC774\uB3D9">\u{1F4C1} \uC774\uB3D9</button>
                         <button id="batch-cancel-btn" data-action="batch-cancel">\uCDE8\uC18C</button>
@@ -9247,9 +9261,7 @@ ${message}` : message;
           console.warn("[ChatLobby] Failed to refresh characters:", error);
         }
         storage.setFilterFolder("all");
-        if (store.batchModeActive) {
-          toggleBatchMode();
-        }
+        deactivateBatchMode();
         closeChatPanel();
         await Promise.all([
           renderPersonaBar(),

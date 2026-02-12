@@ -1557,10 +1557,35 @@ export function closeChatPanel() {
         autoAnalyzeTimerId = null;
     }
     
+    // 배치 모드 자동 해제
+    deactivateBatchMode();
+    
     const chatsPanel = document.getElementById('chat-lobby-chats');
     if (chatsPanel) chatsPanel.classList.remove('visible');
     store.setCurrentCharacter(null);
     store.setCurrentGroup(null);
+}
+
+/**
+ * 배치 모드 강제 해제 (로비 닫기/탭 전환/캐릭터 변경 시)
+ */
+export function deactivateBatchMode() {
+    if (!store.batchModeActive) return;
+    store.setBatchMode(false);
+    
+    const chatsList = document.getElementById('chat-lobby-chats-list');
+    const toolbar = document.getElementById('chat-lobby-batch-toolbar');
+    const batchBtn = document.getElementById('chat-lobby-batch-mode');
+    
+    chatsList?.classList.remove('batch-mode');
+    toolbar?.classList.remove('visible');
+    batchBtn?.classList.remove('active');
+    chatsList?.querySelectorAll('.chat-checkbox').forEach(cb => {
+        cb.style.display = 'none';
+        const input = cb.querySelector('input');
+        if (input) input.checked = false;
+    });
+    updateBatchCount();
 }
 
 // ============================================

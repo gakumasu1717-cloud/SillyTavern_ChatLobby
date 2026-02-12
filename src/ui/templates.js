@@ -124,7 +124,6 @@ export function createLobbyHTML() {
                     <div id="chat-lobby-batch-toolbar">
                         <span id="batch-selected-count">0개 선택</span>
                         <button id="batch-select-all-btn" data-action="batch-select-all" title="전체 선택/해제">☑ 전체</button>
-                        <span id="batch-help-text">채팅을 선택하세요</span>
                         <button id="batch-delete-btn" data-action="batch-delete" title="선택한 채팅 삭제">🗑️ 삭제</button>
                         <button id="batch-move-btn" data-action="open-folder-modal" title="선택한 채팅 폴더 이동">📁 이동</button>
                         <button id="batch-cancel-btn" data-action="batch-cancel">취소</button>

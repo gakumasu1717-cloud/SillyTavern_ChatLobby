@@ -11,6 +11,7 @@ import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { showToast, showConfirm } from './notifications.js';
 import { openChat } from '../handlers/chatHandlers.js';
+import { deactivateBatchMode } from './chatList.js';
 import { operationLock } from '../utils/operationLock.js';
 import { getLocalDateString } from '../data/calendarStorage.js';
 
@@ -202,6 +203,9 @@ export function switchTab(tabId) {
     
     log('Switching tab:', state.currentTab, '->', tabId);
     state.currentTab = tabId;
+    
+    // 탭 전환 시 배치 모드 자동 해제
+    deactivateBatchMode();
     
     document.querySelectorAll('.lobby-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabId);
@@ -425,7 +429,7 @@ function renderRecentView() {
 // ============================================
 
 async function loadLibrary() {
-    console.warn('[TabView] Loading library...');
+    log('Loading library...');
     
     const data = storage.load();
     const context = api.getContext();
@@ -471,7 +475,7 @@ async function loadLibrary() {
     const chatsByAvatar = new Map();
     for (const key of keysToLoad) {
         const parsed = parseKeyBasic(key);
-        console.warn(`[TabView] parseKeyBasic("${key}") =>`, parsed);
+        log(`parseKeyBasic("${key}") =>`, parsed);
         if (parsed) {
             if (!chatsByAvatar.has(parsed.avatar)) {
                 chatsByAvatar.set(parsed.avatar, []);
@@ -479,14 +483,14 @@ async function loadLibrary() {
             chatsByAvatar.get(parsed.avatar).push({ key, fileName: parsed.fileName });
         }
     }
-    console.warn(`[TabView] chatsByAvatar: ${chatsByAvatar.size} avatars`);
+    log(`chatsByAvatar: ${chatsByAvatar.size} avatars`);
     
     // API로 채팅 정보 가져오기 (병렬 처리)
     await Promise.allSettled(
         [...chatsByAvatar.entries()].map(async ([avatar, chats]) => {
             try {
                 const apiChats = await api.fetchChatsForCharacter(avatar);
-                console.warn(`[TabView] API chats for ${avatar}:`, apiChats?.length, 'items');
+
                 const entityInfo = characters.find(c => c.avatar === avatar);
                 const name = entityInfo?.name || avatar.replace(/\.[^.]+$/, '');
                 
@@ -498,7 +502,7 @@ async function loadLibrary() {
                             apiName === `${fileName}.jsonl` ||
                             apiName.replace(/\.jsonl$/i, '') === fileName;
                     });
-                    console.warn(`[TabView] Match for "${fileName}":`, apiChat ? `found (${apiChat.file_name})` : 'NOT found');
+
                     
                     const cachedTime = lastChatCache.lastChatTimes.get(avatar);
                     const lastChatTime = typeof cachedTime === 'number' ? cachedTime : cachedTime?.time || 0;
@@ -526,7 +530,7 @@ async function loadLibrary() {
     );
     
     state.libraryChats.sort((a, b) => b.lastChatTime - a.lastChatTime);
-    console.warn(`[TabView] Loaded ${state.libraryChats.length} library chats`);
+    log(`Loaded ${state.libraryChats.length} library chats`);
 }
 
 // 키에서 avatar와 fileName만 추출 (확장자 기반 파싱 - _ 포함 아바타명 지원)
@@ -604,7 +608,6 @@ function parseChatKey(key, characters, groups) {
 
 function renderLibraryView() {
     const container = document.querySelector('.tab-content[data-tab="library"]');
-    console.warn('[TabView] renderLibraryView:', { container: !!container, mode: state.libraryMode, chats: state.libraryChats.length, folderId: state.currentFolderId });
     if (!container) return;
     
     if (state.currentFolderId) {
