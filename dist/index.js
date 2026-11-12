@@ -1717,6 +1717,35 @@ ${message}` : message;
       }
     }
     /**
+     * 캐릭터의 "마지막 채팅" 기록만 갱신 (다음 실행 시 이 채팅이 열리도록)
+     * ST의 openCharacterChat은 카드 전체를 다시 저장(createOrEditCharacter)하지만
+     * 여기서는 chat 필드 하나만 바꾼다. 실패해도 채팅 동작에는 영향 없음.
+     * @param {string} characterAvatar
+     * @param {string} characterName
+     * @param {string} chatFileName - .jsonl 없는 파일명
+     * @returns {Promise<boolean>}
+     */
+    async saveLastChatPointer(characterAvatar, characterName, chatFileName) {
+      if (!characterAvatar || !characterName || !chatFileName) return false;
+      try {
+        const response = await fetch("/api/characters/edit-attribute", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body: JSON.stringify({
+            avatar_url: characterAvatar,
+            ch_name: characterName,
+            field: "chat",
+            value: chatFileName
+          })
+        });
+        if (!response.ok) console.debug("[API] saveLastChatPointer failed:", response.status);
+        return response.ok;
+      } catch (e) {
+        console.debug("[API] saveLastChatPointer error:", e);
+        return false;
+      }
+    }
+    /**
      * 캐릭터 편집 화면 열기
      * @param {number|string} characterIndex - 캐릭터 인덱스
      * @returns {Promise<void>}
@@ -6387,8 +6416,13 @@ ${message}` : message;
       const ctxAfter = api.getContext();
       const loadedChat = ctxAfter?.characters?.[ctxAfter.characterId]?.chat;
       if (!isSameCharacter && loadedChat === chatFileName) {
-        console.debug("[ChatHandlers] Target chat already loaded via select, skipping openCharacterChat");
+        console.debug("[ChatHandlers] Target chat loaded directly (single load)");
+        const loadedChar = ctxAfter.characters[ctxAfter.characterId];
+        api.saveLastChatPointer(loadedChar.avatar, loadedChar.name, chatFileName);
         return;
+      }
+      if (!isSameCharacter) {
+        console.warn("[ChatHandlers] Direct load missed (loaded:", loadedChat, "), opening target chat again");
       }
       console.debug("[ChatHandlers] Opening chat:", chatFileName);
       if (typeof context?.openCharacterChat === "function") {
@@ -6557,7 +6591,16 @@ ${message}` : message;
   }
   async function switchCharacter(charIndexNum, charAvatar, { chatPointer = null, token = null } = {}) {
     const context = api.getContext();
-    const targetChar = context?.characters?.[charIndexNum];
+    if (context?.characters?.[charIndexNum]?.avatar !== charAvatar) return "failed";
+    if (typeof chatPointer === "string" && context.characters[charIndexNum].shallow && typeof context.unshallowCharacter === "function") {
+      try {
+        await context.unshallowCharacter(charIndexNum);
+      } catch (e) {
+        console.warn("[ChatHandlers] unshallowCharacter failed:", e);
+      }
+      if (token !== null && !operationLock.isCurrent(token)) return "stale";
+    }
+    const targetChar = api.getContext()?.characters?.[charIndexNum];
     if (!targetChar || targetChar.avatar !== charAvatar) return "failed";
     const originalPointer = targetChar.chat;
     const pointerChanged = typeof chatPointer === "string" && typeof originalPointer === "string" && chatPointer !== originalPointer;
@@ -7914,6 +7957,18 @@ ${message}` : message;
     try {
       log("Opening recent chat:", chat.file, chat.avatar);
       window.dispatchEvent(new CustomEvent("chatlobby:close"));
+      if (!chat.isGroup && chat.avatar && chat.file) {
+        const charIndex = (api.getContext()?.characters || []).findIndex((c) => c.avatar === chat.avatar);
+        if (charIndex !== -1) {
+          operationLock.release(token);
+          await openChat({
+            fileName: chat.file,
+            charAvatar: chat.avatar,
+            charIndex: String(charIndex)
+          });
+          return;
+        }
+      }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const selector = chat.isGroup ? `.recentChat[data-group="${chat.avatar}"]` : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
       const recentEl = document.querySelector(selector);

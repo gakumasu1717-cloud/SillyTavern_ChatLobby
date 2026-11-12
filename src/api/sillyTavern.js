@@ -591,6 +591,36 @@ class SillyTavernAPI {
     }
     
     /**
+     * 캐릭터의 "마지막 채팅" 기록만 갱신 (다음 실행 시 이 채팅이 열리도록)
+     * ST의 openCharacterChat은 카드 전체를 다시 저장(createOrEditCharacter)하지만
+     * 여기서는 chat 필드 하나만 바꾼다. 실패해도 채팅 동작에는 영향 없음.
+     * @param {string} characterAvatar
+     * @param {string} characterName
+     * @param {string} chatFileName - .jsonl 없는 파일명
+     * @returns {Promise<boolean>}
+     */
+    async saveLastChatPointer(characterAvatar, characterName, chatFileName) {
+        if (!characterAvatar || !characterName || !chatFileName) return false;
+        try {
+            const response = await fetch('/api/characters/edit-attribute', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify({
+                    avatar_url: characterAvatar,
+                    ch_name: characterName,
+                    field: 'chat',
+                    value: chatFileName,
+                }),
+            });
+            if (!response.ok) console.debug('[API] saveLastChatPointer failed:', response.status);
+            return response.ok;
+        } catch (e) {
+            console.debug('[API] saveLastChatPointer error:', e);
+            return false;
+        }
+    }
+
+    /**
      * 캐릭터 편집 화면 열기
      * @param {number|string} characterIndex - 캐릭터 인덱스
      * @returns {Promise<void>}

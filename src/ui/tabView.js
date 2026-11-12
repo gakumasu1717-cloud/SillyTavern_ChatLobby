@@ -1289,6 +1289,23 @@ export async function openRecentChat(chat, idx) {
         // index.js의 완전한 closeLobby 호출
         window.dispatchEvent(new CustomEvent('chatlobby:close'));
 
+        // ★ 캐릭터 채팅은 ST 첫 화면의 최근 채팅을 대신 클릭하지 않고 openChat으로 직접 연다.
+        // ST 자체 핸들러(openRecentCharacterChat)는 "캐릭터 선택(마지막 채팅 로드) → 대상 채팅 열기"라
+        // 구조적으로 두 번 로드한다. openChat은 대상 채팅 하나만 로드한다.
+        if (!chat.isGroup && chat.avatar && chat.file) {
+            const charIndex = (api.getContext()?.characters || []).findIndex(c => c.avatar === chat.avatar);
+            if (charIndex !== -1) {
+                // openChat이 자체 락을 쓰므로 현재 락은 먼저 해제
+                operationLock.release(token);
+                await openChat({
+                    fileName: chat.file,
+                    charAvatar: chat.avatar,
+                    charIndex: String(charIndex),
+                });
+                return;
+            }
+        }
+
         // DOM이 다시 보이도록 대기 (rAF 2회 체이닝이 더 안정적)
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 

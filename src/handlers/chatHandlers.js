@@ -88,8 +88,15 @@ export async function openChat(chatInfo) {
         const ctxAfter = api.getContext();
         const loadedChat = ctxAfter?.characters?.[ctxAfter.characterId]?.chat;
         if (!isSameCharacter && loadedChat === chatFileName) {
-            console.debug('[ChatHandlers] Target chat already loaded via select, skipping openCharacterChat');
+            console.debug('[ChatHandlers] Target chat loaded directly (single load)');
+            // ST의 openCharacterChat은 캐릭터 카드 전체를 다시 저장해서 "다음에 열 채팅"을 기록한다.
+            // 그 대신 chat 필드 하나만 가볍게 기록 (실패해도 동작에는 영향 없음)
+            const loadedChar = ctxAfter.characters[ctxAfter.characterId];
+            api.saveLastChatPointer(loadedChar.avatar, loadedChar.name, chatFileName);
             return;
+        }
+        if (!isSameCharacter) {
+            console.warn('[ChatHandlers] Direct load missed (loaded:', loadedChat, '), opening target chat again');
         }
 
         // SillyTavern openCharacterChat 함수 사용
@@ -362,7 +369,25 @@ function isCharacterSelected(charIndexNum, charAvatar) {
  */
 export async function switchCharacter(charIndexNum, charAvatar, { chatPointer = null, token = null } = {}) {
     const context = api.getContext();
-    const targetChar = context?.characters?.[charIndexNum];
+    if (context?.characters?.[charIndexNum]?.avatar !== charAvatar) return 'failed';
+
+    // ★ 지연 로딩(shallow) 캐릭터는 전환 전에 전체 데이터를 먼저 받아둔다.
+    // ST의 getChat()은 내부에서 unshallowCharacter()를 부르는데, 이게 characters[i]를
+    // 서버에서 받은 새 객체로 통째로 교체한다 → 미리 바꿔둔 chat 포인터가 사라짐
+    // → 마지막(무거운) 채팅이 먼저 열리고 대상 채팅을 또 여는 "이중 로딩"의 원인이었음.
+    // 먼저 받아두면 getChat 안의 unshallow는 아무것도 안 하므로 포인터가 유지된다.
+    if (typeof chatPointer === 'string' && context.characters[charIndexNum].shallow
+        && typeof context.unshallowCharacter === 'function') {
+        try {
+            await context.unshallowCharacter(charIndexNum);
+        } catch (e) {
+            console.warn('[ChatHandlers] unshallowCharacter failed:', e);
+        }
+        if (token !== null && !operationLock.isCurrent(token)) return 'stale';
+    }
+
+    // unshallow로 객체가 교체됐을 수 있으므로 다시 읽음
+    const targetChar = api.getContext()?.characters?.[charIndexNum];
     if (!targetChar || targetChar.avatar !== charAvatar) return 'failed';
 
     const originalPointer = targetChar.chat;
