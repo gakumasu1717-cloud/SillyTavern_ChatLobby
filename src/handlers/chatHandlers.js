@@ -310,38 +310,8 @@ function updateChatCountAfterDelete() {
 }
 
 // ============================================
-// 가벼운 채팅 경유 선택 (무거운 최근 채팅 로드 회피)
+// 캐릭터 전환
 // ============================================
-
-/**
- * 캐릭터의 채팅 목록에서 가장 가벼운(메시지 수 최소) 채팅 파일명 찾기
- * 채팅 목록은 채팅 수 카운트용으로 이미 캐시되어 있는 경우가 대부분 → O(n) 스캔, 추가 API 비용 거의 없음
- * @param {string} charAvatar
- * @returns {Promise<string|null>} - .jsonl 제거된 파일명, 판단 불가 시 null
- */
-async function findLightestChatName(charAvatar) {
-    let chats = cache.isValid('chats', charAvatar) ? cache.get('chats', charAvatar) : null;
-    if (!Array.isArray(chats)) {
-        try {
-            chats = await api.fetchChatsForCharacter(charAvatar);
-        } catch (e) {
-            return null;
-        }
-    }
-    if (!Array.isArray(chats) || chats.length === 0) return null;
-
-    let best = null;
-    let bestCount = Infinity;
-    for (const chat of chats) {
-        const count = typeof chat.chat_items === 'number' ? chat.chat_items : NaN;
-        if (Number.isNaN(count)) continue; // 메시지 수를 모르는 채팅은 후보 제외
-        if (count < bestCount) {
-            bestCount = count;
-            best = chat.file_name || null;
-        }
-    }
-    return best ? best.replace(/\.jsonl$/i, '') : null;
-}
 
 /**
  * 지금 ST에서 선택된 캐릭터가 대상인지
@@ -432,31 +402,6 @@ export async function switchCharacter(charIndexNum, charAvatar, { chatPointer = 
     return (token === null || operationLock.isCurrent(token)) ? 'ok' : 'stale';
 }
 
-/**
- * 캐릭터 선택 (가벼운 채팅 경유) - 새 채팅 시작 전용
- *
- * 마지막 채팅이 무거우면 새 채팅 시작이 그 로딩에 발목 잡히므로,
- * 메시지 수가 가장 적은 채팅을 거쳐 전환한다. 바로 이어서 새 채팅을 만드는
- * 흐름에서만 쓸 것 (봇카드 보기 등에서 쓰면 사용자가 엉뚱한 채팅에 남게 됨).
- *
- * @param {number} charIndexNum - 캐릭터 인덱스
- * @param {string} charAvatar - 캐릭터 아바타 (검증용)
- * @param {number|null} [token=null] - operationLock 토큰 (stale 체크용, 없으면 생략)
- * @returns {Promise<boolean>} - 선택 성공 여부
- */
-async function selectCharacterLight(charIndexNum, charAvatar, token = null) {
-    let lightest = null;
-    try {
-        lightest = await findLightestChatName(charAvatar);
-    } catch (e) {
-        console.warn('[ChatHandlers] findLightestChatName failed, using default chat:', e);
-    }
-    if (lightest) console.debug('[ChatHandlers] Light select via', lightest);
-
-    const result = await switchCharacter(charIndexNum, charAvatar, { chatPointer: lightest, token });
-    return result === 'ok';
-}
-
 // ============================================
 // 새 채팅 시작
 // ============================================
@@ -487,7 +432,28 @@ export async function startNewChat() {
 }
 
 /**
+ * ST와 같은 형식의 채팅 파일명용 시각 문자열 (RossAscends-mods.humanizedDateTime과 동일)
+ * 예: 2026-11-12@18h05m09s042ms
+ * @param {number} [timestamp]
+ * @returns {string}
+ */
+function humanizedDateTime(timestamp = Date.now()) {
+    const d = new Date(timestamp);
+    const p = (n, len = 2) => String(n).padStart(len, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+        + `@${p(d.getHours())}h${p(d.getMinutes())}m${p(d.getSeconds())}s${p(d.getMilliseconds(), 3)}ms`;
+}
+
+/**
  * 캐릭터 새 채팅 시작
+ *
+ * 다른 캐릭터: 아직 없는 새 파일명으로 chat 포인터를 지정해서 전환한다.
+ *   ST는 파일이 없으면 인사말로 새 채팅을 만들고 저장한다
+ *   (ST 자체도 채팅 기록이 없는 카드에 같은 방식으로 이름을 붙임: getCharacters 참고)
+ *   → 기존 채팅을 하나도 불러오지 않고 새 채팅 한 번만 로드.
+ *   예전엔 "가장 짧은 채팅 로드 → 새 채팅 생성"으로 두 번 로드했음.
+ * 같은 캐릭터: 이미 열려 있으므로 ST 기본 새 채팅 버튼 사용 (한 번 로드)
+ *
  * @param {HTMLElement} btn - 새 채팅 버튼
  * @param {number|null} token - operationLock 토큰
  * @returns {Promise<void>}
@@ -504,45 +470,49 @@ async function startNewCharacterChat(btn, token = null) {
         return;
     }
 
-    // 🔥 채팅 수를 직접 확인 (dataset은 비동기 로딩으로 인해 신뢰할 수 없음)
-    // 이 목록은 findLightestChatName에서도 캐시로 재사용됨
-    let actualChatCount = 0;
-    try {
-        const chats = await api.fetchChatsForCharacter(charAvatar);
-        actualChatCount = Array.isArray(chats) ? chats.length : 0;
-        console.debug('[ChatHandlers] Actual chat count:', actualChatCount);
-    } catch (e) {
-        console.warn('[ChatHandlers] Failed to get chat count, using dataset fallback');
-        actualChatCount = btn?.dataset.hasChats === 'true' ? 1 : 0;
-    }
-
     try {
         // 로비 닫기 (상태 유지)
         closeLobbyKeepState();
 
-        // 이미 같은 캐릭터가 선택되어 있는지 확인
         const context = api.getContext();
         const currentChar = context?.characters?.[context.characterId];
         const isSameCharacter = currentChar?.avatar === charAvatar;
 
-        if (!isSameCharacter) {
-            // ★ 가벼운 채팅 경유 선택 - 무거운 최근 채팅을 강제로 로드하는 문제 회피
-            // (어차피 바로 새 채팅을 만들 것이므로 중간에 어떤 채팅이 열리든 상관없음)
-            const selected = await selectCharacterLight(charIndexNum, charAvatar, token);
-            if (!selected) {
-                console.warn('[ChatHandlers] startNewCharacterChat: select failed or stale, aborting');
-                return;
-            }
-        }
-
-        // 새 채팅 생성 직전에 캐시 무효화 (목록이 바뀔 예정이므로)
+        // 새 채팅이 생기므로 목록 캐시 무효화
         cache.invalidate('chats', charAvatar);
+        cache.invalidate('chatCounts', charAvatar);
 
-        // 🔥 채팅 기록이 있는 경우에만 새 채팅 버튼 클릭
-        // 채팅이 0개면 SillyTavern이 자동으로 첫 채팅을 생성하므로 추가 동작 불필요
-        if (actualChatCount > 0) {
+        if (isSameCharacter) {
             const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
             if (newChatBtn) newChatBtn.click();
+            return;
+        }
+
+        const charName = context?.characters?.[charIndexNum]?.name || '';
+        if (!charName) {
+            showToast('캐릭터를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        const newChatName = `${charName} - ${humanizedDateTime()}`;
+
+        const result = await switchCharacter(charIndexNum, charAvatar, { chatPointer: newChatName, token });
+        if (result === 'stale') {
+            console.warn('[ChatHandlers] startNewCharacterChat became stale, aborting');
+            return;
+        }
+        if (result === 'failed') {
+            showToast('새 채팅을 시작하지 못했습니다. 다시 시도해주세요.', 'error');
+            return;
+        }
+
+        const ctxAfter = api.getContext();
+        const loadedChar = ctxAfter?.characters?.[ctxAfter.characterId];
+        if (loadedChar?.avatar === charAvatar && loadedChar.chat === newChatName) {
+            console.debug('[ChatHandlers] New chat created directly (single load):', newChatName);
+            // 다음 실행 때도 이 채팅이 열리도록 chat 필드만 기록
+            api.saveLastChatPointer(loadedChar.avatar, loadedChar.name, newChatName);
+        } else {
+            console.warn('[ChatHandlers] New chat pointer was not kept (loaded:', loadedChar?.chat, ')');
         }
     } catch (error) {
         console.error('[ChatHandlers] Failed to start new chat:', error);

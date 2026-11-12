@@ -6563,28 +6563,6 @@ ${message}` : message;
       }
     }
   }
-  async function findLightestChatName(charAvatar) {
-    let chats = cache.isValid("chats", charAvatar) ? cache.get("chats", charAvatar) : null;
-    if (!Array.isArray(chats)) {
-      try {
-        chats = await api.fetchChatsForCharacter(charAvatar);
-      } catch (e) {
-        return null;
-      }
-    }
-    if (!Array.isArray(chats) || chats.length === 0) return null;
-    let best = null;
-    let bestCount = Infinity;
-    for (const chat of chats) {
-      const count = typeof chat.chat_items === "number" ? chat.chat_items : NaN;
-      if (Number.isNaN(count)) continue;
-      if (count < bestCount) {
-        bestCount = count;
-        best = chat.file_name || null;
-      }
-    }
-    return best ? best.replace(/\.jsonl$/i, "") : null;
-  }
   function isCharacterSelected(charIndexNum, charAvatar) {
     const ctx = api.getContext();
     return String(ctx?.characterId) === String(charIndexNum) && ctx?.characters?.[ctx.characterId]?.avatar === charAvatar;
@@ -6633,17 +6611,6 @@ ${message}` : message;
     await new Promise((r) => setTimeout(r, 300));
     return token === null || operationLock.isCurrent(token) ? "ok" : "stale";
   }
-  async function selectCharacterLight(charIndexNum, charAvatar, token = null) {
-    let lightest = null;
-    try {
-      lightest = await findLightestChatName(charAvatar);
-    } catch (e) {
-      console.warn("[ChatHandlers] findLightestChatName failed, using default chat:", e);
-    }
-    if (lightest) console.debug("[ChatHandlers] Light select via", lightest);
-    const result = await switchCharacter(charIndexNum, charAvatar, { chatPointer: lightest, token });
-    return result === "ok";
-  }
   async function startNewChat() {
     const token = operationLock.acquire("startNewChat", 15e3);
     if (!token) return;
@@ -6659,6 +6626,11 @@ ${message}` : message;
       operationLock.release(token);
     }
   }
+  function humanizedDateTime(timestamp = Date.now()) {
+    const d = new Date(timestamp);
+    const p = (n, len = 2) => String(n).padStart(len, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}@${p(d.getHours())}h${p(d.getMinutes())}m${p(d.getSeconds())}s${p(d.getMilliseconds(), 3)}ms`;
+  }
   async function startNewCharacterChat(btn, token = null) {
     const charIndex = btn?.dataset.charIndex;
     const charAvatar = btn?.dataset.charAvatar;
@@ -6668,31 +6640,40 @@ ${message}` : message;
       showToast("\uCE90\uB9AD\uD130\uAC00 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    let actualChatCount = 0;
-    try {
-      const chats = await api.fetchChatsForCharacter(charAvatar);
-      actualChatCount = Array.isArray(chats) ? chats.length : 0;
-      console.debug("[ChatHandlers] Actual chat count:", actualChatCount);
-    } catch (e) {
-      console.warn("[ChatHandlers] Failed to get chat count, using dataset fallback");
-      actualChatCount = btn?.dataset.hasChats === "true" ? 1 : 0;
-    }
     try {
       closeLobbyKeepState();
       const context = api.getContext();
       const currentChar = context?.characters?.[context.characterId];
       const isSameCharacter = currentChar?.avatar === charAvatar;
-      if (!isSameCharacter) {
-        const selected = await selectCharacterLight(charIndexNum, charAvatar, token);
-        if (!selected) {
-          console.warn("[ChatHandlers] startNewCharacterChat: select failed or stale, aborting");
-          return;
-        }
-      }
       cache.invalidate("chats", charAvatar);
-      if (actualChatCount > 0) {
+      cache.invalidate("chatCounts", charAvatar);
+      if (isSameCharacter) {
         const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
         if (newChatBtn) newChatBtn.click();
+        return;
+      }
+      const charName = context?.characters?.[charIndexNum]?.name || "";
+      if (!charName) {
+        showToast("\uCE90\uB9AD\uD130\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+        return;
+      }
+      const newChatName = `${charName} - ${humanizedDateTime()}`;
+      const result = await switchCharacter(charIndexNum, charAvatar, { chatPointer: newChatName, token });
+      if (result === "stale") {
+        console.warn("[ChatHandlers] startNewCharacterChat became stale, aborting");
+        return;
+      }
+      if (result === "failed") {
+        showToast("\uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
+        return;
+      }
+      const ctxAfter = api.getContext();
+      const loadedChar = ctxAfter?.characters?.[ctxAfter.characterId];
+      if (loadedChar?.avatar === charAvatar && loadedChar.chat === newChatName) {
+        console.debug("[ChatHandlers] New chat created directly (single load):", newChatName);
+        api.saveLastChatPointer(loadedChar.avatar, loadedChar.name, newChatName);
+      } else {
+        console.warn("[ChatHandlers] New chat pointer was not kept (loaded:", loadedChar?.chat, ")");
       }
     } catch (error) {
       console.error("[ChatHandlers] Failed to start new chat:", error);
