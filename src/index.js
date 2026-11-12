@@ -12,7 +12,7 @@ import { renderPersonaBar } from './ui/personaBar.js';
 import { initPersonaRadialMenu, refreshPersonaRadialMenu, cleanupPersonaRadialMenu } from './ui/personaRadialMenu.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange, resetCharacterSelectLock, setGroupSelectHandler } from './ui/characterGrid.js';
 import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, executeBatchDelete, batchSelectAll, closeChatPanel, deactivateBatchMode, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
-import { openChat, deleteChat, startNewChat, deleteCharacter, selectCharacterLight } from './handlers/chatHandlers.js';
+import { openChat, deleteChat, startNewChat, deleteCharacter, switchCharacter } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast, showConfirm } from './ui/notifications.js';
 import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
@@ -34,10 +34,16 @@ import { escapeHtml } from './utils/textUtils.js';
 import { analyzeBranches } from './utils/branchAnalyzer.js';
 import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 import { operationLock } from './utils/operationLock.js';
+import { installSaveGuard, uninstallSaveGuard, setSaveGuardEnabled } from './safety/saveGuard.js';
+import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.js';
 
 (function() {
     'use strict';
-    
+
+    // ★ 채팅 덮어쓰기 가드는 UI 초기화를 기다리지 않고 가장 먼저 설치
+    // (ST가 첫 채팅을 불러오는 순간부터 보호해야 함)
+    installSaveGuard();
+
     // CHAT_CHANGED cooldown 타이머 (모듈 스코프)
     let chatChangedCooldownTimer = null;
     let closeLobbyHandler = null;
@@ -154,64 +160,174 @@ import { operationLock } from './utils/operationLock.js';
     // 초기화
     // ============================================
     
+    // ★ 초기화는 2단계로 나뉜다
+    // 1) mountShell  : 확장이 로드되는 즉시 (ST 스플래시 중). 데이터 없이 로비 틀 + 스켈레톤을 띄운다.
+    // 2) onAppReady : ST가 캐릭터/설정 로드를 끝낸 시점(APP_INITIALIZED). 데이터를 채운다.
+    // 예전에는 initDelay(1초) + 여러 setTimeout 뒤에 로비를 만들어서 ST 화면이 먼저 보이고
+    // 로비가 맨 마지막에 떴다.
+
+    let appReadyHandled = false;
+    let appReadyListener = null;
+
     /**
-     * 익스텐션 초기화
-     * @returns {Promise<void>}
+     * 1단계: 로비 셸 마운트 (ST 데이터 불필요)
+     * @returns {boolean} 마운트했는지 (이미 초기화됐으면 false)
      */
-    async function init() {
-        // 🔥 중복 초기화 방지 - 이미 초기화되었으면 스킵
+    function mountShell() {
+        // 🔥 중복 초기화 방지
         if (window._chatLobbyInitialized) {
             console.warn('[ChatLobby] Already initialized, skipping duplicate init');
-            return;
+            return false;
         }
         window._chatLobbyInitialized = true;
-        console.info('[ChatLobby] 🚀 Initializing...');
-        
-        // 기존 UI 제거
-        removeExistingUI();
-        
-        // UI 삽입
-        document.body.insertAdjacentHTML('beforeend', createLobbyHTML());
-        
-        // FAB 버튼 표시
-        const fab = document.getElementById('chat-lobby-fab');
-        if (fab) {
-            fab.style.display = 'flex';
-        }
-        
-        // 핸들러 연결
-        setupHandlers();
+        console.info('[ChatLobby] 🚀 Mounting shell...');
 
-        // 이벤트 위임 설정
+        removeExistingUI();
+        document.body.insertAdjacentHTML('beforeend', createLobbyHTML());
+
+        // 핸들러/이벤트 위임은 DOM만 있으면 됨
+        setupHandlers();
         setupEventDelegation();
 
         // 테마/표시 설정 메뉴 이벤트 (옵션 변경 시 그리드 리렌더)
         initThemeMenuEvents(() => renderCharacterGrid(store.searchTerm));
 
-        // ST 메뉴 도크 렌더링 (콘솔 테마에서 표시됨)
-        renderStDock();
-        
-        // SillyTavern 이벤트 리스닝
-        setupSillyTavernEvents();
-        
-        // 백그라운드 프리로딩 시작
-        startBackgroundPreload();
-        
-        // 옵션 메뉴에 버튼 추가
-        addLobbyToOptionsMenu();
-        
-        // CustomTheme 사이드바에 버튼 추가 (있으면)
-        setTimeout(() => initCustomThemeIntegration(openLobby), CONFIG.timing.initDelay);
+        showBootSkeleton();
+        return true;
+    }
 
-        // 캘린더 저장소 초기화 (localforage 로드 + localStorage 마이그레이션)
-        // ⚠️ updateFabPreview()가 getStreak()→loadSnapshots()를 호출하므로 반드시 그 전에 await
-        await initCalendarStorage();
+    /**
+     * 데이터가 오기 전 로비를 스켈레톤 상태로 표시
+     */
+    function showBootSkeleton() {
+        const overlay = document.getElementById('chat-lobby-overlay');
+        const container = document.getElementById('chat-lobby-container');
+        const fab = document.getElementById('chat-lobby-fab');
+        const grid = document.getElementById('chat-lobby-characters');
 
-        // FAB 프리뷰 초기화
-        updateFabPreview();
+        if (overlay) overlay.style.display = 'flex';
+        if (container) {
+            container.style.display = 'flex';
+            container.classList.add('is-booting');
+        }
+        if (fab) fab.style.display = 'none';
+        if (grid) {
+            grid.innerHTML = Array.from({ length: 12 },
+                () => '<div class="lobby-char-card lobby-skeleton-card" aria-hidden="true"></div>'
+            ).join('');
+        }
+    }
 
-        // 현재 페르소나 추적 초기화 (SETTINGS_UPDATED 비교 기준)
+    /**
+     * 2단계: ST 준비 완료 후 데이터 연결 + 로비 채우기
+     */
+    async function onAppReady() {
+        if (appReadyHandled) return;
+        appReadyHandled = true;
+        clearBootWatchdog();
+        console.info('[ChatLobby] SillyTavern ready, loading data');
+
+        const overlay = document.getElementById('chat-lobby-overlay');
+        // 스켈레톤 동안 사용자가 로비를 닫았으면 다시 열지 않음
+        const shouldOpen = overlay?.style.display === 'flex';
+
+        // ★ 각 단계는 서로 독립: 하나가 실패해도 로그만 남기고 다음 단계 진행
+        // (순차 체인에서 하나가 터지면 로비가 스켈레톤에 갇히는 것 방지)
+        await runStep('renderStDock', renderStDock);
+        await runStep('setupSillyTavernEvents', setupSillyTavernEvents);
+        await runStep('addLobbyToOptionsMenu', () => addLobbyToOptionsMenu());
+        await runStep('customThemeIntegration', () => initCustomThemeIntegration(openLobby));
         api.getCurrentPersona().then(p => { if (p) lastKnownPersona = p; }).catch(() => {});
+
+        // ⚠️ updateFabPreview()가 getStreak()→loadSnapshots()를 호출하므로 캘린더 저장소 먼저
+        await runStep('initCalendarStorage', initCalendarStorage);
+        await runStep('updateFabPreview', updateFabPreview);
+
+        document.getElementById('chat-lobby-container')?.classList.remove('is-booting');
+
+        if (shouldOpen) {
+            // openLobby는 자체적으로 실패 시 FAB로 복구함
+            await runStep('openLobby', openLobby);
+        } else {
+            showFabOnly();
+        }
+
+        // 프리로딩은 로비가 뜬 뒤에 (첫 렌더와 경쟁하지 않도록)
+        runStep('startBackgroundPreload', startBackgroundPreload);
+    }
+
+    /**
+     * 초기화 단계 하나를 격리 실행 (예외를 삼키고 로그만 남김)
+     * @param {string} name
+     * @param {Function} fn
+     */
+    async function runStep(name, fn) {
+        try {
+            await fn();
+            return true;
+        } catch (e) {
+            console.error(`[ChatLobby] Init step "${name}" failed:`, e);
+            return false;
+        }
+    }
+
+    /**
+     * 스켈레톤을 걷고 FAB만 표시 (부팅 실패/취소 시 복구 상태)
+     */
+    function showFabOnly() {
+        const overlay = document.getElementById('chat-lobby-overlay');
+        const container = document.getElementById('chat-lobby-container');
+        const fab = document.getElementById('chat-lobby-fab');
+        container?.classList.remove('is-booting');
+        if (overlay) overlay.style.display = 'none';
+        if (container) container.style.display = 'none';
+        if (fab) fab.style.display = 'flex';
+    }
+
+    // 부팅 워치독: ST 준비 신호가 끝내 안 오면 스켈레톤에 갇히지 않도록 FAB로 복구
+    const BOOT_WATCHDOG_MS = 30000;
+    let bootWatchdogTimer = null;
+
+    function startBootWatchdog() {
+        clearBootWatchdog();
+        bootWatchdogTimer = setTimeout(() => {
+            bootWatchdogTimer = null;
+            if (appReadyHandled) return;
+            console.warn('[ChatLobby] SillyTavern did not become ready in time, showing FAB only');
+            showFabOnly();
+        }, BOOT_WATCHDOG_MS);
+    }
+
+    function clearBootWatchdog() {
+        if (bootWatchdogTimer) {
+            clearTimeout(bootWatchdogTimer);
+            bootWatchdogTimer = null;
+        }
+    }
+
+    /**
+     * ST가 준비되면 콜백 실행
+     * APP_INITIALIZED/APP_READY는 늦게 등록한 리스너에게도 즉시 전달됨 (ST eventemitter의 autoFire)
+     * → 확장이 런타임에 설치/재로드돼도 동작
+     * ⚠️ 리스너는 Promise를 반환하지 않음: ST는 emit 시 리스너를 await하므로 스플래시가 늦어짐
+     */
+    function whenAppReady(callback) {
+        const context = window.SillyTavern?.getContext?.();
+        const eventSource = context?.eventSource;
+        const eventName = context?.eventTypes?.APP_INITIALIZED || context?.eventTypes?.APP_READY;
+
+        if (eventSource && eventName) {
+            appReadyListener = () => {
+                callback().catch(e => console.error('[ChatLobby] App ready handler failed:', e));
+            };
+            eventSource.on(eventName, appReadyListener);
+            return;
+        }
+
+        // 구버전 ST: 캐릭터 목록이 채워질 때까지 대기
+        waitForSillyTavern().then(ready => {
+            if (ready) callback().catch(e => console.error('[ChatLobby] App ready handler failed:', e));
+        });
     }
     
     /**
@@ -603,16 +719,12 @@ import { operationLock } from './utils/operationLock.js';
             // 캐릭터 선택 락 리셋
             resetCharacterSelectLock();
             
-            // SillyTavern 캐릭터 목록 최신화
-            try {
-                const context = api.getContext();
-                if (typeof context?.getCharacters === 'function') {
-                    await context.getCharacters();
-                }
-            } catch (error) {
-                console.warn('[ChatLobby] Failed to refresh characters:', error);
-            }
-            
+            // ⚠️ 여기서 context.getCharacters()를 부르지 않음
+            // 예전엔 로비를 열 때마다 캐릭터 목록 전체를 서버에서 다시 받고 ST 캐릭터 목록 화면까지
+            // 다시 그려서 들낙이 느렸음. ST의 context.characters는 항상 최신이고
+            // (추가/수정/삭제는 ST가 직접 반영 + CHARACTER_* 이벤트로 캐시 무효화)
+            // 수동 새로고침 버튼에서만 강제 재요청함
+
             // 폴더 필터 항상 리셋 (캐릭터별로 폴더가 다르므로)
             storage.setFilterFolder('all');
             
@@ -715,6 +827,7 @@ import { operationLock } from './utils/operationLock.js';
         store.setLobbyOpen(false);
         store.resetSelection(); // 선택 상태 초기화
         closeChatPanel();
+        closeCharInfo();
         
         // 🔥 로비 닫힐 때 DOM 감시 시작 (채팅 변경 감지)
         startRecentDomObserver();
@@ -872,7 +985,9 @@ import { operationLock } from './utils/operationLock.js';
     window._chatLobbyLastChatCache = lastChatCache;
     // 디버그: 그룹별 리스너 등록 현황 (콘솔에서 ChatLobby.listenerStats() 호출)
     window.ChatLobby.listenerStats = () => listeners.stats();
-    
+    // 저장 가드 켜기/끄기 (콘솔에서 ChatLobby.saveGuard(false))
+    window.ChatLobby.saveGuard = (value = true) => setSaveGuardEnabled(value);
+
     /**
      * 전역 정리 함수 (확장 재로드 시 호출)
      * 모든 이벤트 리스너, observer, 메모리 정리
@@ -882,6 +997,14 @@ import { operationLock } from './utils/operationLock.js';
         console.info('[ChatLobby] 🧹 Cleanup started');
         
         cleanupSillyTavernEvents();
+        uninstallSaveGuard();
+        clearBootWatchdog();
+        if (appReadyListener) {
+            const ctx = window.SillyTavern?.getContext?.();
+            const eventName = ctx?.eventTypes?.APP_INITIALIZED || ctx?.eventTypes?.APP_READY;
+            try { ctx?.eventSource?.removeListener?.(eventName, appReadyListener); } catch { /* ignore */ }
+            appReadyListener = null;
+        }
         cleanupEventDelegation();
         cleanupCustomThemeIntegration();
         cleanupTooltip();
@@ -1145,7 +1268,19 @@ import { operationLock } from './utils/operationLock.js';
                 closeChatPanel();
                 break;
             case 'go-to-character':
+                // 캐릭터는 로비 안에서 정보만 표시 (채팅 전환 없음), 그룹은 기존대로 이동
+                if (store.currentGroup) {
+                    await handleGoToGroup();
+                } else if (store.currentCharacter) {
+                    await openCharInfo(store.currentCharacter);
+                }
+                break;
+            case 'edit-character':
+                closeCharInfo();
                 await handleGoToCharacter();
+                break;
+            case 'close-charinfo':
+                closeCharInfo();
                 break;
             case 'toggle-collapse':
                 toggleCollapse();
@@ -1207,6 +1342,12 @@ import { operationLock } from './utils/operationLock.js';
             // (이 핸들러가 뷰어 자체 핸들러보다 먼저 실행되므로 여기서 분기해야
             //  ESC가 로비를 통째로 닫아버리는 사고를 막을 수 있음)
             if (closeTopRemindLayer()) {
+                return;
+            }
+
+            // 캐릭터 정보 패널 열려있으면 먼저 닫기
+            if (isCharInfoOpen()) {
+                closeCharInfo();
                 return;
             }
 
@@ -1272,10 +1413,17 @@ import { operationLock } from './utils/operationLock.js';
      */
     async function handleRefresh() {
         cache.invalidateAll();
-        
-        // 강제로 API 재호출 (forceRefresh=true)
+
+        // 강제로 API 재호출 (사용자가 직접 누른 새로고침에서만 캐릭터 목록 재요청)
         await api.fetchPersonas();
-        await api.fetchCharacters(true);
+        try {
+            const context = api.getContext();
+            if (typeof context?.getCharacters === 'function') {
+                await context.getCharacters();
+            }
+        } catch (e) {
+            console.warn('[ChatLobby] Failed to refresh characters:', e);
+        }
         
         await Promise.all([
             renderPersonaBar(),
@@ -1576,14 +1724,14 @@ import { operationLock } from './utils/operationLock.js';
         closeLobby();
 
         // 이미 선택된 캐릭터인지 확인
-        const isAlreadySelected = (context.characterId === index);
+        const isAlreadySelected = (String(context.characterId) === String(index));
 
         if (!isAlreadySelected) {
-            // ★ 가벼운 채팅 경유 선택 - 봇카드 열람인데 무거운 최근 채팅을
-            // 강제로 로드하는 문제 회피 (가장 메시지 수 적은 채팅을 대신 로드)
-            const selected = await selectCharacterLight(index, character.avatar);
-            if (!selected) {
-                console.warn('[ChatLobby] Character selection timeout');
+            // ⚠️ 가벼운 채팅 경유 선택을 쓰지 않음: 드로어를 닫으면 사용자가
+            // 최근 채팅이 아닌 "가장 짧은 채팅"에 남아 엉뚱한 채팅에 이어 쓰게 됨
+            const result = await switchCharacter(index, character.avatar);
+            if (result !== 'ok') {
+                console.warn('[ChatLobby] Character selection failed:', result);
             }
         }
 
@@ -1698,27 +1846,29 @@ import { operationLock } from './utils/operationLock.js';
     }
     
     /**
-     * 초기화 완료 후 로비 자동 열기
+     * 부트스트랩: 셸 즉시 마운트 → ST 준비되면 데이터 채우기
      */
-    async function initAndOpen() {
-        // SillyTavern 컨텍스트가 준비될 때까지 대기
-        const isReady = await waitForSillyTavern();
-        if (!isReady) {
-            console.error('[ChatLobby] Cannot initialize - SillyTavern not ready');
+    function bootstrap() {
+        let mounted = false;
+        try {
+            mounted = mountShell();
+        } catch (e) {
+            // 셸 마운트 실패 시 넣던 UI를 걷어내서 ST 화면을 가리지 않게 함
+            console.error('[ChatLobby] Shell mount failed:', e);
+            try { removeExistingUI(); } catch { /* ignore */ }
+            window._chatLobbyInitialized = false;
             return;
         }
-        
-        await init();
-        // 초기화 완료 후 로비 자동 열기
-        setTimeout(() => {
-            openLobby();
-        }, 100);
+        if (!mounted) return;
+
+        startBootWatchdog();
+        whenAppReady(onAppReady);
     }
-    
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setTimeout(initAndOpen, CONFIG.timing.initDelay));
+        document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
     } else {
-        setTimeout(initAndOpen, CONFIG.timing.initDelay);
+        bootstrap();
     }
-    
+
 })();

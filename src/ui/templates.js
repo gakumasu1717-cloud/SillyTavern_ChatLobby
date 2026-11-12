@@ -96,7 +96,7 @@ export function createLobbyHTML() {
                 <aside id="chat-lobby-chats">
                     <header id="chat-lobby-chats-header">
                         <button id="chat-lobby-chats-back" data-action="close-chat-panel" title="뒤로">←</button>
-                        <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="캐릭터 설정" style="display:none;">
+                        <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="캐릭터 정보" style="display:none;">
                         <div class="char-info">
                             <div class="char-name" id="chat-panel-name">캐릭터를 선택하세요</div>
                             <div class="chat-count" id="chat-panel-count"></div>

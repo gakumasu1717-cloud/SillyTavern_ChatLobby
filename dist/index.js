@@ -275,6 +275,9 @@ ${message}` : message;
 
   // src/data/cache.js
   init_config();
+  var CACHE_LIMITS = {
+    chats: 40
+  };
   var CacheManager = class {
     constructor() {
       this.stores = {
@@ -342,8 +345,16 @@ ${message}` : message;
     set(type, data, key = null) {
       const now = Date.now();
       if (key !== null) {
-        this.stores[type].set(key, data);
+        const store2 = this.stores[type];
+        store2.delete(key);
+        store2.set(key, data);
         this.timestamps[type].set(key, now);
+        const limit = CACHE_LIMITS[type];
+        if (limit && store2.size > limit) {
+          const oldestKey = store2.keys().next().value;
+          store2.delete(oldestKey);
+          this.timestamps[type].delete(oldestKey);
+        }
       } else {
         this.stores[type] = data;
         this.timestamps[type] = now;
@@ -1476,7 +1487,16 @@ ${message}` : message;
       }
       if (forceRefresh) {
         cache.invalidate("chats", characterAvatar);
+        return this._requestChats(characterAvatar);
       }
+      return cache.getOrFetch(`chats:${characterAvatar}`, () => this._requestChats(characterAvatar));
+    }
+    /**
+     * 채팅 목록 실제 요청 + 캐시 저장
+     * @param {string} characterAvatar
+     * @returns {Promise<Array>}
+     */
+    async _requestChats(characterAvatar) {
       try {
         const response = await this.fetchWithRetry("/api/characters/chats", {
           method: "POST",
@@ -1503,10 +1523,10 @@ ${message}` : message;
         cache.set("chats", result, characterAvatar);
         const count = result.length;
         cache.set("chatCounts", count, characterAvatar);
-        const messageCount = result.reduce((sum, chat) => {
+        const messageCount2 = result.reduce((sum, chat) => {
           return sum + (chat.chat_items || 0);
         }, 0);
-        cache.set("messageCounts", messageCount, characterAvatar);
+        cache.set("messageCounts", messageCount2, characterAvatar);
         return result;
       } catch (error) {
         console.error("[API] Failed to load chats:", error);
@@ -1710,45 +1730,6 @@ ${message}` : message;
       } else {
         console.warn("[API] option_settings button not found");
       }
-    }
-    /**
-     * 특정 채팅 파일 열기 (SillyTavern API 사용)
-     * @param {string} fileName - 채팅 파일명
-     * @param {string} characterAvatar - 캐릭터 아바타
-     * @returns {Promise<boolean>}
-     */
-    async openChatFile(fileName, characterAvatar) {
-      const context = this.getContext();
-      if (context?.openChat) {
-        try {
-          await context.openChat(fileName);
-          return true;
-        } catch (e) {
-          console.warn("[API] context.openChat failed:", e);
-        }
-      }
-      try {
-        const chatName = fileName.replace(".jsonl", "");
-        if (window.SillyTavern?.getContext) {
-          const ctx = window.SillyTavern.getContext();
-          const response = await fetch("/api/chats/get", {
-            method: "POST",
-            headers: this.getRequestHeaders(),
-            body: JSON.stringify({
-              ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ""),
-              file_name: fileName,
-              avatar_url: characterAvatar
-            })
-          });
-          if (response.ok) {
-            location.reload();
-            return true;
-          }
-        }
-      } catch (e) {
-        console.warn("[API] Direct chat load failed:", e);
-      }
-      return false;
     }
     // ============================================
     // 그룹 채팅 API
@@ -5463,7 +5444,7 @@ ${message}` : message;
     const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
     const displayName = fileName.replace(".jsonl", "");
     const preview = chat.preview || chat.mes || chat.last_message || "\uCC44\uD305 \uAE30\uB85D";
-    const messageCount = chat.chat_items || chat.message_count || chat.mes_count || 0;
+    const messageCount2 = chat.chat_items || chat.message_count || chat.mes_count || 0;
     const isFav = storage.isFavorite(charAvatar, fileName);
     const folderId = storage.getChatFolder(charAvatar, fileName);
     const data = storage.load();
@@ -5497,7 +5478,7 @@ ${message}` : message;
             <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
             <div class="chat-meta">
-                ${messageCount > 0 ? `<span>\u{1F4AC} ${messageCount}\uAC1C</span>` : ""}
+                ${messageCount2 > 0 ? `<span>\u{1F4AC} ${messageCount2}\uAC1C</span>` : ""}
                 ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
             </div>
         </div>
@@ -6390,28 +6371,13 @@ ${message}` : message;
       const isSameCharacter = currentChar?.avatar === charAvatar;
       if (!isSameCharacter) {
         console.debug("[ChatHandlers] Different character, selecting...");
-        const targetChar = characters[index];
-        if (targetChar && typeof targetChar.chat === "string") {
-          targetChar.chat = chatFileName;
-        }
-        const chatChangedPromise = waitForChatChanged(5e3);
-        await api.selectCharacterById(index);
-        const chatChanged = await chatChangedPromise;
-        console.debug("[ChatHandlers] Chat changed event received:", chatChanged);
-        if (!operationLock.isCurrent(token)) {
+        const result = await switchCharacter(index, charAvatar, { chatPointer: chatFileName, token });
+        if (result === "stale") {
           console.warn("[ChatHandlers] openChat became stale, aborting");
           return;
         }
-        if (!chatChanged) {
-          const charSelected = await waitForCharacterSelect(charAvatar, 2e3);
-          if (!charSelected) {
-            showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
-            return;
-          }
-        }
-        await new Promise((r) => setTimeout(r, 300));
-        if (!operationLock.isCurrent(token)) {
-          console.warn("[ChatHandlers] openChat became stale, aborting");
+        if (result === "failed") {
+          showToast("\uCE90\uB9AD\uD130 \uC120\uD0DD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "error");
           return;
         }
       } else {
@@ -6534,14 +6500,6 @@ ${message}` : message;
             updateChatCountAfterDelete();
           }, 200);
         }
-        const context2 = api.getContext();
-        if (context2?.reloadCurrentChat) {
-          try {
-            await context2.reloadCurrentChat();
-          } catch (e) {
-            console.warn("[ChatLobby] reloadCurrentChat failed:", e);
-          }
-        }
         showToast("\uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "success");
       } else {
         showToast("\uCC44\uD305 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -6593,30 +6551,55 @@ ${message}` : message;
     }
     return best ? best.replace(/\.jsonl$/i, "") : null;
   }
-  async function selectCharacterLight(charIndexNum, charAvatar, token = null) {
+  function isCharacterSelected(charIndexNum, charAvatar) {
+    const ctx = api.getContext();
+    return String(ctx?.characterId) === String(charIndexNum) && ctx?.characters?.[ctx.characterId]?.avatar === charAvatar;
+  }
+  async function switchCharacter(charIndexNum, charAvatar, { chatPointer = null, token = null } = {}) {
     const context = api.getContext();
     const targetChar = context?.characters?.[charIndexNum];
-    if (targetChar && targetChar.avatar === charAvatar && typeof targetChar.chat === "string") {
-      try {
-        const lightest = await findLightestChatName(charAvatar);
-        if (lightest && targetChar.chat !== lightest) {
-          console.debug("[ChatHandlers] Light select: redirecting chat pointer to", lightest);
-          targetChar.chat = lightest;
-        }
-      } catch (e) {
-        console.warn("[ChatHandlers] findLightestChatName failed, using default chat:", e);
+    if (!targetChar || targetChar.avatar !== charAvatar) return "failed";
+    const originalPointer = targetChar.chat;
+    const pointerChanged = typeof chatPointer === "string" && typeof originalPointer === "string" && chatPointer !== originalPointer;
+    if (pointerChanged) {
+      targetChar.chat = chatPointer;
+    }
+    const restoreIfNotSwitched = () => {
+      if (pointerChanged && !isCharacterSelected(charIndexNum, charAvatar) && targetChar.chat === chatPointer) {
+        targetChar.chat = originalPointer;
+        console.warn("[ChatHandlers] Switch did not happen, restored chat pointer:", originalPointer);
       }
+    };
+    try {
+      const chatChangedPromise = waitForChatChanged(5e3);
+      await api.selectCharacterById(charIndexNum);
+      const chatChanged = await chatChangedPromise;
+      if (!chatChanged) {
+        const selected = await waitForCharacterSelect(charAvatar, 2e3);
+        if (!selected) {
+          restoreIfNotSwitched();
+          return "failed";
+        }
+      }
+    } catch (error) {
+      console.error("[ChatHandlers] selectCharacterById failed:", error);
+      restoreIfNotSwitched();
+      return "failed";
     }
-    const chatChangedPromise = waitForChatChanged(5e3);
-    await api.selectCharacterById(charIndexNum);
-    const chatChanged = await chatChangedPromise;
-    if (token !== null && !operationLock.isCurrent(token)) return false;
-    if (!chatChanged) {
-      const selected = await waitForCharacterSelect(charAvatar, 2e3);
-      if (!selected) return false;
-    }
+    if (token !== null && !operationLock.isCurrent(token)) return "stale";
     await new Promise((r) => setTimeout(r, 300));
-    return token === null || operationLock.isCurrent(token);
+    return token === null || operationLock.isCurrent(token) ? "ok" : "stale";
+  }
+  async function selectCharacterLight(charIndexNum, charAvatar, token = null) {
+    let lightest = null;
+    try {
+      lightest = await findLightestChatName(charAvatar);
+    } catch (e) {
+      console.warn("[ChatHandlers] findLightestChatName failed, using default chat:", e);
+    }
+    if (lightest) console.debug("[ChatHandlers] Light select via", lightest);
+    const result = await switchCharacter(charIndexNum, charAvatar, { chatPointer: lightest, token });
+    return result === "ok";
   }
   async function startNewChat() {
     const token = operationLock.acquire("startNewChat", 15e3);
@@ -7043,7 +7026,7 @@ ${message}` : message;
         const chatDate = el.querySelector(".chatDate")?.textContent?.trim() || "";
         const chatMessage = el.querySelector(".chatMessage")?.textContent?.trim() || "";
         const counterSmall = el.querySelector(".counterBlock small");
-        const messageCount = counterSmall?.textContent?.trim() || "0";
+        const messageCount2 = counterSmall?.textContent?.trim() || "0";
         const chatNameSpans = el.querySelectorAll(".chatName span");
         let chatName = file;
         if (chatNameSpans.length >= 2) {
@@ -7060,7 +7043,7 @@ ${message}` : message;
             chatName,
             date: chatDate,
             preview: chatMessage,
-            messageCount: parseInt(messageCount) || 0,
+            messageCount: parseInt(messageCount2) || 0,
             thumbnailSrc,
             type: isGroup ? "group" : "char"
           });
@@ -8626,7 +8609,7 @@ ${message}` : message;
                 <aside id="chat-lobby-chats">
                     <header id="chat-lobby-chats-header">
                         <button id="chat-lobby-chats-back" data-action="close-chat-panel" title="\uB4A4\uB85C">\u2190</button>
-                        <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="\uCE90\uB9AD\uD130 \uC124\uC815" style="display:none;">
+                        <img src="" alt="avatar" id="chat-panel-avatar" data-action="go-to-character" title="\uCE90\uB9AD\uD130 \uC815\uBCF4" style="display:none;">
                         <div class="char-info">
                             <div class="char-name" id="chat-panel-name">\uCE90\uB9AD\uD130\uB97C \uC120\uD0DD\uD558\uC138\uC694</div>
                             <div class="chat-count" id="chat-panel-count"></div>
@@ -9638,16 +9621,16 @@ ${message}` : message;
       loadChatCountsAsync(filtered, sortOption);
     } else {
       container.innerHTML = sortedItems.slice(0, INITIAL_RENDER_COUNT).map(renderItem).join("");
+      loadChatCountsAsync(filtered, sortOption);
       let offset = INITIAL_RENDER_COUNT;
       const appendChunk = () => {
         if (gen !== renderGeneration) return;
         const chunk = sortedItems.slice(offset, offset + RENDER_CHUNK_SIZE);
         container.insertAdjacentHTML("beforeend", chunk.map(renderItem).join(""));
         offset += RENDER_CHUNK_SIZE;
+        observeNewCards(container);
         if (offset < sortedItems.length) {
           requestAnimationFrame(appendChunk);
-        } else {
-          loadChatCountsAsync(filtered, sortOption);
         }
       };
       requestAnimationFrame(appendChunk);
@@ -9657,9 +9640,9 @@ ${message}` : message;
   function renderHeroCorner(characters) {
     const hero = document.getElementById("chat-lobby-hero");
     if (!hero) return;
-    const enabled = uiPrefs.get("showHero");
+    const enabled2 = uiPrefs.get("showHero");
     const filterActive = !!store.searchTerm || !!store.selectedTag;
-    if (!enabled || filterActive) {
+    if (!enabled2 || filterActive) {
       hero.style.display = "none";
       hero.dataset.hasContent = "false";
       return;
@@ -9770,85 +9753,145 @@ ${message}` : message;
     </div>
     `;
   }
-  async function loadChatCountsAsync(characters, sortOption = "recent") {
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
-      const batch = characters.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (char) => {
-        const existingCount = cache.get("chatCounts", char.avatar);
-        if (typeof existingCount === "number") return;
-        try {
-          const chats = await api.fetchChatsForCharacter(char.avatar);
-          const chatArray = Array.isArray(chats) ? chats : typeof chats === "object" && chats ? Object.values(chats) : [];
-          const count = chatArray.length;
-          const messageCount = chatArray.reduce((sum, chat) => {
-            return sum + (chat.chat_items || 0);
-          }, 0);
-          cache.set("chatCounts", count, char.avatar);
-          cache.set("messageCounts", messageCount, char.avatar);
-          const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(char.avatar)}"]`);
-          if (chatArray.length > 0) {
-            await lastChatCache.refreshForCharacter(char.avatar, chatArray);
-            if (sortOption === "recent" && card) {
-              const lastTime = lastChatCache.get(char.avatar);
-              if (lastTime > 0) {
-                const now = /* @__PURE__ */ new Date();
-                const lastDate = new Date(lastTime);
-                const isToday = now.toDateString() === lastDate.toDateString();
-                if (isToday) {
-                  const nameTextEl = card.querySelector(".char-name-text");
-                  if (nameTextEl && !nameTextEl.querySelector(".char-last-time")) {
-                    const hours = lastDate.getHours();
-                    const minutes = String(lastDate.getMinutes()).padStart(2, "0");
-                    const timeSpan = document.createElement("span");
-                    timeSpan.className = "char-last-time";
-                    timeSpan.textContent = ` ${hours}:${minutes}`;
-                    nameTextEl.appendChild(timeSpan);
-                  }
-                }
-              }
-            }
-          }
-          if (card) {
-            const chatValueEl = card.querySelector(".chat-count-value");
-            if (chatValueEl) {
-              chatValueEl.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
-            }
-            const hoverInfo = card.querySelector(".char-hover-info");
-            if (hoverInfo && messageCount > 0) {
-              let messageRow = hoverInfo.querySelector(".message-count-value");
-              if (!messageRow) {
-                const newRow = document.createElement("div");
-                newRow.className = "info-row";
-                newRow.innerHTML = `
-                                <span class="info-icon">\u{1F4DD}</span>
-                                <span class="info-value message-count-value">${messageCount}\uAC1C \uBA54\uC2DC\uC9C0</span>
-                            `;
-                hoverInfo.appendChild(newRow);
-              } else {
-                messageRow.textContent = `${messageCount}\uAC1C \uBA54\uC2DC\uC9C0`;
-              }
-            }
-          }
-        } catch (e) {
-          console.error("[CharacterGrid] Failed to load chat count:", char.name, e);
+  var COUNT_CONCURRENCY = 3;
+  var countObserver = null;
+  var countQueue = [];
+  var countQueued = /* @__PURE__ */ new Set();
+  var countActive = 0;
+  var countSortOption = "recent";
+  var snapshotTimer = null;
+  function loadChatCountsAsync(characters, sortOption = "recent") {
+    countSortOption = sortOption;
+    const container = document.getElementById("chat-lobby-characters");
+    if (!container) return;
+    if (typeof IntersectionObserver === "undefined") {
+      characters.forEach((char) => enqueueChatCount(char.avatar));
+      return;
+    }
+    if (countObserver) countObserver.disconnect();
+    countQueue = [];
+    countQueued.clear();
+    countObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        countObserver?.unobserve(entry.target);
+        enqueueChatCount(entry.target.dataset.charAvatar);
+      }
+    }, { root: null, rootMargin: "400px 0px" });
+    container.querySelectorAll(".lobby-char-card[data-char-avatar]").forEach((card) => {
+      card.dataset.countObserved = "1";
+      if (typeof cache.get("chatCounts", card.dataset.charAvatar) === "number") return;
+      countObserver.observe(card);
+    });
+  }
+  function observeNewCards(container) {
+    if (!countObserver) return;
+    container.querySelectorAll(".lobby-char-card[data-char-avatar]:not([data-count-observed])").forEach((card) => {
+      card.dataset.countObserved = "1";
+      if (typeof cache.get("chatCounts", card.dataset.charAvatar) === "number") return;
+      countObserver.observe(card);
+    });
+  }
+  function enqueueChatCount(avatar) {
+    if (!avatar || countQueued.has(avatar)) return;
+    if (typeof cache.get("chatCounts", avatar) === "number") return;
+    countQueued.add(avatar);
+    countQueue.push(avatar);
+    pumpChatCounts();
+  }
+  function pumpChatCounts() {
+    while (countActive < COUNT_CONCURRENCY && countQueue.length > 0) {
+      const avatar = countQueue.shift();
+      countActive++;
+      loadOneChatCount(avatar).catch((e) => console.error("[CharacterGrid] Failed to load chat count:", avatar, e)).finally(() => {
+        countActive--;
+        countQueued.delete(avatar);
+        if (countQueue.length > 0) {
+          pumpChatCounts();
+        } else if (countActive === 0) {
+          scheduleSnapshot();
         }
-      }));
-      if (i + BATCH_SIZE < characters.length) {
-        await new Promise((r) => setTimeout(r, 10));
+      });
+    }
+  }
+  function scheduleSnapshot() {
+    if (snapshotTimer) clearTimeout(snapshotTimer);
+    snapshotTimer = setTimeout(() => {
+      snapshotTimer = null;
+      saveTodaySnapshotFromCache();
+    }, 1500);
+  }
+  async function loadOneChatCount(avatar) {
+    const chats = await api.fetchChatsForCharacter(avatar);
+    const chatArray = Array.isArray(chats) ? chats : typeof chats === "object" && chats ? Object.values(chats) : [];
+    const count = chatArray.length;
+    const messageCount2 = chatArray.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
+    cache.set("chatCounts", count, avatar);
+    cache.set("messageCounts", messageCount2, avatar);
+    if (chatArray.length > 0) {
+      await lastChatCache.refreshForCharacter(avatar, chatArray);
+    }
+    const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(avatar)}"]`);
+    if (!card) return;
+    if (countSortOption === "recent" && chatArray.length > 0) {
+      const lastTime = lastChatCache.get(avatar);
+      if (lastTime > 0) {
+        const lastDate = new Date(lastTime);
+        if ((/* @__PURE__ */ new Date()).toDateString() === lastDate.toDateString()) {
+          const nameTextEl = card.querySelector(".char-name-text");
+          if (nameTextEl && !nameTextEl.querySelector(".char-last-time")) {
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "char-last-time";
+            timeSpan.textContent = ` ${lastDate.getHours()}:${String(lastDate.getMinutes()).padStart(2, "0")}`;
+            nameTextEl.appendChild(timeSpan);
+          }
+        }
       }
     }
-    await saveTodaySnapshotFromCache();
+    const chatValueEl = card.querySelector(".chat-count-value");
+    if (chatValueEl) {
+      chatValueEl.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
+    }
+    const hoverInfo = card.querySelector(".char-hover-info");
+    if (hoverInfo && messageCount2 > 0) {
+      const messageRow = hoverInfo.querySelector(".message-count-value");
+      if (!messageRow) {
+        const newRow = document.createElement("div");
+        newRow.className = "info-row";
+        newRow.innerHTML = `
+                <span class="info-icon">\u{1F4DD}</span>
+                <span class="info-value message-count-value">${messageCount2}\uAC1C \uBA54\uC2DC\uC9C0</span>
+            `;
+        hoverInfo.appendChild(newRow);
+      } else {
+        messageRow.textContent = `${messageCount2}\uAC1C \uBA54\uC2DC\uC9C0`;
+      }
+    }
   }
   async function saveTodaySnapshotFromCache() {
     try {
       const today = getLocalDateString();
       const characters = api.getCharacters();
       if (!characters || characters.length === 0) return;
+      const snapshots = loadSnapshots();
+      const todaySnapshot = snapshots[today] || null;
+      let recentSnapshot = null;
+      const checkDate = /* @__PURE__ */ new Date();
+      for (let i = 0; i < 7; i++) {
+        checkDate.setDate(checkDate.getDate() - 1);
+        const dateStr = getLocalDateString(checkDate);
+        if (snapshots[dateStr]) {
+          recentSnapshot = snapshots[dateStr];
+          break;
+        }
+      }
       const byChar = {};
       let totalMessages = 0;
       characters.forEach((char) => {
-        const msgCount = cache.get("messageCounts", char.avatar) || 0;
+        let msgCount = cache.get("messageCounts", char.avatar);
+        if (typeof msgCount !== "number") {
+          msgCount = todaySnapshot?.byChar?.[char.avatar] ?? recentSnapshot?.byChar?.[char.avatar] ?? 0;
+        }
         if (msgCount > 0) {
           byChar[char.avatar] = msgCount;
           totalMessages += msgCount;
@@ -9871,19 +9914,8 @@ ${message}` : message;
           lastChatTimes[char.avatar] = lastTime;
         }
       }
-      const snapshots = loadSnapshots();
       let topChar = "";
       let maxIncrease = -Infinity;
-      let recentSnapshot = null;
-      const checkDate = /* @__PURE__ */ new Date();
-      for (let i = 0; i < 7; i++) {
-        checkDate.setDate(checkDate.getDate() - 1);
-        const dateStr = getLocalDateString(checkDate);
-        if (snapshots[dateStr]) {
-          recentSnapshot = snapshots[dateStr];
-          break;
-        }
-      }
       const baseByChar = recentSnapshot?.byChar || {};
       for (const [avatar, msgCount] of Object.entries(byChar)) {
         const prev = baseByChar[avatar] || 0;
@@ -10511,10 +10543,10 @@ ${message}` : message;
               chats = await api.fetchChatsForCharacter(char.avatar);
             }
             const chatCount = Array.isArray(chats) ? chats.length : 0;
-            let messageCount = 0;
+            let messageCount2 = 0;
             let firstChatDate = null;
             if (Array.isArray(chats)) {
-              messageCount = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
+              messageCount2 = chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
               for (const chat of chats) {
                 let chatDate = null;
                 const fileName = chat.file_name || "";
@@ -10538,7 +10570,7 @@ ${message}` : message;
                 }
               }
             }
-            return { name: char.name, avatar: char.avatar, chatCount, messageCount, firstChatDate };
+            return { name: char.name, avatar: char.avatar, chatCount, messageCount: messageCount2, firstChatDate };
           } catch (e) {
             return { name: char.name, avatar: char.avatar, chatCount: 0, messageCount: 0, firstChatDate: null };
           }
@@ -11314,8 +11346,8 @@ ${message}` : message;
             chats = [];
           }
           const chatCount = Array.isArray(chats) ? chats.length : 0;
-          const messageCount = Array.isArray(chats) ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) : 0;
-          return { avatar: char.avatar, chatCount, messageCount };
+          const messageCount2 = Array.isArray(chats) ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) : 0;
+          return { avatar: char.avatar, chatCount, messageCount: messageCount2 };
         })
       );
       rankings.push(...batchResults);
@@ -11704,8 +11736,321 @@ ${message}` : message;
 
   // src/index.js
   init_textUtils();
+
+  // src/safety/saveGuard.js
+  var SAVE_PATH = "/api/chats/save";
+  var GET_PATH = "/api/chats/get";
+  var MAX_RECOVERIES = 2;
+  var RECOVERY_WINDOW_MS = 6e4;
+  var rawFetch = null;
+  var originalFetch = null;
+  var guardedFetch = null;
+  var enabled = true;
+  var recoveryLog = /* @__PURE__ */ new Map();
+  var recoveryTimer = null;
+  function messageCount(chat) {
+    return Array.isArray(chat) && chat.length > 0 ? chat.length - 1 : 0;
+  }
+  function isSameMessage(a, b) {
+    if (!a || !b) return false;
+    return String(a.send_date ?? "") === String(b.send_date ?? "") && String(a.mes ?? "") === String(b.mes ?? "");
+  }
+  function needsServerCheck(payload) {
+    const chat = payload?.chat;
+    if (!Array.isArray(chat) || payload.force === true) return false;
+    const slug = chat[0]?.chat_metadata?.integrity;
+    return !slug || messageCount(chat) <= 1;
+  }
+  function decideSave(payload, serverChat) {
+    if (!needsServerCheck(payload)) return { allow: true, reason: "normal" };
+    if (!Array.isArray(serverChat)) return { allow: true, reason: "server-unknown" };
+    const outgoing = payload.chat;
+    const outCount = messageCount(outgoing);
+    const serverCount = messageCount(serverChat);
+    if (serverCount <= 1) return { allow: true, reason: "nothing-to-lose" };
+    const slug = outgoing[0]?.chat_metadata?.integrity;
+    const serverSlug = serverChat[0]?.chat_metadata?.integrity;
+    if (!slug) return { allow: false, reason: "no-integrity" };
+    if (serverSlug) {
+      if (slug === serverSlug) return { allow: true, reason: "same-chat" };
+      return { allow: false, reason: "integrity-mismatch" };
+    }
+    if (outCount === 1 && isSameMessage(outgoing[1], serverChat[1])) {
+      return { allow: true, reason: "legacy-trimmed" };
+    }
+    return { allow: false, reason: "legacy-replaced" };
+  }
+  function isSaveRequest(input, init) {
+    if (typeof input !== "string") return false;
+    if (String(init?.method || "GET").toUpperCase() !== "POST") return false;
+    const path = input.split("?")[0];
+    return path === SAVE_PATH || path.endsWith(SAVE_PATH);
+  }
+  async function readPayload(init) {
+    const body = init?.body;
+    if (typeof body === "string") return JSON.parse(body);
+    if (!body) return null;
+    const headers = new Headers(init.headers || {});
+    if (headers.get("Content-Encoding") !== "gzip") return null;
+    if (typeof DecompressionStream === "undefined") return null;
+    const stream = new Blob([body]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return JSON.parse(await new Response(stream).text());
+  }
+  function getRequestHeaders() {
+    const context = window.SillyTavern?.getContext?.();
+    return context?.getRequestHeaders?.() || { "Content-Type": "application/json" };
+  }
+  async function fetchServerChat(payload) {
+    const response = await originalFetch(GET_PATH, {
+      method: "POST",
+      headers: getRequestHeaders(),
+      cache: "no-cache",
+      body: JSON.stringify({
+        ch_name: payload.ch_name,
+        file_name: payload.file_name,
+        avatar_url: payload.avatar_url
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  }
+  function notify(message, type = "warning", sticky = false) {
+    const toastr = window.toastr;
+    if (toastr?.[type]) {
+      toastr[type](message, "Chat Lobby \uC800\uC7A5 \uAC00\uB4DC", sticky ? { timeOut: 0, extendedTimeOut: 0 } : { timeOut: 8e3 });
+    } else {
+      console.warn("[SaveGuard]", message);
+    }
+  }
+  function stamp() {
+    const d = /* @__PURE__ */ new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+  async function saveRescueCopy(payload) {
+    const rescueName = `${payload.file_name} [\uBCF5\uAD6C ${stamp()}]`;
+    try {
+      const response = await originalFetch(SAVE_PATH, {
+        method: "POST",
+        headers: getRequestHeaders(),
+        cache: "no-cache",
+        body: JSON.stringify({ ...payload, file_name: rescueName, force: false })
+      });
+      return response.ok ? rescueName : null;
+    } catch (e) {
+      console.error("[SaveGuard] Rescue copy failed:", e);
+      return null;
+    }
+  }
+  function isGenerating() {
+    const stopBtn = document.getElementById("mes_stop");
+    return !!stopBtn && stopBtn.offsetParent !== null;
+  }
+  function scheduleChatReload(fileKey) {
+    const now = Date.now();
+    const recent = (recoveryLog.get(fileKey) || []).filter((t) => now - t < RECOVERY_WINDOW_MS);
+    if (recent.length >= MAX_RECOVERIES) {
+      notify("\uCC44\uD305\uC744 \uACC4\uC18D \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8 \uD30C\uC77C\uC740 \uBCF4\uD638 \uC911\uC774\uB2C8, \uC11C\uBC84 \uC5F0\uACB0\uC744 \uD655\uC778\uD55C \uB4A4 \uCC44\uD305\uC744 \uB2E4\uC2DC \uC5F4\uC5B4\uC8FC\uC138\uC694.", "error", true);
+      return false;
+    }
+    recent.push(now);
+    recoveryLog.set(fileKey, recent);
+    if (recoveryTimer) clearTimeout(recoveryTimer);
+    let waited = 0;
+    const tryReload = () => {
+      if (isGenerating() && waited < 6e4) {
+        waited += 500;
+        recoveryTimer = setTimeout(tryReload, 500);
+        return;
+      }
+      recoveryTimer = null;
+      const context = window.SillyTavern?.getContext?.();
+      context?.reloadCurrentChat?.().catch?.((e) => console.error("[SaveGuard] Chat reload failed:", e));
+    };
+    recoveryTimer = setTimeout(tryReload, 300);
+    return true;
+  }
+  async function handleBlocked(payload, reason) {
+    const outCount = messageCount(payload.chat);
+    console.warn("[SaveGuard] Blocked chat save:", { file: payload.file_name, reason, outgoingMessages: outCount });
+    let rescueName = null;
+    if (outCount > 1) {
+      rescueName = await saveRescueCopy(payload);
+    }
+    const willReload = scheduleChatReload(`${payload.avatar_url}::${payload.file_name}`);
+    const rescueText = rescueName ? `
+\uC800\uC7A5\uD558\uB824\uB358 \uB0B4\uC6A9\uC740 "${rescueName}"\uC5D0 \uB530\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.` : "";
+    const reloadText = willReload ? "\n\uCC44\uD305\uC744 \uB2E4\uC2DC \uBD88\uB7EC\uC635\uB2C8\uB2E4." : "";
+    notify(`"${payload.file_name}" \uCC44\uD305\uC774 \uB36E\uC5B4\uC368\uC9C0\uB294 \uAC83\uC744 \uB9C9\uC558\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8\uC740 \uADF8\uB300\uB85C\uC785\uB2C8\uB2E4.${rescueText}${reloadText}`);
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+  async function guardedFetchImpl(input, init) {
+    if (!enabled || !isSaveRequest(input, init)) {
+      return originalFetch(input, init);
+    }
+    let payload = null;
+    try {
+      payload = await readPayload(init);
+    } catch (e) {
+      console.debug("[SaveGuard] Could not read save payload, passing through:", e);
+    }
+    if (!payload) return originalFetch(input, init);
+    if (needsServerCheck(payload)) {
+      let decision = { allow: true, reason: "check-failed" };
+      try {
+        const serverChat = await fetchServerChat(payload);
+        decision = decideSave(payload, serverChat);
+      } catch (e) {
+        console.debug("[SaveGuard] Server check failed, passing through:", e);
+      }
+      if (!decision.allow) return handleBlocked(payload, decision.reason);
+    }
+    const response = await originalFetch(input, init);
+    if (response.status === 400) {
+      try {
+        const data = await response.clone().json();
+        if (data?.error === "integrity") {
+          return handleBlocked(payload, "server-integrity");
+        }
+      } catch {
+      }
+    }
+    return response;
+  }
+  function installSaveGuard() {
+    if (guardedFetch && window.fetch === guardedFetch) return;
+    rawFetch = window.fetch;
+    originalFetch = (input, init) => rawFetch.call(window, input, init);
+    guardedFetch = function chatLobbyGuardedFetch(input, init) {
+      return guardedFetchImpl(input, init);
+    };
+    window.fetch = guardedFetch;
+    enabled = true;
+    console.info("[SaveGuard] Installed");
+  }
+  function uninstallSaveGuard() {
+    if (!guardedFetch) return;
+    if (window.fetch === guardedFetch) {
+      window.fetch = rawFetch;
+      guardedFetch = null;
+    } else {
+      enabled = false;
+    }
+    if (recoveryTimer) {
+      clearTimeout(recoveryTimer);
+      recoveryTimer = null;
+    }
+  }
+  function setSaveGuardEnabled(value) {
+    enabled = !!value;
+    console.info("[SaveGuard]", enabled ? "enabled" : "disabled");
+  }
+
+  // src/ui/charInfoView.js
+  init_textUtils();
+  var PANEL_ID = "chat-lobby-charinfo-panel";
+  var openToken = 0;
+  function isCharInfoOpen() {
+    return !!document.getElementById(PANEL_ID);
+  }
+  function closeCharInfo() {
+    openToken++;
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+    panel.classList.remove("open");
+    setTimeout(() => panel.remove(), 250);
+  }
+  function field(char, key, legacyKey = key) {
+    const value = char?.data?.[key] ?? char?.[legacyKey];
+    return typeof value === "string" ? value : "";
+  }
+  function fillNames(text, charName, userName) {
+    return text.replace(/\{\{char\}\}/gi, charName).replace(/\{\{user\}\}/gi, userName || "User");
+  }
+  function section(title, text, { open = false } = {}) {
+    if (!text || !text.trim()) return "";
+    return `
+        <details class="charinfo-section" ${open ? "open" : ""}>
+            <summary>${escapeHtml(title)}</summary>
+            <div class="charinfo-text">${escapeHtml(text)}</div>
+        </details>`;
+  }
+  async function openCharInfo(character) {
+    if (!character?.avatar) return;
+    const token = ++openToken;
+    document.getElementById(PANEL_ID)?.remove();
+    const context = api.getContext();
+    const characters = context?.characters || [];
+    const index = characters.findIndex((c) => c.avatar === character.avatar);
+    if (index === -1) return;
+    const panel = document.createElement("div");
+    panel.id = PANEL_ID;
+    panel.className = "charinfo-panel";
+    panel.innerHTML = `
+        <div class="charinfo-header">
+            <h3>${escapeHtml(characters[index].name || character.name || "")}</h3>
+            <div class="charinfo-actions">
+                <button class="charinfo-edit-btn" data-action="edit-character" title="\uCE90\uB9AD\uD130\uB85C \uC774\uB3D9\uD574\uC11C \uD3B8\uC9D1">\u270F\uFE0F \uD3B8\uC9D1</button>
+                <button class="charinfo-close-btn" data-action="close-charinfo" title="\uB2EB\uAE30">\u2715</button>
+            </div>
+        </div>
+        <div class="charinfo-body"><div class="lobby-loading">\uBD88\uB7EC\uC624\uB294 \uC911...</div></div>
+    `;
+    const container = document.getElementById("chat-lobby-container") || document.body;
+    container.appendChild(panel);
+    requestAnimationFrame(() => panel.classList.add("open"));
+    try {
+      if (characters[index].shallow && typeof context.unshallowCharacter === "function") {
+        await context.unshallowCharacter(index);
+      }
+    } catch (e) {
+      console.warn("[CharInfo] unshallowCharacter failed:", e);
+    }
+    if (token !== openToken) return;
+    const char = api.getContext()?.characters?.[index];
+    if (!char || char.avatar !== character.avatar) {
+      closeCharInfo();
+      return;
+    }
+    const charName = char.name || "";
+    const userName = context.name1 || "";
+    const fill = (text) => fillNames(text, charName, userName);
+    const creator = field(char, "creator");
+    const version = field(char, "character_version");
+    const tags = Array.isArray(char.tags) ? char.tags : Array.isArray(char.data?.tags) ? char.data.tags : [];
+    const greetings = Array.isArray(char.data?.alternate_greetings) ? char.data.alternate_greetings : [];
+    const meta = [
+      creator ? `\uB9CC\uB4E0 \uC0AC\uB78C: ${escapeHtml(creator)}` : "",
+      version ? `\uBC84\uC804: ${escapeHtml(version)}` : "",
+      greetings.length ? `\uCD94\uAC00 \uC778\uC0AC\uB9D0 ${greetings.length}\uAC1C` : ""
+    ].filter(Boolean).join(" \xB7 ");
+    const body = panel.querySelector(".charinfo-body");
+    body.innerHTML = `
+        <div class="charinfo-top">
+            <img class="charinfo-avatar" src="/characters/${encodeURIComponent(char.avatar)}" alt="" onerror="this.src='/img/ai4.png'">
+            <div class="charinfo-meta">
+                ${meta ? `<div class="charinfo-meta-line">${meta}</div>` : ""}
+                ${tags.length ? `<div class="charinfo-tags">${tags.map((t) => `<span class="charinfo-tag">${escapeHtml(String(t))}</span>`).join("")}</div>` : ""}
+            </div>
+        </div>
+        ${section("\uC81C\uC791\uC790 \uB178\uD2B8", fill(field(char, "creator_notes", "creatorcomment")), { open: true })}
+        ${section("\uC124\uBA85", fill(field(char, "description")), { open: true })}
+        ${section("\uC131\uACA9", fill(field(char, "personality")))}
+        ${section("\uC2DC\uB098\uB9AC\uC624", fill(field(char, "scenario")))}
+        ${section("\uCCAB \uBA54\uC2DC\uC9C0", fill(field(char, "first_mes")))}
+        ${greetings.map((g, i) => section(`\uCD94\uAC00 \uC778\uC0AC\uB9D0 ${i + 1}`, fill(String(g || "")))).join("")}
+        ${section("\uC608\uC2DC \uB300\uD654", fill(field(char, "mes_example")))}
+    `;
+  }
+
+  // src/index.js
   (function() {
     "use strict";
+    installSaveGuard();
     let chatChangedCooldownTimer = null;
     let closeLobbyHandler = null;
     let lastKnownPersona = null;
@@ -11769,32 +12114,114 @@ ${message}` : message;
       }
       preview.dataset.empty = !hasAvatar && !hasStreak ? "true" : "false";
     }
-    async function init() {
+    let appReadyHandled = false;
+    let appReadyListener = null;
+    function mountShell() {
       if (window._chatLobbyInitialized) {
         console.warn("[ChatLobby] Already initialized, skipping duplicate init");
-        return;
+        return false;
       }
       window._chatLobbyInitialized = true;
-      console.info("[ChatLobby] \u{1F680} Initializing...");
+      console.info("[ChatLobby] \u{1F680} Mounting shell...");
       removeExistingUI();
       document.body.insertAdjacentHTML("beforeend", createLobbyHTML());
-      const fab = document.getElementById("chat-lobby-fab");
-      if (fab) {
-        fab.style.display = "flex";
-      }
       setupHandlers();
       setupEventDelegation();
       initThemeMenuEvents(() => renderCharacterGrid(store.searchTerm));
-      renderStDock();
-      setupSillyTavernEvents();
-      startBackgroundPreload();
-      addLobbyToOptionsMenu();
-      setTimeout(() => initCustomThemeIntegration(openLobby), CONFIG.timing.initDelay);
-      await initCalendarStorage();
-      updateFabPreview();
+      showBootSkeleton();
+      return true;
+    }
+    function showBootSkeleton() {
+      const overlay = document.getElementById("chat-lobby-overlay");
+      const container = document.getElementById("chat-lobby-container");
+      const fab = document.getElementById("chat-lobby-fab");
+      const grid = document.getElementById("chat-lobby-characters");
+      if (overlay) overlay.style.display = "flex";
+      if (container) {
+        container.style.display = "flex";
+        container.classList.add("is-booting");
+      }
+      if (fab) fab.style.display = "none";
+      if (grid) {
+        grid.innerHTML = Array.from(
+          { length: 12 },
+          () => '<div class="lobby-char-card lobby-skeleton-card" aria-hidden="true"></div>'
+        ).join("");
+      }
+    }
+    async function onAppReady() {
+      if (appReadyHandled) return;
+      appReadyHandled = true;
+      clearBootWatchdog();
+      console.info("[ChatLobby] SillyTavern ready, loading data");
+      const overlay = document.getElementById("chat-lobby-overlay");
+      const shouldOpen = overlay?.style.display === "flex";
+      await runStep("renderStDock", renderStDock);
+      await runStep("setupSillyTavernEvents", setupSillyTavernEvents);
+      await runStep("addLobbyToOptionsMenu", () => addLobbyToOptionsMenu());
+      await runStep("customThemeIntegration", () => initCustomThemeIntegration(openLobby));
       api.getCurrentPersona().then((p) => {
         if (p) lastKnownPersona = p;
       }).catch(() => {
+      });
+      await runStep("initCalendarStorage", initCalendarStorage);
+      await runStep("updateFabPreview", updateFabPreview);
+      document.getElementById("chat-lobby-container")?.classList.remove("is-booting");
+      if (shouldOpen) {
+        await runStep("openLobby", openLobby);
+      } else {
+        showFabOnly();
+      }
+      runStep("startBackgroundPreload", startBackgroundPreload);
+    }
+    async function runStep(name, fn) {
+      try {
+        await fn();
+        return true;
+      } catch (e) {
+        console.error(`[ChatLobby] Init step "${name}" failed:`, e);
+        return false;
+      }
+    }
+    function showFabOnly() {
+      const overlay = document.getElementById("chat-lobby-overlay");
+      const container = document.getElementById("chat-lobby-container");
+      const fab = document.getElementById("chat-lobby-fab");
+      container?.classList.remove("is-booting");
+      if (overlay) overlay.style.display = "none";
+      if (container) container.style.display = "none";
+      if (fab) fab.style.display = "flex";
+    }
+    const BOOT_WATCHDOG_MS = 3e4;
+    let bootWatchdogTimer = null;
+    function startBootWatchdog() {
+      clearBootWatchdog();
+      bootWatchdogTimer = setTimeout(() => {
+        bootWatchdogTimer = null;
+        if (appReadyHandled) return;
+        console.warn("[ChatLobby] SillyTavern did not become ready in time, showing FAB only");
+        showFabOnly();
+      }, BOOT_WATCHDOG_MS);
+    }
+    function clearBootWatchdog() {
+      if (bootWatchdogTimer) {
+        clearTimeout(bootWatchdogTimer);
+        bootWatchdogTimer = null;
+      }
+    }
+    function whenAppReady(callback) {
+      const context = window.SillyTavern?.getContext?.();
+      const eventSource = context?.eventSource;
+      const eventName = context?.eventTypes?.APP_INITIALIZED || context?.eventTypes?.APP_READY;
+      if (eventSource && eventName) {
+        appReadyListener = () => {
+          callback().catch((e) => console.error("[ChatLobby] App ready handler failed:", e));
+        };
+        eventSource.on(eventName, appReadyListener);
+        return;
+      }
+      waitForSillyTavern().then((ready) => {
+        if (ready) callback().catch((e) => console.error("[ChatLobby] App ready handler failed:", e));
       });
     }
     function setupSillyTavernEvents() {
@@ -12046,14 +12473,6 @@ ${message}` : message;
         }
         store.resetSelection();
         resetCharacterSelectLock();
-        try {
-          const context = api.getContext();
-          if (typeof context?.getCharacters === "function") {
-            await context.getCharacters();
-          }
-        } catch (error) {
-          console.warn("[ChatLobby] Failed to refresh characters:", error);
-        }
         storage.setFilterFolder("all");
         deactivateBatchMode();
         closeChatPanel();
@@ -12118,6 +12537,7 @@ ${message}` : message;
       store.setLobbyOpen(false);
       store.resetSelection();
       closeChatPanel();
+      closeCharInfo();
       startRecentDomObserver();
       updateFabPreview();
     }
@@ -12228,9 +12648,21 @@ ${message}` : message;
     window.ChatLobby = window.ChatLobby || {};
     window._chatLobbyLastChatCache = lastChatCache;
     window.ChatLobby.listenerStats = () => listeners.stats();
+    window.ChatLobby.saveGuard = (value = true) => setSaveGuardEnabled(value);
     function cleanup() {
       console.info("[ChatLobby] \u{1F9F9} Cleanup started");
       cleanupSillyTavernEvents();
+      uninstallSaveGuard();
+      clearBootWatchdog();
+      if (appReadyListener) {
+        const ctx = window.SillyTavern?.getContext?.();
+        const eventName = ctx?.eventTypes?.APP_INITIALIZED || ctx?.eventTypes?.APP_READY;
+        try {
+          ctx?.eventSource?.removeListener?.(eventName, appReadyListener);
+        } catch {
+        }
+        appReadyListener = null;
+      }
       cleanupEventDelegation();
       cleanupCustomThemeIntegration();
       cleanupTooltip();
@@ -12397,7 +12829,18 @@ ${message}` : message;
           closeChatPanel();
           break;
         case "go-to-character":
+          if (store.currentGroup) {
+            await handleGoToGroup();
+          } else if (store.currentCharacter) {
+            await openCharInfo(store.currentCharacter);
+          }
+          break;
+        case "edit-character":
+          closeCharInfo();
           await handleGoToCharacter();
+          break;
+        case "close-charinfo":
+          closeCharInfo();
           break;
         case "toggle-collapse":
           toggleCollapse();
@@ -12449,6 +12892,10 @@ ${message}` : message;
         if (closeTopRemindLayer()) {
           return;
         }
+        if (isCharInfoOpen()) {
+          closeCharInfo();
+          return;
+        }
         if (isDebugPanelOpen) {
           closeDebugModal();
           return;
@@ -12487,7 +12934,14 @@ ${message}` : message;
     async function handleRefresh() {
       cache.invalidateAll();
       await api.fetchPersonas();
-      await api.fetchCharacters(true);
+      try {
+        const context = api.getContext();
+        if (typeof context?.getCharacters === "function") {
+          await context.getCharacters();
+        }
+      } catch (e) {
+        console.warn("[ChatLobby] Failed to refresh characters:", e);
+      }
       await Promise.all([
         renderPersonaBar(),
         renderCharacterGrid(),
@@ -12682,11 +13136,11 @@ ${message}` : message;
         return;
       }
       closeLobby();
-      const isAlreadySelected = context.characterId === index;
+      const isAlreadySelected = String(context.characterId) === String(index);
       if (!isAlreadySelected) {
-        const selected = await selectCharacterLight(index, character.avatar);
-        if (!selected) {
-          console.warn("[ChatLobby] Character selection timeout");
+        const result = await switchCharacter(index, character.avatar);
+        if (result !== "ok") {
+          console.warn("[ChatLobby] Character selection failed:", result);
         }
       }
       if (!openDrawerSafely("rightNavHolder")) {
@@ -12754,21 +13208,27 @@ ${message}` : message;
       console.error("[ChatLobby] SillyTavern context not available after", maxAttempts * interval, "ms");
       return false;
     }
-    async function initAndOpen() {
-      const isReady = await waitForSillyTavern();
-      if (!isReady) {
-        console.error("[ChatLobby] Cannot initialize - SillyTavern not ready");
+    function bootstrap() {
+      let mounted = false;
+      try {
+        mounted = mountShell();
+      } catch (e) {
+        console.error("[ChatLobby] Shell mount failed:", e);
+        try {
+          removeExistingUI();
+        } catch {
+        }
+        window._chatLobbyInitialized = false;
         return;
       }
-      await init();
-      setTimeout(() => {
-        openLobby();
-      }, 100);
+      if (!mounted) return;
+      startBootWatchdog();
+      whenAppReady(onAppReady);
     }
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => setTimeout(initAndOpen, CONFIG.timing.initDelay));
+      document.addEventListener("DOMContentLoaded", bootstrap, { once: true });
     } else {
-      setTimeout(initAndOpen, CONFIG.timing.initDelay);
+      bootstrap();
     }
   })();
 })();

@@ -4,6 +4,11 @@
 
 import { CONFIG } from '../config.js';
 
+/** 캐릭터별 캐시 최대 개수 (LRU) */
+const CACHE_LIMITS = {
+    chats: 40,
+};
+
 /**
  * @typedef {'chats' | 'chatCounts' | 'personas' | 'characters'} CacheType
  */
@@ -104,8 +109,20 @@ class CacheManager {
         const now = Date.now();
         
         if (key !== null) {
-            this.stores[type].set(key, data);
+            const store = this.stores[type];
+            // 삭제 후 다시 넣어 Map 순서를 "최근 사용" 순으로 유지
+            store.delete(key);
+            store.set(key, data);
             this.timestamps[type].set(key, now);
+
+            // ★ 채팅 목록은 캐릭터당 데이터가 커서 무한히 쌓이면 메모리가 계속 늘어남
+            // → 가장 오래된 것부터 버림 (채팅 수/메시지 수 같은 숫자 캐시는 작으니 유지)
+            const limit = CACHE_LIMITS[type];
+            if (limit && store.size > limit) {
+                const oldestKey = store.keys().next().value;
+                store.delete(oldestKey);
+                this.timestamps[type].delete(oldestKey);
+            }
         } else {
             this.stores[type] = data;
             this.timestamps[type] = now;

@@ -64,46 +64,17 @@ export async function openChat(chatInfo) {
         const isSameCharacter = currentChar?.avatar === charAvatar;
 
         if (!isSameCharacter) {
-            // 다른 캐릭터인 경우에만 selectCharacterById 호출
+            // 다른 캐릭터인 경우에만 전환
+            // ★ chat 포인터를 대상 채팅으로 지정해서 전환 → "최근 채팅 로드 → 대상 채팅 재로드" 이중 로드 회피
             console.debug('[ChatHandlers] Different character, selecting...');
+            const result = await switchCharacter(index, charAvatar, { chatPointer: chatFileName, token });
 
-            // ★ 선택 전에 chat 포인터를 대상 채팅으로 변경
-            // selectCharacterById는 characters[i].chat이 가리키는 채팅을 로드하므로,
-            // 미리 바꿔두면 "최근 채팅 로드 → 대상 채팅 재로드"의 이중 로드를 피한다
-            const targetChar = characters[index];
-            if (targetChar && typeof targetChar.chat === 'string') {
-                targetChar.chat = chatFileName;
-            }
-
-            // ⚠️ 리스너 먼저 등록 → 그 다음 selectCharacterById 호출
-            // (selectCharacterById가 완료되면 CHAT_CHANGED는 이미 발행된 뒤)
-            const chatChangedPromise = waitForChatChanged(5000);
-            await api.selectCharacterById(index);
-
-            // CHAT_CHANGED 이벤트 대기 (ST의 save/load 완료 확인)
-            const chatChanged = await chatChangedPromise;
-            console.debug('[ChatHandlers] Chat changed event received:', chatChanged);
-
-            // 안전 타임아웃으로 락이 해제됐으면 이후 단계 중단 (새 작업과의 겹침 방지)
-            if (!operationLock.isCurrent(token)) {
+            if (result === 'stale') {
                 console.warn('[ChatHandlers] openChat became stale, aborting');
                 return;
             }
-
-            if (!chatChanged) {
-                // 타임아웃된 경우 avatar만이라도 확인
-                const charSelected = await waitForCharacterSelect(charAvatar, 2000);
-                if (!charSelected) {
-                    showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
-                    return;
-                }
-            }
-
-            // 추가 안정화 마진 (save flush 대기)
-            await new Promise(r => setTimeout(r, 300));
-
-            if (!operationLock.isCurrent(token)) {
-                console.warn('[ChatHandlers] openChat became stale, aborting');
+            if (result === 'failed') {
+                showToast('캐릭터 선택에 실패했습니다. 다시 시도해주세요.', 'error');
                 return;
             }
         } else {
@@ -291,16 +262,10 @@ export async function deleteChat(chatInfo) {
                 }, 200);
             }
             
-            // 실리 동기화
-            const context = api.getContext();
-            if (context?.reloadCurrentChat) {
-                try { 
-                    await context.reloadCurrentChat(); 
-                } catch(e) {
-                    console.warn('[ChatLobby] reloadCurrentChat failed:', e);
-                }
-            }
-            
+            // ⚠️ 여기서 reloadCurrentChat()을 부르지 않음
+            // 삭제 대상은 "현재 열린 채팅이 아닌" 파일(위에서 확인)이므로 현재 채팅을 다시 불러올 이유가 없고,
+            // 불필요한 리로드는 편집 중이던 내용을 날릴 수 있음
+
             showToast('채팅이 삭제되었습니다.', 'success');
         } else {
             showToast('채팅 삭제에 실패했습니다.', 'error');
@@ -372,50 +337,99 @@ async function findLightestChatName(charAvatar) {
 }
 
 /**
- * 캐릭터 선택 (가벼운 채팅 경유)
+ * 지금 ST에서 선택된 캐릭터가 대상인지
+ */
+function isCharacterSelected(charIndexNum, charAvatar) {
+    const ctx = api.getContext();
+    return String(ctx?.characterId) === String(charIndexNum)
+        && ctx?.characters?.[ctx.characterId]?.avatar === charAvatar;
+}
+
+/**
+ * 캐릭터 전환 (모든 전환은 이 함수를 거친다)
  *
- * selectCharacterById는 항상 characters[i].chat이 가리키는 "마지막 채팅"을 로드한다.
- * 마지막 채팅이 무거우면 새 채팅 시작/봇카드 열람이 그 로딩에 발목 잡히므로,
- * 선택 직전에 chat 포인터를 가장 가벼운 채팅으로 바꿔 ST가 가벼운 채팅을 로드하게 한다.
- * (이후 흐름에서 새 채팅 생성 또는 다른 채팅 열기로 이어지므로 중간 채팅은 스쳐 지나갈 뿐)
+ * selectCharacterById는 characters[i].chat이 가리키는 채팅을 로드한다.
+ * chatPointer를 주면 전환 직전에 포인터를 바꿔 그 채팅을 바로 로드하게 한다.
+ *
+ * ⚠️ ST는 채팅 저장 중이거나 생성 중이면 전환하지 않고 그냥 리턴한다.
+ * 그때 바꾼 포인터를 그대로 두면 캐릭터의 "마지막 채팅"이 엉뚱한 파일로 남아
+ * 최근 채팅이 사라진 것처럼 보이므로, 전환이 실패하면 반드시 원래 값으로 되돌린다.
+ *
+ * @param {number} charIndexNum - 캐릭터 인덱스
+ * @param {string} charAvatar - 캐릭터 아바타 (검증용)
+ * @param {{ chatPointer?: string|null, token?: number|null }} [options]
+ * @returns {Promise<'ok'|'failed'|'stale'>}
+ */
+export async function switchCharacter(charIndexNum, charAvatar, { chatPointer = null, token = null } = {}) {
+    const context = api.getContext();
+    const targetChar = context?.characters?.[charIndexNum];
+    if (!targetChar || targetChar.avatar !== charAvatar) return 'failed';
+
+    const originalPointer = targetChar.chat;
+    const pointerChanged = typeof chatPointer === 'string'
+        && typeof originalPointer === 'string'
+        && chatPointer !== originalPointer;
+    if (pointerChanged) {
+        targetChar.chat = chatPointer;
+    }
+
+    // 전환이 일어나지 않았으면 포인터 원복 (전환된 뒤에는 절대 건드리지 않음)
+    const restoreIfNotSwitched = () => {
+        if (pointerChanged && !isCharacterSelected(charIndexNum, charAvatar) && targetChar.chat === chatPointer) {
+            targetChar.chat = originalPointer;
+            console.warn('[ChatHandlers] Switch did not happen, restored chat pointer:', originalPointer);
+        }
+    };
+
+    try {
+        // ⚠️ 리스너 먼저 등록 → 그 다음 호출 (호출이 끝나면 CHAT_CHANGED는 이미 발행된 뒤)
+        const chatChangedPromise = waitForChatChanged(5000);
+        await api.selectCharacterById(charIndexNum);
+        const chatChanged = await chatChangedPromise;
+
+        if (!chatChanged) {
+            const selected = await waitForCharacterSelect(charAvatar, 2000);
+            if (!selected) {
+                restoreIfNotSwitched();
+                return 'failed';
+            }
+        }
+    } catch (error) {
+        console.error('[ChatHandlers] selectCharacterById failed:', error);
+        restoreIfNotSwitched();
+        return 'failed';
+    }
+
+    if (token !== null && !operationLock.isCurrent(token)) return 'stale';
+
+    // 추가 안정화 마진 (save flush 대기)
+    await new Promise(r => setTimeout(r, 300));
+    return (token === null || operationLock.isCurrent(token)) ? 'ok' : 'stale';
+}
+
+/**
+ * 캐릭터 선택 (가벼운 채팅 경유) - 새 채팅 시작 전용
+ *
+ * 마지막 채팅이 무거우면 새 채팅 시작이 그 로딩에 발목 잡히므로,
+ * 메시지 수가 가장 적은 채팅을 거쳐 전환한다. 바로 이어서 새 채팅을 만드는
+ * 흐름에서만 쓸 것 (봇카드 보기 등에서 쓰면 사용자가 엉뚱한 채팅에 남게 됨).
  *
  * @param {number} charIndexNum - 캐릭터 인덱스
  * @param {string} charAvatar - 캐릭터 아바타 (검증용)
  * @param {number|null} [token=null] - operationLock 토큰 (stale 체크용, 없으면 생략)
  * @returns {Promise<boolean>} - 선택 성공 여부
  */
-export async function selectCharacterLight(charIndexNum, charAvatar, token = null) {
-    const context = api.getContext();
-    const targetChar = context?.characters?.[charIndexNum];
-
-    // chat 포인터를 가장 가벼운 채팅으로 변경 (실패해도 기본 동작으로 진행)
-    if (targetChar && targetChar.avatar === charAvatar && typeof targetChar.chat === 'string') {
-        try {
-            const lightest = await findLightestChatName(charAvatar);
-            if (lightest && targetChar.chat !== lightest) {
-                console.debug('[ChatHandlers] Light select: redirecting chat pointer to', lightest);
-                targetChar.chat = lightest;
-            }
-        } catch (e) {
-            console.warn('[ChatHandlers] findLightestChatName failed, using default chat:', e);
-        }
+async function selectCharacterLight(charIndexNum, charAvatar, token = null) {
+    let lightest = null;
+    try {
+        lightest = await findLightestChatName(charAvatar);
+    } catch (e) {
+        console.warn('[ChatHandlers] findLightestChatName failed, using default chat:', e);
     }
+    if (lightest) console.debug('[ChatHandlers] Light select via', lightest);
 
-    // ⚠️ 리스너 먼저 등록 → 그 다음 호출
-    const chatChangedPromise = waitForChatChanged(5000);
-    await api.selectCharacterById(charIndexNum);
-
-    const chatChanged = await chatChangedPromise;
-    if (token !== null && !operationLock.isCurrent(token)) return false;
-
-    if (!chatChanged) {
-        const selected = await waitForCharacterSelect(charAvatar, 2000);
-        if (!selected) return false;
-    }
-
-    // 추가 안정화 마진 (save flush 대기)
-    await new Promise(r => setTimeout(r, 300));
-    return token === null || operationLock.isCurrent(token);
+    const result = await switchCharacter(charIndexNum, charAvatar, { chatPointer: lightest, token });
+    return result === 'ok';
 }
 
 // ============================================

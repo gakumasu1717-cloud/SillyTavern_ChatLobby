@@ -241,6 +241,8 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
         loadChatCountsAsync(filtered, sortOption);
     } else {
         container.innerHTML = sortedItems.slice(0, INITIAL_RENDER_COUNT).map(renderItem).join('');
+        // 첫 화면 카드부터 바로 채팅 수 로딩 시작 (청크 렌더 완료를 기다리지 않음)
+        loadChatCountsAsync(filtered, sortOption);
         let offset = INITIAL_RENDER_COUNT;
 
         const appendChunk = () => {
@@ -250,12 +252,10 @@ async function renderCharacterList(container, characters, searchTerm, sortOverri
             const chunk = sortedItems.slice(offset, offset + RENDER_CHUNK_SIZE);
             container.insertAdjacentHTML('beforeend', chunk.map(renderItem).join(''));
             offset += RENDER_CHUNK_SIZE;
+            observeNewCards(container);
 
             if (offset < sortedItems.length) {
                 requestAnimationFrame(appendChunk);
-            } else {
-                // 전체 렌더 완료 후 카운트 로딩 (DOM 패치 대상이 모두 존재하도록)
-                loadChatCountsAsync(filtered, sortOption);
             }
         };
         requestAnimationFrame(appendChunk);
@@ -431,104 +431,168 @@ function renderCharacterCard(char, index, sortOption = 'recent', showBadges = tr
     `;
 }
 
+// ============================================
+// 채팅 수 지연 로딩
+// ★ 예전엔 그리드를 그릴 때마다 "모든 캐릭터"의 채팅 목록(무거운 API)을 5개씩 요청했음
+//   (캐릭터가 많으면 로비 열 때마다 수십~수백 개 요청 → 들낙이 느린 주원인)
+//   이제 화면에 보이는(또는 곧 보일) 카드만 요청한다.
+// ============================================
+
+const COUNT_CONCURRENCY = 3;
+let countObserver = null;
+/** @type {string[]} */
+let countQueue = [];
+const countQueued = new Set();
+let countActive = 0;
+let countSortOption = 'recent';
+let snapshotTimer = null;
+
 /**
- * 백그라운드에서 채팅 수 로딩 후 UI 업데이트
- * 배치 처리로 메모리 최적화 + 메인 스레드 블로킹 방지
- * @param {Array} characters - 캐릭터 배열
+ * 카드가 보이면 채팅 수를 불러오도록 등록
+ * @param {Array} characters - 렌더된 캐릭터 배열
  * @param {string} sortOption - 정렬 옵션
  */
-async function loadChatCountsAsync(characters, sortOption = 'recent') {
-    const BATCH_SIZE = 5;
-    
-    for (let i = 0; i < characters.length; i += BATCH_SIZE) {
-        const batch = characters.slice(i, i + BATCH_SIZE);
-        
-        await Promise.all(batch.map(async (char) => {
-            // 이미 캐시에 숫자가 있으면 스킵
-            const existingCount = cache.get('chatCounts', char.avatar);
-            if (typeof existingCount === 'number') return;
-            
-            try {
-                const chats = await api.fetchChatsForCharacter(char.avatar);
-                // API 응답이 배열인지 확인 (객체일 수도 있음)
-                const chatArray = Array.isArray(chats) ? chats : (typeof chats === 'object' && chats ? Object.values(chats) : []);
-                const count = chatArray.length;
-                
-                // 메시지 수 합계 (chat_items 합산)
-                const messageCount = chatArray.reduce((sum, chat) => {
-                    return sum + (chat.chat_items || 0);
-                }, 0);
-                
-                cache.set('chatCounts', count, char.avatar);
-                cache.set('messageCounts', messageCount, char.avatar);
-                
-                // DOM 업데이트 (CSS.escape로 특수문자 처리)
-                const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(char.avatar)}"]`);
-                
-                // ★ lastChatCache에도 마지막 채팅 시간 갱신 (재접속 정렬 정확도 향상)
-                if (chatArray.length > 0) {
-                    await lastChatCache.refreshForCharacter(char.avatar, chatArray);
-                    
-                    // 최근 채팅순 정렬 + 오늘 날짜인 경우에만 시간 표시
-                    if (sortOption === 'recent' && card) {
-                        const lastTime = lastChatCache.get(char.avatar);
-                        if (lastTime > 0) {
-                            // 오늘 날짜인지 확인
-                            const now = new Date();
-                            const lastDate = new Date(lastTime);
-                            const isToday = now.toDateString() === lastDate.toDateString();
-                            
-                            if (isToday) {
-                                const nameTextEl = card.querySelector('.char-name-text');
-                                if (nameTextEl && !nameTextEl.querySelector('.char-last-time')) {
-                                    const hours = lastDate.getHours();
-                                    const minutes = String(lastDate.getMinutes()).padStart(2, '0');
-                                    const timeSpan = document.createElement('span');
-                                    timeSpan.className = 'char-last-time';
-                                    timeSpan.textContent = ` ${hours}:${minutes}`;
-                                    nameTextEl.appendChild(timeSpan);
-                                }
-                            }
-                        }
-                    }
+function loadChatCountsAsync(characters, sortOption = 'recent') {
+    countSortOption = sortOption;
+    const container = document.getElementById('chat-lobby-characters');
+    if (!container) return;
+
+    // 구형 브라우저: 예전처럼 전체 순차 로딩
+    if (typeof IntersectionObserver === 'undefined') {
+        characters.forEach(char => enqueueChatCount(char.avatar));
+        return;
+    }
+
+    if (countObserver) countObserver.disconnect();
+    // 대기열은 새 렌더 기준으로 다시 만듦 (진행 중인 요청은 그대로 끝까지)
+    countQueue = [];
+    countQueued.clear();
+
+    // root: null(뷰포트) → 어떤 조상이 스크롤하든 실제로 보이는지 기준으로 판단
+    countObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            countObserver?.unobserve(entry.target);
+            enqueueChatCount(entry.target.dataset.charAvatar);
+        }
+    }, { root: null, rootMargin: '400px 0px' });
+
+    container.querySelectorAll('.lobby-char-card[data-char-avatar]').forEach(card => {
+        card.dataset.countObserved = '1';
+        if (typeof cache.get('chatCounts', card.dataset.charAvatar) === 'number') return;
+        countObserver.observe(card);
+    });
+}
+
+/**
+ * 청크 렌더로 나중에 추가된 카드도 관찰 대상에 추가
+ * @param {HTMLElement} container
+ */
+function observeNewCards(container) {
+    if (!countObserver) return;
+    container.querySelectorAll('.lobby-char-card[data-char-avatar]:not([data-count-observed])').forEach(card => {
+        card.dataset.countObserved = '1';
+        if (typeof cache.get('chatCounts', card.dataset.charAvatar) === 'number') return;
+        countObserver.observe(card);
+    });
+}
+
+function enqueueChatCount(avatar) {
+    if (!avatar || countQueued.has(avatar)) return;
+    if (typeof cache.get('chatCounts', avatar) === 'number') return;
+    countQueued.add(avatar);
+    countQueue.push(avatar);
+    pumpChatCounts();
+}
+
+function pumpChatCounts() {
+    while (countActive < COUNT_CONCURRENCY && countQueue.length > 0) {
+        const avatar = countQueue.shift();
+        countActive++;
+        loadOneChatCount(avatar)
+            .catch(e => console.error('[CharacterGrid] Failed to load chat count:', avatar, e))
+            .finally(() => {
+                countActive--;
+                countQueued.delete(avatar);
+                if (countQueue.length > 0) {
+                    pumpChatCounts();
+                } else if (countActive === 0) {
+                    scheduleSnapshot();
                 }
-                
-                if (card) {
-                    const chatValueEl = card.querySelector('.chat-count-value');
-                    if (chatValueEl) {
-                        chatValueEl.textContent = count > 0 ? `${count}개 채팅` : '채팅 없음';
-                    }
-                    
-                    // 메시지 수 업데이트 (요소가 없으면 추가)
-                    const hoverInfo = card.querySelector('.char-hover-info');
-                    if (hoverInfo && messageCount > 0) {
-                        let messageRow = hoverInfo.querySelector('.message-count-value');
-                        if (!messageRow) {
-                            const newRow = document.createElement('div');
-                            newRow.className = 'info-row';
-                            newRow.innerHTML = `
-                                <span class="info-icon">📝</span>
-                                <span class="info-value message-count-value">${messageCount}개 메시지</span>
-                            `;
-                            hoverInfo.appendChild(newRow);
-                        } else {
-                            messageRow.textContent = `${messageCount}개 메시지`;
-                        }
-                    }
+            });
+    }
+}
+
+/**
+ * 대기열이 비면 오늘 스냅샷 저장 (연달아 스크롤할 때 여러 번 저장하지 않도록 디바운스)
+ */
+function scheduleSnapshot() {
+    if (snapshotTimer) clearTimeout(snapshotTimer);
+    snapshotTimer = setTimeout(() => {
+        snapshotTimer = null;
+        saveTodaySnapshotFromCache();
+    }, 1500);
+}
+
+/**
+ * 캐릭터 하나의 채팅 수를 불러와 카드에 반영
+ * @param {string} avatar
+ */
+async function loadOneChatCount(avatar) {
+    const chats = await api.fetchChatsForCharacter(avatar);
+    const chatArray = Array.isArray(chats) ? chats : (typeof chats === 'object' && chats ? Object.values(chats) : []);
+    const count = chatArray.length;
+    const messageCount = chatArray.reduce((sum, chat) => sum + (chat.chat_items || 0), 0);
+
+    cache.set('chatCounts', count, avatar);
+    cache.set('messageCounts', messageCount, avatar);
+
+    // ★ lastChatCache에도 마지막 채팅 시간 갱신 (재접속 정렬 정확도 향상)
+    if (chatArray.length > 0) {
+        await lastChatCache.refreshForCharacter(avatar, chatArray);
+    }
+
+    const card = document.querySelector(`.lobby-char-card[data-char-avatar="${CSS.escape(avatar)}"]`);
+    if (!card) return;
+
+    // 최근 채팅순 정렬 + 오늘 날짜인 경우에만 시간 표시
+    if (countSortOption === 'recent' && chatArray.length > 0) {
+        const lastTime = lastChatCache.get(avatar);
+        if (lastTime > 0) {
+            const lastDate = new Date(lastTime);
+            if (new Date().toDateString() === lastDate.toDateString()) {
+                const nameTextEl = card.querySelector('.char-name-text');
+                if (nameTextEl && !nameTextEl.querySelector('.char-last-time')) {
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'char-last-time';
+                    timeSpan.textContent = ` ${lastDate.getHours()}:${String(lastDate.getMinutes()).padStart(2, '0')}`;
+                    nameTextEl.appendChild(timeSpan);
                 }
-            } catch (e) {
-                console.error('[CharacterGrid] Failed to load chat count:', char.name, e);
             }
-        }));
-        
-        // 배치 간 약간의 딜레이로 메인 스레드 블로킹 방지 + GC 기회 제공
-        if (i + BATCH_SIZE < characters.length) {
-            await new Promise(r => setTimeout(r, 10));
         }
     }
-    
-    // 🔥 로비 로드 완료 후 오늘 스냅샷 저장 (캐시 재사용, API 호출 0)
-    await saveTodaySnapshotFromCache();
+
+    const chatValueEl = card.querySelector('.chat-count-value');
+    if (chatValueEl) {
+        chatValueEl.textContent = count > 0 ? `${count}개 채팅` : '채팅 없음';
+    }
+
+    // 메시지 수 업데이트 (요소가 없으면 추가)
+    const hoverInfo = card.querySelector('.char-hover-info');
+    if (hoverInfo && messageCount > 0) {
+        const messageRow = hoverInfo.querySelector('.message-count-value');
+        if (!messageRow) {
+            const newRow = document.createElement('div');
+            newRow.className = 'info-row';
+            newRow.innerHTML = `
+                <span class="info-icon">📝</span>
+                <span class="info-value message-count-value">${messageCount}개 메시지</span>
+            `;
+            hoverInfo.appendChild(newRow);
+        } else {
+            messageRow.textContent = `${messageCount}개 메시지`;
+        }
+    }
 }
 
 /**
@@ -542,12 +606,33 @@ async function saveTodaySnapshotFromCache() {
         
         if (!characters || characters.length === 0) return;
         
+        // 최근 스냅샷 (오늘 것 / 오늘 이전 최근 7일 중 가장 최근 것)
+        const snapshots = loadSnapshots();
+        const todaySnapshot = snapshots[today] || null;
+        let recentSnapshot = null;
+        const checkDate = new Date();
+        for (let i = 0; i < 7; i++) {
+            checkDate.setDate(checkDate.getDate() - 1);
+            const dateStr = getLocalDateString(checkDate);
+            if (snapshots[dateStr]) {
+                recentSnapshot = snapshots[dateStr];
+                break;
+            }
+        }
+
         // 캐시에서 데이터 수집
+        // ★ 채팅 수는 이제 화면에 보인 카드만 불러오므로 일부 캐릭터는 값이 없을 수 있음
+        //   → 그런 캐릭터는 오늘/최근 스냅샷의 값을 그대로 써서 합계가 줄어들지 않게 함
         const byChar = {};
         let totalMessages = 0;
         
         characters.forEach(char => {
-            const msgCount = cache.get('messageCounts', char.avatar) || 0;
+            let msgCount = cache.get('messageCounts', char.avatar);
+            if (typeof msgCount !== 'number') {
+                msgCount = todaySnapshot?.byChar?.[char.avatar]
+                    ?? recentSnapshot?.byChar?.[char.avatar]
+                    ?? 0;
+            }
             if (msgCount > 0) {
                 byChar[char.avatar] = msgCount;
                 totalMessages += msgCount;
@@ -581,21 +666,8 @@ async function saveTodaySnapshotFromCache() {
         }
         
         // 가장 증가한 캐릭터 찾기 (이전 스냅샷과 비교)
-        const snapshots = loadSnapshots();
         let topChar = '';
         let maxIncrease = -Infinity;
-        
-        // 최근 스냅샷 찾기 (오늘 제외)
-        let recentSnapshot = null;
-        const checkDate = new Date();
-        for (let i = 0; i < 7; i++) {
-            checkDate.setDate(checkDate.getDate() - 1);
-            const dateStr = getLocalDateString(checkDate);
-            if (snapshots[dateStr]) {
-                recentSnapshot = snapshots[dateStr];
-                break;
-            }
-        }
         
         const baseByChar = recentSnapshot?.byChar || {};
         

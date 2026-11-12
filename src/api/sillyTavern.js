@@ -309,12 +309,22 @@ class SillyTavernAPI {
             return cache.get('chats', characterAvatar);
         }
         
-        // forceRefresh면 캐시 무효화
+        // forceRefresh면 캐시 무효화 후 새로 요청 (진행 중인 요청에 합류하지 않음)
         if (forceRefresh) {
             cache.invalidate('chats', characterAvatar);
+            return this._requestChats(characterAvatar);
         }
-        
-        // 직접 API 호출 (중복 요청 방지 없이)
+
+        // 같은 캐릭터에 대한 동시 요청은 하나로 합침 (그리드 지연 로딩 + 채팅 패널이 겹칠 때)
+        return cache.getOrFetch(`chats:${characterAvatar}`, () => this._requestChats(characterAvatar));
+    }
+
+    /**
+     * 채팅 목록 실제 요청 + 캐시 저장
+     * @param {string} characterAvatar
+     * @returns {Promise<Array>}
+     */
+    async _requestChats(characterAvatar) {
         try {
             const response = await this.fetchWithRetry('/api/characters/chats', {
                 method: 'POST',
@@ -600,60 +610,6 @@ class SillyTavernAPI {
         } else {
             console.warn('[API] option_settings button not found');
         }
-    }
-    
-    /**
-     * 특정 채팅 파일 열기 (SillyTavern API 사용)
-     * @param {string} fileName - 채팅 파일명
-     * @param {string} characterAvatar - 캐릭터 아바타
-     * @returns {Promise<boolean>}
-     */
-    async openChatFile(fileName, characterAvatar) {
-        
-        const context = this.getContext();
-        
-        // 방법 1: SillyTavern context.openChat 사용
-        if (context?.openChat) {
-            try {
-                await context.openChat(fileName);
-                return true;
-            } catch (e) {
-                console.warn('[API] context.openChat failed:', e);
-            }
-        }
-        
-        // 방법 2: getChat API 직접 호출 (fallback)
-        try {
-            // 파일명에서 확장자 제거
-            const chatName = fileName.replace('.jsonl', '');
-            
-            // SillyTavern의 getChat 함수 호출 시도
-            if (window.SillyTavern?.getContext) {
-                const ctx = window.SillyTavern.getContext();
-                
-                // 기존 채팅 로드 API 직접 호출
-                const response = await fetch('/api/chats/get', {
-                    method: 'POST',
-                    headers: this.getRequestHeaders(),
-                    body: JSON.stringify({
-                        ch_name: characterAvatar.replace(/\.(png|jpg|webp)$/i, ''),
-                        file_name: fileName,
-                        avatar_url: characterAvatar
-                    })
-                });
-                
-                if (response.ok) {
-                    // 페이지 새로고침으로 채팅 적용
-                    location.reload();
-                    return true;
-                }
-            }
-        } catch (e) {
-            console.warn('[API] Direct chat load failed:', e);
-        }
-        
-        // 방법 3: jQuery로 채팅 목록에서 직접 선택
-        return false;
     }
     
     // ============================================

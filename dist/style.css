@@ -7564,3 +7564,166 @@ body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
     opacity: 0.6;
     padding: 4px 0;
 }
+
+/* ============================================
+   Boot skeleton (shown before SillyTavern is ready)
+   ============================================ */
+.lobby-skeleton-card {
+    pointer-events: none;
+    cursor: default;
+    overflow: hidden;
+    background: var(--lobby-bg-light, rgba(127, 127, 127, 0.12));
+}
+
+.lobby-skeleton-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.08) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: lobby-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes lobby-skeleton-shimmer {
+    to { transform: translateX(100%); }
+}
+
+#chat-lobby-container.is-booting #chat-lobby-persona-bar,
+#chat-lobby-container.is-booting #chat-lobby-tag-bar,
+#chat-lobby-container.is-booting #chat-lobby-hero {
+    visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lobby-skeleton-card::after { animation: none; }
+}
+
+/* ============================================
+   Character info panel (view card inside the lobby)
+   ============================================ */
+.charinfo-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 75%;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    background: var(--lobby-bg-card, #1a1a1a);
+    color: var(--lobby-text, #eee);
+    border-top: 1px solid var(--lobby-border, rgba(255, 255, 255, 0.1));
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.45);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+}
+
+.charinfo-panel.open {
+    transform: translateY(0);
+}
+
+.charinfo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--lobby-border, rgba(255, 255, 255, 0.1));
+}
+
+.charinfo-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.charinfo-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.charinfo-actions button {
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    background: var(--lobby-bg-hover, rgba(255, 255, 255, 0.08));
+    color: var(--lobby-text, #eee);
+}
+
+.charinfo-actions .charinfo-edit-btn {
+    background: var(--lobby-accent, #e50914);
+    color: #fff;
+}
+
+.charinfo-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.charinfo-top {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.charinfo-avatar {
+    width: 96px;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.charinfo-meta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.charinfo-meta-line {
+    color: var(--lobby-text-secondary, #aaa);
+    font-size: 0.9em;
+}
+
+.charinfo-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.charinfo-tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.8em;
+    background: var(--lobby-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.charinfo-section {
+    border-top: 1px solid var(--lobby-border, rgba(255, 255, 255, 0.08));
+    padding: 10px 0;
+}
+
+.charinfo-section summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.charinfo-text {
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.55;
+    color: var(--lobby-text-secondary, #ccc);
+}
+
+@media (max-width: 768px) {
+    .charinfo-panel { height: 88%; }
+    .charinfo-avatar { width: 72px; }
+}
