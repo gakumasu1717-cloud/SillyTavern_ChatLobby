@@ -12,15 +12,15 @@ import { renderPersonaBar } from './ui/personaBar.js';
 import { initPersonaRadialMenu, refreshPersonaRadialMenu, cleanupPersonaRadialMenu } from './ui/personaRadialMenu.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange, resetCharacterSelectLock, setGroupSelectHandler } from './ui/characterGrid.js';
 import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, executeBatchDelete, batchSelectAll, closeChatPanel, deactivateBatchMode, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
-import { openChat, deleteChat, startNewChat, deleteCharacter, switchCharacter } from './handlers/chatHandlers.js';
+import { openChat, openGroupChat, deleteChat, startNewChat, deleteCharacter, switchCharacter, switchGroup } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast, showConfirm } from './ui/notifications.js';
 import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.js';
 import { openCalendarView, closeCalendarView } from './ui/calendarView.js';
-import { bindTabEvents, switchTab, getCurrentTab, refreshCurrentTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen, loadRecentChats, startRecentDomObserver, stopRecentDomObserver } from './ui/tabView.js';
+import { bindTabEvents, switchTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen, loadRecentChats, startRecentDomObserver, stopRecentDomObserver } from './ui/tabView.js';
 import { lastChatCache } from './data/lastChatCache.js';
 import { loadSnapshots as loadCalendarSnapshots, getLocalDateString, initCalendarStorage } from './data/calendarStorage.js';
-import { debounce, isMobile } from './utils/eventHelpers.js';
+import { debounce } from './utils/eventHelpers.js';
 import { waitForElement } from './utils/waitFor.js';
 import { intervalManager } from './utils/intervalManager.js';
 import { openDrawerSafely } from './utils/drawerHelper.js';
@@ -587,7 +587,8 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
         // 채팅 열기/삭제 핸들러
         setChatHandlers({
             onOpen: openChat,
-            onDelete: deleteChat
+            onDelete: deleteChat,
+            onOpenGroup: openGroupChat
         });
     }
     
@@ -780,11 +781,12 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
             // 열기 완료 후 플래그 해제
             isOpeningLobby = false;
             
-            // 안정화 시간 후 락 해제 (CHAT_CHANGED debounce settle 대기)
-            if (store.isLobbyOpen) {
-                setTimeout(() => {
-                    store.setLobbyLocked(false);
-                }, 500);
+            // 렌더가 끝났으면 바로 잠금 해제
+            // (예전엔 0.5초 더 잠가서 로비를 연 직후 카드 클릭이 무시됐음 - 이중 로딩 시절
+            //  CHAT_CHANGED가 늦게 들어오던 것 대비. 지금은 로비 열기가 채팅을 바꾸지 않음)
+            // 진행 중인 CHAT_CHANGED 쿨다운 렌더가 있으면 그쪽이 끝날 때 해제함
+            if (store.isLobbyOpen && !chatChangedCooldownTimer) {
+                store.setLobbyLocked(false);
             }
         }
     }
@@ -1760,19 +1762,14 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
         // 로비 닫기
         closeLobby();
         
-        // 그룹 선택 (UI 클릭으로)
-        const groupItem = document.querySelector(`.group_select[data-grid="${group.id}"]`);
-        if (groupItem) {
-            if (window.$) {
-                window.$(groupItem).trigger('click');
-            } else {
-                groupItem.click();
+        // 그룹 선택 (이미 선택돼 있으면 생략) - 마지막 채팅 한 번만 로드
+        if (api.getContext()?.groupId !== group.id) {
+            const result = await switchGroup(group.id);
+            if (result !== 'ok') {
+                console.warn('[ChatLobby] Group selection failed:', result);
             }
-        } else {
-            // openGroupChat API 사용
-            await api.openGroupChat(group.id);
         }
-        
+
         // 우측 드로어 열기
         await new Promise(resolve => setTimeout(resolve, 200));
         if (!openDrawerSafely('rightNavHolder')) {

@@ -51,19 +51,6 @@ export async function waitForCharacterSelect(expectedAvatar, timeout = 3000) {
 }
 
 /**
- * 채팅 UI가 로드될 때까지 대기
- * @param {number} [timeout=3000] - 최대 대기 시간 (ms)
- * @returns {Promise<boolean>}
- */
-export async function waitForChatUI(timeout = 3000) {
-    return waitFor(() => {
-        // 채팅 메시지 영역이 있거나, 채팅 선택 팝업이 있는지 확인
-        return document.querySelector('#chat') !== null ||
-               document.querySelectorAll('.select_chat_block').length > 0;
-    }, timeout);
-}
-
-/**
  * SillyTavern의 CHAT_CHANGED 이벤트를 대기
  * selectCharacterById 후 채팅 save/load가 완료되었음을 확인하는 가장 신뢰할 수 있는 방법
  * @param {number} [timeout=5000] - 최대 대기 시간 (ms)

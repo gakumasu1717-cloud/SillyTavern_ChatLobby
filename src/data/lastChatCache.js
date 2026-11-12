@@ -7,6 +7,7 @@
 
 import { api } from '../api/sillyTavern.js';
 import { cache } from './cache.js';
+import { getTimestamp } from '../utils/dateUtils.js';
 
 // localStorage 키
 const STORAGE_KEY = 'chatLobby_lastChatTimes';
@@ -156,36 +157,12 @@ class LastChatCache {
 
     /**
      * 개별 채팅에서 타임스탬프 추출
+     * ⚠️ dateUtils.getTimestamp 사용: ST의 last_mes는 "December 31, 2025 5:48pm"처럼
+     * am/pm 앞에 공백이 없어서 new Date()로 바로 읽으면 NaN이 됨
+     * (예전엔 NaN → "시간 모름" → 채팅 파일 3개를 통째로 내려받는 대체 경로를 탔음)
      */
     getChatTimestamp(chat) {
-        if (chat.last_mes) {
-            return typeof chat.last_mes === 'number'
-                ? chat.last_mes
-                : new Date(chat.last_mes).getTime();
-        }
-        if (chat.file_name) {
-            const timestamp = this.parseFileNameDate(chat.file_name);
-            if (timestamp) return timestamp;
-        }
-        if (chat.date) {
-            return typeof chat.date === 'number'
-                ? chat.date
-                : new Date(chat.date).getTime();
-        }
-        return 0;
-    }
-
-    /**
-     * 파일명에서 날짜 파싱
-     */
-    parseFileNameDate(fileName) {
-        const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
-        if (!match) return null;
-        const [, year, month, day, hour, min, sec] = match;
-        return new Date(
-            parseInt(year), parseInt(month) - 1, parseInt(day),
-            parseInt(hour), parseInt(min), parseInt(sec)
-        ).getTime();
+        return getTimestamp(chat);
     }
 
     /**
@@ -204,24 +181,8 @@ class LastChatCache {
                 const cached = this.get(charAvatar);
                 if (cached > 0) return cached;
             }
-            if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
-                const chatsToCheck = chats.slice(0, 3);
-                const fallbackPromises = chatsToCheck.map(async (chat) => {
-                    const chatTime = this.getChatTimestamp(chat);
-                    if (chatTime > 0) return chatTime;
-                    if (chat.file_name) {
-                        try {
-                            const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
-                            if (lastMsgDate > 0) return lastMsgDate;
-                        } catch (e) {
-                            console.debug('[LastChatCache] getChatLastMessageDate failed:', e.message);
-                        }
-                    }
-                    return 0;
-                });
-                const times = await Promise.all(fallbackPromises);
-                lastTime = Math.max(...times, 0);
-            }
+            // 서버는 last_mes를 항상 채워줌 (마지막 메시지 시간, 없으면 파일 수정 시각)
+            // → 채팅 파일 전체를 내려받는 대체 경로는 두지 않음
             if (lastTime > 0) this.set(charAvatar, lastTime);
             return lastTime;
         } catch (e) {

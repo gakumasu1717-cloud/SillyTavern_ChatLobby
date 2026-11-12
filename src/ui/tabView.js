@@ -10,10 +10,10 @@ import { cache } from '../data/cache.js';
 import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { showToast, showConfirm } from './notifications.js';
-import { openChat } from '../handlers/chatHandlers.js';
+import { openChat, openGroupChat } from '../handlers/chatHandlers.js';
 import { deactivateBatchMode } from './chatList.js';
 import { operationLock } from '../utils/operationLock.js';
-import { getLocalDateString } from '../data/calendarStorage.js';
+
 import { waitForChatChanged } from '../utils/waitFor.js';
 import { listeners } from '../utils/listenerManager.js';
 import { remindStore } from '../data/remindStore.js';
@@ -103,8 +103,14 @@ export async function cacheRecentChatsBeforeOpen() {
         }
     }
     
-    // DOM이 준비될 때까지 대기 (최대 0.5초로 단축)
-    for (let retry = 0; retry < MAX_CACHE_RETRIES; retry++) {
+    // ★ 채팅이 열려 있으면 ST 첫 화면(.recentChat)이 그려지지 않으므로 기다려도 안 나타남
+    // → 한 번만 확인 (예전엔 로비를 열 때마다 0.5초씩 헛대기)
+    const chatOpen = (context?.characterId !== undefined && context.characterId !== null && Number(context.characterId) >= 0)
+        || !!context?.groupId;
+    const maxRetries = chatOpen ? 1 : MAX_CACHE_RETRIES;
+
+    // DOM이 준비될 때까지 대기 (채팅이 없을 때만 최대 0.5초)
+    for (let retry = 0; retry < maxRetries; retry++) {
         const recentChatElements = document.querySelectorAll('.recentChat');
         
         if (recentChatElements.length > 0) {
@@ -113,8 +119,10 @@ export async function cacheRecentChatsBeforeOpen() {
             return;
         }
         
-        log(`No .recentChat found, retry ${retry + 1}/${MAX_CACHE_RETRIES} in ${CACHE_RETRY_DELAY}ms`);
-        await new Promise(r => setTimeout(r, CACHE_RETRY_DELAY));
+        if (retry + 1 < maxRetries) {
+            log(`No .recentChat found, retry ${retry + 1}/${maxRetries} in ${CACHE_RETRY_DELAY}ms`);
+            await new Promise(r => setTimeout(r, CACHE_RETRY_DELAY));
+        }
     }
     
     // DOM에서 못 가져왔으면 이전 캐시 복원
@@ -164,6 +172,8 @@ function cacheElements(recentChatElements) {
                     file,
                     avatar,
                     isGroup,
+                    // ST의 recentChat은 data-avatar에 그룹 이미지, data-group에 그룹 ID를 넣음
+                    groupId: isGroup ? groupAttr : null,
                     characterName: characterName || avatar.replace(/\.[^.]+$/, ''),
                     chatName,
                     date: chatDate,
@@ -1292,6 +1302,13 @@ export async function openRecentChat(chat, idx) {
         // ★ 캐릭터 채팅은 ST 첫 화면의 최근 채팅을 대신 클릭하지 않고 openChat으로 직접 연다.
         // ST 자체 핸들러(openRecentCharacterChat)는 "캐릭터 선택(마지막 채팅 로드) → 대상 채팅 열기"라
         // 구조적으로 두 번 로드한다. openChat은 대상 채팅 하나만 로드한다.
+        // 그룹 채팅도 같은 이유로 직접 연다 (data-group = 그룹 ID)
+        if (chat.isGroup && chat.groupId && chat.file) {
+            operationLock.release(token);
+            await openGroupChat(chat.groupId, chat.file);
+            return;
+        }
+
         if (!chat.isGroup && chat.avatar && chat.file) {
             const charIndex = (api.getContext()?.characters || []).findIndex(c => c.avatar === chat.avatar);
             if (charIndex !== -1) {
@@ -1311,7 +1328,7 @@ export async function openRecentChat(chat, idx) {
 
         // selector로 원본 DOM 요소 찾기 (isGroup 처리 포함)
         const selector = chat.isGroup
-            ? `.recentChat[data-group="${chat.avatar}"]`
+            ? `.recentChat[data-group="${chat.groupId || chat.avatar}"]`
             : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
         const recentEl = document.querySelector(selector);
 
@@ -1539,10 +1556,6 @@ export function bindTabEvents() {
         const tab = e.target.closest('.lobby-tab');
         if (tab?.dataset.tab) switchTab(tab.dataset.tab);
     });
-}
-
-export function getCurrentTab() {
-    return state.currentTab;
 }
 
 export function refreshCurrentTab() {

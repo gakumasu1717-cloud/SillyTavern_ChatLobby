@@ -5,7 +5,7 @@
 import { cache } from '../data/cache.js';
 import { CONFIG } from '../config.js';
 import { sortPersonas } from '../utils/sortUtils.js';
-import { waitFor } from '../utils/waitFor.js';
+import { getTimestamp } from '../utils/dateUtils.js';
 
 /**
  * @typedef {Object} ApiResponse
@@ -427,55 +427,6 @@ class SillyTavernAPI {
     }
     
     /**
-     * 채팅의 마지막 메시지 시간 가져오기 (파일명 변경된 채팅용)
-     * @param {string} characterAvatar - 캐릭터 아바타
-     * @param {string} fileName - 채팅 파일명 (.jsonl)
-     * @returns {Promise<number>} - 마지막 메시지의 타임스탬프 (ms), 없으면 0
-     */
-    async getChatLastMessageDate(characterAvatar, fileName) {
-        try {
-            const charDir = characterAvatar.replace(/\.(png|jpg|webp)$/i, '');
-            
-            const response = await this.fetchWithRetry('/api/chats/get', {
-                method: 'POST',
-                headers: this.getRequestHeaders(),
-                body: JSON.stringify({
-                    ch_name: charDir,
-                    file_name: fileName.replace('.jsonl', ''),
-                    avatar_url: characterAvatar
-                }),
-            });
-            
-            if (!response.ok) return 0;
-            
-            const data = await response.json();
-            
-            // 채팅 데이터가 배열인 경우 마지막 메시지 확인
-            if (Array.isArray(data) && data.length > 0) {
-                // 마지막 메시지 (배열의 끝)
-                const lastMessage = data[data.length - 1];
-                
-                if (lastMessage.send_date) {
-                    if (typeof lastMessage.send_date === 'number') {
-                        return lastMessage.send_date;
-                    }
-                    // 문자열이면 am/pm 앞에 공백 추가 후 파싱
-                    const fixedStr = String(lastMessage.send_date).replace(/(\d+)(am|pm)/i, '$1 $2');
-                    const date = new Date(fixedStr);
-                    if (!isNaN(date.getTime())) {
-                        return date.getTime();
-                    }
-                }
-            }
-            
-            return 0;
-        } catch (error) {
-            console.warn('[API] Failed to get chat last message date:', error);
-            return 0;
-        }
-    }
-
-    /**
      * 채팅 메시지 전체 가져오기 (리마인드 뷰어용)
      * @param {string} characterAvatar - 캐릭터 아바타
      * @param {string} fileName - 채팅 파일명 (.jsonl 유무 무관)
@@ -510,10 +461,11 @@ class SillyTavernAPI {
 
     /**
      * 채팅 이름 변경
+     * 서버는 파일명을 정리(sanitize)할 수 있으므로 실제로 적용된 새 이름을 돌려준다.
      * @param {string} charAvatar - 캐릭터 아바타
      * @param {string} oldFileName - 기존 파일명 (.jsonl 유무 무관)
      * @param {string} newFileName - 새 파일명 (.jsonl 유무 무관)
-     * @returns {Promise<boolean>}
+     * @returns {Promise<string|null>} 실제 새 파일명 (.jsonl 없음), 실패 시 null
      */
     async renameChat(charAvatar, oldFileName, newFileName) {
         try {
@@ -530,15 +482,21 @@ class SillyTavernAPI {
                 }),
             });
 
-            if (response.ok) {
-                cache.invalidate('chats', charAvatar);
-            } else {
+            if (!response.ok) {
                 console.error('[API] Rename failed:', response.status);
+                return null;
             }
-            return response.ok;
+
+            let data = null;
+            try { data = await response.json(); } catch { /* 구버전: 본문 없음 */ }
+            if (data?.error) return null;
+
+            cache.invalidate('chats', charAvatar);
+            const applied = data?.sanitizedFileName || renamedFile;
+            return String(applied).replace(/\.jsonl$/i, '');
         } catch (error) {
             console.error('[API] Failed to rename chat:', error);
-            return false;
+            return null;
         }
     }
 
@@ -569,26 +527,6 @@ class SillyTavernAPI {
         }
     }
     
-    /**
-     * 캐릭터의 채팅 수 가져오기
-     * @param {string} characterAvatar - 캐릭터 아바타
-     * @returns {Promise<number>}
-     */
-    async getChatCount(characterAvatar) {
-        if (cache.isValid('chatCounts', characterAvatar)) {
-            return cache.get('chatCounts', characterAvatar);
-        }
-        
-        try {
-            const chats = await this.fetchChatsForCharacter(characterAvatar);
-            const count = Array.isArray(chats) ? chats.length : Object.keys(chats || {}).length;
-            cache.set('chatCounts', count, characterAvatar);
-            return count;
-        } catch (e) {
-            console.error('[API] Failed to get chat count:', e);
-            return 0;
-        }
-    }
     
     /**
      * 캐릭터의 "마지막 채팅" 기록만 갱신 (다음 실행 시 이 채팅이 열리도록)
@@ -621,26 +559,35 @@ class SillyTavernAPI {
     }
 
     /**
-     * 캐릭터 편집 화면 열기
-     * @param {number|string} characterIndex - 캐릭터 인덱스
+     * 삭제한 채팅이 캐릭터의 "마지막 채팅"이었으면 남은 채팅 중 가장 최근 것으로 포인터를 옮김
+     * (안 하면 다음에 캐릭터로 들어갈 때 ST가 지워진 이름으로 빈 새 채팅을 만들어
+     *  남은 채팅들이 사라진 것처럼 보임)
+     * @param {string} charAvatar
+     * @param {string[]} deletedNames - 삭제한 파일명들 (.jsonl 유무 무관)
      * @returns {Promise<void>}
      */
-    async openCharacterEditor(characterIndex) {
-        
-        // 먼저 캐릭터 선택
-        await this.selectCharacterById(characterIndex);
-        
-        // 잠시 대기 후 캐릭터 설정 버튼 클릭
-        await this.delay(300);
-        
-        // 캐릭터 설정/편집 버튼 찾기 및 클릭
-        const settingsBtn = document.getElementById('option_settings');
-        if (settingsBtn) {
-            settingsBtn.click();
-        } else {
-            console.warn('[API] option_settings button not found');
+    async repointLastChatAfterDelete(charAvatar, deletedNames) {
+        const char = this.getCharacters().find(c => c.avatar === charAvatar);
+        if (!char) return;
+        const deleted = new Set(deletedNames.map(n => String(n).replace(/\.jsonl$/i, '')));
+        if (!deleted.has(char.chat)) return;
+
+        try {
+            const chats = await this.fetchChatsForCharacter(charAvatar, true);
+            const remaining = (Array.isArray(chats) ? chats : [])
+                .filter(c => !deleted.has(String(c.file_name || '').replace(/\.jsonl$/i, '')))
+                .sort((a, b) => getTimestamp(b) - getTimestamp(a));
+            // 남은 채팅이 없으면 그대로 둠 (ST가 들어갈 때 새 채팅을 만드는 게 맞는 동작)
+            if (remaining.length === 0) return;
+
+            const latest = String(remaining[0].file_name).replace(/\.jsonl$/i, '');
+            char.chat = latest;
+            await this.saveLastChatPointer(char.avatar, char.name, latest);
+        } catch (e) {
+            console.debug('[API] repointLastChatAfterDelete failed:', e);
         }
     }
+
     
     // ============================================
     // 그룹 채팅 API
@@ -707,40 +654,7 @@ class SillyTavernAPI {
             for (let i = 0; i < group.chats.length; i += BATCH_SIZE) {
                 const batch = group.chats.slice(i, i + BATCH_SIZE);
                 const batchResults = await Promise.all(
-                    batch.map(async (chatId) => {
-                        try {
-                            const response = await this.fetchWithRetry('/api/chats/group/get', {
-                                method: 'POST',
-                                headers: this.getRequestHeaders(),
-                                body: JSON.stringify({ id: chatId }),
-                            });
-                            
-                            if (!response.ok) return null;
-                            
-                            const messages = await response.json();
-                            if (!Array.isArray(messages) || messages.length === 0) return null;
-                            
-                            // 헤더 제거
-                            const hasHeader = messages[0] && Object.hasOwn(messages[0], 'chat_metadata');
-                            const msgData = hasHeader ? messages.slice(1) : messages;
-                            
-                            const chatItems = msgData.length;
-                            const lastMessage = msgData.length ? msgData[msgData.length - 1] : null;
-                            const lastMes = lastMessage?.mes || '[빈 채팅]';
-                            const lastDate = lastMessage?.send_date || Date.now();
-                            
-                            return {
-                                file_name: chatId,
-                                mes: lastMes,
-                                last_mes: lastDate,
-                                chat_items: chatItems,
-                                isGroupChat: true,
-                            };
-                        } catch (e) {
-                            console.warn(`[API] Failed to load group chat ${chatId}:`, e);
-                            return null;
-                        }
-                    })
+                    batch.map(chatId => this._getGroupChatSummary(chatId))
                 );
                 allChats.push(...batchResults.filter(Boolean));
             }
@@ -753,188 +667,80 @@ class SillyTavernAPI {
     }
     
     /**
-     * 그룹 열기
-     * @param {string} groupId - 그룹 ID
-     * @returns {Promise<boolean>}
+     * 그룹 채팅 하나의 요약 (메시지 수, 마지막 메시지, 마지막 시간)
+     * ★ /api/chats/group/info 사용: 서버가 파일을 한 줄씩 읽어 요약만 돌려줌
+     *   (예전엔 /api/chats/group/get으로 채팅 파일 전체를 받아서 마지막 메시지만 썼음)
+     * 구버전 ST에 info가 없으면 get으로 대체
+     * @param {string} chatId
+     * @returns {Promise<Object|null>}
      */
-    async openGroup(groupId) {
+    async _getGroupChatSummary(chatId) {
+        const body = JSON.stringify({ id: chatId });
         try {
-            const context = this.getContext();
-            
-            // SillyTavern의 openGroupById 함수 사용
-            if (typeof context?.openGroupById === 'function') {
-                await context.openGroupById(groupId);
-                return true;
+            const infoRes = await fetch('/api/chats/group/info', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body,
+            });
+            if (infoRes.ok) {
+                const info = await infoRes.json();
+                if (!info || info.match === false && !info.file_name) return null;
+                return {
+                    file_name: chatId,
+                    mes: info.mes || '[빈 채팅]',
+                    last_mes: info.last_mes || Date.now(),
+                    chat_items: typeof info.chat_items === 'number' ? info.chat_items : 0,
+                    isGroupChat: true,
+                };
             }
-            
-            // Fallback: 직접 import 시도
-            try {
-                const groupChatsModule = await import('../../../../group-chats.js');
-                if (typeof groupChatsModule.openGroupById === 'function') {
-                    await groupChatsModule.openGroupById(groupId);
-                    return true;
-                }
-            } catch (e) {
-                console.warn('[API] Could not import group-chats module:', e);
-            }
-            
-            // Fallback: jQuery 클릭
-            const groupElement = document.querySelector(`.group_select[data-grid="${groupId}"]`);
-            if (groupElement) {
-                groupElement.click();
-                return true;
-            }
-            
-            return false;
-        } catch (error) {
-            console.error('[API] Failed to open group:', error);
-            return false;
-        }
-    }
-    
-    /**
-     * 그룹 채팅 열기
-     * @param {string} groupId - 그룹 ID
-     * @param {string} chatId - 채팅 ID (파일명)
-     * @returns {Promise<boolean>}
-     */
-    async openGroupChat(groupId, chatId) {
-        try {
-            const context = this.getContext();
-            const chatFileName = chatId.replace('.jsonl', '');
-            
-            console.debug('[API] openGroupChat:', { groupId, chatFileName });
-            
-            // 1. 그룹 선택 - 여러 방법 시도
-            let groupSelected = false;
-            
-            // 방법 A: selectGroupById
-            if (typeof context?.selectGroupById === 'function') {
-                try {
-                    await context.selectGroupById(groupId);
-                    groupSelected = true;
-                    console.debug('[API] Group selected via selectGroupById');
-                } catch (e) {
-                    console.warn('[API] selectGroupById failed:', e);
-                }
-            }
-            
-            // 방법 B: openGroupById (기본 채팅 안 열기)
-            if (!groupSelected && typeof context?.openGroupById === 'function') {
-                try {
-                    await context.openGroupById(groupId, false);
-                    groupSelected = true;
-                    console.debug('[API] Group selected via openGroupById');
-                } catch (e) {
-                    console.warn('[API] openGroupById failed:', e);
-                }
-            }
-            
-            // 방법 C: UI 클릭
-            if (!groupSelected) {
-                const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
-                if (groupCard) {
-                    // jQuery 클릭 (SillyTavern 방식)
-                    if (window.$) {
-                        window.$(groupCard).trigger('click');
-                    } else {
-                        groupCard.click();
-                    }
-                    groupSelected = true;
-                    console.debug('[API] Group selected via UI click');
-                }
-            }
-            
-            if (!groupSelected) {
-                console.error('[API] Failed to select group');
-                return false;
-            }
-            
-            // 그룹 선택 완료 대기
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // 2. 그룹 채팅 열기
-            // 방법 A: context.openGroupChat
-            if (typeof context?.openGroupChat === 'function') {
-                try {
-                    await context.openGroupChat(chatFileName);
-                    console.debug('[API] Chat opened via context.openGroupChat');
-                    return true;
-                } catch (e) {
-                    console.warn('[API] context.openGroupChat failed:', e);
-                }
-            }
-            
-            // 방법 B: group-chats 모듈
-            try {
-                const groupChatsModule = await import('../../../../group-chats.js');
-                if (typeof groupChatsModule.openGroupChat === 'function') {
-                    await groupChatsModule.openGroupChat(chatFileName);
-                    console.debug('[API] Chat opened via group-chats module');
-                    return true;
-                }
-            } catch (e) {
-                console.warn('[API] group-chats import failed:', e);
-            }
-            
-            // 방법 C: UI 클릭 방식
-            return await this.openGroupChatByUI(groupId, chatFileName);
-            
-        } catch (error) {
-            console.error('[API] Failed to open group chat:', error);
-            return false;
-        }
-    }
-    
-    /**
-     * UI 클릭 방식으로 그룹 채팅 열기
-     * @param {string} groupId - 그룹 ID
-     * @param {string} chatFileName - 채팅 파일명
-     * @returns {Promise<boolean>}
-     */
-    async openGroupChatByUI(groupId, chatFileName) {
-        try {
-            console.debug('[API] openGroupChatByUI:', { groupId, chatFileName });
-            
-            // 채팅 관리 버튼 클릭
-            const manageChatsBtn = document.getElementById('option_select_chat');
-            if (!manageChatsBtn) {
-                console.error('[API] option_select_chat not found');
-                return false;
-            }
-            
-            manageChatsBtn.click();
-            
-            // 채팅 목록 로드 대기 (최대 3초)
-            await waitFor(() => document.querySelectorAll('.select_chat_block').length > 0, 3000, 100);
-            
-            // 채팅 목록에서 해당 채팅 찾기
-            const chatItems = document.querySelectorAll('.select_chat_block');
-            for (const item of chatItems) {
-                const itemFileName = item.getAttribute('file_name') || '';
-                const itemText = item.querySelector('.select_chat_block_filename')?.textContent || '';
-                
-                // 파일명 또는 표시명으로 매칭
-                if (itemFileName.includes(chatFileName) || itemText.includes(chatFileName)) {
-                    // jQuery 클릭 시도 (SillyTavern 방식)
-                    if (window.$) {
-                        window.$(item).trigger('click');
-                    } else {
-                        item.click();
-                    }
-                    console.debug('[API] Chat opened via UI click');
-                    return true;
-                }
-            }
-            
-            console.warn('[API] Chat not found in list:', chatFileName);
-            return false;
+            if (infoRes.status !== 404) return null;
+
+            // 구버전 대체: 전체 파일
+            const response = await this.fetchWithRetry('/api/chats/group/get', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body,
+            });
+            if (!response.ok) return null;
+            const messages = await response.json();
+            if (!Array.isArray(messages) || messages.length === 0) return null;
+            const msgData = Object.hasOwn(messages[0] || {}, 'chat_metadata') ? messages.slice(1) : messages;
+            const lastMessage = msgData[msgData.length - 1] || null;
+            return {
+                file_name: chatId,
+                mes: lastMessage?.mes || '[빈 채팅]',
+                last_mes: lastMessage?.send_date || Date.now(),
+                chat_items: msgData.length,
+                isGroupChat: true,
+            };
         } catch (e) {
-            console.error('[API] openGroupChatByUI failed:', e);
+            console.warn(`[API] Failed to load group chat ${chatId}:`, e);
+            return null;
+        }
+    }
+
+    /**
+     * 그룹 정보 저장 (ST의 editGroup → /api/groups/edit와 동일한 요청)
+     * 채팅 목록/현재 채팅(chat_id)을 바꾼 뒤 기록할 때 사용. 실패해도 채팅 동작에는 영향 없음.
+     * @param {Object} group - context.groups의 그룹 객체
+     * @returns {Promise<boolean>}
+     */
+    async saveGroup(group) {
+        if (!group?.id) return false;
+        try {
+            const response = await fetch('/api/groups/edit', {
+                method: 'POST',
+                headers: this.getRequestHeaders(),
+                body: JSON.stringify(group),
+            });
+            if (response.ok) cache.invalidate('groups');
+            return response.ok;
+        } catch (e) {
+            console.debug('[API] saveGroup error:', e);
             return false;
         }
     }
-    
+
     /**
      * 그룹 아바타 URL 가져오기
      * @param {Object} group - 그룹 객체

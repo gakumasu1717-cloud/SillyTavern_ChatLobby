@@ -657,7 +657,7 @@ function showFinalStats(container) {
         `;
     }).join('');
     
-    const encouragement = getEncouragement(top?.name);
+    const encouragement = getEncouragement(escapeHtml(top?.name || ''));
     
     // Fun Facts 섹션 - 전체 통계
     const oldestDateStr = funFactsData.oldestDate 

@@ -3,7 +3,6 @@
 // ============================================
 
 import { intervalManager } from '../utils/intervalManager.js';
-import { CONFIG } from '../config.js';
 
 // MutationObserver 참조 (cleanup용)
 let hamburgerObserver = null;

@@ -476,10 +476,6 @@ export function closeTopRemindLayer() {
     return true;
 }
 
-export function isRemindViewerOpen() {
-    return isViewerOpen;
-}
-
 function handleViewerKeydown(e) {
     if (!isViewerOpen) return;
 

@@ -57,29 +57,3 @@ export function openDrawerSafely(drawerId) {
     return true;
 }
 
-/**
- * Drawer를 안전하게 닫기
- * @param {string} drawerId
- * @returns {boolean}
- */
-export function closeDrawerSafely(drawerId) {
-    const drawer = document.getElementById(drawerId);
-    if (!drawer) return false;
-    
-    const drawerContent = drawer.querySelector('.drawer-content');
-    const drawerIcon = drawer.querySelector('.drawer-icon');
-    
-    if (drawerContent) {
-        drawerContent.classList.remove('openDrawer');
-        drawerContent.classList.add('closedDrawer');
-    }
-    
-    if (drawerIcon) {
-        drawerIcon.classList.remove('openIcon');
-        drawerIcon.classList.add('closedIcon');
-    }
-    
-    drawer.setAttribute('data-st-open', 'false');
-    
-    return true;
-}

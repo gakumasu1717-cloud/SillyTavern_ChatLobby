@@ -5,7 +5,7 @@
 import { storage } from '../data/storage.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { getBatchFoldersHTML } from '../ui/templates.js';
-import { refreshChatList, isBatchMode, executeBatchMove, toggleBatchMode } from '../ui/chatList.js';
+import { refreshChatList, isBatchMode, executeBatchMove } from '../ui/chatList.js';
 import { showToast, showConfirm, showPrompt } from '../ui/notifications.js';
 
 // ============================================

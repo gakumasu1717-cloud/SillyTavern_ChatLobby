@@ -17,8 +17,28 @@
 //   정상 저장을 막는 것은 덮어쓰기만큼 위험하다.
 // ============================================
 
-const SAVE_PATH = '/api/chats/save';
-const GET_PATH = '/api/chats/get';
+// 저장 종류별 엔드포인트 (캐릭터 채팅 / 그룹 채팅)
+// 그룹 채팅도 서버에서 같은 trySaveChat(integrity 검사)을 거치므로 같은 위험이 있음
+const TARGETS = {
+    char: {
+        savePath: '/api/chats/save',
+        getPath: '/api/chats/get',
+        label: (p) => p.file_name,
+        key: (p) => `${p.avatar_url}::${p.file_name}`,
+        getBody: (p) => ({ ch_name: p.ch_name, file_name: p.file_name, avatar_url: p.avatar_url }),
+        rename: (p, name) => ({ ...p, file_name: name, force: false }),
+        currentName: (p) => p.file_name,
+    },
+    group: {
+        savePath: '/api/chats/group/save',
+        getPath: '/api/chats/group/get',
+        label: (p) => p.id,
+        key: (p) => `group::${p.id}`,
+        getBody: (p) => ({ id: p.id }),
+        rename: (p, name) => ({ ...p, id: name, force: false }),
+        currentName: (p) => p.id,
+    },
+};
 
 /** 같은 파일에 대한 자동 복구 시도 제한 (로드 실패가 반복될 때 무한 루프 방지) */
 const MAX_RECOVERIES = 2;
@@ -105,11 +125,18 @@ export function decideSave(payload, serverChat) {
 // 요청 파싱
 // ============================================
 
-function isSaveRequest(input, init) {
-    if (typeof input !== 'string') return false;
-    if (String(init?.method || 'GET').toUpperCase() !== 'POST') return false;
+/**
+ * 가드 대상 저장 요청인지
+ * @returns {'char'|'group'|null}
+ */
+function getSaveKind(input, init) {
+    if (typeof input !== 'string') return null;
+    if (String(init?.method || 'GET').toUpperCase() !== 'POST') return null;
     const path = input.split('?')[0];
-    return path === SAVE_PATH || path.endsWith(SAVE_PATH);
+    for (const [kind, target] of Object.entries(TARGETS)) {
+        if (path === target.savePath || path.endsWith(target.savePath)) return kind;
+    }
+    return null;
 }
 
 /**
@@ -138,16 +165,12 @@ function getRequestHeaders() {
  * 서버에 있는 파일 내용 가져오기 (가드 자신은 거치지 않음)
  * @returns {Promise<Array|null>}
  */
-async function fetchServerChat(payload) {
-    const response = await originalFetch(GET_PATH, {
+async function fetchServerChat(target, payload) {
+    const response = await originalFetch(target.getPath, {
         method: 'POST',
         headers: getRequestHeaders(),
         cache: 'no-cache',
-        body: JSON.stringify({
-            ch_name: payload.ch_name,
-            file_name: payload.file_name,
-            avatar_url: payload.avatar_url,
-        }),
+        body: JSON.stringify(target.getBody(payload)),
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -178,14 +201,14 @@ function stamp() {
  * 막힌 저장 내용을 복구본 파일로 따로 저장
  * @returns {Promise<string|null>} 복구본 파일명
  */
-async function saveRescueCopy(payload) {
-    const rescueName = `${payload.file_name} [복구 ${stamp()}]`;
+async function saveRescueCopy(target, payload) {
+    const rescueName = `${target.currentName(payload)} [복구 ${stamp()}]`;
     try {
-        const response = await originalFetch(SAVE_PATH, {
+        const response = await originalFetch(target.savePath, {
             method: 'POST',
             headers: getRequestHeaders(),
             cache: 'no-cache',
-            body: JSON.stringify({ ...payload, file_name: rescueName, force: false }),
+            body: JSON.stringify(target.rename(payload, rescueName)),
         });
         return response.ok ? rescueName : null;
     } catch (e) {
@@ -232,19 +255,20 @@ function scheduleChatReload(fileKey) {
     return true;
 }
 
-async function handleBlocked(payload, reason) {
+async function handleBlocked(target, payload, reason) {
     const outCount = messageCount(payload.chat);
-    console.warn('[SaveGuard] Blocked chat save:', { file: payload.file_name, reason, outgoingMessages: outCount });
+    const label = target.label(payload);
+    console.warn('[SaveGuard] Blocked chat save:', { file: label, reason, outgoingMessages: outCount });
 
     let rescueName = null;
     if (outCount > 1) {
-        rescueName = await saveRescueCopy(payload);
+        rescueName = await saveRescueCopy(target, payload);
     }
 
-    const willReload = scheduleChatReload(`${payload.avatar_url}::${payload.file_name}`);
+    const willReload = scheduleChatReload(target.key(payload));
     const rescueText = rescueName ? `\n저장하려던 내용은 "${rescueName}"에 따로 저장했습니다.` : '';
     const reloadText = willReload ? '\n채팅을 다시 불러옵니다.' : '';
-    notify(`"${payload.file_name}" 채팅이 덮어써지는 것을 막았습니다. 원본은 그대로입니다.${rescueText}${reloadText}`);
+    notify(`"${label}" 채팅이 덮어써지는 것을 막았습니다. 원본은 그대로입니다.${rescueText}${reloadText}`);
 
     // ST에는 저장 성공으로 응답 → ST의 "새로고침" 팝업/에러 토스트를 띄우지 않음
     return new Response(JSON.stringify({ ok: true }), {
@@ -258,7 +282,8 @@ async function handleBlocked(payload, reason) {
 // ============================================
 
 async function guardedFetchImpl(input, init) {
-    if (!enabled || !isSaveRequest(input, init)) {
+    const kind = enabled ? getSaveKind(input, init) : null;
+    if (!kind) {
         return originalFetch(input, init);
     }
 
@@ -269,17 +294,18 @@ async function guardedFetchImpl(input, init) {
         console.debug('[SaveGuard] Could not read save payload, passing through:', e);
     }
     if (!payload) return originalFetch(input, init);
+    const target = TARGETS[kind];
 
     // 1) 사전 검사 (무결성 표식 없음 / 1개 이하로 줄어드는 저장)
     if (needsServerCheck(payload)) {
         let decision = { allow: true, reason: 'check-failed' };
         try {
-            const serverChat = await fetchServerChat(payload);
+            const serverChat = await fetchServerChat(target, payload);
             decision = decideSave(payload, serverChat);
         } catch (e) {
             console.debug('[SaveGuard] Server check failed, passing through:', e);
         }
-        if (!decision.allow) return handleBlocked(payload, decision.reason);
+        if (!decision.allow) return handleBlocked(target, payload, decision.reason);
     }
 
     // 2) 서버의 무결성 거부 응답 가로채기 (ST의 페이지 새로고침 방지)
@@ -288,7 +314,7 @@ async function guardedFetchImpl(input, init) {
         try {
             const data = await response.clone().json();
             if (data?.error === 'integrity') {
-                return handleBlocked(payload, 'server-integrity');
+                return handleBlocked(target, payload, 'server-integrity');
             }
         } catch { /* JSON 아님 → 그대로 반환 */ }
     }

@@ -25,15 +25,3 @@ export function truncateText(text, maxLength) {
     return text.substring(0, maxLength) + '...';
 }
 
-/**
- * 파일 크기 포맷팅
- * @param {number} bytes - 바이트 수
- * @returns {string} 포맷된 크기 (예: "1.5MB")
- */
-export function formatFileSize(bytes) {
-    if (bytes === undefined || bytes === null || isNaN(bytes)) return '';
-    bytes = Number(bytes);
-    if (bytes < 1024) return bytes + 'B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
-}

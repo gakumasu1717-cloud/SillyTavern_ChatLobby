@@ -899,7 +899,3 @@ export function cleanupPersonaRadialMenu() {
     state.isInitialized = false;
 }
 
-export function setFabVisibility(show) {
-    const fab = document.getElementById('persona-fab');
-    if (fab) fab.style.display = show ? 'flex' : 'none';
-}

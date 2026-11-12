@@ -105,34 +105,11 @@
   // src/ui/notifications.js
   var notifications_exports = {};
   __export(notifications_exports, {
-    initNotifications: () => initNotifications,
     showAlert: () => showAlert,
     showConfirm: () => showConfirm,
     showPrompt: () => showPrompt,
     showToast: () => showToast
   });
-  async function requestNotificationPermission() {
-    if (!("Notification" in window)) {
-      console.debug("[Notification] Browser does not support notifications");
-      return "denied";
-    }
-    if (Notification.permission === "granted") {
-      notificationPermission = "granted";
-      return "granted";
-    }
-    if (Notification.permission !== "denied") {
-      try {
-        const permission = await Notification.requestPermission();
-        notificationPermission = permission;
-        return permission;
-      } catch (e) {
-        console.warn("[Notification] Permission request failed:", e);
-        return "denied";
-      }
-    }
-    notificationPermission = Notification.permission;
-    return Notification.permission;
-  }
   function initToastContainer() {
     if (toastContainer) return;
     toastContainer = document.createElement("div");
@@ -233,9 +210,6 @@
   function showToast(message, type = "info", duration = CONFIG.timing.toastDuration) {
     showDOMToast(message, type, duration);
   }
-  async function initNotifications() {
-    await requestNotificationPermission();
-  }
   function removeToast(toast) {
     if (!toast.parentNode) return;
     toast.classList.add("fade-out");
@@ -260,13 +234,12 @@ ${message}` : message;
 ${message}` : message;
     return Promise.resolve(prompt(fullMessage, defaultValue));
   }
-  var toastContainer, notificationPermission;
+  var toastContainer;
   var init_notifications = __esm({
     "src/ui/notifications.js"() {
       init_config();
       init_textUtils();
       toastContainer = null;
-      notificationPermission = "default";
     }
   });
 
@@ -1052,7 +1025,8 @@ ${message}` : message;
         // 그룹 선택 콜백
         chatHandlers: {
           onOpen: null,
-          onDelete: null
+          onDelete: null,
+          onOpenGroup: null
         }
       };
     }
@@ -1138,7 +1112,8 @@ ${message}` : message;
     setChatHandlers(handlers) {
       this._state.chatHandlers = {
         onOpen: handlers.onOpen || null,
-        onDelete: handlers.onDelete || null
+        onDelete: handlers.onDelete || null,
+        onOpenGroup: handlers.onOpenGroup || null
       };
     }
     // ============================================
@@ -1187,56 +1162,55 @@ ${message}` : message;
     return [...personas].sort((a, b) => koreanSort(a.name, b.name));
   }
 
-  // src/utils/waitFor.js
-  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-      try {
-        if (conditionFn()) return true;
-      } catch (e) {
-      }
-      await new Promise((r) => setTimeout(r, interval));
+  // src/utils/dateUtils.js
+  function formatDate(timestamp) {
+    if (!timestamp) return "";
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return "";
+      return date.toLocaleDateString("ko-KR", {
+        month: "short",
+        day: "numeric"
+      });
+    } catch {
+      return "";
     }
-    return false;
   }
-  async function waitForElement(selector, timeout = 3e3) {
-    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
-    return found ? document.querySelector(selector) : null;
+  function parseDateFromFilename(filename) {
+    const m = filename.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
+    if (m) {
+      return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    }
+    const m2 = filename.match(/(\d{4})-(\d{2})-(\d{2})\s*@\s*(\d{2})h\s*(\d{2})m\s*(\d{2})s/);
+    if (m2) {
+      return new Date(+m2[1], +m2[2] - 1, +m2[3], +m2[4], +m2[5], +m2[6]).getTime();
+    }
+    const m3 = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m3) {
+      return new Date(+m3[1], +m3[2] - 1, +m3[3]).getTime();
+    }
+    return 0;
   }
-  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
-    return waitFor(() => {
-      const context = window.SillyTavern?.getContext?.();
-      if (!context) return false;
-      const currentChar = context.characters?.[context.characterId];
-      return currentChar?.avatar === expectedAvatar;
-    }, timeout);
-  }
-  function waitForChatChanged(timeout = 5e3) {
-    return new Promise((resolve) => {
-      const context = window.SillyTavern?.getContext?.();
-      if (!context?.eventSource || !context?.eventTypes?.CHAT_CHANGED) {
-        setTimeout(() => resolve(false), 1e3);
-        return;
+  function getTimestamp(chat) {
+    if (chat.last_mes) {
+      let ts2;
+      if (typeof chat.last_mes === "number") {
+        ts2 = chat.last_mes;
+      } else {
+        const fixedStr = String(chat.last_mes).replace(/(\d+)(am|pm)/i, "$1 $2");
+        ts2 = new Date(fixedStr).getTime();
       }
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
-          console.warn("[waitForChatChanged] Timed out after", timeout, "ms");
-          resolve(false);
-        }
-      }, timeout);
-      const handler = () => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
-          resolve(true);
-        }
-      };
-      context.eventSource.on(context.eventTypes.CHAT_CHANGED, handler);
-    });
+      if (ts2 > 0 && !isNaN(ts2)) return ts2;
+    }
+    if (chat.file_date || chat.date) {
+      const dateVal = chat.file_date || chat.date;
+      const ts2 = typeof dateVal === "number" ? dateVal : new Date(dateVal).getTime();
+      if (ts2 > 0 && !isNaN(ts2)) return ts2;
+    }
+    const fileName = chat.file_name || chat.fileName || "";
+    const ts = parseDateFromFilename(fileName);
+    if (ts > 0) return ts;
+    return 0;
   }
 
   // src/api/sillyTavern.js
@@ -1576,45 +1550,6 @@ ${message}` : message;
       }
     }
     /**
-     * 채팅의 마지막 메시지 시간 가져오기 (파일명 변경된 채팅용)
-     * @param {string} characterAvatar - 캐릭터 아바타
-     * @param {string} fileName - 채팅 파일명 (.jsonl)
-     * @returns {Promise<number>} - 마지막 메시지의 타임스탬프 (ms), 없으면 0
-     */
-    async getChatLastMessageDate(characterAvatar, fileName) {
-      try {
-        const charDir = characterAvatar.replace(/\.(png|jpg|webp)$/i, "");
-        const response = await this.fetchWithRetry("/api/chats/get", {
-          method: "POST",
-          headers: this.getRequestHeaders(),
-          body: JSON.stringify({
-            ch_name: charDir,
-            file_name: fileName.replace(".jsonl", ""),
-            avatar_url: characterAvatar
-          })
-        });
-        if (!response.ok) return 0;
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const lastMessage = data[data.length - 1];
-          if (lastMessage.send_date) {
-            if (typeof lastMessage.send_date === "number") {
-              return lastMessage.send_date;
-            }
-            const fixedStr = String(lastMessage.send_date).replace(/(\d+)(am|pm)/i, "$1 $2");
-            const date = new Date(fixedStr);
-            if (!isNaN(date.getTime())) {
-              return date.getTime();
-            }
-          }
-        }
-        return 0;
-      } catch (error) {
-        console.warn("[API] Failed to get chat last message date:", error);
-        return 0;
-      }
-    }
-    /**
      * 채팅 메시지 전체 가져오기 (리마인드 뷰어용)
      * @param {string} characterAvatar - 캐릭터 아바타
      * @param {string} fileName - 채팅 파일명 (.jsonl 유무 무관)
@@ -1643,10 +1578,11 @@ ${message}` : message;
     }
     /**
      * 채팅 이름 변경
+     * 서버는 파일명을 정리(sanitize)할 수 있으므로 실제로 적용된 새 이름을 돌려준다.
      * @param {string} charAvatar - 캐릭터 아바타
      * @param {string} oldFileName - 기존 파일명 (.jsonl 유무 무관)
      * @param {string} newFileName - 새 파일명 (.jsonl 유무 무관)
-     * @returns {Promise<boolean>}
+     * @returns {Promise<string|null>} 실제 새 파일명 (.jsonl 없음), 실패 시 null
      */
     async renameChat(charAvatar, oldFileName, newFileName) {
       try {
@@ -1661,15 +1597,22 @@ ${message}` : message;
             renamed_file: renamedFile
           })
         });
-        if (response.ok) {
-          cache.invalidate("chats", charAvatar);
-        } else {
+        if (!response.ok) {
           console.error("[API] Rename failed:", response.status);
+          return null;
         }
-        return response.ok;
+        let data = null;
+        try {
+          data = await response.json();
+        } catch {
+        }
+        if (data?.error) return null;
+        cache.invalidate("chats", charAvatar);
+        const applied = data?.sanitizedFileName || renamedFile;
+        return String(applied).replace(/\.jsonl$/i, "");
       } catch (error) {
         console.error("[API] Failed to rename chat:", error);
-        return false;
+        return null;
       }
     }
     /**
@@ -1695,25 +1638,6 @@ ${message}` : message;
       } catch (error) {
         console.error("[API] Failed to delete chat:", error);
         return false;
-      }
-    }
-    /**
-     * 캐릭터의 채팅 수 가져오기
-     * @param {string} characterAvatar - 캐릭터 아바타
-     * @returns {Promise<number>}
-     */
-    async getChatCount(characterAvatar) {
-      if (cache.isValid("chatCounts", characterAvatar)) {
-        return cache.get("chatCounts", characterAvatar);
-      }
-      try {
-        const chats = await this.fetchChatsForCharacter(characterAvatar);
-        const count = Array.isArray(chats) ? chats.length : Object.keys(chats || {}).length;
-        cache.set("chatCounts", count, characterAvatar);
-        return count;
-      } catch (e) {
-        console.error("[API] Failed to get chat count:", e);
-        return 0;
       }
     }
     /**
@@ -1746,18 +1670,27 @@ ${message}` : message;
       }
     }
     /**
-     * 캐릭터 편집 화면 열기
-     * @param {number|string} characterIndex - 캐릭터 인덱스
+     * 삭제한 채팅이 캐릭터의 "마지막 채팅"이었으면 남은 채팅 중 가장 최근 것으로 포인터를 옮김
+     * (안 하면 다음에 캐릭터로 들어갈 때 ST가 지워진 이름으로 빈 새 채팅을 만들어
+     *  남은 채팅들이 사라진 것처럼 보임)
+     * @param {string} charAvatar
+     * @param {string[]} deletedNames - 삭제한 파일명들 (.jsonl 유무 무관)
      * @returns {Promise<void>}
      */
-    async openCharacterEditor(characterIndex) {
-      await this.selectCharacterById(characterIndex);
-      await this.delay(300);
-      const settingsBtn = document.getElementById("option_settings");
-      if (settingsBtn) {
-        settingsBtn.click();
-      } else {
-        console.warn("[API] option_settings button not found");
+    async repointLastChatAfterDelete(charAvatar, deletedNames) {
+      const char = this.getCharacters().find((c) => c.avatar === charAvatar);
+      if (!char) return;
+      const deleted = new Set(deletedNames.map((n) => String(n).replace(/\.jsonl$/i, "")));
+      if (!deleted.has(char.chat)) return;
+      try {
+        const chats = await this.fetchChatsForCharacter(charAvatar, true);
+        const remaining = (Array.isArray(chats) ? chats : []).filter((c) => !deleted.has(String(c.file_name || "").replace(/\.jsonl$/i, ""))).sort((a, b) => getTimestamp(b) - getTimestamp(a));
+        if (remaining.length === 0) return;
+        const latest = String(remaining[0].file_name).replace(/\.jsonl$/i, "");
+        char.chat = latest;
+        await this.saveLastChatPointer(char.avatar, char.name, latest);
+      } catch (e) {
+        console.debug("[API] repointLastChatAfterDelete failed:", e);
       }
     }
     // ============================================
@@ -1812,34 +1745,7 @@ ${message}` : message;
         for (let i = 0; i < group.chats.length; i += BATCH_SIZE) {
           const batch = group.chats.slice(i, i + BATCH_SIZE);
           const batchResults = await Promise.all(
-            batch.map(async (chatId) => {
-              try {
-                const response = await this.fetchWithRetry("/api/chats/group/get", {
-                  method: "POST",
-                  headers: this.getRequestHeaders(),
-                  body: JSON.stringify({ id: chatId })
-                });
-                if (!response.ok) return null;
-                const messages = await response.json();
-                if (!Array.isArray(messages) || messages.length === 0) return null;
-                const hasHeader = messages[0] && Object.hasOwn(messages[0], "chat_metadata");
-                const msgData = hasHeader ? messages.slice(1) : messages;
-                const chatItems = msgData.length;
-                const lastMessage = msgData.length ? msgData[msgData.length - 1] : null;
-                const lastMes = lastMessage?.mes || "[\uBE48 \uCC44\uD305]";
-                const lastDate = lastMessage?.send_date || Date.now();
-                return {
-                  file_name: chatId,
-                  mes: lastMes,
-                  last_mes: lastDate,
-                  chat_items: chatItems,
-                  isGroupChat: true
-                };
-              } catch (e) {
-                console.warn(`[API] Failed to load group chat ${chatId}:`, e);
-                return null;
-              }
-            })
+            batch.map((chatId) => this._getGroupChatSummary(chatId))
           );
           allChats.push(...batchResults.filter(Boolean));
         }
@@ -1850,143 +1756,73 @@ ${message}` : message;
       }
     }
     /**
-     * 그룹 열기
-     * @param {string} groupId - 그룹 ID
-     * @returns {Promise<boolean>}
+     * 그룹 채팅 하나의 요약 (메시지 수, 마지막 메시지, 마지막 시간)
+     * ★ /api/chats/group/info 사용: 서버가 파일을 한 줄씩 읽어 요약만 돌려줌
+     *   (예전엔 /api/chats/group/get으로 채팅 파일 전체를 받아서 마지막 메시지만 썼음)
+     * 구버전 ST에 info가 없으면 get으로 대체
+     * @param {string} chatId
+     * @returns {Promise<Object|null>}
      */
-    async openGroup(groupId) {
+    async _getGroupChatSummary(chatId) {
+      const body = JSON.stringify({ id: chatId });
       try {
-        const context = this.getContext();
-        if (typeof context?.openGroupById === "function") {
-          await context.openGroupById(groupId);
-          return true;
+        const infoRes = await fetch("/api/chats/group/info", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body
+        });
+        if (infoRes.ok) {
+          const info = await infoRes.json();
+          if (!info || info.match === false && !info.file_name) return null;
+          return {
+            file_name: chatId,
+            mes: info.mes || "[\uBE48 \uCC44\uD305]",
+            last_mes: info.last_mes || Date.now(),
+            chat_items: typeof info.chat_items === "number" ? info.chat_items : 0,
+            isGroupChat: true
+          };
         }
-        try {
-          const groupChatsModule = await import("../../../../group-chats.js");
-          if (typeof groupChatsModule.openGroupById === "function") {
-            await groupChatsModule.openGroupById(groupId);
-            return true;
-          }
-        } catch (e) {
-          console.warn("[API] Could not import group-chats module:", e);
-        }
-        const groupElement = document.querySelector(`.group_select[data-grid="${groupId}"]`);
-        if (groupElement) {
-          groupElement.click();
-          return true;
-        }
-        return false;
-      } catch (error) {
-        console.error("[API] Failed to open group:", error);
-        return false;
-      }
-    }
-    /**
-     * 그룹 채팅 열기
-     * @param {string} groupId - 그룹 ID
-     * @param {string} chatId - 채팅 ID (파일명)
-     * @returns {Promise<boolean>}
-     */
-    async openGroupChat(groupId, chatId) {
-      try {
-        const context = this.getContext();
-        const chatFileName = chatId.replace(".jsonl", "");
-        console.debug("[API] openGroupChat:", { groupId, chatFileName });
-        let groupSelected = false;
-        if (typeof context?.selectGroupById === "function") {
-          try {
-            await context.selectGroupById(groupId);
-            groupSelected = true;
-            console.debug("[API] Group selected via selectGroupById");
-          } catch (e) {
-            console.warn("[API] selectGroupById failed:", e);
-          }
-        }
-        if (!groupSelected && typeof context?.openGroupById === "function") {
-          try {
-            await context.openGroupById(groupId, false);
-            groupSelected = true;
-            console.debug("[API] Group selected via openGroupById");
-          } catch (e) {
-            console.warn("[API] openGroupById failed:", e);
-          }
-        }
-        if (!groupSelected) {
-          const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
-          if (groupCard) {
-            if (window.$) {
-              window.$(groupCard).trigger("click");
-            } else {
-              groupCard.click();
-            }
-            groupSelected = true;
-            console.debug("[API] Group selected via UI click");
-          }
-        }
-        if (!groupSelected) {
-          console.error("[API] Failed to select group");
-          return false;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        if (typeof context?.openGroupChat === "function") {
-          try {
-            await context.openGroupChat(chatFileName);
-            console.debug("[API] Chat opened via context.openGroupChat");
-            return true;
-          } catch (e) {
-            console.warn("[API] context.openGroupChat failed:", e);
-          }
-        }
-        try {
-          const groupChatsModule = await import("../../../../group-chats.js");
-          if (typeof groupChatsModule.openGroupChat === "function") {
-            await groupChatsModule.openGroupChat(chatFileName);
-            console.debug("[API] Chat opened via group-chats module");
-            return true;
-          }
-        } catch (e) {
-          console.warn("[API] group-chats import failed:", e);
-        }
-        return await this.openGroupChatByUI(groupId, chatFileName);
-      } catch (error) {
-        console.error("[API] Failed to open group chat:", error);
-        return false;
-      }
-    }
-    /**
-     * UI 클릭 방식으로 그룹 채팅 열기
-     * @param {string} groupId - 그룹 ID
-     * @param {string} chatFileName - 채팅 파일명
-     * @returns {Promise<boolean>}
-     */
-    async openGroupChatByUI(groupId, chatFileName) {
-      try {
-        console.debug("[API] openGroupChatByUI:", { groupId, chatFileName });
-        const manageChatsBtn = document.getElementById("option_select_chat");
-        if (!manageChatsBtn) {
-          console.error("[API] option_select_chat not found");
-          return false;
-        }
-        manageChatsBtn.click();
-        await waitFor(() => document.querySelectorAll(".select_chat_block").length > 0, 3e3, 100);
-        const chatItems = document.querySelectorAll(".select_chat_block");
-        for (const item of chatItems) {
-          const itemFileName = item.getAttribute("file_name") || "";
-          const itemText = item.querySelector(".select_chat_block_filename")?.textContent || "";
-          if (itemFileName.includes(chatFileName) || itemText.includes(chatFileName)) {
-            if (window.$) {
-              window.$(item).trigger("click");
-            } else {
-              item.click();
-            }
-            console.debug("[API] Chat opened via UI click");
-            return true;
-          }
-        }
-        console.warn("[API] Chat not found in list:", chatFileName);
-        return false;
+        if (infoRes.status !== 404) return null;
+        const response = await this.fetchWithRetry("/api/chats/group/get", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body
+        });
+        if (!response.ok) return null;
+        const messages = await response.json();
+        if (!Array.isArray(messages) || messages.length === 0) return null;
+        const msgData = Object.hasOwn(messages[0] || {}, "chat_metadata") ? messages.slice(1) : messages;
+        const lastMessage = msgData[msgData.length - 1] || null;
+        return {
+          file_name: chatId,
+          mes: lastMessage?.mes || "[\uBE48 \uCC44\uD305]",
+          last_mes: lastMessage?.send_date || Date.now(),
+          chat_items: msgData.length,
+          isGroupChat: true
+        };
       } catch (e) {
-        console.error("[API] openGroupChatByUI failed:", e);
+        console.warn(`[API] Failed to load group chat ${chatId}:`, e);
+        return null;
+      }
+    }
+    /**
+     * 그룹 정보 저장 (ST의 editGroup → /api/groups/edit와 동일한 요청)
+     * 채팅 목록/현재 채팅(chat_id)을 바꾼 뒤 기록할 때 사용. 실패해도 채팅 동작에는 영향 없음.
+     * @param {Object} group - context.groups의 그룹 객체
+     * @returns {Promise<boolean>}
+     */
+    async saveGroup(group) {
+      if (!group?.id) return false;
+      try {
+        const response = await fetch("/api/groups/edit", {
+          method: "POST",
+          headers: this.getRequestHeaders(),
+          body: JSON.stringify(group)
+        });
+        if (response.ok) cache.invalidate("groups");
+        return response.ok;
+      } catch (e) {
+        console.debug("[API] saveGroup error:", e);
         return false;
       }
     }
@@ -2165,35 +2001,12 @@ ${message}` : message;
     }
     /**
      * 개별 채팅에서 타임스탬프 추출
+     * ⚠️ dateUtils.getTimestamp 사용: ST의 last_mes는 "December 31, 2025 5:48pm"처럼
+     * am/pm 앞에 공백이 없어서 new Date()로 바로 읽으면 NaN이 됨
+     * (예전엔 NaN → "시간 모름" → 채팅 파일 3개를 통째로 내려받는 대체 경로를 탔음)
      */
     getChatTimestamp(chat) {
-      if (chat.last_mes) {
-        return typeof chat.last_mes === "number" ? chat.last_mes : new Date(chat.last_mes).getTime();
-      }
-      if (chat.file_name) {
-        const timestamp = this.parseFileNameDate(chat.file_name);
-        if (timestamp) return timestamp;
-      }
-      if (chat.date) {
-        return typeof chat.date === "number" ? chat.date : new Date(chat.date).getTime();
-      }
-      return 0;
-    }
-    /**
-     * 파일명에서 날짜 파싱
-     */
-    parseFileNameDate(fileName) {
-      const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
-      if (!match) return null;
-      const [, year, month, day, hour, min, sec] = match;
-      return new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        parseInt(hour),
-        parseInt(min),
-        parseInt(sec)
-      ).getTime();
+      return getTimestamp(chat);
     }
     /**
      * 캐릭터의 채팅 목록을 가져와서 마지막 시간 갱신
@@ -2210,24 +2023,6 @@ ${message}` : message;
         if (lastTime === 0 && !forceRefresh) {
           const cached = this.get(charAvatar);
           if (cached > 0) return cached;
-        }
-        if (lastTime === 0 && Array.isArray(chats) && chats.length > 0) {
-          const chatsToCheck = chats.slice(0, 3);
-          const fallbackPromises = chatsToCheck.map(async (chat) => {
-            const chatTime = this.getChatTimestamp(chat);
-            if (chatTime > 0) return chatTime;
-            if (chat.file_name) {
-              try {
-                const lastMsgDate = await api.getChatLastMessageDate(charAvatar, chat.file_name);
-                if (lastMsgDate > 0) return lastMsgDate;
-              } catch (e) {
-                console.debug("[LastChatCache] getChatLastMessageDate failed:", e.message);
-              }
-            }
-            return 0;
-          });
-          const times = await Promise.all(fallbackPromises);
-          lastTime = Math.max(...times, 0);
         }
         if (lastTime > 0) this.set(charAvatar, lastTime);
         return lastTime;
@@ -2408,57 +2203,6 @@ ${message}` : message;
 
   // src/ui/chatList.js
   init_textUtils();
-
-  // src/utils/dateUtils.js
-  function formatDate(timestamp) {
-    if (!timestamp) return "";
-    try {
-      const date = new Date(timestamp);
-      if (isNaN(date.getTime())) return "";
-      return date.toLocaleDateString("ko-KR", {
-        month: "short",
-        day: "numeric"
-      });
-    } catch {
-      return "";
-    }
-  }
-  function parseDateFromFilename(filename) {
-    const m = filename.match(/(\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s/);
-    if (m) {
-      return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
-    }
-    const m2 = filename.match(/(\d{4})-(\d{2})-(\d{2})\s*@\s*(\d{2})h\s*(\d{2})m\s*(\d{2})s/);
-    if (m2) {
-      return new Date(+m2[1], +m2[2] - 1, +m2[3], +m2[4], +m2[5], +m2[6]).getTime();
-    }
-    const m3 = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (m3) {
-      return new Date(+m3[1], +m3[2] - 1, +m3[3]).getTime();
-    }
-    return 0;
-  }
-  function getTimestamp(chat) {
-    if (chat.last_mes) {
-      let ts2;
-      if (typeof chat.last_mes === "number") {
-        ts2 = chat.last_mes;
-      } else {
-        const fixedStr = String(chat.last_mes).replace(/(\d+)(am|pm)/i, "$1 $2");
-        ts2 = new Date(fixedStr).getTime();
-      }
-      if (ts2 > 0 && !isNaN(ts2)) return ts2;
-    }
-    if (chat.file_date || chat.date) {
-      const dateVal = chat.file_date || chat.date;
-      const ts2 = typeof dateVal === "number" ? dateVal : new Date(dateVal).getTime();
-      if (ts2 > 0 && !isNaN(ts2)) return ts2;
-    }
-    const fileName = chat.file_name || chat.fileName || "";
-    const ts = parseDateFromFilename(fileName);
-    if (ts > 0) return ts;
-    return 0;
-  }
 
   // src/utils/eventHelpers.js
   init_config();
@@ -2661,9 +2405,60 @@ ${message}` : message;
     });
   }
 
+  // src/utils/waitFor.js
+  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      try {
+        if (conditionFn()) return true;
+      } catch (e) {
+      }
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    return false;
+  }
+  async function waitForElement(selector, timeout = 3e3) {
+    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
+    return found ? document.querySelector(selector) : null;
+  }
+  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
+    return waitFor(() => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context) return false;
+      const currentChar = context.characters?.[context.characterId];
+      return currentChar?.avatar === expectedAvatar;
+    }, timeout);
+  }
+  function waitForChatChanged(timeout = 5e3) {
+    return new Promise((resolve) => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context?.eventSource || !context?.eventTypes?.CHAT_CHANGED) {
+        setTimeout(() => resolve(false), 1e3);
+        return;
+      }
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+          console.warn("[waitForChatChanged] Timed out after", timeout, "ms");
+          resolve(false);
+        }
+      }, timeout);
+      const handler = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+          resolve(true);
+        }
+      };
+      context.eventSource.on(context.eventTypes.CHAT_CHANGED, handler);
+    });
+  }
+
   // src/ui/chatList.js
   init_notifications();
-  init_config();
 
   // src/data/branchCache.js
   var STORAGE_KEY2 = "chatLobby_branchCache";
@@ -5823,12 +5618,17 @@ ${message}` : message;
       return;
     }
     try {
-      const success = await api.renameChat(charAvatar, currentName, newName);
-      if (success) {
-        storage.renameChatKey(charAvatar, currentName, newName);
-        remindStore.renameChat(charAvatar, currentName, newName);
-        highlightStore.renameChat(charAvatar, currentName, newName);
-        showToast(`\uC774\uB984 \uBCC0\uACBD: "${newName}"`, "success");
+      const appliedName = await api.renameChat(charAvatar, currentName, newName);
+      if (appliedName) {
+        storage.renameChatKey(charAvatar, currentName, appliedName);
+        remindStore.renameChat(charAvatar, currentName, appliedName);
+        highlightStore.renameChat(charAvatar, currentName, appliedName);
+        const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
+        if (char && char.chat === currentName) {
+          char.chat = appliedName;
+          api.saveLastChatPointer(char.avatar, char.name, appliedName);
+        }
+        showToast(`\uC774\uB984 \uBCC0\uACBD: "${appliedName}"`, "success");
         await refreshCurrentChatList(true);
       } else {
         showToast("\uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
@@ -5983,12 +5783,14 @@ ${message}` : message;
     }
     let successCount = 0;
     let failCount = 0;
+    const deletedOk = [];
     try {
       for (const chat of chatItems) {
         try {
           const success = await api.deleteChat(chat.fileName, chat.charAvatar);
           if (success) {
             successCount++;
+            deletedOk.push(chat);
             const data = storage.load();
             const key = storage.getChatKey(chat.charAvatar, chat.fileName);
             delete data.chatAssignments[key];
@@ -6007,6 +5809,11 @@ ${message}` : message;
       }
       const avatarSet = new Set(chatItems.map((c) => c.charAvatar));
       avatarSet.forEach((avatar) => cache.invalidate("chats", avatar));
+      for (const avatar of avatarSet) {
+        const names = deletedOk.filter((c) => c.charAvatar === avatar).map((c) => c.fileName);
+        if (names.length === 0) continue;
+        await api.repointLastChatAfterDelete(avatar, names);
+      }
       toggleBatchMode();
       if (failCount === 0) {
         showToast(`${successCount}\uAC1C \uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
@@ -6235,89 +6042,14 @@ ${message}` : message;
         }, { debugName: `group-fav-${index}` });
       }
       createTouchClickHandler(chatContent, async () => {
-        const token = operationLock.acquire("openGroupChat", 2e4);
-        if (!token) return;
-        try {
-          console.debug("[ChatList] Opening group chat:", { groupId: group.id, chatFile });
-          const context = api.getContext();
-          const chatFileName = chatFile.replace(".jsonl", "");
-          console.debug("[ChatList] Closing lobby first...");
-          const overlay = document.getElementById("chat-lobby-overlay");
-          const lobbyContainer = document.getElementById("chat-lobby-container");
-          const fab = document.getElementById("chat-lobby-fab");
-          const chatsPanel = document.getElementById("chat-lobby-chats");
-          if (overlay) overlay.style.display = "none";
-          if (lobbyContainer) lobbyContainer.style.display = "none";
-          if (fab) fab.style.display = "flex";
-          if (chatsPanel) chatsPanel.classList.remove("visible");
-          store.setCurrentGroup(null);
-          store.setCurrentCharacter(null);
-          store.setLobbyOpen(false);
-          console.debug("[ChatList] Selecting group via UI click...");
-          const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
-          if (!groupCard) {
-            console.error("[ChatList] Group card not found:", `.group_select[data-grid="${group.id}"]`);
-            showToast("\uADF8\uB8F9\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
-            return;
-          }
-          const groupChatChanged = waitForChatChanged(5e3);
-          if (window.$) {
-            window.$(groupCard).trigger("click");
-          } else {
-            groupCard.click();
-          }
-          await groupChatChanged;
-          if (!operationLock.isCurrent(token)) {
-            console.warn("[ChatList] openGroupChat became stale, aborting");
-            return;
-          }
-          const currentContext = api.getContext();
-          const currentChat = currentContext?.chatId || "";
-          console.debug("[ChatList] Current chat after group select:", currentChat, "Target:", chatFileName);
-          if (currentChat === chatFileName || currentChat.includes(chatFileName)) {
-            console.debug("[ChatList] Target chat is already open");
-            return;
-          }
-          console.debug("[ChatList] Opening chat management panel...");
-          const manageChatsBtn = document.getElementById("option_select_chat");
-          if (!manageChatsBtn) {
-            console.error("[ChatList] Chat management button not found");
-            showToast("\uCC44\uD305 \uAD00\uB9AC \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
-            return;
-          }
-          manageChatsBtn.click();
-          await waitFor(() => document.querySelectorAll(".select_chat_block").length > 0, 3e3);
-          if (!operationLock.isCurrent(token)) {
-            console.warn("[ChatList] openGroupChat became stale, aborting");
-            return;
-          }
-          const chatItems = document.querySelectorAll(".select_chat_block");
-          console.debug("[ChatList] Found", chatItems.length, "chat items");
-          for (const chatItem of chatItems) {
-            const itemFileName = chatItem.getAttribute("file_name") || "";
-            const cleanItemName = itemFileName.replace(".jsonl", "").trim();
-            const cleanTargetName = chatFileName.replace(".jsonl", "").trim();
-            if (cleanItemName === cleanTargetName) {
-              console.debug("[ChatList] Found target chat, clicking...");
-              const targetChatChanged = waitForChatChanged(8e3);
-              if (window.$) {
-                window.$(chatItem).trigger("click");
-              } else {
-                chatItem.click();
-              }
-              await targetChatChanged;
-              console.debug("[ChatList] Group chat opened successfully");
-              return;
-            }
-          }
-          console.warn("[ChatList] Target chat not found in list");
-          showToast("\uCC44\uD305\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "warning");
-        } catch (error) {
-          console.error("[ChatList] Failed to open group chat:", error);
-          showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
-        } finally {
-          operationLock.release(token);
+        const onOpenGroup = store.chatHandlers?.onOpenGroup;
+        if (typeof onOpenGroup !== "function") {
+          console.error("[ChatList] onOpenGroup handler not set");
+          return;
         }
+        store.setCurrentGroup(null);
+        store.setCurrentCharacter(null);
+        await onOpenGroup(group.id, chatFile);
       }, { preventDefault: true, stopPropagation: true, debugName: `group-chat-${index}` });
       if (delBtn) {
         createTouchClickHandler(delBtn, async () => {
@@ -6374,7 +6106,6 @@ ${message}` : message;
 
   // src/handlers/chatHandlers.js
   init_notifications();
-  init_config();
   async function openChat(chatInfo) {
     const token = operationLock.acquire("openChat", 15e3);
     if (!token) return;
@@ -6523,6 +6254,7 @@ ${message}` : message;
         }
         storage.save(data);
         cache.invalidate("chats", charAvatar);
+        api.repointLastChatAfterDelete(charAvatar, [fileName]);
         if (element) {
           element.style.transition = "opacity 0.2s, transform 0.2s";
           element.style.opacity = "0";
@@ -6682,44 +6414,125 @@ ${message}` : message;
   }
   async function startNewGroupChat(btn, token = null) {
     const groupId = btn?.dataset.groupId;
-    const groupName = btn?.dataset.groupName;
     if (!groupId) {
       console.error("[ChatHandlers] No group selected");
       showToast("\uADF8\uB8F9\uC774 \uC120\uD0DD\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", "error");
       return;
     }
-    console.debug("[ChatHandlers] Starting new group chat:", { groupId, groupName });
     try {
-      const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
-      if (!groupCard) {
-        console.error("[ChatHandlers] Group card not found:", groupId);
-        showToast("\uADF8\uB8F9\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
-        return;
-      }
-      console.debug("[ChatHandlers] Found group card, clicking...");
-      const chatChangedPromise = waitForChatChanged(5e3);
-      if (window.$) {
-        window.$(groupCard).trigger("click");
-      } else {
-        groupCard.click();
-      }
-      await chatChangedPromise;
-      if (token !== null && !operationLock.isCurrent(token)) {
-        console.warn("[ChatHandlers] startNewGroupChat became stale, aborting");
-        return;
-      }
       closeLobbyKeepState();
-      const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
-      if (newChatBtn) {
-        console.debug("[ChatHandlers] Clicking new chat button");
-        newChatBtn.click();
-      } else {
-        console.error("[ChatHandlers] New chat button not found");
-        showToast("\uC0C8 \uCC44\uD305 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+      cache.invalidate("groups");
+      if (api.getContext()?.groupId === groupId) {
+        const newChatBtn = await waitForElement("#option_start_new_chat", 1e3);
+        if (newChatBtn) newChatBtn.click();
+        return;
+      }
+      const newChatId = humanizedDateTime();
+      const result = await switchGroup(groupId, newChatId, { token, isNew: true });
+      if (result === "failed") {
+        showToast("\uADF8\uB8F9 \uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+        return;
+      }
+      if (result === "ok") {
+        const group = api.getContext()?.groups?.find((g) => g.id === groupId);
+        if (group) api.saveGroup(group);
       }
     } catch (error) {
       console.error("[ChatHandlers] Failed to start new group chat:", error);
       showToast("\uADF8\uB8F9 \uC0C8 \uCC44\uD305\uC744 \uC2DC\uC791\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    }
+  }
+  async function selectGroupNative(groupId) {
+    try {
+      const groupChats = await import("../../../../group-chats.js");
+      if (typeof groupChats.openGroupById === "function") {
+        const opened = await groupChats.openGroupById(groupId);
+        return opened === false ? "refused" : "started";
+      }
+    } catch (e) {
+      console.debug("[ChatHandlers] group-chats module not available, using UI click:", e);
+    }
+    const card = document.querySelector(`.group_select[data-grid="${CSS.escape(groupId)}"]`);
+    if (!card) return "unavailable";
+    if (window.$) {
+      window.$(card).trigger("click");
+    } else {
+      card.click();
+    }
+    return "started";
+  }
+  async function switchGroup(groupId, chatId = null, { token = null, isNew = false } = {}) {
+    const group = api.getContext()?.groups?.find((g) => g.id === groupId);
+    if (!group || !Array.isArray(group.chats)) return "failed";
+    const originalChatId = group.chat_id;
+    const originalChats = [...group.chats];
+    if (chatId) {
+      if (isNew && !group.chats.includes(chatId)) group.chats.push(chatId);
+      if (!group.chats.includes(chatId)) return "failed";
+      group.chat_id = chatId;
+    }
+    const restoreIfNotSwitched = () => {
+      if (!chatId || api.getContext()?.groupId === groupId) return;
+      if (group.chat_id === chatId) group.chat_id = originalChatId;
+      group.chats.splice(0, group.chats.length, ...originalChats);
+      console.warn("[ChatHandlers] Group switch did not happen, restored chat pointer:", originalChatId);
+    };
+    try {
+      const chatChangedPromise = waitForChatChanged(8e3);
+      const started = await selectGroupNative(groupId);
+      if (started !== "started") {
+        restoreIfNotSwitched();
+        return "failed";
+      }
+      await chatChangedPromise;
+      if (api.getContext()?.groupId !== groupId) {
+        restoreIfNotSwitched();
+        return "failed";
+      }
+    } catch (error) {
+      console.error("[ChatHandlers] Group switch failed:", error);
+      restoreIfNotSwitched();
+      return "failed";
+    }
+    if (token !== null && !operationLock.isCurrent(token)) return "stale";
+    return "ok";
+  }
+  async function openGroupChat(groupId, chatFile) {
+    const token = operationLock.acquire("openGroupChat", 2e4);
+    if (!token) return;
+    try {
+      const chatId = String(chatFile || "").replace(/\.jsonl$/i, "");
+      if (!groupId || !chatId) {
+        showToast("\uCC44\uD305 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", "error");
+        return;
+      }
+      closeLobbyKeepState();
+      const context = api.getContext();
+      if (context?.groupId === groupId) {
+        if (context.chatId !== chatId && typeof context.openGroupChat === "function") {
+          const chatChangedPromise = waitForChatChanged(8e3);
+          await context.openGroupChat(groupId, chatId);
+          await chatChangedPromise;
+        }
+        return;
+      }
+      const result = await switchGroup(groupId, chatId, { token });
+      if (result === "failed") {
+        showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+        return;
+      }
+      if (result === "ok") {
+        const group = api.getContext()?.groups?.find((g) => g.id === groupId);
+        if (group) {
+          group.date_last_chat = Date.now();
+          api.saveGroup(group);
+        }
+      }
+    } catch (error) {
+      console.error("[ChatHandlers] Failed to open group chat:", error);
+      showToast("\uADF8\uB8F9 \uCC44\uD305\uC744 \uC5F4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release(token);
     }
   }
   async function deleteCharacter() {
@@ -6815,151 +6628,6 @@ ${message}` : message;
     startRecentDomObserver();
   }
 
-  // src/data/calendarStorage.js
-  var STORAGE_KEY6 = "chatLobby_calendar";
-  var CURRENT_VERSION = 1;
-  var _snapshotsCache = null;
-  var _initialized = false;
-  var _saveTimer = null;
-  function lf() {
-    return typeof window !== "undefined" && window.localforage || null;
-  }
-  function _safeRemoveLegacy() {
-    try {
-      localStorage.removeItem(STORAGE_KEY6);
-    } catch (e) {
-    }
-  }
-  function _loadFromLocalStorageSync() {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY6);
-      if (data) {
-        const parsed = JSON.parse(data);
-        return parsed.snapshots || {};
-      }
-    } catch (e) {
-      console.error("[Calendar] localStorage load failed:", e);
-    }
-    return {};
-  }
-  function getLocalDateString(date = /* @__PURE__ */ new Date()) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  }
-  async function initCalendarStorage() {
-    if (_initialized) return;
-    const store2 = lf();
-    try {
-      if (store2) {
-        const lfData = await store2.getItem(STORAGE_KEY6);
-        const lfSnaps = lfData && lfData.snapshots ? lfData.snapshots : null;
-        let lsSnaps = null;
-        try {
-          const legacy = localStorage.getItem(STORAGE_KEY6);
-          if (legacy) lsSnaps = JSON.parse(legacy).snapshots || null;
-        } catch (e) {
-          console.warn("[Calendar] Corrupt localStorage residue ignored");
-        }
-        if (lfSnaps && lsSnaps) {
-          _snapshotsCache = { ...lsSnaps, ...lfSnaps };
-          await store2.setItem(STORAGE_KEY6, { version: CURRENT_VERSION, snapshots: _snapshotsCache });
-          _safeRemoveLegacy();
-          console.info("[Calendar] Merged residual localStorage into localforage (lf priority)");
-        } else if (!lfSnaps && lsSnaps) {
-          _snapshotsCache = lsSnaps;
-          await store2.setItem(STORAGE_KEY6, { version: CURRENT_VERSION, snapshots: lsSnaps });
-          _safeRemoveLegacy();
-          console.info("[Calendar] Migrated localStorage \u2192 localforage(IndexedDB)");
-        } else {
-          _snapshotsCache = lfSnaps || {};
-          if (!lsSnaps && localStorage.getItem(STORAGE_KEY6)) _safeRemoveLegacy();
-        }
-      } else {
-        console.warn("[Calendar] window.localforage not found, using localStorage");
-        _snapshotsCache = _loadFromLocalStorageSync();
-      }
-    } catch (e) {
-      console.warn("[Calendar] init failed, fallback to localStorage:", e);
-      _snapshotsCache = _loadFromLocalStorageSync();
-    }
-    _initialized = true;
-    try {
-      cleanOldSnapshots();
-    } catch (e) {
-    }
-  }
-  function _persist() {
-    if (_saveTimer) clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => {
-      _saveTimer = null;
-      const payload = { version: CURRENT_VERSION, snapshots: _snapshotsCache || {} };
-      const store2 = lf();
-      try {
-        if (store2) {
-          store2.setItem(STORAGE_KEY6, payload).catch((e) => {
-            console.error("[Calendar] localforage persist failed:", e);
-          });
-        } else {
-          localStorage.setItem(STORAGE_KEY6, JSON.stringify(payload));
-        }
-      } catch (e) {
-        console.error("[Calendar] persist failed:", e);
-      }
-    }, 500);
-  }
-  function loadSnapshots(_forceRefresh = false) {
-    if (_snapshotsCache !== null) return _snapshotsCache;
-    _snapshotsCache = _loadFromLocalStorageSync();
-    return _snapshotsCache;
-  }
-  function getSnapshot(date) {
-    const snapshots = loadSnapshots();
-    return snapshots[date] || null;
-  }
-  function cleanOldSnapshots() {
-    const snapshots = loadSnapshots();
-    const twoYearsAgo = /* @__PURE__ */ new Date();
-    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-    const cutoff = getLocalDateString(twoYearsAgo);
-    let deleted = 0;
-    for (const date of Object.keys(snapshots)) {
-      if (date < cutoff) {
-        delete snapshots[date];
-        deleted++;
-      }
-    }
-    if (deleted > 0) {
-      console.debug("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
-      _persist();
-    }
-  }
-  function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
-    const thisYear = (/* @__PURE__ */ new Date()).getFullYear();
-    const jan1 = `${thisYear}-01-01`;
-    if (!isBaseline && date < jan1) return;
-    const snapshots = loadSnapshots();
-    const existingTimes = snapshots[date]?.lastChatTimes || {};
-    const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-    snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
-    _persist();
-  }
-  function clearAllSnapshots() {
-    _snapshotsCache = {};
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
-    const store2 = lf();
-    try {
-      if (store2) store2.removeItem(STORAGE_KEY6).catch(() => {
-      });
-    } catch (e) {
-    }
-    try {
-      localStorage.removeItem(STORAGE_KEY6);
-    } catch (e) {
-    }
-  }
-
   // src/ui/tabView.js
   var DEBUG = false;
   function log(...args) {
@@ -7018,15 +6686,19 @@ ${message}` : message;
         log("Added current character to cache:", char.avatar);
       }
     }
-    for (let retry = 0; retry < MAX_CACHE_RETRIES; retry++) {
+    const chatOpen = context?.characterId !== void 0 && context.characterId !== null && Number(context.characterId) >= 0 || !!context?.groupId;
+    const maxRetries = chatOpen ? 1 : MAX_CACHE_RETRIES;
+    for (let retry = 0; retry < maxRetries; retry++) {
       const recentChatElements = document.querySelectorAll(".recentChat");
       if (recentChatElements.length > 0) {
         log(`Found ${recentChatElements.length} .recentChat elements (retry ${retry})`);
         cacheElements(recentChatElements);
         return;
       }
-      log(`No .recentChat found, retry ${retry + 1}/${MAX_CACHE_RETRIES} in ${CACHE_RETRY_DELAY}ms`);
-      await new Promise((r) => setTimeout(r, CACHE_RETRY_DELAY));
+      if (retry + 1 < maxRetries) {
+        log(`No .recentChat found, retry ${retry + 1}/${maxRetries} in ${CACHE_RETRY_DELAY}ms`);
+        await new Promise((r) => setTimeout(r, CACHE_RETRY_DELAY));
+      }
     }
     if (previousCache.length > 0) {
       log("Restoring previous cache:", previousCache.length);
@@ -7063,6 +6735,8 @@ ${message}` : message;
             file,
             avatar,
             isGroup,
+            // ST의 recentChat은 data-avatar에 그룹 이미지, data-group에 그룹 ID를 넣음
+            groupId: isGroup ? groupAttr : null,
             characterName: characterName || avatar.replace(/\.[^.]+$/, ""),
             chatName,
             date: chatDate,
@@ -7938,6 +7612,11 @@ ${message}` : message;
     try {
       log("Opening recent chat:", chat.file, chat.avatar);
       window.dispatchEvent(new CustomEvent("chatlobby:close"));
+      if (chat.isGroup && chat.groupId && chat.file) {
+        operationLock.release(token);
+        await openGroupChat(chat.groupId, chat.file);
+        return;
+      }
       if (!chat.isGroup && chat.avatar && chat.file) {
         const charIndex = (api.getContext()?.characters || []).findIndex((c) => c.avatar === chat.avatar);
         if (charIndex !== -1) {
@@ -7951,7 +7630,7 @@ ${message}` : message;
         }
       }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const selector = chat.isGroup ? `.recentChat[data-group="${chat.avatar}"]` : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
+      const selector = chat.isGroup ? `.recentChat[data-group="${chat.groupId || chat.avatar}"]` : `.recentChat[data-file="${chat.file}"][data-avatar="${chat.avatar}"]`;
       const recentEl = document.querySelector(selector);
       if (recentEl) {
         log("Found element via selector, clicking");
@@ -9527,6 +9206,151 @@ ${message}` : message;
     state2.isInitialized = false;
   }
 
+  // src/data/calendarStorage.js
+  var STORAGE_KEY6 = "chatLobby_calendar";
+  var CURRENT_VERSION = 1;
+  var _snapshotsCache = null;
+  var _initialized = false;
+  var _saveTimer = null;
+  function lf() {
+    return typeof window !== "undefined" && window.localforage || null;
+  }
+  function _safeRemoveLegacy() {
+    try {
+      localStorage.removeItem(STORAGE_KEY6);
+    } catch (e) {
+    }
+  }
+  function _loadFromLocalStorageSync() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY6);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return parsed.snapshots || {};
+      }
+    } catch (e) {
+      console.error("[Calendar] localStorage load failed:", e);
+    }
+    return {};
+  }
+  function getLocalDateString(date = /* @__PURE__ */ new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+  async function initCalendarStorage() {
+    if (_initialized) return;
+    const store2 = lf();
+    try {
+      if (store2) {
+        const lfData = await store2.getItem(STORAGE_KEY6);
+        const lfSnaps = lfData && lfData.snapshots ? lfData.snapshots : null;
+        let lsSnaps = null;
+        try {
+          const legacy = localStorage.getItem(STORAGE_KEY6);
+          if (legacy) lsSnaps = JSON.parse(legacy).snapshots || null;
+        } catch (e) {
+          console.warn("[Calendar] Corrupt localStorage residue ignored");
+        }
+        if (lfSnaps && lsSnaps) {
+          _snapshotsCache = { ...lsSnaps, ...lfSnaps };
+          await store2.setItem(STORAGE_KEY6, { version: CURRENT_VERSION, snapshots: _snapshotsCache });
+          _safeRemoveLegacy();
+          console.info("[Calendar] Merged residual localStorage into localforage (lf priority)");
+        } else if (!lfSnaps && lsSnaps) {
+          _snapshotsCache = lsSnaps;
+          await store2.setItem(STORAGE_KEY6, { version: CURRENT_VERSION, snapshots: lsSnaps });
+          _safeRemoveLegacy();
+          console.info("[Calendar] Migrated localStorage \u2192 localforage(IndexedDB)");
+        } else {
+          _snapshotsCache = lfSnaps || {};
+          if (!lsSnaps && localStorage.getItem(STORAGE_KEY6)) _safeRemoveLegacy();
+        }
+      } else {
+        console.warn("[Calendar] window.localforage not found, using localStorage");
+        _snapshotsCache = _loadFromLocalStorageSync();
+      }
+    } catch (e) {
+      console.warn("[Calendar] init failed, fallback to localStorage:", e);
+      _snapshotsCache = _loadFromLocalStorageSync();
+    }
+    _initialized = true;
+    try {
+      cleanOldSnapshots();
+    } catch (e) {
+    }
+  }
+  function _persist() {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      _saveTimer = null;
+      const payload = { version: CURRENT_VERSION, snapshots: _snapshotsCache || {} };
+      const store2 = lf();
+      try {
+        if (store2) {
+          store2.setItem(STORAGE_KEY6, payload).catch((e) => {
+            console.error("[Calendar] localforage persist failed:", e);
+          });
+        } else {
+          localStorage.setItem(STORAGE_KEY6, JSON.stringify(payload));
+        }
+      } catch (e) {
+        console.error("[Calendar] persist failed:", e);
+      }
+    }, 500);
+  }
+  function loadSnapshots(_forceRefresh = false) {
+    if (_snapshotsCache !== null) return _snapshotsCache;
+    _snapshotsCache = _loadFromLocalStorageSync();
+    return _snapshotsCache;
+  }
+  function getSnapshot(date) {
+    const snapshots = loadSnapshots();
+    return snapshots[date] || null;
+  }
+  function cleanOldSnapshots() {
+    const snapshots = loadSnapshots();
+    const twoYearsAgo = /* @__PURE__ */ new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    const cutoff = getLocalDateString(twoYearsAgo);
+    let deleted = 0;
+    for (const date of Object.keys(snapshots)) {
+      if (date < cutoff) {
+        delete snapshots[date];
+        deleted++;
+      }
+    }
+    if (deleted > 0) {
+      console.debug("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
+      _persist();
+    }
+  }
+  function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
+    const thisYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const jan1 = `${thisYear}-01-01`;
+    if (!isBaseline && date < jan1) return;
+    const snapshots = loadSnapshots();
+    const existingTimes = snapshots[date]?.lastChatTimes || {};
+    const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
+    snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
+    _persist();
+  }
+  function clearAllSnapshots() {
+    _snapshotsCache = {};
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+    const store2 = lf();
+    try {
+      if (store2) store2.removeItem(STORAGE_KEY6).catch(() => {
+      });
+    } catch (e) {
+    }
+    try {
+      localStorage.removeItem(STORAGE_KEY6);
+    } catch (e) {
+    }
+  }
+
   // src/ui/characterGrid.js
   init_textUtils();
   init_notifications();
@@ -11024,7 +10848,7 @@ ${message}` : message;
             </div>
         `;
     }).join("");
-    const encouragement = getEncouragement(top?.name);
+    const encouragement = getEncouragement(escapeHtml(top?.name || ""));
     const oldestDateStr = funFactsData.oldestDate ? funFactsData.oldestDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "\uC54C \uC218 \uC5C6\uC74C";
     const topCharData = funFactsData.top3WithDates?.find((c) => c.name === top?.name);
     const topCharDateStr = topCharData?.firstChatDate ? topCharData.firstChatDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "\uC54C \uC218 \uC5C6\uC74C";
@@ -11178,6 +11002,7 @@ ${message}` : message;
   }
 
   // src/ui/calendarView.js
+  init_textUtils();
   var calendarOverlay = null;
   var THIS_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
   var currentMonth = (/* @__PURE__ */ new Date()).getMonth();
@@ -11473,7 +11298,7 @@ ${message}` : message;
                 <div class="cal-card-day">${day}</div>
                 <div class="cal-card-gradient"></div>
                 <div class="cal-card-info">
-                    <div class="cal-card-name">${charName}</div>
+                    <div class="cal-card-name">${escapeHtml(charName)}</div>
                     <div class="cal-card-count">${charText}/${totalText}</div>
                 </div>
             `;
@@ -11545,7 +11370,7 @@ ${message}` : message;
         cardsHtml += `
                 <div class="lastmsg-card">
                     <img class="lastmsg-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
-                    <div class="lastmsg-name">${charName}</div>
+                    <div class="lastmsg-name">${escapeHtml(charName)}</div>
                     <div class="lastmsg-stats">
                         <div class="lastmsg-label">Last Chat</div>
                         <div class="lastmsg-time">${timeStr}</div>
@@ -11674,7 +11499,6 @@ ${message}` : message;
   var intervalManager = new IntervalManager();
 
   // src/integration/customTheme.js
-  init_config();
   var hamburgerObserver = null;
   var captureClickHandler = null;
   function initCustomThemeIntegration(openLobbyFn) {
@@ -11774,8 +11598,26 @@ ${message}` : message;
   init_textUtils();
 
   // src/safety/saveGuard.js
-  var SAVE_PATH = "/api/chats/save";
-  var GET_PATH = "/api/chats/get";
+  var TARGETS = {
+    char: {
+      savePath: "/api/chats/save",
+      getPath: "/api/chats/get",
+      label: (p) => p.file_name,
+      key: (p) => `${p.avatar_url}::${p.file_name}`,
+      getBody: (p) => ({ ch_name: p.ch_name, file_name: p.file_name, avatar_url: p.avatar_url }),
+      rename: (p, name) => ({ ...p, file_name: name, force: false }),
+      currentName: (p) => p.file_name
+    },
+    group: {
+      savePath: "/api/chats/group/save",
+      getPath: "/api/chats/group/get",
+      label: (p) => p.id,
+      key: (p) => `group::${p.id}`,
+      getBody: (p) => ({ id: p.id }),
+      rename: (p, name) => ({ ...p, id: name, force: false }),
+      currentName: (p) => p.id
+    }
+  };
   var MAX_RECOVERIES = 2;
   var RECOVERY_WINDOW_MS = 6e4;
   var rawFetch = null;
@@ -11816,11 +11658,14 @@ ${message}` : message;
     }
     return { allow: false, reason: "legacy-replaced" };
   }
-  function isSaveRequest(input, init) {
-    if (typeof input !== "string") return false;
-    if (String(init?.method || "GET").toUpperCase() !== "POST") return false;
+  function getSaveKind(input, init) {
+    if (typeof input !== "string") return null;
+    if (String(init?.method || "GET").toUpperCase() !== "POST") return null;
     const path = input.split("?")[0];
-    return path === SAVE_PATH || path.endsWith(SAVE_PATH);
+    for (const [kind, target] of Object.entries(TARGETS)) {
+      if (path === target.savePath || path.endsWith(target.savePath)) return kind;
+    }
+    return null;
   }
   async function readPayload(init) {
     const body = init?.body;
@@ -11836,16 +11681,12 @@ ${message}` : message;
     const context = window.SillyTavern?.getContext?.();
     return context?.getRequestHeaders?.() || { "Content-Type": "application/json" };
   }
-  async function fetchServerChat(payload) {
-    const response = await originalFetch(GET_PATH, {
+  async function fetchServerChat(target, payload) {
+    const response = await originalFetch(target.getPath, {
       method: "POST",
       headers: getRequestHeaders(),
       cache: "no-cache",
-      body: JSON.stringify({
-        ch_name: payload.ch_name,
-        file_name: payload.file_name,
-        avatar_url: payload.avatar_url
-      })
+      body: JSON.stringify(target.getBody(payload))
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -11864,14 +11705,14 @@ ${message}` : message;
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   }
-  async function saveRescueCopy(payload) {
-    const rescueName = `${payload.file_name} [\uBCF5\uAD6C ${stamp()}]`;
+  async function saveRescueCopy(target, payload) {
+    const rescueName = `${target.currentName(payload)} [\uBCF5\uAD6C ${stamp()}]`;
     try {
-      const response = await originalFetch(SAVE_PATH, {
+      const response = await originalFetch(target.savePath, {
         method: "POST",
         headers: getRequestHeaders(),
         cache: "no-cache",
-        body: JSON.stringify({ ...payload, file_name: rescueName, force: false })
+        body: JSON.stringify(target.rename(payload, rescueName))
       });
       return response.ok ? rescueName : null;
     } catch (e) {
@@ -11907,25 +11748,27 @@ ${message}` : message;
     recoveryTimer = setTimeout(tryReload, 300);
     return true;
   }
-  async function handleBlocked(payload, reason) {
+  async function handleBlocked(target, payload, reason) {
     const outCount = messageCount(payload.chat);
-    console.warn("[SaveGuard] Blocked chat save:", { file: payload.file_name, reason, outgoingMessages: outCount });
+    const label = target.label(payload);
+    console.warn("[SaveGuard] Blocked chat save:", { file: label, reason, outgoingMessages: outCount });
     let rescueName = null;
     if (outCount > 1) {
-      rescueName = await saveRescueCopy(payload);
+      rescueName = await saveRescueCopy(target, payload);
     }
-    const willReload = scheduleChatReload(`${payload.avatar_url}::${payload.file_name}`);
+    const willReload = scheduleChatReload(target.key(payload));
     const rescueText = rescueName ? `
 \uC800\uC7A5\uD558\uB824\uB358 \uB0B4\uC6A9\uC740 "${rescueName}"\uC5D0 \uB530\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.` : "";
     const reloadText = willReload ? "\n\uCC44\uD305\uC744 \uB2E4\uC2DC \uBD88\uB7EC\uC635\uB2C8\uB2E4." : "";
-    notify(`"${payload.file_name}" \uCC44\uD305\uC774 \uB36E\uC5B4\uC368\uC9C0\uB294 \uAC83\uC744 \uB9C9\uC558\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8\uC740 \uADF8\uB300\uB85C\uC785\uB2C8\uB2E4.${rescueText}${reloadText}`);
+    notify(`"${label}" \uCC44\uD305\uC774 \uB36E\uC5B4\uC368\uC9C0\uB294 \uAC83\uC744 \uB9C9\uC558\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8\uC740 \uADF8\uB300\uB85C\uC785\uB2C8\uB2E4.${rescueText}${reloadText}`);
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
   }
   async function guardedFetchImpl(input, init) {
-    if (!enabled || !isSaveRequest(input, init)) {
+    const kind = enabled ? getSaveKind(input, init) : null;
+    if (!kind) {
       return originalFetch(input, init);
     }
     let payload = null;
@@ -11935,22 +11778,23 @@ ${message}` : message;
       console.debug("[SaveGuard] Could not read save payload, passing through:", e);
     }
     if (!payload) return originalFetch(input, init);
+    const target = TARGETS[kind];
     if (needsServerCheck(payload)) {
       let decision = { allow: true, reason: "check-failed" };
       try {
-        const serverChat = await fetchServerChat(payload);
+        const serverChat = await fetchServerChat(target, payload);
         decision = decideSave(payload, serverChat);
       } catch (e) {
         console.debug("[SaveGuard] Server check failed, passing through:", e);
       }
-      if (!decision.allow) return handleBlocked(payload, decision.reason);
+      if (!decision.allow) return handleBlocked(target, payload, decision.reason);
     }
     const response = await originalFetch(input, init);
     if (response.status === 400) {
       try {
         const data = await response.clone().json();
         if (data?.error === "integrity") {
-          return handleBlocked(payload, "server-integrity");
+          return handleBlocked(target, payload, "server-integrity");
         }
       } catch {
       }
@@ -12438,7 +12282,8 @@ ${message}` : message;
       });
       setChatHandlers({
         onOpen: openChat,
-        onDelete: deleteChat
+        onDelete: deleteChat,
+        onOpenGroup: openGroupChat
       });
     }
     async function startBackgroundPreload() {
@@ -12544,10 +12389,8 @@ ${message}` : message;
         showToast("\uB85C\uBE44\uB97C \uC5EC\uB294 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
       } finally {
         isOpeningLobby = false;
-        if (store.isLobbyOpen) {
-          setTimeout(() => {
-            store.setLobbyLocked(false);
-          }, 500);
+        if (store.isLobbyOpen && !chatChangedCooldownTimer) {
+          store.setLobbyLocked(false);
         }
       }
     }
@@ -13195,15 +13038,11 @@ ${message}` : message;
         return;
       }
       closeLobby();
-      const groupItem = document.querySelector(`.group_select[data-grid="${group.id}"]`);
-      if (groupItem) {
-        if (window.$) {
-          window.$(groupItem).trigger("click");
-        } else {
-          groupItem.click();
+      if (api.getContext()?.groupId !== group.id) {
+        const result = await switchGroup(group.id);
+        if (result !== "ok") {
+          console.warn("[ChatLobby] Group selection failed:", result);
         }
-      } else {
-        await api.openGroupChat(group.id);
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
       if (!openDrawerSafely("rightNavHolder")) {

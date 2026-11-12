@@ -8,11 +8,11 @@ import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
 import { lastChatCache } from '../data/lastChatCache.js';
-import { refreshChatList, getCurrentCharacter, closeChatPanel } from '../ui/chatList.js';
-import { showToast, showConfirm, showAlert } from '../ui/notifications.js';
-import { CONFIG } from '../config.js';
+import { closeChatPanel } from '../ui/chatList.js';
+import { showToast, showConfirm } from '../ui/notifications.js';
+
 import { waitFor, waitForCharacterSelect, waitForElement, waitForChatChanged } from '../utils/waitFor.js';
-import { isMobile } from '../utils/eventHelpers.js';
+
 import { startRecentDomObserver } from '../ui/tabView.js';
 
 // ============================================
@@ -255,6 +255,9 @@ export async function deleteChat(chatInfo) {
             
             // 캐시 무효화
             cache.invalidate('chats', charAvatar);
+
+            // 지운 채팅이 캐릭터의 "마지막 채팅"이었으면 포인터를 남은 최신 채팅으로
+            api.repointLastChatAfterDelete(charAvatar, [fileName]);
             
             // UI에서 해당 요소만 제거 (전체 리렌더 X)
             if (element) {
@@ -522,66 +525,186 @@ async function startNewCharacterChat(btn, token = null) {
 
 /**
  * 그룹 새 채팅 시작
+ *
+ * 다른 그룹: 새 채팅 ID를 group.chats에 넣고 chat_id로 지정한 뒤 그룹을 선택한다.
+ *   ST는 파일이 없으면 멤버 인사말로 새 채팅을 만든다 (ST의 createNewGroupChat과 같은 결과)
+ *   → 기존 채팅을 불러오지 않고 한 번만 로드. 예전엔 마지막 채팅 로드 → 새 채팅 생성으로 2번.
+ * 같은 그룹: ST 기본 새 채팅 버튼 사용 (한 번 로드)
+ *
  * @param {HTMLElement} btn - 새 채팅 버튼
  * @param {number|null} token - operationLock 토큰
  * @returns {Promise<void>}
  */
 async function startNewGroupChat(btn, token = null) {
     const groupId = btn?.dataset.groupId;
-    const groupName = btn?.dataset.groupName;
-
     if (!groupId) {
         console.error('[ChatHandlers] No group selected');
         showToast('그룹이 선택되지 않았습니다.', 'error');
         return;
     }
 
-    console.debug('[ChatHandlers] Starting new group chat:', { groupId, groupName });
-
     try {
-        // 1. 그룹 선택 (UI 클릭 방식 - 정확한 선택자 사용)
-        const groupCard = document.querySelector(`.group_select[data-grid="${groupId}"]`);
-
-        if (!groupCard) {
-            console.error('[ChatHandlers] Group card not found:', groupId);
-            showToast('그룹을 찾을 수 없습니다.', 'error');
-            return;
-        }
-
-        console.debug('[ChatHandlers] Found group card, clicking...');
-        // ⚠️ 리스너 먼저 등록 → 클릭 (고정 딜레이 대신 이벤트 기반 대기)
-        const chatChangedPromise = waitForChatChanged(5000);
-        if (window.$) {
-            window.$(groupCard).trigger('click');
-        } else {
-            groupCard.click();
-        }
-
-        // 2. 그룹 선택(채팅 로드) 완료 대기
-        await chatChangedPromise;
-
-        // 안전 타임아웃 발동 여부 확인 (이후 단계 중단)
-        if (token !== null && !operationLock.isCurrent(token)) {
-            console.warn('[ChatHandlers] startNewGroupChat became stale, aborting');
-            return;
-        }
-
-        // 3. 로비 닫기
         closeLobbyKeepState();
+        cache.invalidate('groups');
 
-        // 4. 새 채팅 버튼 클릭
-        const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
-        if (newChatBtn) {
-            console.debug('[ChatHandlers] Clicking new chat button');
-            newChatBtn.click();
-        } else {
-            console.error('[ChatHandlers] New chat button not found');
-            showToast('새 채팅 버튼을 찾을 수 없습니다.', 'error');
+        if (api.getContext()?.groupId === groupId) {
+            const newChatBtn = await waitForElement('#option_start_new_chat', 1000);
+            if (newChatBtn) newChatBtn.click();
+            return;
         }
 
+        const newChatId = humanizedDateTime();
+        const result = await switchGroup(groupId, newChatId, { token, isNew: true });
+        if (result === 'failed') {
+            showToast('그룹 새 채팅을 시작하지 못했습니다.', 'error');
+            return;
+        }
+        if (result === 'ok') {
+            // ST의 createNewGroupChat처럼 그룹 정보(채팅 목록 + 현재 채팅)를 바로 저장
+            // (안 하면 메시지를 보내기 전까지 새 채팅이 그룹 목록에 기록되지 않음)
+            const group = api.getContext()?.groups?.find(g => g.id === groupId);
+            if (group) api.saveGroup(group);
+        }
     } catch (error) {
         console.error('[ChatHandlers] Failed to start new group chat:', error);
         showToast('그룹 새 채팅을 시작하지 못했습니다.', 'error');
+    }
+}
+
+// ============================================
+// 그룹 전환 / 그룹 채팅 열기
+// ============================================
+
+/**
+ * ST 방식으로 그룹 선택 (openGroupById → 실패 시 그룹 카드 클릭)
+ * @param {string} groupId
+ * @returns {Promise<'started'|'refused'|'unavailable'>}
+ */
+async function selectGroupNative(groupId) {
+    try {
+        // 확장 번들 위치(…/third-party/<확장>/dist/) 기준 상대 경로 → /scripts/group-chats.js
+        const groupChats = await import('../../../../group-chats.js');
+        if (typeof groupChats.openGroupById === 'function') {
+            const opened = await groupChats.openGroupById(groupId);
+            return opened === false ? 'refused' : 'started';
+        }
+    } catch (e) {
+        console.debug('[ChatHandlers] group-chats module not available, using UI click:', e);
+    }
+
+    const card = document.querySelector(`.group_select[data-grid="${CSS.escape(groupId)}"]`);
+    if (!card) return 'unavailable';
+    if (window.$) {
+        window.$(card).trigger('click');
+    } else {
+        card.click();
+    }
+    return 'started';
+}
+
+/**
+ * 그룹 전환 (그룹 버전 switchCharacter)
+ *
+ * openGroupById는 group.chat_id가 가리키는 채팅을 로드하므로, chatId를 주면 미리 지정해서
+ * 그 채팅을 바로 로드하게 한다. 그룹 객체는 캐릭터와 달리 로드 중에 교체되지 않는다.
+ * 전환이 거부되면(저장 중/생성 중) 바꾼 값을 원래대로 되돌린다.
+ *
+ * @param {string} groupId
+ * @param {string|null} chatId - 열 채팅 ID (.jsonl 없음), null이면 마지막 채팅
+ * @param {{ token?: number|null, isNew?: boolean }} [options] - isNew: 새 채팅 ID를 목록에 추가
+ * @returns {Promise<'ok'|'failed'|'stale'>}
+ */
+export async function switchGroup(groupId, chatId = null, { token = null, isNew = false } = {}) {
+    const group = api.getContext()?.groups?.find(g => g.id === groupId);
+    if (!group || !Array.isArray(group.chats)) return 'failed';
+
+    const originalChatId = group.chat_id;
+    const originalChats = [...group.chats];
+
+    if (chatId) {
+        if (isNew && !group.chats.includes(chatId)) group.chats.push(chatId);
+        if (!group.chats.includes(chatId)) return 'failed';
+        group.chat_id = chatId;
+    }
+
+    const restoreIfNotSwitched = () => {
+        if (!chatId || api.getContext()?.groupId === groupId) return;
+        if (group.chat_id === chatId) group.chat_id = originalChatId;
+        group.chats.splice(0, group.chats.length, ...originalChats);
+        console.warn('[ChatHandlers] Group switch did not happen, restored chat pointer:', originalChatId);
+    };
+
+    try {
+        const chatChangedPromise = waitForChatChanged(8000);
+        const started = await selectGroupNative(groupId);
+        if (started !== 'started') {
+            restoreIfNotSwitched();
+            return 'failed';
+        }
+        await chatChangedPromise;
+        if (api.getContext()?.groupId !== groupId) {
+            restoreIfNotSwitched();
+            return 'failed';
+        }
+    } catch (error) {
+        console.error('[ChatHandlers] Group switch failed:', error);
+        restoreIfNotSwitched();
+        return 'failed';
+    }
+
+    if (token !== null && !operationLock.isCurrent(token)) return 'stale';
+    return 'ok';
+}
+
+/**
+ * 로비에서 그룹 채팅 열기 (한 번만 로드)
+ * 예전엔 그룹 카드 클릭(마지막 채팅 로드) → ST 채팅 관리 팝업에서 대상 클릭(두 번째 로드)이었음
+ * @param {string} groupId
+ * @param {string} chatFile - 채팅 ID (.jsonl 유무 무관)
+ * @returns {Promise<void>}
+ */
+export async function openGroupChat(groupId, chatFile) {
+    const token = operationLock.acquire('openGroupChat', 20000);
+    if (!token) return;
+
+    try {
+        const chatId = String(chatFile || '').replace(/\.jsonl$/i, '');
+        if (!groupId || !chatId) {
+            showToast('채팅 정보가 올바르지 않습니다.', 'error');
+            return;
+        }
+
+        closeLobbyKeepState();
+
+        const context = api.getContext();
+        if (context?.groupId === groupId) {
+            // 같은 그룹: ST 기본 함수로 대상 채팅만 로드 (그룹 정보 저장 포함)
+            if (context.chatId !== chatId && typeof context.openGroupChat === 'function') {
+                const chatChangedPromise = waitForChatChanged(8000);
+                await context.openGroupChat(groupId, chatId);
+                await chatChangedPromise;
+            }
+            return;
+        }
+
+        const result = await switchGroup(groupId, chatId, { token });
+        if (result === 'failed') {
+            showToast('그룹 채팅을 열지 못했습니다.', 'error');
+            return;
+        }
+        if (result === 'ok') {
+            // ST의 openGroupChat처럼 "마지막 채팅"을 그룹 정보에 기록
+            const group = api.getContext()?.groups?.find(g => g.id === groupId);
+            if (group) {
+                group.date_last_chat = Date.now();
+                api.saveGroup(group);
+            }
+        }
+    } catch (error) {
+        console.error('[ChatHandlers] Failed to open group chat:', error);
+        showToast('그룹 채팅을 열지 못했습니다.', 'error');
+    } finally {
+        operationLock.release(token);
     }
 }
 

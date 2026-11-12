@@ -214,28 +214,3 @@ export function bindDelegatedTouchClick(container, route, options = {}) {
     });
 }
 
-/**
- * 버튼용 터치 핸들러 (스크롤 무시)
- * @param {HTMLElement} element - 버튼 요소
- * @param {Function} handler - 클릭 핸들러
- */
-export function createButtonHandler(element, handler) {
-    createTouchClickHandler(element, handler, {
-        preventDefault: true,
-        stopPropagation: true,
-        scrollThreshold: 10
-    });
-}
-
-/**
- * 카드/리스트 아이템용 핸들러 (이벤트 전파 허용)
- * @param {HTMLElement} element - 카드 요소
- * @param {Function} handler - 클릭 핸들러
- */
-export function createCardHandler(element, handler) {
-    createTouchClickHandler(element, handler, {
-        preventDefault: false,
-        stopPropagation: false,
-        scrollThreshold: 10
-    });
-}

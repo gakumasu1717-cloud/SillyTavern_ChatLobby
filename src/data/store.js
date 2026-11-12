@@ -46,7 +46,8 @@ class Store {
             onGroupSelect: null,  // 그룹 선택 콜백
             chatHandlers: {
                 onOpen: null,
-                onDelete: null
+                onDelete: null,
+                onOpenGroup: null
             }
         };
     }
@@ -159,7 +160,8 @@ class Store {
     setChatHandlers(handlers) {
         this._state.chatHandlers = {
             onOpen: handlers.onOpen || null,
-            onDelete: handlers.onDelete || null
+            onDelete: handlers.onDelete || null,
+            onOpenGroup: handlers.onOpenGroup || null
         };
     }
     

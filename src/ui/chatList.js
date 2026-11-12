@@ -9,10 +9,10 @@ import { store } from '../data/store.js';
 import { escapeHtml, truncateText } from '../utils/textUtils.js';
 import { formatDate, getTimestamp } from '../utils/dateUtils.js';
 import { createTouchClickHandler, isMobile } from '../utils/eventHelpers.js';
-import { waitFor, waitForChatChanged } from '../utils/waitFor.js';
+import { waitFor } from '../utils/waitFor.js';
 import { listeners } from '../utils/listenerManager.js';
 import { showToast, showAlert, showConfirm, showPrompt } from './notifications.js';
-import { CONFIG } from '../config.js';
+
 import { getFoldersOptionsHTML } from './templates.js';
 import { lastChatCache } from '../data/lastChatCache.js';
 import { operationLock } from '../utils/operationLock.js';
@@ -275,14 +275,6 @@ export function cleanupTooltip() {
  */
 export function setChatHandlers(handlers) {
     store.setChatHandlers(handlers);
-}
-
-/**
- * 현재 선택된 캐릭터 반환
- * @returns {Object|null}
- */
-export function getCurrentCharacter() {
-    return store.currentCharacter;
 }
 
 // ============================================
@@ -1385,13 +1377,24 @@ async function renameChatPrompt(charAvatar, fileName) {
     }
 
     try {
-        const success = await api.renameChat(charAvatar, currentName, newName);
-        if (success) {
+        // 서버가 파일명을 정리할 수 있으므로 실제 적용된 이름을 사용
+        const appliedName = await api.renameChat(charAvatar, currentName, newName);
+        if (appliedName) {
             // 폴더 배정/즐겨찾기/리마인드/형광펜 키 함께 이동
-            storage.renameChatKey(charAvatar, currentName, newName);
-            remindStore.renameChat(charAvatar, currentName, newName);
-            highlightStore.renameChat(charAvatar, currentName, newName);
-            showToast(`이름 변경: "${newName}"`, 'success');
+            storage.renameChatKey(charAvatar, currentName, appliedName);
+            remindStore.renameChat(charAvatar, currentName, appliedName);
+            highlightStore.renameChat(charAvatar, currentName, appliedName);
+
+            // ★ 이 채팅이 캐릭터의 "마지막 채팅"이었으면 포인터도 옮김
+            // (안 하면 다음에 캐릭터로 들어갈 때 ST가 옛 이름으로 빈 새 채팅을 만들어
+            //  채팅이 사라진 것처럼 보임 - ST도 이름 변경 시 포인터를 갱신함)
+            const char = api.getContext()?.characters?.find(c => c.avatar === charAvatar);
+            if (char && char.chat === currentName) {
+                char.chat = appliedName;
+                api.saveLastChatPointer(char.avatar, char.name, appliedName);
+            }
+
+            showToast(`이름 변경: "${appliedName}"`, 'success');
             await refreshCurrentChatList(true);
         } else {
             showToast('이름 변경에 실패했습니다.', 'error');
@@ -1625,6 +1628,8 @@ export async function executeBatchDelete() {
 
     let successCount = 0;
     let failCount = 0;
+    /** @type {Array<{fileName: string, charAvatar: string}>} */
+    const deletedOk = [];
     
     try {
         for (const chat of chatItems) {
@@ -1632,6 +1637,7 @@ export async function executeBatchDelete() {
                 const success = await api.deleteChat(chat.fileName, chat.charAvatar);
                 if (success) {
                     successCount++;
+                    deletedOk.push(chat);
                     
                     // 로컬 데이터 정리
                     const data = storage.load();
@@ -1654,6 +1660,13 @@ export async function executeBatchDelete() {
         // 캐시 무효화 (관련 캐릭터들)
         const avatarSet = new Set(chatItems.map(c => c.charAvatar));
         avatarSet.forEach(avatar => cache.invalidate('chats', avatar));
+
+        // 지운 채팅 중 캐릭터의 "마지막 채팅"이 있으면 포인터를 남은 최신 채팅으로
+        for (const avatar of avatarSet) {
+            const names = deletedOk.filter(c => c.charAvatar === avatar).map(c => c.fileName);
+            if (names.length === 0) continue;
+            await api.repointLastChatAfterDelete(avatar, names);
+        }
         
         // 배치 모드 종료
         toggleBatchMode();
@@ -2001,124 +2014,16 @@ function bindGroupChatEvents(container, group) {
             }, { debugName: `group-fav-${index}` });
         }
         
-        // 채팅 열기 - 그룹은 UI 클릭 시 최근 채팅이 자동으로 열리므로
-        // 채팅 관리 패널을 통해 원하는 채팅을 선택하는 방식 사용
+        // 채팅 열기 - chatHandlers.openGroupChat이 대상 채팅 하나만 로드 (락/로비 닫기 포함)
         createTouchClickHandler(chatContent, async () => {
-            // 전역 OperationLock으로 Race Condition 방지
-            // 최악 경로: 그룹 선택 대기(5s) + 목록 로드(3s) + 채팅 로드(8s) → 20초
-            const token = operationLock.acquire('openGroupChat', 20000);
-            if (!token) return;
-
-            try {
-                console.debug('[ChatList] Opening group chat:', { groupId: group.id, chatFile });
-
-                const context = api.getContext();
-                const chatFileName = chatFile.replace('.jsonl', '');
-
-                // 1. 로비 먼저 닫기
-                console.debug('[ChatList] Closing lobby first...');
-                const overlay = document.getElementById('chat-lobby-overlay');
-                const lobbyContainer = document.getElementById('chat-lobby-container');
-                const fab = document.getElementById('chat-lobby-fab');
-                const chatsPanel = document.getElementById('chat-lobby-chats');
-
-                if (overlay) overlay.style.display = 'none';
-                if (lobbyContainer) lobbyContainer.style.display = 'none';
-                if (fab) fab.style.display = 'flex';
-                if (chatsPanel) chatsPanel.classList.remove('visible');
-
-                store.setCurrentGroup(null);
-                store.setCurrentCharacter(null);
-                store.setLobbyOpen(false);
-
-                // 2. 그룹 카드 클릭하여 그룹 선택 (이때 최근 채팅이 열림)
-                console.debug('[ChatList] Selecting group via UI click...');
-                const groupCard = document.querySelector(`.group_select[data-grid="${group.id}"]`);
-
-                if (!groupCard) {
-                    console.error('[ChatList] Group card not found:', `.group_select[data-grid="${group.id}"]`);
-                    showToast('그룹을 찾을 수 없습니다.', 'error');
-                    return;
-                }
-
-                // ⚠️ 리스너 먼저 등록 → 클릭 (고정 딜레이 대신 이벤트 기반 대기)
-                const groupChatChanged = waitForChatChanged(5000);
-                if (window.$) {
-                    window.$(groupCard).trigger('click');
-                } else {
-                    groupCard.click();
-                }
-
-                // 그룹 선택(채팅 로드) 완료 대기
-                await groupChatChanged;
-
-                // 안전 타임아웃 발동 여부 확인 (새 작업과의 겹침 방지)
-                if (!operationLock.isCurrent(token)) {
-                    console.warn('[ChatList] openGroupChat became stale, aborting');
-                    return;
-                }
-
-                // 3. 현재 열린 채팅이 원하는 채팅인지 확인
-                const currentContext = api.getContext();
-                const currentChat = currentContext?.chatId || '';
-                console.debug('[ChatList] Current chat after group select:', currentChat, 'Target:', chatFileName);
-
-                if (currentChat === chatFileName || currentChat.includes(chatFileName)) {
-                    console.debug('[ChatList] Target chat is already open');
-                    return;
-                }
-
-                // 4. 원하는 채팅이 아니면 채팅 관리 패널을 통해 선택
-                console.debug('[ChatList] Opening chat management panel...');
-                const manageChatsBtn = document.getElementById('option_select_chat');
-                if (!manageChatsBtn) {
-                    console.error('[ChatList] Chat management button not found');
-                    showToast('채팅 관리 버튼을 찾을 수 없습니다.', 'error');
-                    return;
-                }
-
-                manageChatsBtn.click();
-                // 채팅 목록이 로드될 때까지 조건 대기 (고정 딜레이 대신)
-                await waitFor(() => document.querySelectorAll('.select_chat_block').length > 0, 3000);
-
-                if (!operationLock.isCurrent(token)) {
-                    console.warn('[ChatList] openGroupChat became stale, aborting');
-                    return;
-                }
-
-                // 5. 채팅 목록에서 원하는 채팅 찾아 클릭
-                const chatItems = document.querySelectorAll('.select_chat_block');
-                console.debug('[ChatList] Found', chatItems.length, 'chat items');
-
-                for (const chatItem of chatItems) {
-                    const itemFileName = chatItem.getAttribute('file_name') || '';
-                    const cleanItemName = itemFileName.replace('.jsonl', '').trim();
-                    const cleanTargetName = chatFileName.replace('.jsonl', '').trim();
-
-                    if (cleanItemName === cleanTargetName) {
-                        console.debug('[ChatList] Found target chat, clicking...');
-                        // 대상 채팅 로드 완료까지 락 유지 (조기 해제 방지)
-                        const targetChatChanged = waitForChatChanged(8000);
-                        if (window.$) {
-                            window.$(chatItem).trigger('click');
-                        } else {
-                            chatItem.click();
-                        }
-                        await targetChatChanged;
-                        console.debug('[ChatList] Group chat opened successfully');
-                        return;
-                    }
-                }
-
-                console.warn('[ChatList] Target chat not found in list');
-                showToast('채팅을 찾을 수 없습니다.', 'warning');
-
-            } catch (error) {
-                console.error('[ChatList] Failed to open group chat:', error);
-                showToast('그룹 채팅을 열지 못했습니다.', 'error');
-            } finally {
-                operationLock.release(token);
+            const onOpenGroup = store.chatHandlers?.onOpenGroup;
+            if (typeof onOpenGroup !== 'function') {
+                console.error('[ChatList] onOpenGroup handler not set');
+                return;
             }
+            store.setCurrentGroup(null);
+            store.setCurrentCharacter(null);
+            await onOpenGroup(group.id, chatFile);
         }, { preventDefault: true, stopPropagation: true, debugName: `group-chat-${index}` });
         
         // 삭제 버튼 이벤트

@@ -119,77 +119,6 @@ function createFingerprint(messages, fileName = 'unknown') {
 }
 
 /**
- * 두 채팅의 공통 접두사 길이 계산 (분기점 찾기)
- * @param {Array} chat1 - 첫 번째 채팅 메시지 배열
- * @param {Array} chat2 - 두 번째 채팅 메시지 배열
- * @returns {number} - 공통 메시지 수
- */
-function findCommonPrefixLength(chat1, chat2) {
-    const minLen = Math.min(chat1.length, chat2.length);
-    let commonLen = 0;
-    
-    for (let i = 0; i < minLen; i++) {
-        const msg1 = chat1[i];
-        const msg2 = chat2[i];
-        
-        // 내용 + 발신자 둘 다 체크
-        if (msg1?.mes === msg2?.mes && msg1?.is_user === msg2?.is_user) {
-            commonLen++;
-        } else {
-            break;
-        }
-    }
-    
-    return commonLen;
-}
-
-/**
- * 캐릭터의 브랜치 정보 가져오기 (캐시된)
- * @param {string} charAvatar
- * @param {string} chatFileName
- * @returns {{ parentChat: string|null, branchPoint: number, depth: number }|null}
- */
-export function getBranchInfo(charAvatar, chatFileName) {
-    const cache = loadCache();
-    return cache.characters[charAvatar]?.branches?.[chatFileName] || null;
-}
-
-/**
- * fingerprint 캐시 가져오기
- * @param {string} charAvatar
- * @param {string} chatFileName
- * @returns {{ hash: string, length: number }|null}
- */
-export function getFingerprint(charAvatar, chatFileName) {
-    const cache = loadCache();
-    return cache.characters[charAvatar]?.fingerprints?.[chatFileName] || null;
-}
-
-/**
- * fingerprint 저장
- * @param {string} charAvatar
- * @param {string} chatFileName
- * @param {string} hash
- * @param {number} length
- * @param {boolean} skipSave - true면 saveCache() 스킵 (배치 저장용)
- */
-export function setFingerprint(charAvatar, chatFileName, hash, length, skipSave = false) {
-    const cache = loadCache();
-    
-    if (!cache.characters[charAvatar]) {
-        cache.characters[charAvatar] = { fingerprints: {}, branches: {} };
-    }
-    
-    cache.characters[charAvatar].fingerprints[chatFileName] = {
-        hash,
-        length,
-        lastUpdated: Date.now()
-    };
-    
-    if (!skipSave) saveCache();
-}
-
-/**
  * fingerprint 배치 저장 (한 번에 여러 개)
  * @param {string} charAvatar
  * @param {Array<{fileName: string, hash: string, length: number}>} entries
@@ -212,31 +141,6 @@ export function setFingerprintBatch(charAvatar, entries) {
     }
     
     saveCache(); // 한 번만!
-}
-
-/**
- * 브랜치 정보 저장
- * @param {string} charAvatar
- * @param {string} chatFileName
- * @param {string|null} parentChat
- * @param {number} branchPoint
- * @param {number} depth
- * @param {boolean} skipSave - true면 saveCache() 스킵 (배치 저장용)
- */
-export function setBranchInfo(charAvatar, chatFileName, parentChat, branchPoint, depth, skipSave = false) {
-    const cache = loadCache();
-    
-    if (!cache.characters[charAvatar]) {
-        cache.characters[charAvatar] = { fingerprints: {}, branches: {} };
-    }
-    
-    cache.characters[charAvatar].branches[chatFileName] = {
-        parentChat,
-        branchPoint,
-        depth
-    };
-    
-    if (!skipSave) saveCache();
 }
 
 /**
@@ -284,21 +188,6 @@ export function getAllFingerprints(charAvatar) {
 }
 
 /**
- * 캐시 무효화 (채팅 삭제 시 등)
- * @param {string} charAvatar
- * @param {string} chatFileName
- */
-export function invalidateCache(charAvatar, chatFileName) {
-    const cache = loadCache();
-    
-    if (cache.characters[charAvatar]) {
-        delete cache.characters[charAvatar].fingerprints?.[chatFileName];
-        delete cache.characters[charAvatar].branches?.[chatFileName];
-        saveCache();
-    }
-}
-
-/**
  * 캐릭터 전체 캐시 초기화
  * @param {string} charAvatar
  */
@@ -307,15 +196,6 @@ export function clearCharacterCache(charAvatar) {
     delete cache.characters[charAvatar];
     saveCache();
     console.debug('[BranchCache] Cleared cache for:', charAvatar);
-}
-
-/**
- * 전체 캐시 초기화 (모든 캐릭터)
- */
-export function clearAllCache() {
-    cacheData = { version: 1, characters: {} };
-    saveCache();
-    console.debug('[BranchCache] Cleared ALL cache');
 }
 
 // Export utilities

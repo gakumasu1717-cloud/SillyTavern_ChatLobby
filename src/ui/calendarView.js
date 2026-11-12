@@ -6,6 +6,7 @@ import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { loadSnapshots, getSnapshot, saveSnapshot, getLocalDateString, clearAllSnapshots } from '../data/calendarStorage.js';
 import { lastChatCache } from '../data/lastChatCache.js';
+import { escapeHtml } from '../utils/textUtils.js';
 
 let calendarOverlay = null;
 const THIS_YEAR = new Date().getFullYear();
@@ -383,120 +384,6 @@ function findRecentSnapshot(beforeDate, maxDays = 7) {
 }
 
 /**
- * 오늘 스냅샷 저장 - 가장 증가한 캐릭터 찾기
- * 배치 처리로 메모리 최적화
- */
-async function saveTodaySnapshot() {
-    try {
-        const today = getLocalDateString();
-        
-        // 항상 어제(또는 가장 최근 과거) 스냅샷을 기준으로 비교
-        // 초기 스냅샷은 saveBaselineSnapshot()에서 어제 날짜로 저장됨
-        const recentData = findRecentSnapshot(today);
-        const baseByChar = recentData?.snapshot?.byChar || {};
-        
-        let characters = cache.get('characters');
-        if (!characters || characters.length === 0) {
-            characters = api.getCharacters();
-        }
-        
-        if (!characters || !Array.isArray(characters) || characters.length === 0) {
-            console.warn('[Calendar] No characters found');
-            return;
-        }
-        
-        const BATCH_SIZE = 5;
-        const rankings = [];
-        
-        for (let i = 0; i < characters.length; i += BATCH_SIZE) {
-            const batch = characters.slice(i, i + BATCH_SIZE);
-            const batchResults = await Promise.all(
-                batch.map(async (char) => {
-                    // 캐릭터 스냅샷은 항상 fresh data 필요 (forceRefresh=true)
-                    let chats;
-                    try {
-                        chats = await api.fetchChatsForCharacter(char.avatar, true);
-                    } catch (e) {
-                        console.error('[Calendar] API error:', char.avatar, e);
-                        chats = [];
-                    }
-                    const chatCount = Array.isArray(chats) ? chats.length : 0;
-                    const messageCount = Array.isArray(chats) 
-                        ? chats.reduce((sum, chat) => sum + (chat.chat_items || 0), 0) 
-                        : 0;
-                    return { avatar: char.avatar, chatCount, messageCount };
-                })
-            );
-            rankings.push(...batchResults);
-            
-            // 배치 간 약간의 딜레이로 메인 스레드 블로킹 방지
-            if (i + BATCH_SIZE < characters.length) {
-                await new Promise(r => setTimeout(r, 10));
-            }
-        }
-        
-        rankings.sort((a, b) => b.messageCount - a.messageCount);
-        const totalMessages = rankings.reduce((sum, r) => sum + r.messageCount, 0);
-        
-        // 캐릭터별 메시지 수 객체 생성
-        const byChar = {};
-        rankings.forEach(r => {
-            byChar[r.avatar] = r.messageCount;
-        });
-        
-        // 🔥 캐릭터별 마지막 채팅 시간 복사 (현재 lastChatCache에서)
-        // ⚠️ 오늘 날짜에 채팅한 것만 저장 (다른 날짜 시간은 제외)
-        const lastChatTimes = {};
-        let savedTimeCount = 0;
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayStartMs = todayStart.getTime();
-        
-        rankings.forEach(r => {
-            const lastTime = lastChatCache.get(r.avatar);
-            // 오늘 0시 이후에 채팅한 경우만 저장
-            if (lastTime >= todayStartMs) {
-                lastChatTimes[r.avatar] = lastTime;
-                savedTimeCount++;
-            }
-        });
-        console.debug('[Calendar] Saving lastChatTimes for', savedTimeCount, 'characters (today only)');
-        
-        // 가장 증가한 캐릭터 찾기 (메시지 수 기준)
-        let topChar = '';
-        let maxIncrease = -Infinity;
-        let maxMsgCountOnTie = -1;
-        
-        for (const r of rankings) {
-            const prev = baseByChar[r.avatar] || 0;
-            const increase = r.messageCount - prev;
-            
-            // 증가량 더 크면 교체
-            if (increase > maxIncrease) {
-                maxIncrease = increase;
-                maxMsgCountOnTie = r.messageCount;
-                topChar = r.avatar;
-            } 
-            // 동률이면 메시지 수 많은 캐릭터
-            else if (increase === maxIncrease && r.messageCount > maxMsgCountOnTie) {
-                maxMsgCountOnTie = r.messageCount;
-                topChar = r.avatar;
-            }
-        }
-        
-        // 기준 데이터 없으면 (완전 첫 접속) 메시지 1위로
-        if (!recentData) {
-            topChar = rankings[0]?.avatar || '';
-        }
-        
-        saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
-        
-    } catch (e) {
-        console.error('[Calendar] Failed to save snapshot:', e);
-    }
-}
-
-/**
  * 캘린더 렌더링 - 그리드 스타일
  */
 function renderCalendar() {
@@ -560,7 +447,7 @@ function renderCalendar() {
                 <div class="cal-card-day">${day}</div>
                 <div class="cal-card-gradient"></div>
                 <div class="cal-card-info">
-                    <div class="cal-card-name">${charName}</div>
+                    <div class="cal-card-name">${escapeHtml(charName)}</div>
                     <div class="cal-card-count">${charText}/${totalText}</div>
                 </div>
             `;
@@ -671,7 +558,7 @@ function showLastMessagePanel(date) {
             cardsHtml += `
                 <div class="lastmsg-card">
                     <img class="lastmsg-avatar" src="${avatarUrl}" alt="" onerror="this.style.opacity='0.3'">
-                    <div class="lastmsg-name">${charName}</div>
+                    <div class="lastmsg-name">${escapeHtml(charName)}</div>
                     <div class="lastmsg-stats">
                         <div class="lastmsg-label">Last Chat</div>
                         <div class="lastmsg-time">${timeStr}</div>
