@@ -2282,9 +2282,6 @@ ${message}` : message;
   };
   var operationLock = new OperationLock();
 
-  // src/ui/chatList.js
-  init_textUtils();
-
   // src/utils/eventHelpers.js
   init_config();
 
@@ -2488,59 +2485,160 @@ ${message}` : message;
     });
   }
 
-  // src/utils/waitFor.js
-  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-      try {
-        if (conditionFn()) return true;
-      } catch (e) {
-      }
-      await new Promise((r) => setTimeout(r, interval));
+  // src/ui/chatList/tooltip.js
+  var tooltipElement = null;
+  var tooltipTimeout = null;
+  var currentTooltipTarget = null;
+  var tooltipEventsInitialized = false;
+  var lastMouseX = 0;
+  var lastMouseY = 0;
+  function ensureTooltipElement() {
+    if (tooltipElement) return tooltipElement;
+    tooltipElement = document.createElement("div");
+    tooltipElement.id = "chat-preview-tooltip";
+    tooltipElement.className = "chat-preview-tooltip";
+    tooltipElement.style.cssText = `
+        position: fixed;
+        display: none;
+        max-width: 400px;
+        max-height: 300px;
+        padding: 12px 16px;
+        background: rgba(20, 20, 30, 0.95);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        color: #e0e0e0;
+        font-size: 13px;
+        line-height: 1.6;
+        z-index: 100000;
+        overflow-y: auto;
+        overflow-x: hidden;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        pointer-events: none;
+        white-space: pre-wrap;
+        word-break: break-word;
+        backdrop-filter: blur(10px);
+    `;
+    const style = document.createElement("style");
+    style.textContent = `
+        .chat-preview-tooltip::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-preview-tooltip::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+            border-radius: 3px;
+        }
+        .chat-preview-tooltip::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+        .chat-preview-tooltip::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(tooltipElement);
+    return tooltipElement;
+  }
+  function showTooltip(content) {
+    const tooltip = ensureTooltipElement();
+    tooltip.textContent = content;
+    tooltip.style.display = "block";
+    tooltip.style.left = `${lastMouseX + 15}px`;
+    tooltip.style.top = `${lastMouseY + 15}px`;
+  }
+  function hideTooltip() {
+    if (tooltipTimeout) {
+      clearTimeout(tooltipTimeout);
+      tooltipTimeout = null;
     }
-    return false;
+    if (tooltipElement) {
+      tooltipElement.style.display = "none";
+    }
+    currentTooltipTarget = null;
   }
-  async function waitForElement(selector, timeout = 3e3) {
-    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
-    return found ? document.querySelector(selector) : null;
+  function bindTooltipEvents(container) {
+    if (isMobile()) {
+      return;
+    }
+    if (tooltipEventsInitialized) {
+      return;
+    }
+    const lobbyContainer = document.getElementById("chat-lobby-container");
+    if (!lobbyContainer) return;
+    listeners.add("tooltip", lobbyContainer, "mouseover", handleTooltipMouseOver);
+    listeners.add("tooltip", lobbyContainer, "mouseout", handleTooltipMouseOut);
+    listeners.add("tooltip", lobbyContainer, "mousemove", handleTooltipMouseMove);
+    listeners.add("tooltip", lobbyContainer, "wheel", handleTooltipWheel, { passive: false });
+    tooltipEventsInitialized = true;
   }
-  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
-    return waitFor(() => {
-      const context = window.SillyTavern?.getContext?.();
-      if (!context) return false;
-      const currentChar = context.characters?.[context.characterId];
-      return currentChar?.avatar === expectedAvatar;
-    }, timeout);
-  }
-  function waitForChatChanged(timeout = 5e3) {
-    return new Promise((resolve) => {
-      const context = window.SillyTavern?.getContext?.();
-      if (!context?.eventSource || !context?.eventTypes?.CHAT_CHANGED) {
-        setTimeout(() => resolve(false), 1e3);
-        return;
+  function handleTooltipMouseOver(e) {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    const item = e.target.closest(".lobby-chat-item");
+    if (!item) return;
+    if (currentTooltipTarget === item) return;
+    let fullPreview = "";
+    if (item.dataset.fullPreviewEncoded) {
+      try {
+        fullPreview = decodeURIComponent(escape(atob(item.dataset.fullPreviewEncoded)));
+      } catch (e2) {
+        fullPreview = "";
       }
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
-          console.warn("[waitForChatChanged] Timed out after", timeout, "ms");
-          resolve(false);
-        }
-      }, timeout);
-      const handler = () => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
-          resolve(true);
-        }
-      };
-      context.eventSource.on(context.eventTypes.CHAT_CHANGED, handler);
-    });
+    } else if (item.dataset.fullPreview) {
+      fullPreview = item.dataset.fullPreview;
+    }
+    if (!fullPreview) return;
+    hideTooltip();
+    currentTooltipTarget = item;
+    tooltipTimeout = setTimeout(() => {
+      if (currentTooltipTarget === item && fullPreview) {
+        showTooltip(fullPreview);
+      }
+    }, 300);
+  }
+  function handleTooltipMouseOut(e) {
+    const item = e.target.closest(".lobby-chat-item");
+    if (!item) return;
+    const relatedItem = e.relatedTarget?.closest(".lobby-chat-item");
+    if (relatedItem === item) return;
+    if (currentTooltipTarget === item) {
+      hideTooltip();
+    }
+  }
+  function handleTooltipWheel(e) {
+    if (!tooltipElement || tooltipElement.style.display !== "block") return;
+    const hasScroll = tooltipElement.scrollHeight > tooltipElement.clientHeight;
+    if (!hasScroll) return;
+    const item = e.target.closest(".lobby-chat-item");
+    if (item && currentTooltipTarget === item) {
+      e.preventDefault();
+      e.stopPropagation();
+      tooltipElement.scrollTop += e.deltaY;
+    }
+  }
+  function handleTooltipMouseMove(e) {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    const item = e.target.closest(".lobby-chat-item");
+    if (!item) return;
+    if (tooltipElement && tooltipElement.style.display === "block" && currentTooltipTarget === item) {
+      tooltipElement.style.left = `${e.clientX + 15}px`;
+      tooltipElement.style.top = `${e.clientY + 15}px`;
+    }
+  }
+  function cleanupTooltip() {
+    hideTooltip();
+    listeners.clear("tooltip");
+    tooltipEventsInitialized = false;
+    if (tooltipElement && tooltipElement.parentNode) {
+      tooltipElement.parentNode.removeChild(tooltipElement);
+    }
+    tooltipElement = null;
+    currentTooltipTarget = null;
   }
 
-  // src/ui/chatList.js
+  // src/ui/chatList/charChatList.js
+  init_textUtils();
   init_notifications();
 
   // src/data/persist.js
@@ -3255,6 +3353,290 @@ ${message}` : message;
     }
     return false;
   }
+
+  // src/ui/chatList/chatQuery.js
+  function normalizeChats(chats) {
+    if (Array.isArray(chats)) return [...chats];
+    if (typeof chats === "object") {
+      return Object.entries(chats).map(([key, value]) => {
+        if (typeof value === "object") {
+          return { ...value, file_name: value.file_name || key };
+        }
+        return { file_name: key, ...value };
+      });
+    }
+    return [];
+  }
+  function filterValidChats(chats) {
+    return chats.filter((chat) => {
+      const fileName = chat?.file_name || chat?.fileName || "";
+      const hasJsonl = fileName.includes(".jsonl");
+      return fileName && hasJsonl && !fileName.startsWith("chat_") && fileName.toLowerCase() !== "error";
+    });
+  }
+  function filterByFolder(chats, charAvatar, filterFolder) {
+    const data = storage.load();
+    const result = chats.filter((chat) => {
+      const fn = chat.file_name || chat.fileName || "";
+      const key = storage.getChatKey(charAvatar, fn);
+      if (filterFolder === "favorites") {
+        return data.favorites.includes(key);
+      }
+      const assigned = data.chatAssignments[key] || "uncategorized";
+      return assigned === filterFolder;
+    });
+    return result;
+  }
+  function sortChats(chats, charAvatar, sortOption) {
+    const data = storage.load();
+    if (sortOption === "branch") {
+      return sortByBranchTreeCached(chats, charAvatar, data);
+    }
+    return [...chats].sort((a, b) => {
+      const fnA = a.file_name || "";
+      const fnB = b.file_name || "";
+      const keyA = storage.getChatKey(charAvatar, fnA);
+      const keyB = storage.getChatKey(charAvatar, fnB);
+      const favA = data.favorites.includes(keyA) ? 0 : 1;
+      const favB = data.favorites.includes(keyB) ? 0 : 1;
+      if (favA !== favB) return favA - favB;
+      if (sortOption === "name") {
+        return fnA.localeCompare(fnB, "ko");
+      }
+      if (sortOption === "messages") {
+        const msgA = a.message_count || a.mes_count || a.chat_items || 0;
+        const msgB = b.message_count || b.mes_count || b.chat_items || 0;
+        return msgB - msgA;
+      }
+      return getTimestamp(b) - getTimestamp(a);
+    });
+  }
+  function sortByBranchTreeCached(chats, charAvatar, data) {
+    const branches = getAllBranches(charAvatar);
+    const chatsWithBranch = chats.map((chat) => {
+      const fileName = chat.file_name || "";
+      const branchInfo = branches[fileName];
+      if (branchInfo) {
+        return {
+          ...chat,
+          _branchInfo: {
+            parentChat: branchInfo.parentChat,
+            branchPoint: branchInfo.branchPoint,
+            depth: branchInfo.depth || 1,
+            isOriginal: false
+          }
+        };
+      } else {
+        return {
+          ...chat,
+          _branchInfo: {
+            parentChat: null,
+            branchPoint: 0,
+            depth: 0,
+            isOriginal: true
+          }
+        };
+      }
+    });
+    const originals = chatsWithBranch.filter((c) => c._branchInfo.isOriginal);
+    const branchList = chatsWithBranch.filter((c) => !c._branchInfo.isOriginal);
+    originals.sort((a, b) => {
+      const fnA = a.file_name || "";
+      const fnB = b.file_name || "";
+      const keyA = storage.getChatKey(charAvatar, fnA);
+      const keyB = storage.getChatKey(charAvatar, fnB);
+      const favA = data.favorites.includes(keyA) ? 0 : 1;
+      const favB = data.favorites.includes(keyB) ? 0 : 1;
+      if (favA !== favB) return favA - favB;
+      return getTimestamp(b) - getTimestamp(a);
+    });
+    branchList.sort((a, b) => {
+      const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+      if (depthDiff !== 0) return depthDiff;
+      return getTimestamp(b) - getTimestamp(a);
+    });
+    const result = [];
+    const usedBranches = /* @__PURE__ */ new Set();
+    function addChildBranches(parentFileName) {
+      const children = branchList.filter(
+        (b) => b._branchInfo.parentChat === parentFileName && !usedBranches.has(b.file_name)
+      );
+      children.sort((a, b) => {
+        const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
+        if (depthDiff !== 0) return depthDiff;
+        return getTimestamp(b) - getTimestamp(a);
+      });
+      for (const child of children) {
+        result.push(child);
+        usedBranches.add(child.file_name);
+        addChildBranches(child.file_name);
+      }
+    }
+    for (const original of originals) {
+      result.push(original);
+      addChildBranches(original.file_name);
+    }
+    for (const branch of branchList) {
+      if (!usedBranches.has(branch.file_name)) {
+        result.push(branch);
+        usedBranches.add(branch.file_name);
+        addChildBranches(branch.file_name);
+      }
+    }
+    return result;
+  }
+
+  // src/ui/chatList/chatItem.js
+  init_textUtils();
+  function renderChatItem(chat, charAvatar, index) {
+    const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
+    const displayName = fileName.replace(".jsonl", "");
+    const preview = chat.preview || chat.mes || chat.last_message || "\uCC44\uD305 \uAE30\uB85D";
+    const messageCount2 = chat.chat_items || chat.message_count || chat.mes_count || 0;
+    const isFav = storage.isFavorite(charAvatar, fileName);
+    const folderId = storage.getChatFolder(charAvatar, fileName);
+    const data = storage.load();
+    const folder = data.folders.find((f) => f.id === folderId);
+    const folderName = folder?.name || "";
+    const tooltipPreview = preview;
+    const safeAvatar = escapeHtml(charAvatar || "");
+    const safeFileName = escapeHtml(fileName || "");
+    const safeFullPreview = tooltipPreview ? btoa(unescape(encodeURIComponent(tooltipPreview))) : "";
+    const branchInfo = chat._branchInfo;
+    const branchDepth = branchInfo?.depth || 0;
+    const isBranch = branchInfo && !branchInfo.isOriginal;
+    const branchPoint = branchInfo?.branchPoint || 0;
+    const depthIndent = isBranch ? Math.min(branchDepth, 5) * 16 : 0;
+    const indentStyle = isBranch ? `margin-left: ${depthIndent}px;` : "";
+    const branchClass = branchInfo ? "branch-mode" : "";
+    const branchBadge = isBranch ? `<span class="branch-badge" title="\uBD84\uAE30\uC810: ${branchPoint}\uBC88\uC9F8 \uBA54\uC2DC\uC9C0">\u21B3 \uBD84\uAE30${branchPoint > 0 ? ` @${branchPoint}` : ""}</span>` : "";
+    return `
+    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""} ${branchClass} ${isBranch ? "is-branch" : ""}" 
+         data-file-name="${safeFileName}" 
+         data-char-avatar="${safeAvatar}" 
+         data-chat-index="${index}" 
+         data-folder-id="${folderId}"
+         data-branch-depth="${branchDepth}"
+         data-branch-point="${branchPoint}"
+         data-full-preview-encoded="${safeFullPreview}"
+         style="${indentStyle}">
+        <label class="chat-checkbox" style="display:none;"><input type="checkbox" class="chat-select-cb"></label>
+        <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
+        <div class="chat-content">
+            <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
+            <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
+            <div class="chat-meta">
+                ${messageCount2 > 0 ? `<span>\u{1F4AC} ${messageCount2}\uAC1C</span>` : ""}
+                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
+            </div>
+        </div>
+        <div class="chat-actions">
+            <button class="chat-folder-btn" title="\uD3F4\uB354 \uC774\uB3D9">\u22EE</button>
+            <button class="chat-delete-btn" title="\uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F</button>
+        </div>
+    </div>
+    `;
+  }
+
+  // src/ui/chatList/panelHeader.js
+  init_textUtils();
+  function updateChatHeader(character) {
+    const avatarImg = document.getElementById("chat-panel-avatar");
+    const nameEl = document.getElementById("chat-panel-name");
+    const deleteBtn = document.getElementById("chat-lobby-delete-char");
+    const newChatBtn = document.getElementById("chat-lobby-new-chat");
+    if (avatarImg) {
+      avatarImg.style.display = "block";
+      avatarImg.src = character.avatarSrc;
+    }
+    if (nameEl) nameEl.textContent = character.name;
+    if (deleteBtn) {
+      deleteBtn.style.display = "block";
+      deleteBtn.dataset.charAvatar = character.avatar;
+      deleteBtn.dataset.charName = character.name;
+    }
+    if (newChatBtn) {
+      newChatBtn.style.display = "block";
+      newChatBtn.dataset.charIndex = character.index;
+      newChatBtn.dataset.charAvatar = character.avatar;
+      newChatBtn.dataset.isGroup = "false";
+      delete newChatBtn.dataset.groupId;
+      delete newChatBtn.dataset.groupName;
+    }
+    document.getElementById("chat-panel-count").textContent = "\uCC44\uD305 \uB85C\uB529 \uC911...";
+    renderCharacterTags(character.avatar);
+  }
+  function getCharacterTags(charAvatar) {
+    const context = api.getContext();
+    if (!context?.tagMap || !context?.tags || !charAvatar) {
+      return [];
+    }
+    const tagIds = context.tagMap[charAvatar] || [];
+    return tagIds.map((tagId) => {
+      const tag = context.tags.find((t) => t.id === tagId);
+      return tag?.name || null;
+    }).filter(Boolean);
+  }
+  function renderCharacterTags(charAvatar) {
+    const filtersSection = document.getElementById("chat-lobby-filters");
+    const container = document.getElementById("chat-lobby-char-tags");
+    if (!container || !filtersSection) return;
+    const tags = getCharacterTags(charAvatar);
+    filtersSection.style.display = "block";
+    if (tags.length === 0) {
+      container.style.display = "none";
+      container.innerHTML = "";
+    } else {
+      container.style.display = "flex";
+      container.innerHTML = tags.map(
+        (tag) => `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
+      ).join("");
+    }
+  }
+  function updateChatCount(count) {
+    const el = document.getElementById("chat-panel-count");
+    if (el) el.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
+  }
+  function updateHasChats(totalCount) {
+    const newChatBtn = document.getElementById("chat-lobby-new-chat");
+    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 0 ? "true" : "false";
+  }
+  function showFolderBar(visible) {
+    const filtersSection = document.getElementById("chat-lobby-filters");
+    if (filtersSection) filtersSection.style.display = visible ? "block" : "none";
+  }
+  function syncDropdowns(filterValue, sortValue) {
+    const filterSelect = document.getElementById("chat-lobby-folder-filter");
+    const sortSelect = document.getElementById("chat-lobby-chat-sort");
+    if (filterSelect) filterSelect.value = filterValue;
+    if (sortSelect) sortSelect.value = sortValue;
+  }
+  function updatePersonaQuickButton(charAvatar) {
+    console.debug("[ChatList] updatePersonaQuickButton called:", charAvatar);
+    const btn = document.getElementById("chat-lobby-persona-quick");
+    const img = btn ? btn.querySelector(".persona-quick-avatar") : null;
+    console.debug("[ChatList] Button found:", !!btn, "Image found:", !!img);
+    if (!btn || !img) return;
+    const lastPersona = window._chatLobbyLastChatCache ? window._chatLobbyLastChatCache.getPersona(charAvatar) : null;
+    if (lastPersona) {
+      img.src = "/User Avatars/" + encodeURIComponent(lastPersona);
+      img.alt = lastPersona.replace(/\.[^/.]+$/, "");
+      btn.dataset.persona = lastPersona;
+      btn.dataset.charAvatar = charAvatar;
+      btn.title = "\uD398\uB974\uC18C\uB098 \uC804\uD658: " + img.alt;
+      btn.style.display = "flex";
+    } else {
+      btn.style.display = "none";
+    }
+  }
+  function hidePersonaQuickButton() {
+    const btn = document.getElementById("chat-lobby-persona-quick");
+    if (btn) btn.style.display = "none";
+  }
+
+  // src/ui/chatList/chatMenu.js
+  init_textUtils();
+  init_notifications();
 
   // src/data/remindStore.js
   var STORAGE_KEY4 = "chatLobby_reminds";
@@ -4979,157 +5361,364 @@ ${message}` : message;
     showToast("\u{1F4BE} \uD14D\uC2A4\uD2B8 \uD30C\uC77C\uB85C \uBC31\uC5C5\uD588\uC2B5\uB2C8\uB2E4.", "success");
   }
 
-  // src/ui/chatList.js
-  var tooltipElement = null;
-  var tooltipTimeout = null;
-  var currentTooltipTarget = null;
-  var tooltipEventsInitialized = false;
-  var lastMouseX = 0;
-  var lastMouseY = 0;
-  function ensureTooltipElement() {
-    if (tooltipElement) return tooltipElement;
-    tooltipElement = document.createElement("div");
-    tooltipElement.id = "chat-preview-tooltip";
-    tooltipElement.className = "chat-preview-tooltip";
-    tooltipElement.style.cssText = `
+  // src/ui/chatList/chatMenu.js
+  var activeFolderMenu = null;
+  function showChatFolderMenu(targetBtn, charAvatar, fileName) {
+    if (activeFolderMenu) {
+      const prevBtn = activeFolderMenu._targetBtn;
+      closeChatFolderMenu();
+      if (prevBtn === targetBtn) return;
+    }
+    const data = storage.load();
+    const folders = (data.folders || []).filter((f) => f.id !== "favorites" && f.id !== "uncategorized");
+    const currentFolderId = storage.getChatFolder(charAvatar, fileName);
+    const menu = document.createElement("div");
+    menu.className = "chat-folder-menu";
+    menu.innerHTML = `
+        <div class="folder-menu-item view-chat-item">
+            \u{1F4D6} \uBDF0\uC5B4\uB85C \uAC10\uC0C1
+        </div>
+        <div class="folder-menu-item rename-chat-item">
+            \u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30
+        </div>
+        <div class="folder-menu-item remind-add-item">
+            \u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00
+        </div>
+        <div class="folder-menu-title">\uD3F4\uB354 \uC774\uB3D9</div>
+        <div class="folder-menu-item ${!currentFolderId || currentFolderId === "uncategorized" ? "active" : ""}" data-folder-id="">
+            \u{1F4E4} \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70
+        </div>
+        ${folders.map((f) => `
+            <div class="folder-menu-item ${f.id === currentFolderId ? "active" : ""}" data-folder-id="${f.id}">
+                \u{1F4C1} ${escapeHtml(f.name)}
+            </div>
+        `).join("")}
+    `;
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.cssText = `
         position: fixed;
-        display: none;
-        max-width: 400px;
-        max-height: 300px;
-        padding: 12px 16px;
-        background: rgba(20, 20, 30, 0.95);
-        border: 1px solid rgba(255,255,255,0.15);
+        top: ${rect.bottom + 4}px;
+        right: ${window.innerWidth - rect.right}px;
+        z-index: 60000;
+        background: var(--lobby-bg-card, #1a1a2e);
+        border: 1px solid var(--lobby-border, #333);
         border-radius: 10px;
-        color: #e0e0e0;
-        font-size: 13px;
-        line-height: 1.6;
-        z-index: 100000;
-        overflow-y: auto;
-        overflow-x: hidden;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-        pointer-events: none;
-        white-space: pre-wrap;
-        word-break: break-word;
-        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        min-width: 150px;
+        overflow: hidden;
     `;
-    const style = document.createElement("style");
-    style.textContent = `
-        .chat-preview-tooltip::-webkit-scrollbar {
-            width: 6px;
+    const lobbyContainer = document.getElementById("chat-lobby-container") || document.body;
+    lobbyContainer.appendChild(menu);
+    activeFolderMenu = menu;
+    activeFolderMenu._targetBtn = targetBtn;
+    menu.querySelector(".view-chat-item")?.addEventListener("click", async () => {
+      closeChatFolderMenu();
+      const context = api.getContext();
+      const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
+      await openChatInViewer(charAvatar, char?.name || "", fileName);
+    });
+    menu.querySelector(".rename-chat-item")?.addEventListener("click", async () => {
+      closeChatFolderMenu();
+      await renameChatPrompt(charAvatar, fileName);
+    });
+    menu.querySelector(".remind-add-item")?.addEventListener("click", async () => {
+      closeChatFolderMenu();
+      await addRemindPrompt(charAvatar, fileName);
+    });
+    menu.querySelectorAll(".folder-menu-item:not(.rename-chat-item):not(.remind-add-item):not(.view-chat-item)").forEach((item) => {
+      item.addEventListener("click", async () => {
+        const folderId = item.dataset.folderId;
+        if (folderId) {
+          storage.setChatFolder(charAvatar, fileName, folderId);
+          const folder = folders.find((f) => f.id === folderId);
+          showToast(`\u{1F4C1} ${folder?.name || "\uD3F4\uB354"}\uB85C \uC774\uB3D9`, "success");
+        } else {
+          storage.setChatFolder(charAvatar, fileName, null);
+          showToast("\uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
         }
-        .chat-preview-tooltip::-webkit-scrollbar-track {
-            background: rgba(255,255,255,0.05);
-            border-radius: 3px;
-        }
-        .chat-preview-tooltip::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.2);
-            border-radius: 3px;
-        }
-        .chat-preview-tooltip::-webkit-scrollbar-thumb:hover {
-            background: rgba(255,255,255,0.3);
-        }
-    `;
-    document.head.appendChild(style);
-    document.body.appendChild(tooltipElement);
-    return tooltipElement;
+        closeChatFolderMenu();
+        await refreshCurrentChatList();
+      });
+    });
+    setTimeout(() => {
+      listeners.add("chatFolderMenu", document, "click", closeFolderMenuOnClickOutside);
+    }, 10);
   }
-  function showTooltip(content) {
-    const tooltip = ensureTooltipElement();
-    tooltip.textContent = content;
-    tooltip.style.display = "block";
-    tooltip.style.left = `${lastMouseX + 15}px`;
-    tooltip.style.top = `${lastMouseY + 15}px`;
-  }
-  function hideTooltip() {
-    if (tooltipTimeout) {
-      clearTimeout(tooltipTimeout);
-      tooltipTimeout = null;
+  function closeFolderMenuOnClickOutside(e) {
+    if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
+      closeChatFolderMenu();
     }
-    if (tooltipElement) {
-      tooltipElement.style.display = "none";
-    }
-    currentTooltipTarget = null;
   }
-  function bindTooltipEvents(container) {
-    if (isMobile()) {
+  function closeChatFolderMenu() {
+    if (activeFolderMenu) {
+      activeFolderMenu.remove();
+      activeFolderMenu = null;
+    }
+    listeners.clear("chatFolderMenu");
+  }
+  async function addRemindPrompt(charAvatar, fileName) {
+    const cleanName = fileName.replace(/\.jsonl$/i, "");
+    const rangeInput = await showPrompt(
+      "\uC800\uC7A5\uD560 \uBA54\uC2DC\uC9C0 \uBC94\uC704\uB97C \uC785\uB825\uD558\uC138\uC694. (\uBA54\uC2DC\uC9C0 \uBC88\uD638 \uAE30\uC900)\n\uC608: 120-130 / 120 (\uD55C \uBA54\uC2DC\uC9C0) / \uBE44\uC6B0\uBA74 \uC804\uCCB4",
+      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00",
+      ""
+    );
+    if (rangeInput === null) return;
+    let start = null;
+    let end = null;
+    const trimmed = rangeInput.trim();
+    if (trimmed) {
+      const match = trimmed.match(/^(\d+)\s*[-~]\s*(\d+)$/) || trimmed.match(/^(\d+)$/);
+      if (!match) {
+        showToast("\uBC94\uC704 \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC608: 120-130", "error");
+        return;
+      }
+      start = parseInt(match[1], 10);
+      end = match[2] !== void 0 ? parseInt(match[2], 10) : start;
+      if (end < start) [start, end] = [end, start];
+    }
+    const note = await showPrompt(
+      "\uBA54\uBAA8\uB97C \uB0A8\uACA8\uC8FC\uC138\uC694. (\uC65C \uC88B\uC558\uB294\uC9C0, \uC5B4\uB5A4 \uC7A5\uBA74\uC778\uC9C0)",
+      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uBA54\uBAA8",
+      ""
+    );
+    if (note === null) return;
+    const context = api.getContext();
+    const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
+    remindStore.add({
+      avatar: charAvatar,
+      charName: char?.name || charAvatar.replace(/\.[^.]+$/, ""),
+      fileName: cleanName,
+      start,
+      end,
+      note: note.trim()
+    });
+    const rangeText = start !== null ? ` (#${start}~#${end})` : "";
+    showToast(`\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uC800\uC7A5\uB428${rangeText}
+\uBCF4\uAD00\uD568 \uD0ED\uC5D0\uC11C \uB2E4\uC2DC \uBCFC \uC218 \uC788\uC5B4\uC694.`, "success");
+  }
+  async function renameChatPrompt(charAvatar, fileName) {
+    const currentName = fileName.replace(/\.jsonl$/i, "");
+    const context = api.getContext();
+    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+    if (currentChatFile === currentName) {
+      showToast("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC740 \uC774\uB984\uC744 \uBC14\uAFC0 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.\n\uB2E4\uB978 \uCC44\uD305\uC73C\uB85C \uC774\uB3D9 \uD6C4 \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "warning");
       return;
     }
-    if (tooltipEventsInitialized) {
+    const input = await showPrompt("\uC0C8 \uCC44\uD305 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.", "\u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30", currentName);
+    if (input === null) return;
+    const newName = input.trim().replace(/\.jsonl$/i, "");
+    if (!newName || newName === currentName) return;
+    if (/[\\/:*?"<>|]/.test(newName)) {
+      showToast('\uD30C\uC77C\uBA85\uC5D0 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uB294 \uBB38\uC790\uAC00 \uC788\uC2B5\uB2C8\uB2E4: \\ / : * ? " < > |', "error");
       return;
     }
-    const lobbyContainer = document.getElementById("chat-lobby-container");
-    if (!lobbyContainer) return;
-    listeners.add("tooltip", lobbyContainer, "mouseover", handleTooltipMouseOver);
-    listeners.add("tooltip", lobbyContainer, "mouseout", handleTooltipMouseOut);
-    listeners.add("tooltip", lobbyContainer, "mousemove", handleTooltipMouseMove);
-    listeners.add("tooltip", lobbyContainer, "wheel", handleTooltipWheel, { passive: false });
-    tooltipEventsInitialized = true;
-  }
-  function handleTooltipMouseOver(e) {
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-    const item = e.target.closest(".lobby-chat-item");
-    if (!item) return;
-    if (currentTooltipTarget === item) return;
-    let fullPreview = "";
-    if (item.dataset.fullPreviewEncoded) {
-      try {
-        fullPreview = decodeURIComponent(escape(atob(item.dataset.fullPreviewEncoded)));
-      } catch (e2) {
-        fullPreview = "";
+    const chats = cache.get("chats", charAvatar);
+    if (Array.isArray(chats) && chats.some((c) => (c.file_name || "").replace(/\.jsonl$/i, "") === newName)) {
+      showToast("\uAC19\uC740 \uC774\uB984\uC758 \uCC44\uD305\uC774 \uC774\uBBF8 \uC788\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    const token = operationLock.acquire("renameChat", 1e4);
+    if (!token) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    try {
+      const appliedName = await api.renameChat(charAvatar, currentName, newName);
+      if (appliedName) {
+        storage.renameChatKey(charAvatar, currentName, appliedName);
+        remindStore.renameChat(charAvatar, currentName, appliedName);
+        highlightStore.renameChat(charAvatar, currentName, appliedName);
+        const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
+        if (char && char.chat === currentName) {
+          char.chat = appliedName;
+          api.saveLastChatPointer(char.avatar, char.name, appliedName);
+        }
+        showToast(`\uC774\uB984 \uBCC0\uACBD: "${appliedName}"`, "success");
+        await refreshCurrentChatList(true);
+      } else {
+        showToast("\uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
       }
-    } else if (item.dataset.fullPreview) {
-      fullPreview = item.dataset.fullPreview;
+    } catch (e) {
+      console.error("[ChatList] Rename failed:", e);
+      showToast("\uC774\uB984 \uBCC0\uACBD \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release(token);
     }
-    if (!fullPreview) return;
-    hideTooltip();
-    currentTooltipTarget = item;
-    tooltipTimeout = setTimeout(() => {
-      if (currentTooltipTarget === item && fullPreview) {
-        showTooltip(fullPreview);
+  }
+
+  // src/ui/chatList/batch.js
+  init_notifications();
+  function toggleBatchMode() {
+    const isActive = store.toggleBatchMode();
+    const chatsList = document.getElementById("chat-lobby-chats-list");
+    const toolbar = document.getElementById("chat-lobby-batch-toolbar");
+    const batchBtn = document.getElementById("chat-lobby-batch-mode");
+    if (isActive) {
+      chatsList?.classList.add("batch-mode");
+      toolbar?.classList.add("visible");
+      batchBtn?.classList.add("active");
+      chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => cb.style.display = "block");
+    } else {
+      chatsList?.classList.remove("batch-mode");
+      toolbar?.classList.remove("visible");
+      batchBtn?.classList.remove("active");
+      chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => {
+        cb.style.display = "none";
+        cb.querySelector("input").checked = false;
+      });
+    }
+    updateBatchCount();
+  }
+  function updateBatchCount() {
+    const count = document.querySelectorAll(".chat-select-cb:checked").length;
+    const countSpan = document.getElementById("batch-selected-count");
+    if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
+  }
+  function batchSelectAll() {
+    const checkboxes = document.querySelectorAll(".chat-select-cb");
+    const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
+    checkboxes.forEach((cb) => {
+      cb.checked = !allChecked;
+    });
+    updateBatchCount();
+  }
+  async function executeBatchMove(targetFolder) {
+    if (!targetFolder) {
+      await showAlert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    const checked = document.querySelectorAll(".chat-select-cb:checked");
+    const keys = [];
+    checked.forEach((cb, idx) => {
+      const item = cb.closest(".lobby-chat-item");
+      if (item) {
+        const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
+        keys.push(key);
       }
-    }, 300);
+    });
+    if (keys.length === 0) {
+      await showAlert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    storage.moveChatsBatch(keys, targetFolder);
+    toggleBatchMode();
+    showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+    const filterSelect = document.getElementById("chat-lobby-folder-filter");
+    if (filterSelect) {
+      const currentValue = filterSelect.value;
+      filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
+    }
+    await refreshCurrentChatList();
   }
-  function handleTooltipMouseOut(e) {
-    const item = e.target.closest(".lobby-chat-item");
-    if (!item) return;
-    const relatedItem = e.relatedTarget?.closest(".lobby-chat-item");
-    if (relatedItem === item) return;
-    if (currentTooltipTarget === item) {
-      hideTooltip();
+  async function executeBatchDelete() {
+    const checked = document.querySelectorAll(".chat-select-cb:checked");
+    if (checked.length === 0) {
+      await showAlert("\uC0AD\uC81C\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    const context = api.getContext();
+    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+    const chatItems = [];
+    checked.forEach((cb) => {
+      const item = cb.closest(".lobby-chat-item");
+      if (item) {
+        chatItems.push({
+          fileName: item.dataset.fileName,
+          charAvatar: item.dataset.charAvatar,
+          element: item
+        });
+      }
+    });
+    const hasCurrentChat = chatItems.some((c) => {
+      const nameWithoutExt = c.fileName.replace(".jsonl", "");
+      return currentChatFile === nameWithoutExt;
+    });
+    if (hasCurrentChat) {
+      await showAlert("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC774 \uC120\uD0DD\uC5D0 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.\n\uD604\uC7AC \uCC44\uD305\uC740 \uC0AD\uC81C\uD560 \uC218 \uC5C6\uC73C\uB2C8 \uC120\uD0DD\uC744 \uD574\uC81C\uD558\uC138\uC694.");
+      return;
+    }
+    const confirmed = await showConfirm(
+      `\uC120\uD0DD\uD55C ${chatItems.length}\uAC1C \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+      "\uBC30\uCE58 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    const token = operationLock.acquire("batchDelete", Math.min(12e4, 1e4 + chatItems.length * 1500));
+    if (!token) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    let successCount = 0;
+    let failCount = 0;
+    const deletedOk = [];
+    try {
+      for (const chat of chatItems) {
+        try {
+          const success = await api.deleteChat(chat.fileName, chat.charAvatar);
+          if (success) {
+            successCount++;
+            deletedOk.push(chat);
+            const data = storage.load();
+            const key = storage.getChatKey(chat.charAvatar, chat.fileName);
+            delete data.chatAssignments[key];
+            const favIndex = data.favorites.indexOf(key);
+            if (favIndex > -1) {
+              data.favorites.splice(favIndex, 1);
+            }
+            storage.save(data);
+          } else {
+            failCount++;
+          }
+        } catch (e) {
+          console.error("[BatchDelete] Failed to delete:", chat.fileName, e);
+          failCount++;
+        }
+      }
+      const avatarSet = new Set(chatItems.map((c) => c.charAvatar));
+      avatarSet.forEach((avatar) => cache.invalidate("chats", avatar));
+      for (const avatar of avatarSet) {
+        const names = deletedOk.filter((c) => c.charAvatar === avatar).map((c) => c.fileName);
+        if (names.length === 0) continue;
+        await api.repointLastChatAfterDelete(avatar, names);
+      }
+      toggleBatchMode();
+      if (failCount === 0) {
+        showToast(`${successCount}\uAC1C \uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+      } else {
+        showToast(`${successCount}\uAC1C \uC0AD\uC81C \uC644\uB8CC, ${failCount}\uAC1C \uC2E4\uD328`, "warning");
+      }
+      await refreshCurrentChatList(true);
+    } catch (error) {
+      console.error("[BatchDelete] Error:", error);
+      showToast("\uBC30\uCE58 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release(token);
     }
   }
-  function handleTooltipWheel(e) {
-    if (!tooltipElement || tooltipElement.style.display !== "block") return;
-    const hasScroll = tooltipElement.scrollHeight > tooltipElement.clientHeight;
-    if (!hasScroll) return;
-    const item = e.target.closest(".lobby-chat-item");
-    if (item && currentTooltipTarget === item) {
-      e.preventDefault();
-      e.stopPropagation();
-      tooltipElement.scrollTop += e.deltaY;
-    }
+  function isBatchMode() {
+    return store.batchModeActive;
   }
-  function handleTooltipMouseMove(e) {
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-    const item = e.target.closest(".lobby-chat-item");
-    if (!item) return;
-    if (tooltipElement && tooltipElement.style.display === "block" && currentTooltipTarget === item) {
-      tooltipElement.style.left = `${e.clientX + 15}px`;
-      tooltipElement.style.top = `${e.clientY + 15}px`;
-    }
+  function deactivateBatchMode() {
+    if (!store.batchModeActive) return;
+    store.setBatchMode(false);
+    const chatsList = document.getElementById("chat-lobby-chats-list");
+    const toolbar = document.getElementById("chat-lobby-batch-toolbar");
+    const batchBtn = document.getElementById("chat-lobby-batch-mode");
+    chatsList?.classList.remove("batch-mode");
+    toolbar?.classList.remove("visible");
+    batchBtn?.classList.remove("active");
+    chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => {
+      cb.style.display = "none";
+      const input = cb.querySelector("input");
+      if (input) input.checked = false;
+    });
+    updateBatchCount();
   }
-  function cleanupTooltip() {
-    hideTooltip();
-    listeners.clear("tooltip");
-    tooltipEventsInitialized = false;
-    if (tooltipElement && tooltipElement.parentNode) {
-      tooltipElement.parentNode.removeChild(tooltipElement);
-    }
-    tooltipElement = null;
-    currentTooltipTarget = null;
-  }
+
+  // src/ui/chatList/charChatList.js
   function setChatHandlers(handlers) {
     store.setChatHandlers(handlers);
   }
@@ -5341,185 +5930,6 @@ ${message}` : message;
       }
     }
   }
-  function normalizeChats(chats) {
-    if (Array.isArray(chats)) return [...chats];
-    if (typeof chats === "object") {
-      return Object.entries(chats).map(([key, value]) => {
-        if (typeof value === "object") {
-          return { ...value, file_name: value.file_name || key };
-        }
-        return { file_name: key, ...value };
-      });
-    }
-    return [];
-  }
-  function filterValidChats(chats) {
-    return chats.filter((chat) => {
-      const fileName = chat?.file_name || chat?.fileName || "";
-      const hasJsonl = fileName.includes(".jsonl");
-      return fileName && hasJsonl && !fileName.startsWith("chat_") && fileName.toLowerCase() !== "error";
-    });
-  }
-  function filterByFolder(chats, charAvatar, filterFolder) {
-    const data = storage.load();
-    const result = chats.filter((chat) => {
-      const fn = chat.file_name || chat.fileName || "";
-      const key = storage.getChatKey(charAvatar, fn);
-      if (filterFolder === "favorites") {
-        return data.favorites.includes(key);
-      }
-      const assigned = data.chatAssignments[key] || "uncategorized";
-      return assigned === filterFolder;
-    });
-    return result;
-  }
-  function sortChats(chats, charAvatar, sortOption) {
-    const data = storage.load();
-    if (sortOption === "branch") {
-      return sortByBranchTreeCached(chats, charAvatar, data);
-    }
-    return [...chats].sort((a, b) => {
-      const fnA = a.file_name || "";
-      const fnB = b.file_name || "";
-      const keyA = storage.getChatKey(charAvatar, fnA);
-      const keyB = storage.getChatKey(charAvatar, fnB);
-      const favA = data.favorites.includes(keyA) ? 0 : 1;
-      const favB = data.favorites.includes(keyB) ? 0 : 1;
-      if (favA !== favB) return favA - favB;
-      if (sortOption === "name") {
-        return fnA.localeCompare(fnB, "ko");
-      }
-      if (sortOption === "messages") {
-        const msgA = a.message_count || a.mes_count || a.chat_items || 0;
-        const msgB = b.message_count || b.mes_count || b.chat_items || 0;
-        return msgB - msgA;
-      }
-      return getTimestamp(b) - getTimestamp(a);
-    });
-  }
-  function sortByBranchTreeCached(chats, charAvatar, data) {
-    const branches = getAllBranches(charAvatar);
-    const chatsWithBranch = chats.map((chat) => {
-      const fileName = chat.file_name || "";
-      const branchInfo = branches[fileName];
-      if (branchInfo) {
-        return {
-          ...chat,
-          _branchInfo: {
-            parentChat: branchInfo.parentChat,
-            branchPoint: branchInfo.branchPoint,
-            depth: branchInfo.depth || 1,
-            isOriginal: false
-          }
-        };
-      } else {
-        return {
-          ...chat,
-          _branchInfo: {
-            parentChat: null,
-            branchPoint: 0,
-            depth: 0,
-            isOriginal: true
-          }
-        };
-      }
-    });
-    const originals = chatsWithBranch.filter((c) => c._branchInfo.isOriginal);
-    const branchList = chatsWithBranch.filter((c) => !c._branchInfo.isOriginal);
-    originals.sort((a, b) => {
-      const fnA = a.file_name || "";
-      const fnB = b.file_name || "";
-      const keyA = storage.getChatKey(charAvatar, fnA);
-      const keyB = storage.getChatKey(charAvatar, fnB);
-      const favA = data.favorites.includes(keyA) ? 0 : 1;
-      const favB = data.favorites.includes(keyB) ? 0 : 1;
-      if (favA !== favB) return favA - favB;
-      return getTimestamp(b) - getTimestamp(a);
-    });
-    branchList.sort((a, b) => {
-      const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
-      if (depthDiff !== 0) return depthDiff;
-      return getTimestamp(b) - getTimestamp(a);
-    });
-    const result = [];
-    const usedBranches = /* @__PURE__ */ new Set();
-    function addChildBranches(parentFileName) {
-      const children = branchList.filter(
-        (b) => b._branchInfo.parentChat === parentFileName && !usedBranches.has(b.file_name)
-      );
-      children.sort((a, b) => {
-        const depthDiff = a._branchInfo.depth - b._branchInfo.depth;
-        if (depthDiff !== 0) return depthDiff;
-        return getTimestamp(b) - getTimestamp(a);
-      });
-      for (const child of children) {
-        result.push(child);
-        usedBranches.add(child.file_name);
-        addChildBranches(child.file_name);
-      }
-    }
-    for (const original of originals) {
-      result.push(original);
-      addChildBranches(original.file_name);
-    }
-    for (const branch of branchList) {
-      if (!usedBranches.has(branch.file_name)) {
-        result.push(branch);
-        usedBranches.add(branch.file_name);
-        addChildBranches(branch.file_name);
-      }
-    }
-    return result;
-  }
-  function renderChatItem(chat, charAvatar, index) {
-    const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
-    const displayName = fileName.replace(".jsonl", "");
-    const preview = chat.preview || chat.mes || chat.last_message || "\uCC44\uD305 \uAE30\uB85D";
-    const messageCount2 = chat.chat_items || chat.message_count || chat.mes_count || 0;
-    const isFav = storage.isFavorite(charAvatar, fileName);
-    const folderId = storage.getChatFolder(charAvatar, fileName);
-    const data = storage.load();
-    const folder = data.folders.find((f) => f.id === folderId);
-    const folderName = folder?.name || "";
-    const tooltipPreview = preview;
-    const safeAvatar = escapeHtml(charAvatar || "");
-    const safeFileName = escapeHtml(fileName || "");
-    const safeFullPreview = tooltipPreview ? btoa(unescape(encodeURIComponent(tooltipPreview))) : "";
-    const branchInfo = chat._branchInfo;
-    const branchDepth = branchInfo?.depth || 0;
-    const isBranch = branchInfo && !branchInfo.isOriginal;
-    const branchPoint = branchInfo?.branchPoint || 0;
-    const depthIndent = isBranch ? Math.min(branchDepth, 5) * 16 : 0;
-    const indentStyle = isBranch ? `margin-left: ${depthIndent}px;` : "";
-    const branchClass = branchInfo ? "branch-mode" : "";
-    const branchBadge = isBranch ? `<span class="branch-badge" title="\uBD84\uAE30\uC810: ${branchPoint}\uBC88\uC9F8 \uBA54\uC2DC\uC9C0">\u21B3 \uBD84\uAE30${branchPoint > 0 ? ` @${branchPoint}` : ""}</span>` : "";
-    return `
-    <div class="lobby-chat-item ${isFav ? "is-favorite" : ""} ${branchClass} ${isBranch ? "is-branch" : ""}" 
-         data-file-name="${safeFileName}" 
-         data-char-avatar="${safeAvatar}" 
-         data-chat-index="${index}" 
-         data-folder-id="${folderId}"
-         data-branch-depth="${branchDepth}"
-         data-branch-point="${branchPoint}"
-         data-full-preview-encoded="${safeFullPreview}"
-         style="${indentStyle}">
-        <label class="chat-checkbox" style="display:none;"><input type="checkbox" class="chat-select-cb"></label>
-        <button class="chat-fav-btn" title="\uC990\uACA8\uCC3E\uAE30">${isFav ? "\u2605" : "\u2606"}</button>
-        <div class="chat-content">
-            <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
-            <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
-            <div class="chat-meta">
-                ${messageCount2 > 0 ? `<span>\u{1F4AC} ${messageCount2}\uAC1C</span>` : ""}
-                ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
-            </div>
-        </div>
-        <div class="chat-actions">
-            <button class="chat-folder-btn" title="\uD3F4\uB354 \uC774\uB3D9">\u22EE</button>
-            <button class="chat-delete-btn" title="\uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F</button>
-        </div>
-    </div>
-    `;
-  }
   function bindChatEvents(container, charAvatar) {
     const items = container.querySelectorAll(".lobby-chat-item");
     console.debug("[ChatList] bindChatEvents: items count =", items.length, "charAvatar =", charAvatar);
@@ -5588,264 +5998,9 @@ ${message}` : message;
       }, { debugName: `del-${index}` });
     });
   }
-  function updateChatHeader(character) {
-    const avatarImg = document.getElementById("chat-panel-avatar");
-    const nameEl = document.getElementById("chat-panel-name");
-    const deleteBtn = document.getElementById("chat-lobby-delete-char");
-    const newChatBtn = document.getElementById("chat-lobby-new-chat");
-    if (avatarImg) {
-      avatarImg.style.display = "block";
-      avatarImg.src = character.avatarSrc;
-    }
-    if (nameEl) nameEl.textContent = character.name;
-    if (deleteBtn) {
-      deleteBtn.style.display = "block";
-      deleteBtn.dataset.charAvatar = character.avatar;
-      deleteBtn.dataset.charName = character.name;
-    }
-    if (newChatBtn) {
-      newChatBtn.style.display = "block";
-      newChatBtn.dataset.charIndex = character.index;
-      newChatBtn.dataset.charAvatar = character.avatar;
-      newChatBtn.dataset.isGroup = "false";
-      delete newChatBtn.dataset.groupId;
-      delete newChatBtn.dataset.groupName;
-    }
-    document.getElementById("chat-panel-count").textContent = "\uCC44\uD305 \uB85C\uB529 \uC911...";
-    renderCharacterTags(character.avatar);
-  }
-  function getCharacterTags(charAvatar) {
-    const context = api.getContext();
-    if (!context?.tagMap || !context?.tags || !charAvatar) {
-      return [];
-    }
-    const tagIds = context.tagMap[charAvatar] || [];
-    return tagIds.map((tagId) => {
-      const tag = context.tags.find((t) => t.id === tagId);
-      return tag?.name || null;
-    }).filter(Boolean);
-  }
-  function renderCharacterTags(charAvatar) {
-    const filtersSection = document.getElementById("chat-lobby-filters");
-    const container = document.getElementById("chat-lobby-char-tags");
-    if (!container || !filtersSection) return;
-    const tags = getCharacterTags(charAvatar);
-    filtersSection.style.display = "block";
-    if (tags.length === 0) {
-      container.style.display = "none";
-      container.innerHTML = "";
-    } else {
-      container.style.display = "flex";
-      container.innerHTML = tags.map(
-        (tag) => `<span class="lobby-char-tag">#${escapeHtml(tag)}</span>`
-      ).join("");
-    }
-  }
-  function updateChatCount(count) {
-    const el = document.getElementById("chat-panel-count");
-    if (el) el.textContent = count > 0 ? `${count}\uAC1C \uCC44\uD305` : "\uCC44\uD305 \uC5C6\uC74C";
-  }
-  function updateHasChats(totalCount) {
-    const newChatBtn = document.getElementById("chat-lobby-new-chat");
-    if (newChatBtn) newChatBtn.dataset.hasChats = totalCount > 0 ? "true" : "false";
-  }
-  function showFolderBar(visible) {
-    const filtersSection = document.getElementById("chat-lobby-filters");
-    if (filtersSection) filtersSection.style.display = visible ? "block" : "none";
-  }
-  function syncDropdowns(filterValue, sortValue) {
-    const filterSelect = document.getElementById("chat-lobby-folder-filter");
-    const sortSelect = document.getElementById("chat-lobby-chat-sort");
-    if (filterSelect) filterSelect.value = filterValue;
-    if (sortSelect) sortSelect.value = sortValue;
-  }
   function handleFilterChange(filterValue) {
     storage.setFilterFolder(filterValue);
     refreshCurrentChatList();
-  }
-  var activeFolderMenu = null;
-  function showChatFolderMenu(targetBtn, charAvatar, fileName) {
-    if (activeFolderMenu) {
-      const prevBtn = activeFolderMenu._targetBtn;
-      closeChatFolderMenu();
-      if (prevBtn === targetBtn) return;
-    }
-    const data = storage.load();
-    const folders = (data.folders || []).filter((f) => f.id !== "favorites" && f.id !== "uncategorized");
-    const currentFolderId = storage.getChatFolder(charAvatar, fileName);
-    const menu = document.createElement("div");
-    menu.className = "chat-folder-menu";
-    menu.innerHTML = `
-        <div class="folder-menu-item view-chat-item">
-            \u{1F4D6} \uBDF0\uC5B4\uB85C \uAC10\uC0C1
-        </div>
-        <div class="folder-menu-item rename-chat-item">
-            \u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30
-        </div>
-        <div class="folder-menu-item remind-add-item">
-            \u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00
-        </div>
-        <div class="folder-menu-title">\uD3F4\uB354 \uC774\uB3D9</div>
-        <div class="folder-menu-item ${!currentFolderId || currentFolderId === "uncategorized" ? "active" : ""}" data-folder-id="">
-            \u{1F4E4} \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70
-        </div>
-        ${folders.map((f) => `
-            <div class="folder-menu-item ${f.id === currentFolderId ? "active" : ""}" data-folder-id="${f.id}">
-                \u{1F4C1} ${escapeHtml(f.name)}
-            </div>
-        `).join("")}
-    `;
-    const rect = targetBtn.getBoundingClientRect();
-    menu.style.cssText = `
-        position: fixed;
-        top: ${rect.bottom + 4}px;
-        right: ${window.innerWidth - rect.right}px;
-        z-index: 60000;
-        background: var(--lobby-bg-card, #1a1a2e);
-        border: 1px solid var(--lobby-border, #333);
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        min-width: 150px;
-        overflow: hidden;
-    `;
-    const lobbyContainer = document.getElementById("chat-lobby-container") || document.body;
-    lobbyContainer.appendChild(menu);
-    activeFolderMenu = menu;
-    activeFolderMenu._targetBtn = targetBtn;
-    menu.querySelector(".view-chat-item")?.addEventListener("click", async () => {
-      closeChatFolderMenu();
-      const context = api.getContext();
-      const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
-      await openChatInViewer(charAvatar, char?.name || "", fileName);
-    });
-    menu.querySelector(".rename-chat-item")?.addEventListener("click", async () => {
-      closeChatFolderMenu();
-      await renameChatPrompt(charAvatar, fileName);
-    });
-    menu.querySelector(".remind-add-item")?.addEventListener("click", async () => {
-      closeChatFolderMenu();
-      await addRemindPrompt(charAvatar, fileName);
-    });
-    menu.querySelectorAll(".folder-menu-item:not(.rename-chat-item):not(.remind-add-item):not(.view-chat-item)").forEach((item) => {
-      item.addEventListener("click", async () => {
-        const folderId = item.dataset.folderId;
-        if (folderId) {
-          storage.setChatFolder(charAvatar, fileName, folderId);
-          const folder = folders.find((f) => f.id === folderId);
-          showToast(`\u{1F4C1} ${folder?.name || "\uD3F4\uB354"}\uB85C \uC774\uB3D9`, "success");
-        } else {
-          storage.setChatFolder(charAvatar, fileName, null);
-          showToast("\uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
-        }
-        closeChatFolderMenu();
-        await refreshCurrentChatList();
-      });
-    });
-    setTimeout(() => {
-      listeners.add("chatFolderMenu", document, "click", closeFolderMenuOnClickOutside);
-    }, 10);
-  }
-  function closeFolderMenuOnClickOutside(e) {
-    if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
-      closeChatFolderMenu();
-    }
-  }
-  function closeChatFolderMenu() {
-    if (activeFolderMenu) {
-      activeFolderMenu.remove();
-      activeFolderMenu = null;
-    }
-    listeners.clear("chatFolderMenu");
-  }
-  async function addRemindPrompt(charAvatar, fileName) {
-    const cleanName = fileName.replace(/\.jsonl$/i, "");
-    const rangeInput = await showPrompt(
-      "\uC800\uC7A5\uD560 \uBA54\uC2DC\uC9C0 \uBC94\uC704\uB97C \uC785\uB825\uD558\uC138\uC694. (\uBA54\uC2DC\uC9C0 \uBC88\uD638 \uAE30\uC900)\n\uC608: 120-130 / 120 (\uD55C \uBA54\uC2DC\uC9C0) / \uBE44\uC6B0\uBA74 \uC804\uCCB4",
-      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00",
-      ""
-    );
-    if (rangeInput === null) return;
-    let start = null;
-    let end = null;
-    const trimmed = rangeInput.trim();
-    if (trimmed) {
-      const match = trimmed.match(/^(\d+)\s*[-~]\s*(\d+)$/) || trimmed.match(/^(\d+)$/);
-      if (!match) {
-        showToast("\uBC94\uC704 \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC608: 120-130", "error");
-        return;
-      }
-      start = parseInt(match[1], 10);
-      end = match[2] !== void 0 ? parseInt(match[2], 10) : start;
-      if (end < start) [start, end] = [end, start];
-    }
-    const note = await showPrompt(
-      "\uBA54\uBAA8\uB97C \uB0A8\uACA8\uC8FC\uC138\uC694. (\uC65C \uC88B\uC558\uB294\uC9C0, \uC5B4\uB5A4 \uC7A5\uBA74\uC778\uC9C0)",
-      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uBA54\uBAA8",
-      ""
-    );
-    if (note === null) return;
-    const context = api.getContext();
-    const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
-    remindStore.add({
-      avatar: charAvatar,
-      charName: char?.name || charAvatar.replace(/\.[^.]+$/, ""),
-      fileName: cleanName,
-      start,
-      end,
-      note: note.trim()
-    });
-    const rangeText = start !== null ? ` (#${start}~#${end})` : "";
-    showToast(`\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uC800\uC7A5\uB428${rangeText}
-\uBCF4\uAD00\uD568 \uD0ED\uC5D0\uC11C \uB2E4\uC2DC \uBCFC \uC218 \uC788\uC5B4\uC694.`, "success");
-  }
-  async function renameChatPrompt(charAvatar, fileName) {
-    const currentName = fileName.replace(/\.jsonl$/i, "");
-    const context = api.getContext();
-    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
-    if (currentChatFile === currentName) {
-      showToast("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC740 \uC774\uB984\uC744 \uBC14\uAFC0 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.\n\uB2E4\uB978 \uCC44\uD305\uC73C\uB85C \uC774\uB3D9 \uD6C4 \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "warning");
-      return;
-    }
-    const input = await showPrompt("\uC0C8 \uCC44\uD305 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.", "\u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30", currentName);
-    if (input === null) return;
-    const newName = input.trim().replace(/\.jsonl$/i, "");
-    if (!newName || newName === currentName) return;
-    if (/[\\/:*?"<>|]/.test(newName)) {
-      showToast('\uD30C\uC77C\uBA85\uC5D0 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uB294 \uBB38\uC790\uAC00 \uC788\uC2B5\uB2C8\uB2E4: \\ / : * ? " < > |', "error");
-      return;
-    }
-    const chats = cache.get("chats", charAvatar);
-    if (Array.isArray(chats) && chats.some((c) => (c.file_name || "").replace(/\.jsonl$/i, "") === newName)) {
-      showToast("\uAC19\uC740 \uC774\uB984\uC758 \uCC44\uD305\uC774 \uC774\uBBF8 \uC788\uC2B5\uB2C8\uB2E4.", "error");
-      return;
-    }
-    const token = operationLock.acquire("renameChat", 1e4);
-    if (!token) {
-      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
-      return;
-    }
-    try {
-      const appliedName = await api.renameChat(charAvatar, currentName, newName);
-      if (appliedName) {
-        storage.renameChatKey(charAvatar, currentName, appliedName);
-        remindStore.renameChat(charAvatar, currentName, appliedName);
-        highlightStore.renameChat(charAvatar, currentName, appliedName);
-        const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
-        if (char && char.chat === currentName) {
-          char.chat = appliedName;
-          api.saveLastChatPointer(char.avatar, char.name, appliedName);
-        }
-        showToast(`\uC774\uB984 \uBCC0\uACBD: "${appliedName}"`, "success");
-        await refreshCurrentChatList(true);
-      } else {
-        showToast("\uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
-      }
-    } catch (e) {
-      console.error("[ChatList] Rename failed:", e);
-      showToast("\uC774\uB984 \uBCC0\uACBD \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
-    } finally {
-      operationLock.release(token);
-    }
   }
   function handleSortChange(sortValue) {
     storage.setSortOption(sortValue);
@@ -5886,158 +6041,6 @@ ${message}` : message;
       await renderChatList(character);
     }
   }
-  function toggleBatchMode() {
-    const isActive = store.toggleBatchMode();
-    const chatsList = document.getElementById("chat-lobby-chats-list");
-    const toolbar = document.getElementById("chat-lobby-batch-toolbar");
-    const batchBtn = document.getElementById("chat-lobby-batch-mode");
-    if (isActive) {
-      chatsList?.classList.add("batch-mode");
-      toolbar?.classList.add("visible");
-      batchBtn?.classList.add("active");
-      chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => cb.style.display = "block");
-    } else {
-      chatsList?.classList.remove("batch-mode");
-      toolbar?.classList.remove("visible");
-      batchBtn?.classList.remove("active");
-      chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => {
-        cb.style.display = "none";
-        cb.querySelector("input").checked = false;
-      });
-    }
-    updateBatchCount();
-  }
-  function updateBatchCount() {
-    const count = document.querySelectorAll(".chat-select-cb:checked").length;
-    const countSpan = document.getElementById("batch-selected-count");
-    if (countSpan) countSpan.textContent = `${count}\uAC1C \uC120\uD0DD`;
-  }
-  function batchSelectAll() {
-    const checkboxes = document.querySelectorAll(".chat-select-cb");
-    const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
-    checkboxes.forEach((cb) => {
-      cb.checked = !allChecked;
-    });
-    updateBatchCount();
-  }
-  async function executeBatchMove(targetFolder) {
-    if (!targetFolder) {
-      await showAlert("\uC774\uB3D9\uD560 \uD3F4\uB354\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
-      return;
-    }
-    const checked = document.querySelectorAll(".chat-select-cb:checked");
-    const keys = [];
-    checked.forEach((cb, idx) => {
-      const item = cb.closest(".lobby-chat-item");
-      if (item) {
-        const key = storage.getChatKey(item.dataset.charAvatar, item.dataset.fileName);
-        keys.push(key);
-      }
-    });
-    if (keys.length === 0) {
-      await showAlert("\uC774\uB3D9\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
-      return;
-    }
-    storage.moveChatsBatch(keys, targetFolder);
-    toggleBatchMode();
-    showToast(`${keys.length}\uAC1C \uCC44\uD305\uC774 \uC774\uB3D9\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
-    const filterSelect = document.getElementById("chat-lobby-folder-filter");
-    if (filterSelect) {
-      const currentValue = filterSelect.value;
-      filterSelect.innerHTML = getFoldersOptionsHTML(currentValue);
-    }
-    await refreshCurrentChatList();
-  }
-  async function executeBatchDelete() {
-    const checked = document.querySelectorAll(".chat-select-cb:checked");
-    if (checked.length === 0) {
-      await showAlert("\uC0AD\uC81C\uD560 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
-      return;
-    }
-    const context = api.getContext();
-    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
-    const chatItems = [];
-    checked.forEach((cb) => {
-      const item = cb.closest(".lobby-chat-item");
-      if (item) {
-        chatItems.push({
-          fileName: item.dataset.fileName,
-          charAvatar: item.dataset.charAvatar,
-          element: item
-        });
-      }
-    });
-    const hasCurrentChat = chatItems.some((c) => {
-      const nameWithoutExt = c.fileName.replace(".jsonl", "");
-      return currentChatFile === nameWithoutExt;
-    });
-    if (hasCurrentChat) {
-      await showAlert("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC774 \uC120\uD0DD\uC5D0 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.\n\uD604\uC7AC \uCC44\uD305\uC740 \uC0AD\uC81C\uD560 \uC218 \uC5C6\uC73C\uB2C8 \uC120\uD0DD\uC744 \uD574\uC81C\uD558\uC138\uC694.");
-      return;
-    }
-    const confirmed = await showConfirm(
-      `\uC120\uD0DD\uD55C ${chatItems.length}\uAC1C \uCC44\uD305\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
-
-\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
-      "\uBC30\uCE58 \uC0AD\uC81C",
-      true
-    );
-    if (!confirmed) return;
-    const token = operationLock.acquire("batchDelete", Math.min(12e4, 1e4 + chatItems.length * 1500));
-    if (!token) {
-      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
-      return;
-    }
-    let successCount = 0;
-    let failCount = 0;
-    const deletedOk = [];
-    try {
-      for (const chat of chatItems) {
-        try {
-          const success = await api.deleteChat(chat.fileName, chat.charAvatar);
-          if (success) {
-            successCount++;
-            deletedOk.push(chat);
-            const data = storage.load();
-            const key = storage.getChatKey(chat.charAvatar, chat.fileName);
-            delete data.chatAssignments[key];
-            const favIndex = data.favorites.indexOf(key);
-            if (favIndex > -1) {
-              data.favorites.splice(favIndex, 1);
-            }
-            storage.save(data);
-          } else {
-            failCount++;
-          }
-        } catch (e) {
-          console.error("[BatchDelete] Failed to delete:", chat.fileName, e);
-          failCount++;
-        }
-      }
-      const avatarSet = new Set(chatItems.map((c) => c.charAvatar));
-      avatarSet.forEach((avatar) => cache.invalidate("chats", avatar));
-      for (const avatar of avatarSet) {
-        const names = deletedOk.filter((c) => c.charAvatar === avatar).map((c) => c.fileName);
-        if (names.length === 0) continue;
-        await api.repointLastChatAfterDelete(avatar, names);
-      }
-      toggleBatchMode();
-      if (failCount === 0) {
-        showToast(`${successCount}\uAC1C \uCC44\uD305\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
-      } else {
-        showToast(`${successCount}\uAC1C \uC0AD\uC81C \uC644\uB8CC, ${failCount}\uAC1C \uC2E4\uD328`, "warning");
-      }
-      await refreshCurrentChatList(true);
-    } catch (error) {
-      console.error("[BatchDelete] Error:", error);
-      showToast("\uBC30\uCE58 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
-    } finally {
-      operationLock.release(token);
-    }
-  }
-  function isBatchMode() {
-    return store.batchModeActive;
-  }
   async function refreshChatList() {
     const character = store.currentCharacter;
     if (character) {
@@ -6056,22 +6059,10 @@ ${message}` : message;
     store.setCurrentCharacter(null);
     store.setCurrentGroup(null);
   }
-  function deactivateBatchMode() {
-    if (!store.batchModeActive) return;
-    store.setBatchMode(false);
-    const chatsList = document.getElementById("chat-lobby-chats-list");
-    const toolbar = document.getElementById("chat-lobby-batch-toolbar");
-    const batchBtn = document.getElementById("chat-lobby-batch-mode");
-    chatsList?.classList.remove("batch-mode");
-    toolbar?.classList.remove("visible");
-    batchBtn?.classList.remove("active");
-    chatsList?.querySelectorAll(".chat-checkbox").forEach((cb) => {
-      cb.style.display = "none";
-      const input = cb.querySelector("input");
-      if (input) input.checked = false;
-    });
-    updateBatchCount();
-  }
+
+  // src/ui/chatList/groupChatList.js
+  init_textUtils();
+  init_notifications();
   async function renderGroupChatList(group) {
     console.debug("[ChatList] renderGroupChatList called:", {
       groupId: group?.id,
@@ -6288,31 +6279,63 @@ ${message}` : message;
       }
     });
   }
-  function updatePersonaQuickButton(charAvatar) {
-    console.debug("[ChatList] updatePersonaQuickButton called:", charAvatar);
-    const btn = document.getElementById("chat-lobby-persona-quick");
-    const img = btn ? btn.querySelector(".persona-quick-avatar") : null;
-    console.debug("[ChatList] Button found:", !!btn, "Image found:", !!img);
-    if (!btn || !img) return;
-    const lastPersona = window._chatLobbyLastChatCache ? window._chatLobbyLastChatCache.getPersona(charAvatar) : null;
-    if (lastPersona) {
-      img.src = "/User Avatars/" + encodeURIComponent(lastPersona);
-      img.alt = lastPersona.replace(/\.[^/.]+$/, "");
-      btn.dataset.persona = lastPersona;
-      btn.dataset.charAvatar = charAvatar;
-      btn.title = "\uD398\uB974\uC18C\uB098 \uC804\uD658: " + img.alt;
-      btn.style.display = "flex";
-    } else {
-      btn.style.display = "none";
-    }
-  }
-  function hidePersonaQuickButton() {
-    const btn = document.getElementById("chat-lobby-persona-quick");
-    if (btn) btn.style.display = "none";
-  }
 
   // src/handlers/chatHandlers.js
   init_notifications();
+
+  // src/utils/waitFor.js
+  async function waitFor(conditionFn, timeout = 3e3, interval = 50) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      try {
+        if (conditionFn()) return true;
+      } catch (e) {
+      }
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    return false;
+  }
+  async function waitForElement(selector, timeout = 3e3) {
+    const found = await waitFor(() => document.querySelector(selector) !== null, timeout);
+    return found ? document.querySelector(selector) : null;
+  }
+  async function waitForCharacterSelect(expectedAvatar, timeout = 3e3) {
+    return waitFor(() => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context) return false;
+      const currentChar = context.characters?.[context.characterId];
+      return currentChar?.avatar === expectedAvatar;
+    }, timeout);
+  }
+  function waitForChatChanged(timeout = 5e3) {
+    return new Promise((resolve) => {
+      const context = window.SillyTavern?.getContext?.();
+      if (!context?.eventSource || !context?.eventTypes?.CHAT_CHANGED) {
+        setTimeout(() => resolve(false), 1e3);
+        return;
+      }
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+          console.warn("[waitForChatChanged] Timed out after", timeout, "ms");
+          resolve(false);
+        }
+      }, timeout);
+      const handler = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          context.eventSource.removeListener(context.eventTypes.CHAT_CHANGED, handler);
+          resolve(true);
+        }
+      };
+      context.eventSource.on(context.eventTypes.CHAT_CHANGED, handler);
+    });
+  }
+
+  // src/handlers/chatHandlers.js
   async function openChat(chatInfo) {
     const token = operationLock.acquire("openChat", 15e3);
     if (!token) return;
