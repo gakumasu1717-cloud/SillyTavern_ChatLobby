@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ChatLobby smoke</title>
+<link rel="stylesheet" href="/style.css">
+<style>body{margin:0;background:#222;color:#eee;font-family:sans-serif}</style>
+</head>
+<body>
+<div id="rm_print_characters_block"></div>
+<div id="options"></div>
+<script>
+// ---- 가짜 localforage (IndexedDB 대신 메모리) + 예전 형식 데이터 ----
+window.__idb=new Map();
+window.localforage={getItem:async k=>window.__idb.has(k)?structuredClone(window.__idb.get(k)):null,setItem:async(k,v)=>{window.__idb.set(k,structuredClone(v));return v;},removeItem:async k=>{window.__idb.delete(k);}};
+localStorage.clear();
+localStorage.setItem('chatLobby_reminds', JSON.stringify([{id:'r1',avatar:'char3.png',charName:'Char 3',fileName:'char3.png - chat1',start:0,end:5,note:'메모',createdAt:1}]));
+(function(){ const snaps={}; const counts={}; for(let i=0;i<120;i++) counts['char'+i+'.png']=50+i;
+  for(let d=1;d<=10;d++){ counts['char'+d+'.png']+=7; const date=new Date().getFullYear()+'-01-'+String(d).padStart(2,'0'); snaps[date]={total:Object.values(counts).reduce((a,b)=>a+b,0),topChar:'char'+d+'.png',byChar:{...counts},lastChatTimes:{}}; }
+  window.__v1size=JSON.stringify({version:1,snapshots:snaps}).length; window.__idb.set('chatLobby_calendar',{version:1,snapshots:snaps}); })();
+</script>
+<script>
+// ---- 가짜 ST eventemitter (autoFire 포함) ----
+function Emitter(autoFire){this.events={};this.auto=new Set(autoFire);this.last=new Map();}
+Emitter.prototype.on=function(e,l){(this.events[e]=this.events[e]||[]).push(l);if(this.auto.has(e)&&this.last.has(e))l.apply(this,this.last.get(e));};
+Emitter.prototype.removeListener=function(e,l){this.events[e]=(this.events[e]||[]).filter(x=>x!==l);};
+Emitter.prototype.off=Emitter.prototype.removeListener;
+Emitter.prototype.emit=async function(e,...a){for(const l of (this.events[e]||[]).slice()){try{await l.apply(this,a);}catch(err){console.error('listener error',err);}}if(this.auto.has(e))this.last.set(e,a);};
+
+const eventTypes={APP_INITIALIZED:'app_initialized',APP_READY:'app_ready',CHAT_CHANGED:'chat_id_changed',CHARACTER_DELETED:'characterDeleted',CHARACTER_EDITED:'character_edited',CHARACTER_ADDED:'character_added',MESSAGE_SENT:'message_sent',MESSAGE_RECEIVED:'message_received',SETTINGS_UPDATED:'settings_updated'};
+const eventSource=new Emitter([eventTypes.APP_INITIALIZED,eventTypes.APP_READY]);
+const characters=[];  // ST는 확장 로드 시점엔 아직 비어 있음
+window.__log=[];
+window.__chatsRequests=0;
+const state={chid:undefined, groupId:null, loads:[], cardSaves:0, attrSaves:[], files:new Set(), saved:[], groupSaves:[], groupInfo:0, groupGet:0};
+const groups=[{id:'g1', name:'Group One', members:['char1.png','char2.png'], chats:['g-old','g-target'], chat_id:'g-old', avatar_url:''}];
+window.__state=state;
+async function stLoadGroupChat(groupId){
+  const g=groups.find(x=>x.id===groupId);
+  state.loads.push('group:'+g.chat_id);
+  if(!state.files.has('group::'+g.chat_id)){
+    const r=await fetch('/api/chats/group/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:g.chat_id,chat:[{chat_metadata:{integrity:'gnew'}},{mes:'hi from member'}]})});
+    state.groupGreetingSave=r.status;
+  }
+  await eventSource.emit(eventTypes.CHAT_CHANGED, g.chat_id);
+}
+async function stGetChat(){ // ST getChat: unshallow(교체) 후 characters[chid].chat 로드
+  const c=characters[state.chid];
+  if(c.shallow){ characters[state.chid]={...c, shallow:false, chat:'LAST-HEAVY', data:{description:'d'}}; }
+  const cur=characters[state.chid];
+  state.loads.push(cur.chat);
+  if(!state.files.has(cur.avatar+'::'+cur.chat)){ // 없는 파일 → ST처럼 인사말 채팅 생성 후 저장
+    const r=await fetch('/api/chats/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ch_name:cur.name,file_name:cur.chat,avatar_url:cur.avatar,chat:[{chat_metadata:{integrity:'new-uuid'}},{mes:'Hello!',send_date:'now'}]})});
+    state.greetingSave=r.status;
+  }
+  await eventSource.emit(eventTypes.CHAT_CHANGED, cur.chat);
+}
+const base={
+  characters, groups, name1:'Minseo', eventSource, eventTypes,
+  getRequestHeaders:()=>({'Content-Type':'application/json'}),
+  unshallowCharacter: async (i)=>{ const c=characters[i]; if(!c.shallow) return; characters[i]={...c, shallow:false, chat:'LAST-HEAVY', data:{description:'{{char}} desc'}}; },
+  selectCharacterById: async (id)=>{ if(!state.groupId && String(state.chid)===String(id)) return; state.groupId=null; state.chid=Number(id); await stGetChat(); },
+  openGroupChat: async (groupId, chatId)=>{ const g=groups.find(x=>x.id===groupId); if(!g||!g.chats.includes(chatId)) return; g.chat_id=chatId; await stLoadGroupChat(groupId); },
+  openCharacterChat: async (file)=>{ characters[state.chid].chat=file; state.cardSaves++; await stGetChat(); },
+  getCharacters: async ()=>{},
+};
+window.SillyTavern={getContext:()=>({...base, characterId: state.chid, groupId: state.groupId, chatId: state.groupId ? groups.find(g=>g.id===state.groupId).chat_id : characters[state.chid]?.chat})};
+window.__st={state, characters, eventSource, eventTypes, log:window.__log, loadGroupChat: stLoadGroupChat, refuseNext:false};
+['g-old','g-target'].forEach(id=>state.files.add('group::'+id));
+window.toastr={warning:(m)=>__log.push('toast '+m),error:(m)=>__log.push('toast-error '+m),info:()=>{}};
+
+// ---- 가짜 서버 ----
+window.fetch=async(url,init)=>{
+  if(url==='/api/characters/chats'){ window.__chatsRequests++; const b=JSON.parse(init.body); return Response.json([{file_name:b.avatar_url+' - chat1.jsonl',chat_items:5,last_mes:Date.now()}]); }
+  if(url==='/api/chats/group/info'){ state.groupInfo++; const b=JSON.parse(init.body); return Response.json({file_name:b.id+'.jsonl', chat_items:3, mes:'last of '+b.id, last_mes:Date.now()}); }
+  if(url==='/api/chats/group/get'){ state.groupGet++; const b=JSON.parse(init.body); return Response.json(state.files.has('group::'+b.id)?[{chat_metadata:{integrity:'old'}},{mes:'a'},{mes:'b'}]:[]); }
+  if(url==='/api/chats/group/save'){ const b=JSON.parse(init.body); state.files.add('group::'+b.id); return Response.json({ok:true}); }
+  if(url==='/api/groups/edit'){ state.groupSaves.push(JSON.parse(init.body)); return Response.json({ok:true}); }
+  if(url==='/api/chats/get'){ const b=JSON.parse(init.body); if(b.avatar_url==='char5.png'){ return Response.json([{chat_metadata:{integrity:'long'}}, ...Array.from({length:300},(_,i)=>({name:i%2?'Char 5':'Minseo',is_user:i%2===0,mes:'message '+i,send_date:'2026-01-01'}))]); } return Response.json(state.files.has(b.avatar_url+'::'+b.file_name)?[{chat_metadata:{integrity:'old'}},{mes:'a'},{mes:'b'},{mes:'c'}]:[]); }
+  if(url==='/api/chats/save'){ const b=JSON.parse(init.body); state.saved.push(b.file_name); state.files.add(b.avatar_url+'::'+b.file_name); return Response.json({ok:true}); }
+  if(url==='/api/characters/edit-attribute'){ state.attrSaves.push(JSON.parse(init.body)); return new Response('OK'); }
+  if(String(url).startsWith('/api/')) return Response.json([]);
+  return new Response('',{status:404});
+};
+</script>
+<script src="/index.js"></script>
+<script>
+// ST 스플래시 흉내: 1.5초 뒤 캐릭터 로드 + APP_INITIALIZED
+setTimeout(async()=>{
+  window.__skeletonBeforeReady = document.querySelectorAll('.lobby-skeleton-card').length;
+  window.__overlayBeforeReady = document.getElementById('chat-lobby-overlay')?.style.display;
+  for(let i=0;i<120;i++) characters.push({name:'Char '+i,avatar:'char'+i+'.png',chat:'c',date_last_chat:Date.now()-i*1000,shallow:true});
+  await eventSource.emit(eventTypes.APP_INITIALIZED);
+  window.__emitReturned = performance.now();
+}, 1500);
+</script>
+</body>
+</html>

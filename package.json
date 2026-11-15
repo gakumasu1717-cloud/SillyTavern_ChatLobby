@@ -5,6 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser",
+    "test": "node tests/guard.test.mjs && node tests/storage.test.mjs",
+    "harness": "node tests/harness/serve.mjs",
     "build:watch": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser --watch",
     "build:min": "esbuild src/index.js --bundle --outfile=dist/index.js --format=iife --platform=browser --minify"
   },
