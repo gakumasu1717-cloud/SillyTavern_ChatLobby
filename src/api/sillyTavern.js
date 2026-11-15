@@ -6,6 +6,7 @@ import { cache } from '../data/cache.js';
 import { CONFIG } from '../config.js';
 import { sortPersonas } from '../utils/sortUtils.js';
 import { getTimestamp } from '../utils/dateUtils.js';
+import { charAvatarUrl } from '../utils/avatarUrl.js';
 
 /**
  * @typedef {Object} ApiResponse
@@ -757,7 +758,7 @@ class SillyTavernAPI {
         // 멤버 아바타 콜라주용 첫 번째 멤버
         if (Array.isArray(group.members) && group.members.length > 0) {
             const firstMember = group.members[0];
-            return `/characters/${encodeURIComponent(firstMember)}`;
+            return charAvatarUrl(firstMember);
         }
         
         return '/img/five.png';

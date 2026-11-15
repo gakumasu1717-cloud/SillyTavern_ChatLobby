@@ -5,6 +5,7 @@
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
 import { escapeHtml } from '../utils/textUtils.js';
+import { charAvatarUrl } from '../utils/avatarUrl.js';
 
 /** 표시할 최대 랭킹 수 */
 const MAX_RANKING = 20;
@@ -392,7 +393,7 @@ function showQuiz(container) {
             <h2>가장 많이 대화한 캐릭터는?</h2>
             <div class="quiz-options">
                 ${shuffled.map((char, i) => {
-                    const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : '/img/ai4.png';
+                    const avatarUrl = char.avatar ? charAvatarUrl(char.avatar) : '/img/ai4.png';
                     return `
                         <div class="quiz-option spin-animation" data-name="${escapeHtml(char.name)}" style="animation-delay: ${i * 0.2}s">
                             <img src="${avatarUrl}" alt="${escapeHtml(char.name)}" onerror="this.src='/img/ai4.png'">
@@ -416,7 +417,7 @@ function showQuiz(container) {
 function showQuizResult(container) {
     const correct = rankingsData[0];
     const isCorrect = userGuessChar === correct.name;
-    const avatarUrl = correct.avatar ? `/characters/${encodeURIComponent(correct.avatar)}` : '/img/ai4.png';
+    const avatarUrl = correct.avatar ? charAvatarUrl(correct.avatar) : '/img/ai4.png';
     
     // 정답이면 confetti!
     if (isCorrect) {
@@ -644,7 +645,7 @@ function showFinalStats(container) {
     
     const rankingHTML = rankingsData.slice(0, 10).map((r, i) => {
         const medal = i < 3 ? medals[i] : `${i + 1}위`;
-        const avatarUrl = r.avatar ? `/characters/${encodeURIComponent(r.avatar)}` : '/img/ai4.png';
+        const avatarUrl = r.avatar ? charAvatarUrl(r.avatar) : '/img/ai4.png';
         return `
             <div class="stats-rank-item ${i < 3 ? 'top-3' : ''}" style="animation-delay: ${i * 0.05}s">
                 <span class="rank-medal">${medal}</span>
@@ -703,7 +704,7 @@ function showFinalStats(container) {
     `;
     
     // 1위 캐릭터 섹션
-    const topCharAvatarUrl = top?.avatar ? `/characters/${encodeURIComponent(top.avatar)}` : '/img/ai4.png';
+    const topCharAvatarUrl = top?.avatar ? charAvatarUrl(top.avatar) : '/img/ai4.png';
     const topCharHTML = top ? `
         <div class="stats-section stats-top-char">
             <h4>🏆 ${escapeHtml(top.name)}와의 통계</h4>

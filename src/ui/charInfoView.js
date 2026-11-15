@@ -8,6 +8,7 @@
 
 import { api } from '../api/sillyTavern.js';
 import { escapeHtml } from '../utils/textUtils.js';
+import { charAvatarUrl } from '../utils/avatarUrl.js';
 
 const PANEL_ID = 'chat-lobby-charinfo-panel';
 let openToken = 0;
@@ -122,7 +123,7 @@ export async function openCharInfo(character) {
     const body = panel.querySelector('.charinfo-body');
     body.innerHTML = `
         <div class="charinfo-top">
-            <img class="charinfo-avatar" src="/characters/${encodeURIComponent(char.avatar)}" alt="" onerror="this.src='/img/ai4.png'">
+            <img class="charinfo-avatar" src="${charAvatarUrl(char.avatar)}" alt="" onerror="this.src='/img/ai4.png'">
             <div class="charinfo-meta">
                 ${meta ? `<div class="charinfo-meta-line">${meta}</div>` : ''}
                 ${tags.length ? `<div class="charinfo-tags">${tags.map(t => `<span class="charinfo-tag">${escapeHtml(String(t))}</span>`).join('')}</div>` : ''}

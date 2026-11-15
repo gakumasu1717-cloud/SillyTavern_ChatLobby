@@ -1213,6 +1213,39 @@ ${message}` : message;
     return 0;
   }
 
+  // src/utils/avatarUrl.js
+  var STORAGE_KEY = "chatLobby_avatarVersions";
+  var MAX_ENTRIES = 300;
+  var versions = /* @__PURE__ */ new Map();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) versions = new Map(Object.entries(JSON.parse(raw)));
+  } catch {
+  }
+  function persist() {
+    try {
+      while (versions.size > MAX_ENTRIES) {
+        versions.delete(versions.keys().next().value);
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(versions)));
+    } catch {
+    }
+  }
+  function charAvatarUrl(avatar) {
+    const base = `/characters/${encodeURIComponent(avatar || "")}`;
+    const v = versions.get(avatar);
+    return v ? `${base}?v=${v}` : base;
+  }
+  function bumpAvatarVersion(avatar) {
+    if (!avatar) return;
+    versions.delete(avatar);
+    versions.set(avatar, Date.now());
+    persist();
+  }
+  function forgetAvatarVersion(avatar) {
+    if (versions.delete(avatar)) persist();
+  }
+
   // src/api/sillyTavern.js
   var SillyTavernAPI = class {
     constructor() {
@@ -1838,7 +1871,7 @@ ${message}` : message;
       }
       if (Array.isArray(group.members) && group.members.length > 0) {
         const firstMember = group.members[0];
-        return `/characters/${encodeURIComponent(firstMember)}`;
+        return charAvatarUrl(firstMember);
       }
       return "/img/five.png";
     }
@@ -1876,7 +1909,7 @@ ${message}` : message;
   var api = new SillyTavernAPI();
 
   // src/data/lastChatCache.js
-  var STORAGE_KEY = "chatLobby_lastChatTimes";
+  var STORAGE_KEY2 = "chatLobby_lastChatTimes";
   var LastChatCache = class {
     constructor() {
       this.lastChatTimes = /* @__PURE__ */ new Map();
@@ -1890,7 +1923,7 @@ ${message}` : message;
      */
     _loadFromStorage() {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(STORAGE_KEY2);
         if (stored) {
           const data = JSON.parse(stored);
           if (data && typeof data === "object") {
@@ -1922,7 +1955,7 @@ ${message}` : message;
         this.lastChatTimes.forEach((value, avatar) => {
           data[avatar] = value;
         });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(STORAGE_KEY2, JSON.stringify(data));
         this._dirty = false;
       } catch (e) {
         console.warn("[LastChatCache] Failed to save to storage:", e);
@@ -2087,7 +2120,7 @@ ${message}` : message;
       this._dirty = false;
       if (this._saveTimer) clearTimeout(this._saveTimer);
       try {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY2);
       } catch (e) {
         console.warn("[LastChatCache] Failed to clear storage:", e);
       }
@@ -2461,13 +2494,13 @@ ${message}` : message;
   init_notifications();
 
   // src/data/branchCache.js
-  var STORAGE_KEY2 = "chatLobby_branchCache";
+  var STORAGE_KEY3 = "chatLobby_branchCache";
   var FINGERPRINT_MESSAGE_COUNT = 10;
   var cacheData = null;
   function loadCache() {
     if (cacheData) return cacheData;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY2);
+      const stored = localStorage.getItem(STORAGE_KEY3);
       if (stored) {
         cacheData = JSON.parse(stored);
       }
@@ -2481,7 +2514,7 @@ ${message}` : message;
   }
   function saveCache() {
     try {
-      localStorage.setItem(STORAGE_KEY2, JSON.stringify(cacheData));
+      localStorage.setItem(STORAGE_KEY3, JSON.stringify(cacheData));
     } catch (e) {
       console.warn("[BranchCache] Failed to save cache:", e);
     }
@@ -3066,7 +3099,7 @@ ${message}` : message;
   }
 
   // src/data/remindStore.js
-  var STORAGE_KEY3 = "chatLobby_reminds";
+  var STORAGE_KEY4 = "chatLobby_reminds";
   var PROGRESS_KEY = "chatLobby_remindProgress";
   var PROGRESS_MAX_ENTRIES = 150;
   var RemindStore = class {
@@ -3077,7 +3110,7 @@ ${message}` : message;
     _load() {
       if (this._data) return this._data;
       try {
-        const raw = localStorage.getItem(STORAGE_KEY3);
+        const raw = localStorage.getItem(STORAGE_KEY4);
         this._data = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(this._data)) this._data = [];
       } catch (e) {
@@ -3088,7 +3121,7 @@ ${message}` : message;
     }
     _save() {
       try {
-        localStorage.setItem(STORAGE_KEY3, JSON.stringify(this._data));
+        localStorage.setItem(STORAGE_KEY4, JSON.stringify(this._data));
       } catch (e) {
         console.warn("[RemindStore] Failed to save:", e);
       }
@@ -3219,7 +3252,7 @@ ${message}` : message;
   var remindStore = new RemindStore();
 
   // src/data/highlightStore.js
-  var STORAGE_KEY4 = "chatLobby_highlights";
+  var STORAGE_KEY5 = "chatLobby_highlights";
   var HighlightStore = class {
     constructor() {
       this._data = null;
@@ -3227,7 +3260,7 @@ ${message}` : message;
     _load() {
       if (this._data) return this._data;
       try {
-        const raw = localStorage.getItem(STORAGE_KEY4);
+        const raw = localStorage.getItem(STORAGE_KEY5);
         this._data = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(this._data)) this._data = [];
       } catch (e) {
@@ -3238,7 +3271,7 @@ ${message}` : message;
     }
     _save() {
       try {
-        localStorage.setItem(STORAGE_KEY4, JSON.stringify(this._data));
+        localStorage.setItem(STORAGE_KEY5, JSON.stringify(this._data));
       } catch (e) {
         console.warn("[HighlightStore] Failed to save:", e);
       }
@@ -3797,7 +3830,7 @@ ${message}` : message;
   init_notifications();
 
   // src/data/uiPrefs.js
-  var STORAGE_KEY5 = "chatLobby_uiPrefs";
+  var STORAGE_KEY6 = "chatLobby_uiPrefs";
   var DEFAULTS = {
     theme: null,
     // null = 레거시 키에서 마이그레이션
@@ -3828,7 +3861,7 @@ ${message}` : message;
       if (this._data) return this._data;
       let saved = {};
       try {
-        const raw = localStorage.getItem(STORAGE_KEY5);
+        const raw = localStorage.getItem(STORAGE_KEY6);
         if (raw) saved = JSON.parse(raw) || {};
       } catch (e) {
         console.warn("[UiPrefs] Failed to load:", e);
@@ -3843,7 +3876,7 @@ ${message}` : message;
     }
     _save() {
       try {
-        localStorage.setItem(STORAGE_KEY5, JSON.stringify(this._data));
+        localStorage.setItem(STORAGE_KEY6, JSON.stringify(this._data));
       } catch (e) {
         console.warn("[UiPrefs] Failed to save:", e);
       }
@@ -6679,7 +6712,7 @@ ${message}` : message;
           date: "\uBC29\uAE08",
           preview: "",
           messageCount: char.chat_size || 0,
-          thumbnailSrc: `/characters/${encodeURIComponent(char.avatar)}`,
+          thumbnailSrc: charAvatarUrl(char.avatar),
           type: "char",
           lastChatTime: Date.now()
         });
@@ -6899,7 +6932,7 @@ ${message}` : message;
           type: "char",
           isGroup: false,
           file: char.chat || "",
-          thumbnailSrc: `/characters/${encodeURIComponent(avatar)}`
+          thumbnailSrc: charAvatarUrl(avatar)
         });
       }
     });
@@ -7139,7 +7172,7 @@ ${message}` : message;
       return `
                 <div class="remind-item" data-remind-id="${escapeHtml(r.id)}">
                     <div class="remind-item-avatar">
-                        <img src="/characters/${encodeURIComponent(r.avatar)}" alt="" loading="lazy"
+                        <img src="${charAvatarUrl(r.avatar)}" alt="" loading="lazy"
                              onerror="this.parentElement.innerHTML='\u{1F516}'">
                     </div>
                     <div class="remind-item-info">
@@ -9207,7 +9240,7 @@ ${message}` : message;
   }
 
   // src/data/calendarStorage.js
-  var STORAGE_KEY6 = "chatLobby_calendar";
+  var STORAGE_KEY7 = "chatLobby_calendar";
   var CURRENT_VERSION = 1;
   var _snapshotsCache = null;
   var _initialized = false;
@@ -9217,13 +9250,13 @@ ${message}` : message;
   }
   function _safeRemoveLegacy() {
     try {
-      localStorage.removeItem(STORAGE_KEY6);
+      localStorage.removeItem(STORAGE_KEY7);
     } catch (e) {
     }
   }
   function _loadFromLocalStorageSync() {
     try {
-      const data = localStorage.getItem(STORAGE_KEY6);
+      const data = localStorage.getItem(STORAGE_KEY7);
       if (data) {
         const parsed = JSON.parse(data);
         return parsed.snapshots || {};
@@ -9241,28 +9274,28 @@ ${message}` : message;
     const store2 = lf();
     try {
       if (store2) {
-        const lfData = await store2.getItem(STORAGE_KEY6);
+        const lfData = await store2.getItem(STORAGE_KEY7);
         const lfSnaps = lfData && lfData.snapshots ? lfData.snapshots : null;
         let lsSnaps = null;
         try {
-          const legacy = localStorage.getItem(STORAGE_KEY6);
+          const legacy = localStorage.getItem(STORAGE_KEY7);
           if (legacy) lsSnaps = JSON.parse(legacy).snapshots || null;
         } catch (e) {
           console.warn("[Calendar] Corrupt localStorage residue ignored");
         }
         if (lfSnaps && lsSnaps) {
           _snapshotsCache = { ...lsSnaps, ...lfSnaps };
-          await store2.setItem(STORAGE_KEY6, { version: CURRENT_VERSION, snapshots: _snapshotsCache });
+          await store2.setItem(STORAGE_KEY7, { version: CURRENT_VERSION, snapshots: _snapshotsCache });
           _safeRemoveLegacy();
           console.info("[Calendar] Merged residual localStorage into localforage (lf priority)");
         } else if (!lfSnaps && lsSnaps) {
           _snapshotsCache = lsSnaps;
-          await store2.setItem(STORAGE_KEY6, { version: CURRENT_VERSION, snapshots: lsSnaps });
+          await store2.setItem(STORAGE_KEY7, { version: CURRENT_VERSION, snapshots: lsSnaps });
           _safeRemoveLegacy();
           console.info("[Calendar] Migrated localStorage \u2192 localforage(IndexedDB)");
         } else {
           _snapshotsCache = lfSnaps || {};
-          if (!lsSnaps && localStorage.getItem(STORAGE_KEY6)) _safeRemoveLegacy();
+          if (!lsSnaps && localStorage.getItem(STORAGE_KEY7)) _safeRemoveLegacy();
         }
       } else {
         console.warn("[Calendar] window.localforage not found, using localStorage");
@@ -9286,11 +9319,11 @@ ${message}` : message;
       const store2 = lf();
       try {
         if (store2) {
-          store2.setItem(STORAGE_KEY6, payload).catch((e) => {
+          store2.setItem(STORAGE_KEY7, payload).catch((e) => {
             console.error("[Calendar] localforage persist failed:", e);
           });
         } else {
-          localStorage.setItem(STORAGE_KEY6, JSON.stringify(payload));
+          localStorage.setItem(STORAGE_KEY7, JSON.stringify(payload));
         }
       } catch (e) {
         console.error("[Calendar] persist failed:", e);
@@ -9341,12 +9374,12 @@ ${message}` : message;
     }
     const store2 = lf();
     try {
-      if (store2) store2.removeItem(STORAGE_KEY6).catch(() => {
+      if (store2) store2.removeItem(STORAGE_KEY7).catch(() => {
       });
     } catch (e) {
     }
     try {
-      localStorage.removeItem(STORAGE_KEY6);
+      localStorage.removeItem(STORAGE_KEY7);
     } catch (e) {
     }
   }
@@ -9519,7 +9552,7 @@ ${message}` : message;
         <div class="hero-title">\u2B50 \uCD5C\uC560 \uCF54\uB108</div>
         <div class="hero-list">
             ${favChars.map((char) => {
-      const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
+      const avatarUrl = charAvatarUrl(char.avatar);
       const chatCount = cache.get("chatCounts", char.avatar);
       const metaText = typeof chatCount === "number" && chatCount > 0 ? `\u{1F4AC} ${chatCount}\uAC1C \uCC44\uD305` : "";
       return `
@@ -9542,7 +9575,7 @@ ${message}` : message;
     ensureHeroDelegation();
   }
   function renderCharacterCard(char, index, sortOption = "recent", showBadges = true) {
-    const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
+    const avatarUrl = char.avatar ? charAvatarUrl(char.avatar) : "/img/ai4.png";
     const name = char.name || "Unknown";
     const safeAvatar = escapeHtml(char.avatar || "");
     const isFav = isFavoriteChar(char);
@@ -9961,7 +9994,7 @@ ${message}` : message;
         index: card.dataset.charIndex,
         avatar: charAvatar,
         name: charName,
-        avatarSrc: card.querySelector(".lobby-char-avatar")?.src || `/characters/${encodeURIComponent(charAvatar)}`
+        avatarSrc: card.querySelector(".lobby-char-avatar")?.src || charAvatarUrl(charAvatar)
       };
       const handler = store.onCharacterSelect;
       if (handler && typeof handler === "function") {
@@ -10128,19 +10161,19 @@ ${message}` : message;
     }
     if (count === 1) {
       const avatar = members[0];
-      const avatarUrl = `/characters/${encodeURIComponent(avatar)}`;
+      const avatarUrl = charAvatarUrl(avatar);
       return `<div class="grid-single"><img src="${avatarUrl}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'"></div>`;
     }
     if (count === 2) {
       return `<div class="grid-two">${members.map((avatar) => {
-        const avatarUrl = `/characters/${encodeURIComponent(avatar)}`;
+        const avatarUrl = charAvatarUrl(avatar);
         return `<img src="${avatarUrl}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'">`;
       }).join("")}</div>`;
     }
     if (count === 3) {
-      const avatarUrl0 = `/characters/${encodeURIComponent(members[0])}`;
-      const avatarUrl1 = `/characters/${encodeURIComponent(members[1])}`;
-      const avatarUrl2 = `/characters/${encodeURIComponent(members[2])}`;
+      const avatarUrl0 = charAvatarUrl(members[0]);
+      const avatarUrl1 = charAvatarUrl(members[1]);
+      const avatarUrl2 = charAvatarUrl(members[2]);
       return `
             <div class="grid-three">
                 <div class="grid-top"><img src="${avatarUrl0}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'"></div>
@@ -10152,7 +10185,7 @@ ${message}` : message;
         `;
     }
     return `<div class="grid-four">${members.slice(0, 4).map((avatar) => {
-      const avatarUrl = `/characters/${encodeURIComponent(avatar)}`;
+      const avatarUrl = charAvatarUrl(avatar);
       return `<img src="${avatarUrl}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'">`;
     }).join("")}</div>`;
   }
@@ -10627,7 +10660,7 @@ ${message}` : message;
             <h2>\uAC00\uC7A5 \uB9CE\uC774 \uB300\uD654\uD55C \uCE90\uB9AD\uD130\uB294?</h2>
             <div class="quiz-options">
                 ${shuffled.map((char, i) => {
-      const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : "/img/ai4.png";
+      const avatarUrl = char.avatar ? charAvatarUrl(char.avatar) : "/img/ai4.png";
       return `
                         <div class="quiz-option spin-animation" data-name="${escapeHtml(char.name)}" style="animation-delay: ${i * 0.2}s">
                             <img src="${avatarUrl}" alt="${escapeHtml(char.name)}" onerror="this.src='/img/ai4.png'">
@@ -10648,7 +10681,7 @@ ${message}` : message;
   function showQuizResult(container) {
     const correct = rankingsData[0];
     const isCorrect = userGuessChar === correct.name;
-    const avatarUrl = correct.avatar ? `/characters/${encodeURIComponent(correct.avatar)}` : "/img/ai4.png";
+    const avatarUrl = correct.avatar ? charAvatarUrl(correct.avatar) : "/img/ai4.png";
     if (isCorrect) {
       showConfetti();
     }
@@ -10836,7 +10869,7 @@ ${message}` : message;
     const top = rankingsData[0];
     const rankingHTML = rankingsData.slice(0, 10).map((r, i) => {
       const medal = i < 3 ? medals[i] : `${i + 1}\uC704`;
-      const avatarUrl = r.avatar ? `/characters/${encodeURIComponent(r.avatar)}` : "/img/ai4.png";
+      const avatarUrl = r.avatar ? charAvatarUrl(r.avatar) : "/img/ai4.png";
       return `
             <div class="stats-rank-item ${i < 3 ? "top-3" : ""}" style="animation-delay: ${i * 0.05}s">
                 <span class="rank-medal">${medal}</span>
@@ -10879,7 +10912,7 @@ ${message}` : message;
             </div>
         </div>
     `;
-    const topCharAvatarUrl = top?.avatar ? `/characters/${encodeURIComponent(top.avatar)}` : "/img/ai4.png";
+    const topCharAvatarUrl = top?.avatar ? charAvatarUrl(top.avatar) : "/img/ai4.png";
     const topCharHTML = top ? `
         <div class="stats-section stats-top-char">
             <h4>\u{1F3C6} ${escapeHtml(top.name)}\uC640\uC758 \uD1B5\uACC4</h4>
@@ -11280,7 +11313,7 @@ ${message}` : message;
       let contentHtml = "";
       const validTopChar = hasData ? findValidTopChar(snapshot) : null;
       if (hasData && validTopChar) {
-        const avatarUrl = `/characters/${encodeURIComponent(validTopChar)}`;
+        const avatarUrl = charAvatarUrl(validTopChar);
         const charName = validTopChar.replace(/\.[^/.]+$/, "");
         const currentDate = new Date(THIS_YEAR, currentMonth, day);
         const recentData = findRecentSnapshot(currentDate);
@@ -11364,7 +11397,7 @@ ${message}` : message;
       cardsHtml = '<div class="lastmsg-no-data">No character data</div>';
     } else {
       topChars.forEach((char) => {
-        const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
+        const avatarUrl = charAvatarUrl(char.avatar);
         const charName = char.avatar.replace(/\.[^/.]+$/, "");
         const timeStr = char.lastChatTime > 0 ? formatLastChatTime(char.lastChatTime) : "-";
         cardsHtml += `
@@ -11911,7 +11944,7 @@ ${message}` : message;
     const body = panel.querySelector(".charinfo-body");
     body.innerHTML = `
         <div class="charinfo-top">
-            <img class="charinfo-avatar" src="/characters/${encodeURIComponent(char.avatar)}" alt="" onerror="this.src='/img/ai4.png'">
+            <img class="charinfo-avatar" src="${charAvatarUrl(char.avatar)}" alt="" onerror="this.src='/img/ai4.png'">
             <div class="charinfo-meta">
                 ${meta ? `<div class="charinfo-meta-line">${meta}</div>` : ""}
                 ${tags.length ? `<div class="charinfo-tags">${tags.map((t) => `<span class="charinfo-tag">${escapeHtml(String(t))}</span>`).join("")}</div>` : ""}
@@ -11979,7 +12012,7 @@ ${message}` : message;
       const hasAvatar = todayChats.length > 0;
       if (hasAvatar) {
         const lastChar = todayChats[0];
-        avatar.src = `/characters/${encodeURIComponent(lastChar.avatar)}`;
+        avatar.src = charAvatarUrl(lastChar.avatar);
         avatar.style.display = "block";
       } else {
         avatar.style.display = "none";
@@ -12157,14 +12190,16 @@ ${message}` : message;
             clearCharacterCache(eventData.character.avatar);
             remindStore.removeByAvatar(eventData.character.avatar);
             highlightStore.removeByAvatar(eventData.character.avatar);
+            forgetAvatarVersion(eventData.character.avatar);
             console.debug("[ChatLobby] Removed deleted character from caches:", eventData.character.avatar);
           }
           if (isLobbyOpen()) {
             renderCharacterGrid(store.searchTerm);
           }
         },
-        onCharacterEdited: () => {
+        onCharacterEdited: (eventData) => {
           cache.invalidate("characters");
+          bumpAvatarVersion(eventData?.detail?.character?.avatar);
         },
         onCharacterAdded: () => {
           cache.invalidate("characters");
@@ -12923,7 +12958,7 @@ ${message}` : message;
             index: randomIndex,
             avatar: randomChar.avatar,
             name: randomChar.name,
-            avatarSrc: `/characters/${encodeURIComponent(randomChar.avatar)}`
+            avatarSrc: charAvatarUrl(randomChar.avatar)
           });
         }
       }

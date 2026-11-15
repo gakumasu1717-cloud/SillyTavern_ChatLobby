@@ -7,6 +7,7 @@ import { cache } from '../data/cache.js';
 import { loadSnapshots, getSnapshot, saveSnapshot, getLocalDateString, clearAllSnapshots } from '../data/calendarStorage.js';
 import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml } from '../utils/textUtils.js';
+import { charAvatarUrl } from '../utils/avatarUrl.js';
 
 let calendarOverlay = null;
 const THIS_YEAR = new Date().getFullYear();
@@ -421,7 +422,7 @@ function renderCalendar() {
         const validTopChar = hasData ? findValidTopChar(snapshot) : null;
         
         if (hasData && validTopChar) {
-            const avatarUrl = `/characters/${encodeURIComponent(validTopChar)}`;
+            const avatarUrl = charAvatarUrl(validTopChar);
             const charName = validTopChar.replace(/\.[^/.]+$/, '');
             
             // 가장 최근 스냅샷 찾기 (최대 7일 전까지)
@@ -549,7 +550,7 @@ function showLastMessagePanel(date) {
         cardsHtml = '<div class="lastmsg-no-data">No character data</div>';
     } else {
         topChars.forEach((char) => {
-            const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
+            const avatarUrl = charAvatarUrl(char.avatar);
             const charName = char.avatar.replace(/\.[^/.]+$/, '');
             const timeStr = char.lastChatTime > 0 
                 ? formatLastChatTime(char.lastChatTime)

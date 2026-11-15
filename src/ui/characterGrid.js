@@ -14,6 +14,7 @@ import { showToast } from './notifications.js';
 import { closeChatPanel } from './chatList.js';
 import { CONFIG } from '../config.js';
 import { uiPrefs } from '../data/uiPrefs.js';
+import { charAvatarUrl } from '../utils/avatarUrl.js';
 
 // 렌더링 중복 방지
 let isRendering = false;
@@ -306,7 +307,7 @@ function renderHeroCorner(characters) {
         <div class="hero-title">⭐ 최애 코너</div>
         <div class="hero-list">
             ${favChars.map(char => {
-                const avatarUrl = `/characters/${encodeURIComponent(char.avatar)}`;
+                const avatarUrl = charAvatarUrl(char.avatar);
                 const chatCount = cache.get('chatCounts', char.avatar);
                 const metaText = typeof chatCount === 'number' && chatCount > 0 ? `💬 ${chatCount}개 채팅` : '';
                 return `
@@ -340,7 +341,7 @@ function renderHeroCorner(characters) {
  * @returns {string}
  */
 function renderCharacterCard(char, index, sortOption = 'recent', showBadges = true) {
-    const avatarUrl = char.avatar ? `/characters/${encodeURIComponent(char.avatar)}` : '/img/ai4.png';
+    const avatarUrl = char.avatar ? charAvatarUrl(char.avatar) : '/img/ai4.png';
     const name = char.name || 'Unknown';
     const safeAvatar = escapeHtml(char.avatar || '');
 
@@ -969,7 +970,7 @@ async function handleCharCardClick(card) {
             avatar: charAvatar,
             name: charName,
             avatarSrc: card.querySelector('.lobby-char-avatar')?.src
-                || `/characters/${encodeURIComponent(charAvatar)}`,
+                || charAvatarUrl(charAvatar),
         };
 
         // 콜백 호출
@@ -1255,23 +1256,23 @@ function renderMemberAvatarGrid(members, totalCount) {
     if (count === 1) {
         // 1명이면 단독 표시
         const avatar = members[0];
-        const avatarUrl = `/characters/${encodeURIComponent(avatar)}`;
+        const avatarUrl = charAvatarUrl(avatar);
         return `<div class="grid-single"><img src="${avatarUrl}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'"></div>`;
     }
     
     if (count === 2) {
         // 2명이면 가로 2분할
         return `<div class="grid-two">${members.map(avatar => {
-            const avatarUrl = `/characters/${encodeURIComponent(avatar)}`;
+            const avatarUrl = charAvatarUrl(avatar);
             return `<img src="${avatarUrl}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'">`;
         }).join('')}</div>`;
     }
     
     if (count === 3) {
         // 3명이면 위 1 + 아래 2
-        const avatarUrl0 = `/characters/${encodeURIComponent(members[0])}`;
-        const avatarUrl1 = `/characters/${encodeURIComponent(members[1])}`;
-        const avatarUrl2 = `/characters/${encodeURIComponent(members[2])}`;
+        const avatarUrl0 = charAvatarUrl(members[0]);
+        const avatarUrl1 = charAvatarUrl(members[1]);
+        const avatarUrl2 = charAvatarUrl(members[2]);
         return `
             <div class="grid-three">
                 <div class="grid-top"><img src="${avatarUrl0}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'"></div>
@@ -1285,7 +1286,7 @@ function renderMemberAvatarGrid(members, totalCount) {
     
     // 4명 이상이면 2x2 그리드
     return `<div class="grid-four">${members.slice(0, 4).map(avatar => {
-        const avatarUrl = `/characters/${encodeURIComponent(avatar)}`;
+        const avatarUrl = charAvatarUrl(avatar);
         return `<img src="${avatarUrl}" alt="member" draggable="false" onerror="this.src='/img/ai4.png'">`;
     }).join('')}</div>`;
 }

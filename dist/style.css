@@ -7609,7 +7609,9 @@ body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
     height: 75%;
     display: flex;
     flex-direction: column;
-    z-index: 1000;
+    /* Above the chat list panel (mobile: fixed full-screen at z-index 10000)
+       and the persona FAB (10001); below dialogs/toasts/tooltips (100000+) */
+    z-index: 10020;
     background: var(--lobby-bg-card, #1a1a1a);
     color: var(--lobby-text, #eee);
     border-top: 1px solid var(--lobby-border, rgba(255, 255, 255, 0.1));

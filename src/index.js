@@ -36,6 +36,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 import { operationLock } from './utils/operationLock.js';
 import { installSaveGuard, uninstallSaveGuard, setSaveGuardEnabled } from './safety/saveGuard.js';
 import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.js';
+import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/avatarUrl.js';
 
 (function() {
     'use strict';
@@ -136,7 +137,7 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
         const hasAvatar = todayChats.length > 0;
         if (hasAvatar) {
             const lastChar = todayChats[0];
-            avatar.src = `/characters/${encodeURIComponent(lastChar.avatar)}`;
+            avatar.src = charAvatarUrl(lastChar.avatar);
             avatar.style.display = 'block';
         } else {
             avatar.style.display = 'none';
@@ -410,6 +411,7 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
                     clearBranchCache(eventData.character.avatar);
                     remindStore.removeByAvatar(eventData.character.avatar);
                     highlightStore.removeByAvatar(eventData.character.avatar);
+                    forgetAvatarVersion(eventData.character.avatar);
                     console.debug('[ChatLobby] Removed deleted character from caches:', eventData.character.avatar);
                 }
                 
@@ -417,8 +419,10 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
                     renderCharacterGrid(store.searchTerm);
                 }
             },
-            onCharacterEdited: () => {
+            onCharacterEdited: (eventData) => {
                 cache.invalidate('characters');
+                // 이미지가 바뀌었을 수 있으므로 다음 렌더부터 새로 받게 함 (파일명은 그대로라 캐시됨)
+                bumpAvatarVersion(eventData?.detail?.character?.avatar);
             },
             onCharacterAdded: () => {
                 cache.invalidate('characters');
@@ -1579,7 +1583,7 @@ import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.j
                     index: randomIndex,
                     avatar: randomChar.avatar,
                     name: randomChar.name,
-                    avatarSrc: `/characters/${encodeURIComponent(randomChar.avatar)}`
+                    avatarSrc: charAvatarUrl(randomChar.avatar)
                 });
             }
         }

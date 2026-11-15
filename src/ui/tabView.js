@@ -18,6 +18,7 @@ import { waitForChatChanged } from '../utils/waitFor.js';
 import { listeners } from '../utils/listenerManager.js';
 import { remindStore } from '../data/remindStore.js';
 import { openRemindViewer } from './remindViewer.js';
+import { charAvatarUrl } from '../utils/avatarUrl.js';
 
 // ============================================
 // 디버그 로깅
@@ -95,7 +96,7 @@ export async function cacheRecentChatsBeforeOpen() {
                 date: '방금',
                 preview: '',
                 messageCount: char.chat_size || 0,
-                thumbnailSrc: `/characters/${encodeURIComponent(char.avatar)}`,
+                thumbnailSrc: charAvatarUrl(char.avatar),
                 type: 'char',
                 lastChatTime: Date.now(),
             });
@@ -388,7 +389,7 @@ function getRecentFromCache() {
                 type: 'char',
                 isGroup: false,
                 file: char.chat || '',
-                thumbnailSrc: `/characters/${encodeURIComponent(avatar)}`,
+                thumbnailSrc: charAvatarUrl(avatar),
             });
         }
     });
@@ -700,7 +701,7 @@ function renderRemindsContent() {
                 return `
                 <div class="remind-item" data-remind-id="${escapeHtml(r.id)}">
                     <div class="remind-item-avatar">
-                        <img src="/characters/${encodeURIComponent(r.avatar)}" alt="" loading="lazy"
+                        <img src="${charAvatarUrl(r.avatar)}" alt="" loading="lazy"
                              onerror="this.parentElement.innerHTML='🔖'">
                     </div>
                     <div class="remind-item-info">
