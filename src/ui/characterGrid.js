@@ -15,6 +15,7 @@ import { closeChatPanel } from './chatList.js';
 import { CONFIG } from '../config.js';
 import { uiPrefs } from '../data/uiPrefs.js';
 import { charAvatarUrl } from '../utils/avatarUrl.js';
+import { isCharBatchMode, isCharBatchSelected, toggleCharBatchCard } from './charBatch.js';
 
 // 렌더링 중복 방지
 let isRendering = false;
@@ -398,7 +399,7 @@ function renderCharacterCard(char, index, sortOption = 'recent', showBadges = tr
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="즐겨찾기 토글">${isFav ? '★' : '☆'}</button>`;
     
     return `
-    <div class="lobby-char-card ${isFav ? 'is-char-fav' : ''}" 
+    <div class="lobby-char-card ${isFav ? 'is-char-fav' : ''} ${isCharBatchSelected(char.avatar) ? 'batch-selected' : ''}" 
          data-char-index="${index}" 
          data-char-avatar="${safeAvatar}" 
          data-char-name="${escapeHtml(name)}"
@@ -797,6 +798,7 @@ function ensureGridDelegation() {
     bindDelegatedTouchClick(grid, routeGridEvent, {
         group: 'characterGrid',
         debugName: 'character-grid',
+        bypassCooldown: isCharBatchMode,
     });
 }
 
@@ -821,6 +823,17 @@ function ensureHeroDelegation() {
  * @returns {boolean} 처리 여부
  */
 function routeGridEvent(e) {
+    // 선택 모드: 카드를 눌러도 채팅 목록을 열지 않고 선택만 토글
+    if (isCharBatchMode()) {
+        const card = e.target.closest('.lobby-char-card');
+        if (card && !card.classList.contains('lobby-group-card')) {
+            toggleCharBatchCard(card);
+        } else if (e.target.closest('.lobby-group-card')) {
+            showToast('그룹은 일괄 삭제 대상이 아닙니다.', 'info');
+        }
+        return true;
+    }
+
     const favBtn = e.target.closest('.char-fav-btn');
     if (favBtn) {
         if (favBtn.classList.contains('group-fav-btn')) {

@@ -39,7 +39,10 @@ export function debounce(func, wait = CONFIG.ui.debounceWait) {
 
 // 전역 클릭 쿨다운 (모든 채팅/캐릭터 아이템 공유)
 let globalLastClickTime = 0;
-const GLOBAL_CLICK_COOLDOWN = 500;
+// 더블탭/터치+클릭 중복 방지용 짧은 간격.
+// 예전엔 500ms였는데, 채팅 열기 같은 무거운 작업은 이제 operationLock이 직렬화하므로
+// 길게 잡을 이유가 없고 연달아 누르는 조작(선택, 즐겨찾기)이 씹히기만 했다.
+const GLOBAL_CLICK_COOLDOWN = 200;
 
 /**
  * 터치/클릭 통합 핸들러 생성
@@ -145,13 +148,15 @@ export function createTouchClickHandler(element, handler, options = {}) {
  * @param {HTMLElement} container - 위임 대상 컨테이너 (영속 요소)
  * @param {(e: Event) => boolean} route - 라우터. 처리했으면 true 반환
  *   (true일 때만 preventDefault/stopPropagation 적용 → 미처리 클릭은 그대로 통과)
- * @param {{ group?: string, scrollThreshold?: number, debugName?: string }} [options]
+ * @param {{ group?: string, scrollThreshold?: number, debugName?: string, bypassCooldown?: () => boolean }} [options]
+ *   bypassCooldown: true를 돌려주는 동안은 전역 쿨다운을 적용하지 않음 (여러 개를 빠르게 고르는 선택 모드용)
  */
 export function bindDelegatedTouchClick(container, route, options = {}) {
     const {
         group = 'delegated',
         scrollThreshold = 10,
         debugName = 'delegated',
+        bypassCooldown = null,
     } = options;
 
     if (!container) return;
@@ -165,7 +170,8 @@ export function bindDelegatedTouchClick(container, route, options = {}) {
         const now = Date.now();
 
         // 전역 쿨다운 체크 (요소별 핸들러와 동일한 정책 공유)
-        if (now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) return;
+        const skipCooldown = typeof bypassCooldown === 'function' && bypassCooldown();
+        if (!skipCooldown && now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) return;
         if (isScrolling) return;
 
         let handled = false;
@@ -177,7 +183,7 @@ export function bindDelegatedTouchClick(container, route, options = {}) {
 
         if (handled) {
             // 처리된 경우에만 쿨다운 갱신 + 기본동작 차단
-            globalLastClickTime = now;
+            if (!skipCooldown) globalLastClickTime = now;
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
         }

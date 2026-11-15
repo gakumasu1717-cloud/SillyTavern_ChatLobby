@@ -37,6 +37,7 @@ import { clearCharacterCache as clearBranchCache } from './data/branchCache.js';
 import { operationLock } from './utils/operationLock.js';
 import { installSaveGuard, uninstallSaveGuard, setSaveGuardEnabled } from './safety/saveGuard.js';
 import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.js';
+import { isCharBatchMode, toggleCharBatchMode, charBatchSelectAll, charBatchClear, charBatchDelete } from './ui/charBatch.js';
 import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/avatarUrl.js';
 
 (function() {
@@ -425,6 +426,8 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
                     remindStore.removeByAvatar(eventData.character.avatar);
                     highlightStore.removeByAvatar(eventData.character.avatar);
                     forgetAvatarVersion(eventData.character.avatar);
+                    // 폴더 배정/즐겨찾기도 정리 (ST 화면에서 직접 지운 경우 포함)
+                    storage.removeCharacterData(eventData.character.avatar);
                     console.debug('[ChatLobby] Removed deleted character from caches:', eventData.character.avatar);
                 }
                 
@@ -847,6 +850,7 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
         store.resetSelection(); // 선택 상태 초기화
         closeChatPanel();
         closeCharInfo();
+        toggleCharBatchMode(false);
         
         // 🔥 로비 닫힐 때 DOM 감시 시작 (채팅 변경 감지)
         startRecentDomObserver();
@@ -1301,6 +1305,19 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
             case 'close-charinfo':
                 closeCharInfo();
                 break;
+            case 'toggle-char-batch':
+                closeChatPanel();
+                toggleCharBatchMode();
+                break;
+            case 'char-batch-select-all':
+                charBatchSelectAll();
+                break;
+            case 'char-batch-clear':
+                charBatchClear();
+                break;
+            case 'char-batch-delete':
+                await charBatchDelete();
+                break;
             case 'toggle-collapse':
                 toggleCollapse();
                 break;
@@ -1367,6 +1384,12 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
             // 캐릭터 정보 패널 열려있으면 먼저 닫기
             if (isCharInfoOpen()) {
                 closeCharInfo();
+                return;
+            }
+
+            // 봇 선택 모드면 그것부터 끝내기
+            if (isCharBatchMode()) {
+                toggleCharBatchMode(false);
                 return;
             }
 

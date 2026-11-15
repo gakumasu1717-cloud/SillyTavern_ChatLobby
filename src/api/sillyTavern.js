@@ -266,30 +266,64 @@ class SillyTavernAPI {
     }
     
     /**
-     * 캐릭터 삭제
-     * @param {string} charAvatar - 캐릭터 아바타
-     * @returns {Promise<boolean>}
+     * 캐릭터 여러 개 삭제 (채팅 포함)
+     *
+     * 1순위: ST의 deleteCharacter(avatar[]) - 열린 채팅 닫기, 태그 정리, CHAT_DELETED/
+     *        CHARACTER_DELETED 이벤트, 캐릭터 목록 갱신까지 ST가 한 번에 처리한다.
+     * 2순위(모듈을 못 불러올 때): 삭제 API 직접 호출. 이때 "지금 열려 있는 캐릭터"는
+     *        ST 화면 상태가 꼬이므로 건너뛴다.
+     *
+     * @param {string[]} avatars
+     * @returns {Promise<{ deleted: string[], failed: string[] }>}
      */
-    async deleteCharacter(charAvatar) {
+    async deleteCharacters(avatars) {
+        const list = [...new Set(avatars)].filter(Boolean);
+        if (list.length === 0) return { deleted: [], failed: [] };
+
+        const existing = () => new Set(this.getCharacters().map(c => c.avatar));
+        const split = (before) => {
+            const after = existing();
+            const deleted = list.filter(a => before.has(a) && !after.has(a));
+            return { deleted, failed: list.filter(a => !deleted.includes(a)) };
+        };
+
+        // 1) ST 기본 함수
         try {
-            const response = await this.fetchWithRetry('/api/characters/delete', {
-                method: 'POST',
-                headers: this.getRequestHeaders(),
-                body: JSON.stringify({
-                    avatar_url: charAvatar,
-                    delete_chats: true
-                })
-            });
-            
-            if (response.ok) {
+            // 확장 번들 위치(…/third-party/<확장>/dist/) 기준 상대 경로 → /script.js
+            const st = await import('../../../../../script.js');
+            if (typeof st.deleteCharacter === 'function') {
+                const before = existing();
+                await st.deleteCharacter(list, { deleteChats: true });
                 cache.invalidate('characters');
-                cache.invalidate('chats', charAvatar);
+                return split(before);
             }
-            return response.ok;
-        } catch (error) {
-            console.error('[API] Failed to delete character:', error);
-            return false;
+        } catch (e) {
+            console.debug('[API] ST deleteCharacter not available, using direct API:', e);
         }
+
+        // 2) 직접 API
+        const context = this.getContext();
+        const currentAvatar = context?.characters?.[context?.characterId]?.avatar;
+        const before = existing();
+        for (const avatar of list) {
+            if (avatar === currentAvatar) continue; // 열려 있는 캐릭터는 건너뜀
+            try {
+                await fetch('/api/characters/delete', {
+                    method: 'POST',
+                    headers: this.getRequestHeaders(),
+                    body: JSON.stringify({ avatar_url: avatar, delete_chats: true }),
+                });
+            } catch (e) {
+                console.error('[API] Failed to delete character:', avatar, e);
+            }
+        }
+        try {
+            if (typeof context?.getCharacters === 'function') await context.getCharacters();
+        } catch (e) {
+            console.warn('[API] Failed to refresh characters after delete:', e);
+        }
+        cache.invalidate('characters');
+        return split(before);
     }
     
     // ============================================

@@ -354,6 +354,26 @@ class StorageManager {
     }
 
     /**
+     * 삭제된 캐릭터의 로비 데이터 정리 (폴더 배정, 채팅 즐겨찾기, 캐릭터 즐겨찾기)
+     * @param {string} charAvatar
+     */
+    removeCharacterData(charAvatar) {
+        if (!charAvatar) return;
+        this.update((data) => {
+            const prefix = charAvatar + '::';
+            for (const key of Object.keys(data.chatAssignments || {})) {
+                if (key.startsWith(prefix)) delete data.chatAssignments[key];
+            }
+            if (Array.isArray(data.favorites)) {
+                data.favorites = data.favorites.filter(key => !key.startsWith(prefix));
+            }
+            if (Array.isArray(data.characterFavorites)) {
+                data.characterFavorites = data.characterFavorites.filter(a => a !== charAvatar);
+            }
+        });
+    }
+
+    /**
      * 채팅이 속한 폴더 가져오기
      * @param {string} charAvatar
      * @param {string} chatFileName

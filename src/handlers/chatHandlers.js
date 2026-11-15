@@ -754,53 +754,20 @@ export async function deleteCharacter() {
     }
     
     try {
-        // 로비 데이터 먼저 정리
-        const data = storage.load();
-        const prefix = char.avatar + '::';
-        
-        Object.keys(data.chatAssignments).forEach(key => {
-            if (key.startsWith(prefix)) {
-                delete data.chatAssignments[key];
-            }
-        });
-        
-        data.favorites = data.favorites.filter(key => !key.startsWith(prefix));
-        storage.save(data);
-        
         // UI 리셋
         closeChatPanel();
-        
-        // SillyTavern 내장 deleteCharacter 함수 사용 시도
-        // (위에서 가져온 context 재사용 - 레이스 컨디션 방지)
-        if (typeof context?.deleteCharacter === 'function') {
-            // SillyTavern 내장 함수 사용 (context.characters 자동 갱신됨)
-            await context.deleteCharacter(char.avatar, { deleteChats: true });
-        } else {
-            // Fallback: 직접 API 호출 후 getCharacters로 갱신
-            const headers = api.getRequestHeaders();
-            const avatarUrl = char.avatar.endsWith('.png') ? char.avatar : `${char.avatar}.png`;
-            
-            const response = await fetch('/api/characters/delete', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({
-                    avatar_url: avatarUrl,
-                    delete_chats: true
-                })
-            });
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[ChatLobby] Delete response:', response.status, errorText);
-                throw new Error(`Delete failed: ${response.status} - ${errorText}`);
-            }
-            
-            // API 삭제 성공 후 SillyTavern의 characters 배열 갱신
-            if (typeof context?.getCharacters === 'function') {
-                await context.getCharacters();
-            }
+
+        // ST 기본 삭제 함수 사용 (열린 채팅 닫기, 태그 정리, 목록 갱신까지 처리)
+        // 일괄 삭제와 같은 경로
+        const { deleted } = await api.deleteCharacters([char.avatar]);
+        if (!deleted.includes(char.avatar)) {
+            showToast('캐릭터를 삭제하지 못했습니다.', 'error');
+            return;
         }
-        
+
+        // 로비 데이터 정리 (폴더 배정, 즐겨찾기)
+        storage.removeCharacterData(char.avatar);
+
         // 캐시 무효화
         cache.invalidate('characters');
         cache.invalidate('chats', char.avatar);

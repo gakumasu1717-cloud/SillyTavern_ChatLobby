@@ -747,6 +747,25 @@ ${message}` : message;
       });
     }
     /**
+     * 삭제된 캐릭터의 로비 데이터 정리 (폴더 배정, 채팅 즐겨찾기, 캐릭터 즐겨찾기)
+     * @param {string} charAvatar
+     */
+    removeCharacterData(charAvatar) {
+      if (!charAvatar) return;
+      this.update((data) => {
+        const prefix = charAvatar + "::";
+        for (const key of Object.keys(data.chatAssignments || {})) {
+          if (key.startsWith(prefix)) delete data.chatAssignments[key];
+        }
+        if (Array.isArray(data.favorites)) {
+          data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
+        }
+        if (Array.isArray(data.characterFavorites)) {
+          data.characterFavorites = data.characterFavorites.filter((a) => a !== charAvatar);
+        }
+      });
+    }
+    /**
      * 채팅이 속한 폴더 가져오기
      * @param {string} charAvatar
      * @param {string} chatFileName
@@ -1079,8 +1098,8 @@ ${message}` : message;
       this._state.batchModeActive = !this._state.batchModeActive;
       return this._state.batchModeActive;
     }
-    setBatchMode(active) {
-      this._state.batchModeActive = active;
+    setBatchMode(active2) {
+      this._state.batchModeActive = active2;
     }
     setProcessingPersona(processing) {
       this._state.isProcessingPersona = processing;
@@ -1454,29 +1473,58 @@ ${message}` : message;
       }
     }
     /**
-     * 캐릭터 삭제
-     * @param {string} charAvatar - 캐릭터 아바타
-     * @returns {Promise<boolean>}
+     * 캐릭터 여러 개 삭제 (채팅 포함)
+     *
+     * 1순위: ST의 deleteCharacter(avatar[]) - 열린 채팅 닫기, 태그 정리, CHAT_DELETED/
+     *        CHARACTER_DELETED 이벤트, 캐릭터 목록 갱신까지 ST가 한 번에 처리한다.
+     * 2순위(모듈을 못 불러올 때): 삭제 API 직접 호출. 이때 "지금 열려 있는 캐릭터"는
+     *        ST 화면 상태가 꼬이므로 건너뛴다.
+     *
+     * @param {string[]} avatars
+     * @returns {Promise<{ deleted: string[], failed: string[] }>}
      */
-    async deleteCharacter(charAvatar) {
+    async deleteCharacters(avatars) {
+      const list = [...new Set(avatars)].filter(Boolean);
+      if (list.length === 0) return { deleted: [], failed: [] };
+      const existing = () => new Set(this.getCharacters().map((c) => c.avatar));
+      const split = (before2) => {
+        const after = existing();
+        const deleted = list.filter((a) => before2.has(a) && !after.has(a));
+        return { deleted, failed: list.filter((a) => !deleted.includes(a)) };
+      };
       try {
-        const response = await this.fetchWithRetry("/api/characters/delete", {
-          method: "POST",
-          headers: this.getRequestHeaders(),
-          body: JSON.stringify({
-            avatar_url: charAvatar,
-            delete_chats: true
-          })
-        });
-        if (response.ok) {
+        const st = await import("../../../../../script.js");
+        if (typeof st.deleteCharacter === "function") {
+          const before2 = existing();
+          await st.deleteCharacter(list, { deleteChats: true });
           cache.invalidate("characters");
-          cache.invalidate("chats", charAvatar);
+          return split(before2);
         }
-        return response.ok;
-      } catch (error) {
-        console.error("[API] Failed to delete character:", error);
-        return false;
+      } catch (e) {
+        console.debug("[API] ST deleteCharacter not available, using direct API:", e);
       }
+      const context = this.getContext();
+      const currentAvatar = context?.characters?.[context?.characterId]?.avatar;
+      const before = existing();
+      for (const avatar of list) {
+        if (avatar === currentAvatar) continue;
+        try {
+          await fetch("/api/characters/delete", {
+            method: "POST",
+            headers: this.getRequestHeaders(),
+            body: JSON.stringify({ avatar_url: avatar, delete_chats: true })
+          });
+        } catch (e) {
+          console.error("[API] Failed to delete character:", avatar, e);
+        }
+      }
+      try {
+        if (typeof context?.getCharacters === "function") await context.getCharacters();
+      } catch (e) {
+        console.warn("[API] Failed to refresh characters after delete:", e);
+      }
+      cache.invalidate("characters");
+      return split(before);
     }
     // ============================================
     // 채팅 API
@@ -2321,7 +2369,7 @@ ${message}` : message;
     };
   }
   var globalLastClickTime = 0;
-  var GLOBAL_CLICK_COOLDOWN = 500;
+  var GLOBAL_CLICK_COOLDOWN = 200;
   function createTouchClickHandler(element, handler, options = {}) {
     const {
       preventDefault = true,
@@ -2387,7 +2435,8 @@ ${message}` : message;
     const {
       group = "delegated",
       scrollThreshold = 10,
-      debugName = "delegated"
+      debugName = "delegated",
+      bypassCooldown = null
     } = options;
     if (!container) return;
     let touchStartX2 = 0;
@@ -2396,7 +2445,8 @@ ${message}` : message;
     let touchHandled = false;
     const wrappedRoute = (e) => {
       const now = Date.now();
-      if (now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) return;
+      const skipCooldown = typeof bypassCooldown === "function" && bypassCooldown();
+      if (!skipCooldown && now - globalLastClickTime < GLOBAL_CLICK_COOLDOWN) return;
       if (isScrolling) return;
       let handled = false;
       try {
@@ -2405,7 +2455,7 @@ ${message}` : message;
         console.error(`[EventHelper] ${debugName}: Route error:`, error);
       }
       if (handled) {
-        globalLastClickTime = now;
+        if (!skipCooldown) globalLastClickTime = now;
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
       }
@@ -6485,8 +6535,8 @@ ${message}` : message;
       await api.selectCharacterById(charIndexNum);
       const chatChanged = await chatChangedPromise;
       if (!chatChanged) {
-        const selected = await waitForCharacterSelect(charAvatar, 2e3);
-        if (!selected) {
+        const selected2 = await waitForCharacterSelect(charAvatar, 2e3);
+        if (!selected2) {
           restoreIfNotSwitched();
           return "failed";
         }
@@ -6721,38 +6771,13 @@ ${message}` : message;
       return;
     }
     try {
-      const data = storage.load();
-      const prefix = char.avatar + "::";
-      Object.keys(data.chatAssignments).forEach((key) => {
-        if (key.startsWith(prefix)) {
-          delete data.chatAssignments[key];
-        }
-      });
-      data.favorites = data.favorites.filter((key) => !key.startsWith(prefix));
-      storage.save(data);
       closeChatPanel();
-      if (typeof context?.deleteCharacter === "function") {
-        await context.deleteCharacter(char.avatar, { deleteChats: true });
-      } else {
-        const headers = api.getRequestHeaders();
-        const avatarUrl = char.avatar.endsWith(".png") ? char.avatar : `${char.avatar}.png`;
-        const response = await fetch("/api/characters/delete", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            avatar_url: avatarUrl,
-            delete_chats: true
-          })
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("[ChatLobby] Delete response:", response.status, errorText);
-          throw new Error(`Delete failed: ${response.status} - ${errorText}`);
-        }
-        if (typeof context?.getCharacters === "function") {
-          await context.getCharacters();
-        }
+      const { deleted } = await api.deleteCharacters([char.avatar]);
+      if (!deleted.includes(char.avatar)) {
+        showToast("\uCE90\uB9AD\uD130\uB97C \uC0AD\uC81C\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+        return;
       }
+      storage.removeCharacterData(char.avatar);
       cache.invalidate("characters");
       cache.invalidate("chats", char.avatar);
       showToast(`"${char.name}" \uCE90\uB9AD\uD130\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
@@ -8456,6 +8481,7 @@ ${message}` : message;
                             <option value="name">\u{1F524} \uC774\uB984\uC21C</option>
                             <option value="chats">\u{1F4AC} \uBA54\uC2DC\uC9C0 \uC218</option>
                         </select>
+                        <button id="chat-lobby-char-batch-btn" data-action="toggle-char-batch" title="\uBD07 \uC5EC\uB7EC \uAC1C \uC120\uD0DD (\uC77C\uAD04 \uC0AD\uC81C)">\u2611</button>
                     </div>
                     
                     <!-- \uD0DC\uADF8 \uBC14 -->
@@ -8564,8 +8590,8 @@ ${message}` : message;
     html += '<option value="favorites">\u2B50 \uC990\uACA8\uCC3E\uAE30\uB9CC</option>';
     sorted.forEach((f) => {
       if (f.id !== "favorites") {
-        const selected = f.id === selectedValue ? "selected" : "";
-        html += `<option value="${f.id}" ${selected}>${escapeHtml(f.name)}</option>`;
+        const selected2 = f.id === selectedValue ? "selected" : "";
+        html += `<option value="${f.id}" ${selected2}>${escapeHtml(f.name)}</option>`;
       }
     });
     return html;
@@ -9609,6 +9635,140 @@ ${message}` : message;
   init_textUtils();
   init_notifications();
   init_config();
+
+  // src/ui/charBatch.js
+  init_textUtils();
+  init_notifications();
+  var BAR_ID = "chat-lobby-char-batch-bar";
+  var active = false;
+  var selected = /* @__PURE__ */ new Set();
+  function isCharBatchMode() {
+    return active;
+  }
+  function isCharBatchSelected(avatar) {
+    return active && selected.has(avatar);
+  }
+  function grid() {
+    return document.getElementById("chat-lobby-characters");
+  }
+  function refreshGrid() {
+    window.dispatchEvent(new CustomEvent("chatlobby:refresh-grid"));
+  }
+  function toggleCharBatchMode(force) {
+    const next = typeof force === "boolean" ? force : !active;
+    if (next === active) return;
+    active = next;
+    selected.clear();
+    document.getElementById("chat-lobby-container")?.classList.toggle("char-batch-mode", active);
+    document.getElementById("chat-lobby-char-batch-btn")?.classList.toggle("active", active);
+    grid()?.querySelectorAll(".batch-selected").forEach((el) => el.classList.remove("batch-selected"));
+    if (active) {
+      renderBar();
+    } else {
+      document.getElementById(BAR_ID)?.remove();
+    }
+  }
+  function toggleCharBatchCard(card) {
+    const avatar = card?.dataset.charAvatar;
+    if (!active || !avatar) return;
+    if (selected.has(avatar)) {
+      selected.delete(avatar);
+    } else {
+      selected.add(avatar);
+    }
+    document.querySelectorAll(`.lobby-char-card[data-char-avatar="${CSS.escape(avatar)}"]`).forEach((el) => el.classList.toggle("batch-selected", selected.has(avatar)));
+    updateBar();
+  }
+  function renderBar() {
+    document.getElementById(BAR_ID)?.remove();
+    const host = document.getElementById("chat-lobby-left");
+    if (!host) return;
+    const bar = document.createElement("div");
+    bar.id = BAR_ID;
+    bar.innerHTML = `
+        <span class="char-batch-count" id="chat-lobby-char-batch-count">0\uAC1C \uC120\uD0DD</span>
+        <div class="char-batch-actions">
+            <button data-action="char-batch-select-all" title="\uC9C0\uAE08 \uBAA9\uB85D\uC5D0 \uBCF4\uC774\uB294 \uBD07 \uC804\uBD80 \uC120\uD0DD">\uC804\uCCB4 \uC120\uD0DD</button>
+            <button data-action="char-batch-clear">\uC120\uD0DD \uD574\uC81C</button>
+            <button class="char-batch-delete" data-action="char-batch-delete" disabled>\u{1F5D1}\uFE0F \uC0AD\uC81C</button>
+            <button data-action="toggle-char-batch" title="\uC120\uD0DD \uBAA8\uB4DC \uB05D\uB0B4\uAE30">\u2715</button>
+        </div>
+    `;
+    host.appendChild(bar);
+  }
+  function updateBar() {
+    const count = document.getElementById("chat-lobby-char-batch-count");
+    if (count) count.textContent = `${selected.size}\uAC1C \uC120\uD0DD`;
+    const del = document.querySelector(`#${BAR_ID} .char-batch-delete`);
+    if (del) del.disabled = selected.size === 0;
+  }
+  function charBatchSelectAll() {
+    if (!active) return;
+    grid()?.querySelectorAll(".lobby-char-card[data-char-avatar]:not(.lobby-skeleton-card)").forEach((card) => {
+      selected.add(card.dataset.charAvatar);
+      card.classList.add("batch-selected");
+    });
+    updateBar();
+  }
+  function charBatchClear() {
+    selected.clear();
+    grid()?.querySelectorAll(".batch-selected").forEach((el) => el.classList.remove("batch-selected"));
+    updateBar();
+  }
+  async function charBatchDelete() {
+    if (!active || selected.size === 0) return;
+    const characters = api.getCharacters();
+    const targets = [...selected].map((avatar) => characters.find((c) => c.avatar === avatar)).filter(Boolean);
+    if (targets.length === 0) {
+      showToast("\uC0AD\uC81C\uD560 \uBD07\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    const names = targets.slice(0, 8).map((c) => `\xB7 ${c.name}`).join("\n");
+    const more = targets.length > 8 ? `
+\u2026 \uC678 ${targets.length - 8}\uAC1C` : "";
+    const confirmed = await showConfirm(
+      `\uC120\uD0DD\uD55C \uBD07 ${targets.length}\uAC1C\uC640 \uADF8 \uCC44\uD305\uC744 \uC804\uBD80 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+${names}${more}
+
+\uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+      "\uBD07 \uC77C\uAD04 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    const token = operationLock.acquire("batchDeleteCharacters", Math.min(18e4, 2e4 + targets.length * 3e3));
+    if (!token) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    try {
+      showToast(`\uBD07 ${targets.length}\uAC1C \uC0AD\uC81C \uC911...`, "info");
+      const avatars = targets.map((c) => c.avatar);
+      const { deleted, failed } = await api.deleteCharacters(avatars);
+      for (const avatar of deleted) {
+        storage.removeCharacterData(avatar);
+        cache.invalidate("chats", avatar);
+        cache.invalidate("chatCounts", avatar);
+        cache.invalidate("messageCounts", avatar);
+      }
+      cache.invalidate("characters");
+      if (failed.length === 0) {
+        showToast(`\uBD07 ${deleted.length}\uAC1C\uB97C \uC0AD\uC81C\uD588\uC2B5\uB2C8\uB2E4.`, "success");
+      } else {
+        const failedNames = failed.map((avatar) => targets.find((c) => c.avatar === avatar)?.name || avatar).slice(0, 5).map(escapeHtml).join(", ");
+        showToast(`${deleted.length}\uAC1C \uC0AD\uC81C, ${failed.length}\uAC1C \uC2E4\uD328 (${failedNames})`, "warning", 6e3);
+      }
+      toggleCharBatchMode(false);
+      refreshGrid();
+    } catch (error) {
+      console.error("[CharBatch] Bulk delete failed:", error);
+      showToast("\uBD07 \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release(token);
+    }
+  }
+
+  // src/ui/characterGrid.js
   var isRendering = false;
   var pendingRender = null;
   var renderDebounceTimer = null;
@@ -9834,7 +9994,7 @@ ${message}` : message;
     const messageCountText = hasMessageCount ? cachedMessageCount > 0 ? `${cachedMessageCount}\uAC1C \uBA54\uC2DC\uC9C0` : "" : "";
     const favBtn = `<button class="char-fav-btn" data-char-avatar="${safeAvatar}" title="\uC990\uACA8\uCC3E\uAE30 \uD1A0\uAE00">${isFav ? "\u2605" : "\u2606"}</button>`;
     return `
-    <div class="lobby-char-card ${isFav ? "is-char-fav" : ""}" 
+    <div class="lobby-char-card ${isFav ? "is-char-fav" : ""} ${isCharBatchSelected(char.avatar) ? "batch-selected" : ""}" 
          data-char-index="${index}" 
          data-char-avatar="${safeAvatar}" 
          data-char-name="${escapeHtml(name)}"
@@ -10103,12 +10263,13 @@ ${message}` : message;
     return sorted;
   }
   function ensureGridDelegation() {
-    const grid = document.getElementById("chat-lobby-characters");
-    if (!grid || grid.dataset.delegated === "true") return;
-    grid.dataset.delegated = "true";
-    bindDelegatedTouchClick(grid, routeGridEvent, {
+    const grid2 = document.getElementById("chat-lobby-characters");
+    if (!grid2 || grid2.dataset.delegated === "true") return;
+    grid2.dataset.delegated = "true";
+    bindDelegatedTouchClick(grid2, routeGridEvent, {
       group: "characterGrid",
-      debugName: "character-grid"
+      debugName: "character-grid",
+      bypassCooldown: isCharBatchMode
     });
   }
   function ensureHeroDelegation() {
@@ -10121,6 +10282,15 @@ ${message}` : message;
     });
   }
   function routeGridEvent(e) {
+    if (isCharBatchMode()) {
+      const card = e.target.closest(".lobby-char-card");
+      if (card && !card.classList.contains("lobby-group-card")) {
+        toggleCharBatchCard(card);
+      } else if (e.target.closest(".lobby-group-card")) {
+        showToast("\uADF8\uB8F9\uC740 \uC77C\uAD04 \uC0AD\uC81C \uB300\uC0C1\uC774 \uC544\uB2D9\uB2C8\uB2E4.", "info");
+      }
+      return true;
+    }
     const favBtn = e.target.closest(".char-fav-btn");
     if (favBtn) {
       if (favBtn.classList.contains("group-fav-btn")) {
@@ -11360,9 +11530,9 @@ ${message}` : message;
     if (calendarOverlay) {
       const fullscreen = calendarOverlay.querySelector(".calendar-fullscreen");
       if (fullscreen) fullscreen.style.transform = "";
-      const grid = calendarOverlay.querySelector(".calendar-grid");
-      if (grid) {
-        grid.classList.remove("zoomed-in", "zoomed-out");
+      const grid2 = calendarOverlay.querySelector(".calendar-grid");
+      if (grid2) {
+        grid2.classList.remove("zoomed-in", "zoomed-out");
       }
     }
     if (calendarOverlay) {
@@ -11400,16 +11570,16 @@ ${message}` : message;
     updateDetailVisibility();
   }
   function updateDetailVisibility() {
-    const grid = calendarOverlay.querySelector(".calendar-grid");
-    if (!grid) return;
+    const grid2 = calendarOverlay.querySelector(".calendar-grid");
+    if (!grid2) return;
     if (currentScale >= 1.3) {
-      grid.classList.add("zoomed-in");
-      grid.classList.remove("zoomed-out");
+      grid2.classList.add("zoomed-in");
+      grid2.classList.remove("zoomed-out");
     } else if (currentScale <= 0.8) {
-      grid.classList.add("zoomed-out");
-      grid.classList.remove("zoomed-in");
+      grid2.classList.add("zoomed-out");
+      grid2.classList.remove("zoomed-in");
     } else {
-      grid.classList.remove("zoomed-in", "zoomed-out");
+      grid2.classList.remove("zoomed-in", "zoomed-out");
     }
   }
   function handleDoubleTap(e) {
@@ -11493,7 +11663,7 @@ ${message}` : message;
   }
   function renderCalendar() {
     const title = calendarOverlay.querySelector("#calendar-title");
-    const grid = calendarOverlay.querySelector("#calendar-grid");
+    const grid2 = calendarOverlay.querySelector("#calendar-grid");
     const prevBtn = calendarOverlay.querySelector("#calendar-prev");
     const nextBtn = calendarOverlay.querySelector("#calendar-next");
     title.textContent = currentMonth + 1;
@@ -11561,8 +11731,8 @@ ${message}` : message;
             </div>
         `;
     }
-    grid.innerHTML = html;
-    grid.querySelectorAll(".cal-card.has-data").forEach((card) => {
+    grid2.innerHTML = html;
+    grid2.querySelectorAll(".cal-card.has-data").forEach((card) => {
       card.addEventListener("click", () => {
         const date = card.dataset.date;
         showLastMessagePanel(date);
@@ -12257,15 +12427,15 @@ ${message}` : message;
       const overlay = document.getElementById("chat-lobby-overlay");
       const container = document.getElementById("chat-lobby-container");
       const fab = document.getElementById("chat-lobby-fab");
-      const grid = document.getElementById("chat-lobby-characters");
+      const grid2 = document.getElementById("chat-lobby-characters");
       if (overlay) overlay.style.display = "flex";
       if (container) {
         container.style.display = "flex";
         container.classList.add("is-booting");
       }
       if (fab) fab.style.display = "none";
-      if (grid) {
-        grid.innerHTML = Array.from(
+      if (grid2) {
+        grid2.innerHTML = Array.from(
           { length: 12 },
           () => '<div class="lobby-char-card lobby-skeleton-card" aria-hidden="true"></div>'
         ).join("");
@@ -12401,6 +12571,7 @@ ${message}` : message;
             remindStore.removeByAvatar(eventData.character.avatar);
             highlightStore.removeByAvatar(eventData.character.avatar);
             forgetAvatarVersion(eventData.character.avatar);
+            storage.removeCharacterData(eventData.character.avatar);
             console.debug("[ChatLobby] Removed deleted character from caches:", eventData.character.avatar);
           }
           if (isLobbyOpen()) {
@@ -12662,6 +12833,7 @@ ${message}` : message;
       store.resetSelection();
       closeChatPanel();
       closeCharInfo();
+      toggleCharBatchMode(false);
       startRecentDomObserver();
       updateFabPreview();
     }
@@ -12966,6 +13138,19 @@ ${message}` : message;
         case "close-charinfo":
           closeCharInfo();
           break;
+        case "toggle-char-batch":
+          closeChatPanel();
+          toggleCharBatchMode();
+          break;
+        case "char-batch-select-all":
+          charBatchSelectAll();
+          break;
+        case "char-batch-clear":
+          charBatchClear();
+          break;
+        case "char-batch-delete":
+          await charBatchDelete();
+          break;
         case "toggle-collapse":
           toggleCollapse();
           break;
@@ -13018,6 +13203,10 @@ ${message}` : message;
         }
         if (isCharInfoOpen()) {
           closeCharInfo();
+          return;
+        }
+        if (isCharBatchMode()) {
+          toggleCharBatchMode(false);
           return;
         }
         if (isDebugPanelOpen) {

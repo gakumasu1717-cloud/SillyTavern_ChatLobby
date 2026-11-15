@@ -71,6 +71,7 @@ export function createLobbyHTML() {
                             <option value="name">🔤 이름순</option>
                             <option value="chats">💬 메시지 수</option>
                         </select>
+                        <button id="chat-lobby-char-batch-btn" data-action="toggle-char-batch" title="봇 여러 개 선택 (일괄 삭제)">☑</button>
                     </div>
                     
                     <!-- 태그 바 -->

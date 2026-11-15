@@ -7729,3 +7729,109 @@ body.light-mode #chat-lobby-debug-modal .debug-modal-pre {
     .charinfo-panel { height: 88%; }
     .charinfo-avatar { width: 72px; }
 }
+
+/* ============================================
+   Bot multi-select (bulk delete)
+   ============================================ */
+#chat-lobby-char-batch-btn {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--lobby-bg-hover, #444);
+    border-radius: 8px;
+    background: var(--lobby-bg-card, #2f2f2f);
+    color: var(--lobby-text, #fff);
+    cursor: pointer;
+    line-height: 1;
+}
+
+#chat-lobby-char-batch-btn.active {
+    background: var(--lobby-accent, #e50914);
+    border-color: var(--lobby-accent, #e50914);
+    color: #fff;
+}
+
+#chat-lobby-container.char-batch-mode .lobby-char-card:not(.lobby-group-card):not(.lobby-skeleton-card) {
+    cursor: copy;
+}
+
+#chat-lobby-container.char-batch-mode .lobby-char-card:hover {
+    transform: none;
+}
+
+#chat-lobby-container.char-batch-mode .lobby-group-card,
+#chat-lobby-container.char-batch-mode #chat-lobby-hero {
+    opacity: 0.35;
+}
+
+.lobby-char-card.batch-selected {
+    outline: 3px solid var(--lobby-accent, #e50914);
+    outline-offset: 2px;
+}
+
+.lobby-char-card.batch-selected::after {
+    content: '✓';
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--lobby-accent, #e50914);
+    color: #fff;
+    font-weight: 700;
+    z-index: 3;
+    pointer-events: none;
+}
+
+#chat-lobby-container.char-batch-mode .char-fav-btn {
+    display: none;
+}
+
+#chat-lobby-char-batch-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--lobby-bg-card, #1f1f1f);
+    border-top: 1px solid var(--lobby-border, rgba(255, 255, 255, 0.12));
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.char-batch-count {
+    font-weight: 600;
+    color: var(--lobby-text, #fff);
+    white-space: nowrap;
+}
+
+.char-batch-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.char-batch-actions button {
+    padding: 7px 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--lobby-bg-hover, rgba(255, 255, 255, 0.1));
+    color: var(--lobby-text, #fff);
+    cursor: pointer;
+}
+
+.char-batch-actions .char-batch-delete {
+    background: #c62828;
+    color: #fff;
+}
+
+.char-batch-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
