@@ -24,6 +24,7 @@ import {
 import { bindTooltipEvents } from './tooltip.js';
 import { showChatFolderMenu } from './chatMenu.js';
 import { updateBatchCount, deactivateBatchMode } from './batch.js';
+import { beginCharacterView, prepareSessionView, resetSessionView } from '../sessions/sessionView.js';
 
 // ============================================
 // 초기화
@@ -78,6 +79,8 @@ export async function renderChatList(character) {
     
     // UI 표시
     chatsPanel.classList.add('visible');
+    // 세션 화면 상태: 같은 캐릭터면 보던 화면 유지, 다른 캐릭터면 초기화
+    beginCharacterView(character.avatar);
     updateChatHeader(character);
     showFolderBar(true);
     
@@ -174,6 +177,12 @@ function renderChats(container, rawChats, charAvatar, skipAutoAnalyze = false) {
     // 💡 hasChats는 필터 전 전체 수로 설정 (새 채팅 버튼용)
     const totalChatCount = chatArray.length;
     updateHasChats(totalChatCount);
+    
+    // 세션 화면: 카드 화면이면 여기서 끝, 세션 안이면 그 세션의 채팅만 남긴다
+    // (폴더 필터/정렬보다 먼저. 세션 쪽이 실패하면 전체 목록 그대로 돌려받음)
+    const sessionView = prepareSessionView(container, charAvatar, chatArray);
+    if (sessionView.handled) return;
+    chatArray = sessionView.chats;
     
     if (chatArray.length === 0) {
         console.debug('[renderChats] No valid chats, showing empty state');
@@ -558,6 +567,9 @@ export function closeChatPanel() {
     
     // 배치 모드 자동 해제
     deactivateBatchMode();
+    
+    // 세션 화면 상태/대화상자 정리
+    resetSessionView();
     
     const chatsPanel = document.getElementById('chat-lobby-chats');
     if (chatsPanel) chatsPanel.classList.remove('visible');

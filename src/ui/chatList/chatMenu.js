@@ -13,6 +13,8 @@ import { remindStore } from '../../data/remindStore.js';
 import { highlightStore } from '../../data/highlightStore.js';
 import { openChatInViewer } from '../remindViewer.js';
 import { refreshCurrentChatList } from './charChatList.js';
+import { renameChat as renameSessionChat } from '../../data/sessionStore.js';
+import { renderSessionMenuItems, bindSessionMenuItems } from '../sessions/chatSessionMenu.js';
 
 // ============================================
 // 폴더 이동 메뉴
@@ -47,7 +49,8 @@ export function showChatFolderMenu(targetBtn, charAvatar, fileName) {
         <div class="folder-menu-item remind-add-item">
             🔖 리마인드 추가
         </div>
-        <div class="folder-menu-title">폴더 이동</div>
+        ${renderSessionMenuItems(charAvatar)}
+        <div class="folder-menu-title">보관함 폴더</div>
         <div class="folder-menu-item ${!currentFolderId || currentFolderId === 'uncategorized' ? 'active' : ''}" data-folder-id="">
             📤 폴더에서 제거
         </div>
@@ -70,7 +73,8 @@ export function showChatFolderMenu(targetBtn, charAvatar, fileName) {
         border-radius: 10px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.4);
         min-width: 150px;
-        overflow: hidden;
+        max-height: calc(100vh - 16px);
+        overflow-y: auto;
     `;
     
     // 로비 컨테이너 안에 추가 (z-index 스택 컨텍스트 안에서 표시)
@@ -78,6 +82,15 @@ export function showChatFolderMenu(targetBtn, charAvatar, fileName) {
     lobbyContainer.appendChild(menu);
     activeFolderMenu = menu;
     activeFolderMenu._targetBtn = targetBtn; // 토글용 참조 저장
+    
+    // 항목이 늘어 아래로 넘칠 수 있으니 화면 안으로 끌어올림
+    const menuHeight = menu.offsetHeight;
+    if (rect.bottom + 4 + menuHeight > window.innerHeight - 8) {
+        menu.style.top = `${Math.max(8, window.innerHeight - 8 - menuHeight)}px`;
+    }
+    
+    // 세션 항목 (세션 지정 / 같은 분기 / 메모 / 세션에서 빼기)
+    bindSessionMenuItems(menu, charAvatar, fileName, closeChatFolderMenu);
     
     // 뷰어로 감상 (리마인드 생성 없이 처음부터, 이어 읽기 지원)
     menu.querySelector('.view-chat-item')?.addEventListener('click', async () => {
@@ -100,7 +113,7 @@ export function showChatFolderMenu(targetBtn, charAvatar, fileName) {
     });
 
     // 폴더 이동
-    menu.querySelectorAll('.folder-menu-item:not(.rename-chat-item):not(.remind-add-item):not(.view-chat-item)').forEach(item => {
+    menu.querySelectorAll('.folder-menu-item:not(.rename-chat-item):not(.remind-add-item):not(.view-chat-item):not(.session-menu-item)').forEach(item => {
         item.addEventListener('click', async () => {
             const folderId = item.dataset.folderId;
             if (folderId) {
@@ -248,6 +261,7 @@ async function renameChatPrompt(charAvatar, fileName) {
             storage.renameChatKey(charAvatar, currentName, appliedName);
             remindStore.renameChat(charAvatar, currentName, appliedName);
             highlightStore.renameChat(charAvatar, currentName, appliedName);
+            renameSessionChat(charAvatar, currentName, appliedName);
 
             // ★ 이 채팅이 캐릭터의 "마지막 채팅"이었으면 포인터도 옮김
             // (안 하면 다음에 캐릭터로 들어갈 때 ST가 옛 이름으로 빈 새 채팅을 만들어

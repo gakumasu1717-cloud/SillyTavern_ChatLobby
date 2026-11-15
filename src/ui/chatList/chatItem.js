@@ -4,6 +4,7 @@
 
 import { storage } from '../../data/storage.js';
 import { escapeHtml, truncateText } from '../../utils/textUtils.js';
+import { renderSessionChips, renderMemoLine } from '../sessions/sessionBadges.js';
 
 /**
  * 채팅 아이템 HTML 생성
@@ -65,9 +66,11 @@ export function renderChatItem(chat, charAvatar, index) {
         <div class="chat-content">
             <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
+            ${renderMemoLine(charAvatar, fileName)}
             <div class="chat-meta">
                 ${messageCount > 0 ? `<span>💬 ${messageCount}개</span>` : ''}
                 ${folderName && folderId !== 'uncategorized' ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ''}
+                ${renderSessionChips(charAvatar, fileName)}
             </div>
         </div>
         <div class="chat-actions">

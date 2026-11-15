@@ -17,6 +17,7 @@ export {
     toggleBatchMode,
     updateBatchCount,
     batchSelectAll,
+    executeBatchSession,
     executeBatchMove,
     executeBatchDelete,
     isBatchMode,

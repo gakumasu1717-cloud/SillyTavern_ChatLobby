@@ -11,7 +11,7 @@ import { createLobbyHTML } from './ui/templates.js';
 import { renderPersonaBar } from './ui/personaBar.js';
 import { initPersonaRadialMenu, refreshPersonaRadialMenu, cleanupPersonaRadialMenu } from './ui/personaRadialMenu.js';
 import { renderCharacterGrid, setCharacterSelectHandler, handleSearch, handleSortChange as handleCharSortChange, resetCharacterSelectLock, setGroupSelectHandler } from './ui/characterGrid.js';
-import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, executeBatchDelete, batchSelectAll, closeChatPanel, deactivateBatchMode, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
+import { renderChatList, renderGroupChatList, setChatHandlers, handleFilterChange, handleSortChange as handleChatSortChange, toggleBatchMode, updateBatchCount, executeBatchDelete, executeBatchSession, batchSelectAll, closeChatPanel, deactivateBatchMode, cleanupTooltip, refreshCurrentChatList } from './ui/chatList.js';
 import { openChat, openGroupChat, deleteChat, startNewChat, deleteCharacter, switchCharacter, switchGroup } from './handlers/chatHandlers.js';
 import { openFolderModal, closeFolderModal, addFolder, updateFolderDropdowns } from './handlers/folderHandlers.js';
 import { showToast, showConfirm } from './ui/notifications.js';
@@ -39,6 +39,13 @@ import { installSaveGuard, uninstallSaveGuard, setSaveGuardEnabled } from './saf
 import { openCharInfo, closeCharInfo, isCharInfoOpen } from './ui/charInfoView.js';
 import { isCharBatchMode, toggleCharBatchMode, charBatchSelectAll, charBatchClear, charBatchDelete } from './ui/charBatch.js';
 import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/avatarUrl.js';
+import {
+    SESSIONS_KEY, SESSION_IMAGES_KEY, migrateFoldersToSessions,
+    removeCharacter as removeSessionCharacter, removeChat as removeSessionChat, renameChat as renameSessionChat
+} from './data/sessionStore.js';
+import { handleSessionAction, resetSessionView } from './ui/sessions/sessionView.js';
+import { closeTopSessionLayer, closeAllSessionLayers } from './ui/sessions/sessionOverlay.js';
+import { resolvePendingNewChat } from './ui/sessions/sessionState.js';
 
 (function() {
     'use strict';
@@ -177,6 +184,8 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
         'chatLobby_reminds',
         'chatLobby_highlights',
         'chatLobby_branchCache',
+        SESSIONS_KEY,
+        SESSION_IMAGES_KEY,
         CALENDAR_STORAGE_KEY,
         'chatLobby_calendar_v1_backup',
     ];
@@ -248,6 +257,8 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
 
         // 큰 데이터(IndexedDB) 먼저 불러오기 - 다른 단계가 저장소를 쓰기 전에
         await runStep('initPersist', () => initPersist(PERSIST_KEYS));
+        // 폴더 → 세션 변환 (1회, 폴더 데이터는 읽기만 함). initPersist 직후, 로비를 열기 전에
+        await runStep('migrateFoldersToSessions', () => migrateFoldersToSessions(storage.load()));
         await runStep('renderStDock', renderStDock);
         await runStep('setupSillyTavernEvents', setupSillyTavernEvents);
         await runStep('addLobbyToOptionsMenu', () => addLobbyToOptionsMenu());
@@ -367,6 +378,10 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
         
         // CHAT_CHANGED cooldown 패턴 (마지막 이벤트 후 500ms 대기)
         const onChatChanged = () => {
+            // "세션 안에서 시작한 새 채팅"을 세션에 넣기 (명세 6절)
+            // ⚠️ 새 채팅 시작 자체가 operationLock 안에서 일어나므로 락 검사보다 먼저 처리해야 한다
+            resolvePendingNewChat();
+            
             // 채팅 열기 작업 중이면 무시 (우리가 트리거한 CHAT_CHANGED)
             if (operationLock.isLocked) {
                 console.debug('[ChatLobby] CHAT_CHANGED ignored (operation in progress:', operationLock.currentOp, ')');
@@ -428,6 +443,7 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
                     forgetAvatarVersion(eventData.character.avatar);
                     // 폴더 배정/즐겨찾기도 정리 (ST 화면에서 직접 지운 경우 포함)
                     storage.removeCharacterData(eventData.character.avatar);
+                    removeSessionCharacter(eventData.character.avatar);
                     console.debug('[ChatLobby] Removed deleted character from caches:', eventData.character.avatar);
                 }
                 
@@ -447,6 +463,18 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
                 }
             },
             onChatChanged: onChatChanged,
+            // 채팅 이름 변경/삭제를 세션에 반영 (ST 화면에서 직접 한 경우 포함)
+            onChatRenamed: (data) => {
+                if (data?.avatarId && data.oldFileName && data.newFileName) {
+                    renameSessionChat(data.avatarId, data.oldFileName, data.newFileName);
+                }
+            },
+            onChatDeleted: (fileName) => {
+                // 파일명만 오므로 "지금 열린 캐릭터" 기준으로 처리 (그룹 채팅은 세션 대상 아님)
+                if (typeof fileName !== 'string' || !fileName || api.getContext()?.groupId) return;
+                const avatar = getCurrentCharacterAvatar();
+                if (avatar) removeSessionChat(avatar, fileName);
+            },
             // 🔥 메시지 전송/수신 이벤트 - 로비 밖에서 채팅해도 lastChatCache 갱신
             onMessageSent: () => {
                 // 🔥 그룹 채팅은 통계에서 제외
@@ -518,6 +546,12 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
         }
         
         eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+        if (eventTypes.CHAT_RENAMED) {
+            eventSource.on(eventTypes.CHAT_RENAMED, eventHandlers.onChatRenamed);
+        }
+        if (eventTypes.CHAT_DELETED) {
+            eventSource.on(eventTypes.CHAT_DELETED, eventHandlers.onChatDeleted);
+        }
         
         // 메시지 이벤트 등록 (마지막 채팅 시간 실시간 갱신)
         if (eventTypes.MESSAGE_SENT) {
@@ -558,6 +592,8 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
             eventSource.off?.(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
             eventSource.off?.(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
             eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+            eventSource.off?.(eventTypes.CHAT_RENAMED, eventHandlers.onChatRenamed);
+            eventSource.off?.(eventTypes.CHAT_DELETED, eventHandlers.onChatDeleted);
             
             // 메시지 이벤트 정리
             eventSource.off?.(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
@@ -601,6 +637,8 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
         
         // 그룹 선택 시 채팅 목록 렌더링
         setGroupSelectHandler((group) => {
+            // 캐릭터용 세션 화면(카드/세션 줄)이 그룹 목록에 남지 않도록
+            resetSessionView();
             renderGroupChatList(group);
         });
         
@@ -848,6 +886,7 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
         
         store.setLobbyOpen(false);
         store.resetSelection(); // 선택 상태 초기화
+        closeAllSessionLayers(); // 세션 대화상자/메뉴 (패널을 닫으면 세션 화면 상태도 함께 초기화됨)
         closeChatPanel();
         closeCharInfo();
         toggleCharBatchMode(false);
@@ -1277,6 +1316,9 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
             case 'batch-select-all':
                 batchSelectAll();
                 break;
+            case 'batch-session':
+                await executeBatchSession();
+                break;
             case 'open-folder-modal':
                 openFolderModal();
                 break;
@@ -1355,6 +1397,10 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
             case 'refresh-branches':
                 await handleRefreshBranches();
                 break;
+            default:
+                // session-* 액션 (세션 카드/세션 줄/시작 버튼)
+                await handleSessionAction(action, el);
+                break;
         }
     }
     
@@ -1374,6 +1420,11 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
      */
     function handleKeydown(e) {
         if (e.key === 'Escape') {
+            // 세션 대화상자/팝업이 열려 있으면 가장 위의 것 하나만 닫기 (채팅 패널 위에 떠 있으므로 맨 먼저)
+            if (closeTopSessionLayer()) {
+                return;
+            }
+
             // 리마인드 뷰어(라이트박스 포함)가 열려있으면 그것부터 닫기
             // (이 핸들러가 뷰어 자체 핸들러보다 먼저 실행되므로 여기서 분기해야
             //  ESC가 로비를 통째로 닫아버리는 사고를 막을 수 있음)

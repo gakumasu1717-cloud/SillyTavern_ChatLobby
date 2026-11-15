@@ -11,6 +11,7 @@ import { storage } from '../data/storage.js';
 import { operationLock } from '../utils/operationLock.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { showToast, showConfirm } from './notifications.js';
+import { removeCharacter as removeSessionCharacter } from '../data/sessionStore.js';
 
 const BAR_ID = 'chat-lobby-char-batch-bar';
 
@@ -157,6 +158,7 @@ export async function charBatchDelete() {
         // 로비 쪽 데이터 정리 (ST 이벤트로도 정리되지만, 대체 경로에서는 이벤트가 없음)
         for (const avatar of deleted) {
             storage.removeCharacterData(avatar);
+            removeSessionCharacter(avatar);
             cache.invalidate('chats', avatar);
             cache.invalidate('chatCounts', avatar);
             cache.invalidate('messageCounts', avatar);

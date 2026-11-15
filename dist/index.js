@@ -3488,6 +3488,583 @@ ${message}` : message;
 
   // src/ui/chatList/chatItem.js
   init_textUtils();
+
+  // src/data/sessionStore.js
+  var SESSIONS_KEY = "chatLobby_sessions";
+  var SESSION_IMAGES_KEY = "chatLobby_sessionImages";
+  var SESSION_ALL = "all";
+  var SESSION_UNSORTED = "unsorted";
+  var VERSION = 1;
+  var DEFAULT_SESSION_NAME = "\uC0C8 \uC138\uC158";
+  var MEMO_MAX_LENGTH = 2e3;
+  var SYSTEM_FOLDER_IDS = /* @__PURE__ */ new Set(["favorites", "uncategorized"]);
+  var ID_CHARS = "0123456789abcdefghijklmnopqrstuvwxyz";
+  function isPlainObject(v) {
+    return typeof v === "object" && v !== null && !Array.isArray(v);
+  }
+  function hasOwn(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+  }
+  function isSafeKey(key) {
+    return typeof key === "string" && key !== "" && key !== "__proto__";
+  }
+  function normName(name) {
+    return typeof name === "string" ? name.replace(/\.jsonl$/i, "") : "";
+  }
+  function normNames(list) {
+    const arr = Array.isArray(list) ? list : typeof list === "string" ? [list] : [];
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const item of arr) {
+      const n = normName(item);
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        out.push(n);
+      }
+    }
+    return out;
+  }
+  function makeEmptyRoot() {
+    return { version: VERSION, migratedFromFolders: false, characters: {} };
+  }
+  function loadRoot() {
+    const raw = persistGet(SESSIONS_KEY, makeEmptyRoot);
+    if (!isPlainObject(raw) || raw.version !== VERSION) return makeEmptyRoot();
+    if (!isPlainObject(raw.characters)) {
+      return { version: VERSION, migratedFromFolders: raw.migratedFromFolders === true, characters: {} };
+    }
+    return raw;
+  }
+  function commitRoot(root) {
+    persistSet(SESSIONS_KEY, root);
+  }
+  function loadImages() {
+    const raw = persistGet(SESSION_IMAGES_KEY, () => ({}));
+    return isPlainObject(raw) ? raw : {};
+  }
+  function commitImages(images) {
+    persistSet(SESSION_IMAGES_KEY, images);
+  }
+  function validSession(s) {
+    return isPlainObject(s) && typeof s.id === "string" && s.id !== "";
+  }
+  function chatsOf(session) {
+    if (!Array.isArray(session.chats)) return [];
+    return session.chats.filter((c) => typeof c === "string").map(normName).filter(Boolean);
+  }
+  function peek(root, avatar) {
+    const empty = { sessions: [], memos: {} };
+    if (!isSafeKey(avatar) || !hasOwn(root.characters, avatar)) return empty;
+    const entry = root.characters[avatar];
+    if (!isPlainObject(entry)) return empty;
+    return {
+      sessions: Array.isArray(entry.sessions) ? entry.sessions.filter(validSession) : [],
+      memos: isPlainObject(entry.memos) ? entry.memos : {}
+    };
+  }
+  function ensureEntry(root, avatar, create) {
+    if (!isSafeKey(avatar)) return null;
+    let entry = hasOwn(root.characters, avatar) ? root.characters[avatar] : void 0;
+    if (!isPlainObject(entry)) {
+      if (!create) return null;
+      entry = { sessions: [], memos: {} };
+      root.characters[avatar] = entry;
+    }
+    entry.sessions = Array.isArray(entry.sessions) ? entry.sessions.filter(validSession) : [];
+    if (!isPlainObject(entry.memos)) entry.memos = {};
+    for (const s of entry.sessions) {
+      s.chats = [...new Set(chatsOf(s))];
+    }
+    return entry;
+  }
+  function pruneEntry(root, avatar) {
+    if (!isSafeKey(avatar) || !hasOwn(root.characters, avatar)) return;
+    const entry = root.characters[avatar];
+    if (!isPlainObject(entry)) return;
+    const noSessions = !Array.isArray(entry.sessions) || entry.sessions.length === 0;
+    const noMemos = !isPlainObject(entry.memos) || Object.keys(entry.memos).length === 0;
+    if (noSessions && noMemos) delete root.characters[avatar];
+  }
+  function cloneSession(s) {
+    return { ...s, chats: chatsOf(s) };
+  }
+  function findSession(entry, sessionId) {
+    return entry.sessions.find((s) => s.id === sessionId) || null;
+  }
+  function makeSessionId(root) {
+    const used = /* @__PURE__ */ new Set();
+    for (const entry of Object.values(root.characters)) {
+      if (!isPlainObject(entry) || !Array.isArray(entry.sessions)) continue;
+      for (const s of entry.sessions) {
+        if (isPlainObject(s) && typeof s.id === "string") used.add(s.id);
+      }
+    }
+    for (let len = 8; ; len++) {
+      for (let i = 0; i < 20; i++) {
+        let id = "s_";
+        for (let k = 0; k < len; k++) id += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length) % ID_CHARS.length];
+        if (!used.has(id)) return id;
+      }
+    }
+  }
+  function cleanName(name) {
+    return (typeof name === "string" ? name : "").trim();
+  }
+  function createSessionIn(root, avatar, name, chats) {
+    const entry = ensureEntry(root, avatar, true);
+    const now = Date.now();
+    const session = {
+      id: makeSessionId(root),
+      name: cleanName(name) || DEFAULT_SESSION_NAME,
+      chats: normNames(chats),
+      createdAt: now,
+      updatedAt: now
+    };
+    entry.sessions.push(session);
+    return session;
+  }
+  function getSessions(avatar) {
+    return peek(loadRoot(), avatar).sessions.map(cloneSession);
+  }
+  function getSession(avatar, sessionId) {
+    const s = peek(loadRoot(), avatar).sessions.find((x) => x.id === sessionId);
+    return s ? cloneSession(s) : null;
+  }
+  function hasSessions(avatar) {
+    return peek(loadRoot(), avatar).sessions.length > 0;
+  }
+  function getChatSessions(avatar, fileName) {
+    const name = normName(fileName);
+    if (!name) return [];
+    return peek(loadRoot(), avatar).sessions.filter((s) => chatsOf(s).includes(name)).map(cloneSession);
+  }
+  function getSessionChatSet(avatar, sessionId) {
+    const s = peek(loadRoot(), avatar).sessions.find((x) => x.id === sessionId);
+    return new Set(s ? chatsOf(s) : []);
+  }
+  function getAssignedChatSet(avatar) {
+    const set = /* @__PURE__ */ new Set();
+    for (const s of peek(loadRoot(), avatar).sessions) {
+      for (const c of chatsOf(s)) set.add(c);
+    }
+    return set;
+  }
+  function filterChatsBySession(avatar, sessionId, chats) {
+    if (!Array.isArray(chats)) return [];
+    if (sessionId === SESSION_ALL) return [...chats];
+    if (sessionId === SESSION_UNSORTED) {
+      const assigned = getAssignedChatSet(avatar);
+      return chats.filter((c) => !assigned.has(normName(c && c.file_name)));
+    }
+    const s = peek(loadRoot(), avatar).sessions.find((x) => x.id === sessionId);
+    if (!s) return [];
+    const set = new Set(chatsOf(s));
+    return chats.filter((c) => set.has(normName(c && c.file_name)));
+  }
+  function getSessionImage(sessionId) {
+    if (!isSafeKey(sessionId)) return null;
+    const images = loadImages();
+    if (!hasOwn(images, sessionId)) return null;
+    const v = images[sessionId];
+    return typeof v === "string" && v !== "" ? v : null;
+  }
+  function getMemo(avatar, fileName) {
+    const name = normName(fileName);
+    if (!isSafeKey(name)) return "";
+    const memos = peek(loadRoot(), avatar).memos;
+    if (!hasOwn(memos, name)) return "";
+    return typeof memos[name] === "string" ? memos[name] : "";
+  }
+  function createSession(avatar, name, { chats = [] } = {}) {
+    if (!isSafeKey(avatar)) return null;
+    const root = loadRoot();
+    const session = createSessionIn(root, avatar, name, chats);
+    commitRoot(root);
+    return cloneSession(session);
+  }
+  function renameSession(avatar, sessionId, name) {
+    const clean = cleanName(name);
+    if (!clean) return false;
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    const session = entry && findSession(entry, sessionId);
+    if (!session) return false;
+    if (session.name !== clean) {
+      session.name = clean;
+      session.updatedAt = Date.now();
+      commitRoot(root);
+    }
+    return true;
+  }
+  function deleteSession(avatar, sessionId) {
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    if (!entry) return false;
+    const idx = entry.sessions.findIndex((s) => s.id === sessionId);
+    if (idx < 0) return false;
+    entry.sessions.splice(idx, 1);
+    pruneEntry(root, avatar);
+    commitRoot(root);
+    const images = loadImages();
+    if (hasOwn(images, sessionId)) {
+      delete images[sessionId];
+      commitImages(images);
+    }
+    return true;
+  }
+  function setSessionImage(sessionId, dataUrl) {
+    if (!isSafeKey(sessionId)) return;
+    const images = loadImages();
+    if (dataUrl === null || dataUrl === void 0 || dataUrl === "") {
+      if (!hasOwn(images, sessionId)) return;
+      delete images[sessionId];
+    } else if (typeof dataUrl === "string") {
+      images[sessionId] = dataUrl;
+    } else {
+      return;
+    }
+    commitImages(images);
+  }
+  function addChats(avatar, sessionId, fileNames) {
+    const names = normNames(fileNames);
+    if (names.length === 0) return 0;
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    const session = entry && findSession(entry, sessionId);
+    if (!session) return 0;
+    const have = new Set(session.chats);
+    let added = 0;
+    for (const n of names) {
+      if (!have.has(n)) {
+        have.add(n);
+        session.chats.push(n);
+        added++;
+      }
+    }
+    if (added > 0) {
+      session.updatedAt = Date.now();
+      commitRoot(root);
+    }
+    return added;
+  }
+  function removeChats(avatar, sessionId, fileNames) {
+    const names = new Set(normNames(fileNames));
+    if (names.size === 0) return 0;
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    const session = entry && findSession(entry, sessionId);
+    if (!session) return 0;
+    const before = session.chats.length;
+    session.chats = session.chats.filter((c) => !names.has(c));
+    const removed = before - session.chats.length;
+    if (removed > 0) {
+      session.updatedAt = Date.now();
+      commitRoot(root);
+    }
+    return removed;
+  }
+  function setChatMembership(avatar, fileNames, change) {
+    const { add = [], remove = [] } = isPlainObject(change) ? change : {};
+    const names = normNames(fileNames);
+    if (names.length === 0) return;
+    const removeIds = new Set(Array.isArray(remove) ? remove : []);
+    const addIds = new Set((Array.isArray(add) ? add : []).filter((id) => !removeIds.has(id)));
+    if (addIds.size === 0 && removeIds.size === 0) return;
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    if (!entry) return;
+    const nameSet = new Set(names);
+    const now = Date.now();
+    let changed = false;
+    for (const s of entry.sessions) {
+      if (removeIds.has(s.id)) {
+        const before = s.chats.length;
+        s.chats = s.chats.filter((c) => !nameSet.has(c));
+        if (s.chats.length !== before) {
+          s.updatedAt = now;
+          changed = true;
+        }
+      } else if (addIds.has(s.id)) {
+        const have = new Set(s.chats);
+        let added = 0;
+        for (const n of names) {
+          if (!have.has(n)) {
+            s.chats.push(n);
+            added++;
+          }
+        }
+        if (added > 0) {
+          s.updatedAt = now;
+          changed = true;
+        }
+      }
+    }
+    if (changed) commitRoot(root);
+  }
+  function setMemo(avatar, fileName, text) {
+    const name = normName(fileName);
+    if (!isSafeKey(avatar) || !isSafeKey(name)) return;
+    const memo = Array.from((typeof text === "string" ? text : "").trim()).slice(0, MEMO_MAX_LENGTH).join("");
+    const root = loadRoot();
+    if (memo === "") {
+      const entry2 = ensureEntry(root, avatar, false);
+      if (!entry2 || !hasOwn(entry2.memos, name)) return;
+      delete entry2.memos[name];
+      pruneEntry(root, avatar);
+      commitRoot(root);
+      return;
+    }
+    const entry = ensureEntry(root, avatar, true);
+    if (hasOwn(entry.memos, name) && entry.memos[name] === memo) return;
+    entry.memos[name] = memo;
+    commitRoot(root);
+  }
+  function renameChat(avatar, oldFileName, newFileName) {
+    const oldName = normName(oldFileName);
+    const newName = normName(newFileName);
+    if (!oldName || !newName || oldName === newName) return;
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    if (!entry) return;
+    const now = Date.now();
+    let changed = false;
+    for (const s of entry.sessions) {
+      const idx = s.chats.indexOf(oldName);
+      if (idx < 0) continue;
+      if (s.chats.includes(newName)) {
+        s.chats.splice(idx, 1);
+      } else {
+        s.chats[idx] = newName;
+      }
+      s.updatedAt = now;
+      changed = true;
+    }
+    if (isSafeKey(oldName) && hasOwn(entry.memos, oldName)) {
+      if (isSafeKey(newName) && !hasOwn(entry.memos, newName)) {
+        entry.memos[newName] = entry.memos[oldName];
+      }
+      delete entry.memos[oldName];
+      changed = true;
+    }
+    if (changed) commitRoot(root);
+  }
+  function removeChat(avatar, fileName) {
+    const name = normName(fileName);
+    if (!name) return;
+    const root = loadRoot();
+    const entry = ensureEntry(root, avatar, false);
+    if (!entry) return;
+    const now = Date.now();
+    let changed = false;
+    for (const s of entry.sessions) {
+      const before = s.chats.length;
+      s.chats = s.chats.filter((c) => c !== name);
+      if (s.chats.length !== before) {
+        s.updatedAt = now;
+        changed = true;
+      }
+    }
+    if (isSafeKey(name) && hasOwn(entry.memos, name)) {
+      delete entry.memos[name];
+      changed = true;
+    }
+    if (changed) {
+      pruneEntry(root, avatar);
+      commitRoot(root);
+    }
+  }
+  function removeCharacter(avatar) {
+    if (!isSafeKey(avatar)) return;
+    const root = loadRoot();
+    if (!hasOwn(root.characters, avatar)) return;
+    const entry = root.characters[avatar];
+    const ids = isPlainObject(entry) && Array.isArray(entry.sessions) ? entry.sessions.filter(validSession).map((s) => s.id) : [];
+    delete root.characters[avatar];
+    commitRoot(root);
+    const images = loadImages();
+    let imagesChanged = false;
+    for (const id of ids) {
+      if (hasOwn(images, id)) {
+        delete images[id];
+        imagesChanged = true;
+      }
+    }
+    if (imagesChanged) commitImages(images);
+  }
+  function migrateFoldersToSessions(lobbyData) {
+    const root = loadRoot();
+    if (root.migratedFromFolders === true) return { created: 0, skipped: true };
+    const folderNames = /* @__PURE__ */ new Map();
+    const folders = isPlainObject(lobbyData) && Array.isArray(lobbyData.folders) ? lobbyData.folders : [];
+    for (const f of folders) {
+      if (!isPlainObject(f) || typeof f.id !== "string" || SYSTEM_FOLDER_IDS.has(f.id)) continue;
+      if (!folderNames.has(f.id)) folderNames.set(f.id, cleanName(f.name));
+    }
+    const assignments = isPlainObject(lobbyData) && isPlainObject(lobbyData.chatAssignments) ? lobbyData.chatAssignments : {};
+    const groups = /* @__PURE__ */ new Map();
+    for (const [key, folderId] of Object.entries(assignments)) {
+      if (typeof folderId !== "string" || !folderNames.has(folderId)) continue;
+      const sep = key.indexOf("::");
+      if (sep <= 0) continue;
+      const avatar = key.slice(0, sep);
+      const file = normName(key.slice(sep + 2));
+      if (!file || avatar.startsWith("group_") || !isSafeKey(avatar)) continue;
+      const gKey = avatar + "\0" + folderId;
+      if (!groups.has(gKey)) groups.set(gKey, { avatar, folderId, files: [] });
+      groups.get(gKey).files.push(file);
+    }
+    let created = 0;
+    for (const { avatar, folderId, files } of groups.values()) {
+      const name = folderNames.get(folderId) || DEFAULT_SESSION_NAME;
+      const entry = ensureEntry(root, avatar, true);
+      let session = entry.sessions.find((s) => s.name === name);
+      if (!session) {
+        session = createSessionIn(root, avatar, name, files);
+        created++;
+        continue;
+      }
+      const have = new Set(session.chats);
+      let added = 0;
+      for (const f of normNames(files)) {
+        if (!have.has(f)) {
+          have.add(f);
+          session.chats.push(f);
+          added++;
+        }
+      }
+      if (added > 0) session.updatedAt = Date.now();
+    }
+    root.migratedFromFolders = true;
+    commitRoot(root);
+    return { created, skipped: false };
+  }
+
+  // src/ui/sessions/sessionBadges.js
+  init_textUtils();
+
+  // src/ui/sessions/sessionState.js
+  init_notifications();
+  var NEW_CHAT_TTL_MS = 60 * 1e3;
+  var stripExt = (name) => typeof name === "string" ? name.replace(/\.jsonl$/i, "") : "";
+  function emptyView() {
+    return { avatar: null, mode: "list", activeId: SESSION_ALL };
+  }
+  var view = emptyView();
+  var lastChats = { avatar: null, chats: [] };
+  var pendingNewChat = null;
+  function getSessionView() {
+    return { ...view };
+  }
+  function enterCharacter(avatar) {
+    if (view.avatar === avatar) return;
+    view = { avatar, mode: hasSessions(avatar) ? "cards" : "list", activeId: SESSION_ALL };
+    lastChats = { avatar: null, chats: [] };
+  }
+  function resetSessionState() {
+    view = emptyView();
+    lastChats = { avatar: null, chats: [] };
+  }
+  function showCards() {
+    view = { ...view, mode: "cards", activeId: SESSION_ALL };
+  }
+  function showSession(sessionId) {
+    view = { ...view, mode: "list", activeId: sessionId };
+  }
+  function isRealSessionId(id) {
+    return id !== SESSION_ALL && id !== SESSION_UNSORTED && typeof id === "string" && id !== "";
+  }
+  function getActiveRealSessionId(avatar) {
+    if (view.avatar !== avatar || view.mode !== "list" || !isRealSessionId(view.activeId)) return null;
+    return getSession(avatar, view.activeId) ? view.activeId : null;
+  }
+  function rememberChats(avatar, chats) {
+    lastChats = { avatar, chats: Array.isArray(chats) ? chats : [] };
+  }
+  function getCharacterChats(avatar) {
+    const raw = cache.get("chats", avatar);
+    if (raw) return filterValidChats(normalizeChats(raw));
+    return lastChats.avatar === avatar ? lastChats.chats : [];
+  }
+  function rememberPendingNewChat(avatar, sessionId) {
+    pendingNewChat = null;
+    const raw = cache.get("chats", avatar);
+    const source = raw ? normalizeChats(raw) : lastChats.avatar === avatar ? lastChats.chats : null;
+    if (!source) return false;
+    const known = new Set(source.map((c) => stripExt(c?.file_name || c?.fileName)).filter(Boolean));
+    pendingNewChat = { avatar, sessionId, at: Date.now(), known };
+    return true;
+  }
+  function resolvePendingNewChat() {
+    const pending = pendingNewChat;
+    if (!pending) return;
+    if (Date.now() - pending.at > NEW_CHAT_TTL_MS) {
+      pendingNewChat = null;
+      return;
+    }
+    try {
+      const context = api.getContext();
+      if (!context || context.groupId) return;
+      const id = context.characterId;
+      if (id === void 0 || id === null || id < 0) return;
+      const char = context.characters?.[id];
+      if (!char || char.avatar !== pending.avatar) return;
+      const name = stripExt(char.chat);
+      if (!name || pending.known.has(name)) return;
+      pendingNewChat = null;
+      const session = getSession(pending.avatar, pending.sessionId);
+      if (session && addChats(pending.avatar, pending.sessionId, [name]) > 0) {
+        showToast(`\u{1F5C2}\uFE0F \uC0C8 \uCC44\uD305\uC744 "${session.name}" \uC138\uC158\uC5D0 \uB2F4\uC558\uC2B5\uB2C8\uB2E4.`, "success");
+      }
+    } catch (e) {
+      console.warn("[Sessions] resolvePendingNewChat failed:", e);
+      pendingNewChat = null;
+    }
+  }
+
+  // src/ui/sessions/sessionBadges.js
+  var MAX_CHIPS = 3;
+  function renderSessionChips(avatar, fileName) {
+    try {
+      const view2 = getSessionView();
+      if (view2.avatar !== avatar || view2.mode !== "list" || view2.activeId !== SESSION_ALL) return "";
+      const sessions = getChatSessions(avatar, fileName);
+      if (sessions.length === 0) return "";
+      const shown = sessions.slice(0, MAX_CHIPS).map((s) => `<span class="chat-session-chip" title="${escapeHtml(s.name)}">\u{1F5C2}\uFE0F ${escapeHtml(s.name)}</span>`);
+      if (sessions.length > MAX_CHIPS) {
+        const rest = sessions.slice(MAX_CHIPS).map((s) => s.name).join(", ");
+        shown.push(`<span class="chat-session-chip more" title="${escapeHtml(rest)}">+${sessions.length - MAX_CHIPS}</span>`);
+      }
+      return shown.join("");
+    } catch (e) {
+      console.warn("[Sessions] renderSessionChips failed:", e);
+      return "";
+    }
+  }
+  function renderMemoLine(avatar, fileName) {
+    try {
+      const memo = getMemo(avatar, fileName);
+      if (!memo) return "";
+      const oneLine = memo.replace(/\s+/g, " ").trim();
+      return `<div class="chat-memo-line" title="${escapeHtml(memo)}">\u{1F4DD} ${escapeHtml(oneLine)}</div>`;
+    } catch (e) {
+      console.warn("[Sessions] renderMemoLine failed:", e);
+      return "";
+    }
+  }
+  function refreshMemoLine(avatar, fileName) {
+    const name = String(fileName).replace(/\.jsonl$/i, "");
+    const items = document.querySelectorAll("#chat-lobby-chats-list .lobby-chat-item");
+    for (const item of items) {
+      if (item.dataset.charAvatar !== avatar) continue;
+      if (String(item.dataset.fileName || "").replace(/\.jsonl$/i, "") !== name) continue;
+      item.querySelector(".chat-memo-line")?.remove();
+      const html = renderMemoLine(avatar, fileName);
+      if (html) item.querySelector(".chat-preview")?.insertAdjacentHTML("afterend", html);
+      break;
+    }
+  }
+
+  // src/ui/chatList/chatItem.js
   function renderChatItem(chat, charAvatar, index) {
     const fileName = chat.file_name || chat.fileName || chat.name || `chat_${index}`;
     const displayName = fileName.replace(".jsonl", "");
@@ -3525,9 +4102,11 @@ ${message}` : message;
         <div class="chat-content">
             <div class="chat-name">${branchBadge}${escapeHtml(displayName)}</div>
             <div class="chat-preview">${escapeHtml(truncateText(preview, 80))}</div>
+            ${renderMemoLine(charAvatar, fileName)}
             <div class="chat-meta">
                 ${messageCount2 > 0 ? `<span>\u{1F4AC} ${messageCount2}\uAC1C</span>` : ""}
                 ${folderName && folderId !== "uncategorized" ? `<span class="chat-folder-tag">${escapeHtml(folderName)}</span>` : ""}
+                ${renderSessionChips(charAvatar, fileName)}
             </div>
         </div>
         <div class="chat-actions">
@@ -4462,13 +5041,13 @@ ${message}` : message;
     await openViewerWithData(remind);
   }
   async function openChatInViewer(avatar, charName, fileName) {
-    const cleanName = (fileName || "").replace(/\.jsonl$/i, "");
+    const cleanName2 = (fileName || "").replace(/\.jsonl$/i, "");
     await openViewerWithData({
-      id: `adhoc_${avatar}::${cleanName}`,
+      id: `adhoc_${avatar}::${cleanName2}`,
       // 진행 저장용 안정 키
       avatar,
       charName: charName || avatar.replace(/\.[^.]+$/, ""),
-      fileName: cleanName,
+      fileName: cleanName2,
       start: null,
       end: null,
       note: "",
@@ -4980,8 +5559,8 @@ ${message}` : message;
       clearTimeout(hlHideTimer);
       hlHideTimer = null;
     }
-    const popup = document.getElementById("remind-hl-popup");
-    if (popup) popup.style.display = "none";
+    const popup2 = document.getElementById("remind-hl-popup");
+    if (popup2) popup2.style.display = "none";
   }
   function scheduleHideHighlightPopup() {
     if (hlHideTimer) clearTimeout(hlHideTimer);
@@ -5004,9 +5583,9 @@ ${message}` : message;
     hideHighlightPopup();
   }
   function handleTextSelection() {
-    const popup = document.getElementById("remind-hl-popup");
+    const popup2 = document.getElementById("remind-hl-popup");
     const panel = document.querySelector("#chat-lobby-remind-viewer .remind-viewer-panel");
-    if (!popup || !panel) return;
+    if (!popup2 || !panel) return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
       scheduleHideHighlightPopup();
@@ -5038,9 +5617,9 @@ ${message}` : message;
     const panelRect = panel.getBoundingClientRect();
     const left = Math.min(panelRect.width - 130, Math.max(8, rect.left - panelRect.left));
     const top = Math.min(panelRect.height - 50, rect.bottom - panelRect.top + 8);
-    popup.style.left = `${left}px`;
-    popup.style.top = `${top}px`;
-    popup.style.display = "flex";
+    popup2.style.left = `${left}px`;
+    popup2.style.top = `${top}px`;
+    popup2.style.display = "flex";
   }
   function saveHighlightFromSelection() {
     if (!pendingHighlight || !currentRemind) {
@@ -5361,194 +5940,348 @@ ${message}` : message;
     showToast("\u{1F4BE} \uD14D\uC2A4\uD2B8 \uD30C\uC77C\uB85C \uBC31\uC5C5\uD588\uC2B5\uB2C8\uB2E4.", "success");
   }
 
-  // src/ui/chatList/chatMenu.js
-  var activeFolderMenu = null;
-  function showChatFolderMenu(targetBtn, charAvatar, fileName) {
-    if (activeFolderMenu) {
-      const prevBtn = activeFolderMenu._targetBtn;
-      closeChatFolderMenu();
-      if (prevBtn === targetBtn) return;
+  // src/utils/branchGroup.js
+  var stripExt2 = (name) => typeof name === "string" ? name.replace(/\.jsonl$/i, "") : "";
+  function getBranchFamily(avatar, fileName) {
+    const self = stripExt2(fileName);
+    if (!avatar || !self) return null;
+    const branches = getAllBranches(avatar) || {};
+    const parentOf = /* @__PURE__ */ new Map();
+    for (const [child, info] of Object.entries(branches)) {
+      const c = stripExt2(child);
+      const p = stripExt2(info?.parentChat);
+      if (c && p && c !== p) parentOf.set(c, p);
     }
-    const data = storage.load();
-    const folders = (data.folders || []).filter((f) => f.id !== "favorites" && f.id !== "uncategorized");
-    const currentFolderId = storage.getChatFolder(charAvatar, fileName);
-    const menu = document.createElement("div");
-    menu.className = "chat-folder-menu";
-    menu.innerHTML = `
-        <div class="folder-menu-item view-chat-item">
-            \u{1F4D6} \uBDF0\uC5B4\uB85C \uAC10\uC0C1
-        </div>
-        <div class="folder-menu-item rename-chat-item">
-            \u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30
-        </div>
-        <div class="folder-menu-item remind-add-item">
-            \u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00
-        </div>
-        <div class="folder-menu-title">\uD3F4\uB354 \uC774\uB3D9</div>
-        <div class="folder-menu-item ${!currentFolderId || currentFolderId === "uncategorized" ? "active" : ""}" data-folder-id="">
-            \u{1F4E4} \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70
-        </div>
-        ${folders.map((f) => `
-            <div class="folder-menu-item ${f.id === currentFolderId ? "active" : ""}" data-folder-id="${f.id}">
-                \u{1F4C1} ${escapeHtml(f.name)}
-            </div>
-        `).join("")}
-    `;
-    const rect = targetBtn.getBoundingClientRect();
-    menu.style.cssText = `
-        position: fixed;
-        top: ${rect.bottom + 4}px;
-        right: ${window.innerWidth - rect.right}px;
-        z-index: 60000;
-        background: var(--lobby-bg-card, #1a1a2e);
-        border: 1px solid var(--lobby-border, #333);
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        min-width: 150px;
-        overflow: hidden;
-    `;
-    const lobbyContainer = document.getElementById("chat-lobby-container") || document.body;
-    lobbyContainer.appendChild(menu);
-    activeFolderMenu = menu;
-    activeFolderMenu._targetBtn = targetBtn;
-    menu.querySelector(".view-chat-item")?.addEventListener("click", async () => {
-      closeChatFolderMenu();
-      const context = api.getContext();
-      const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
-      await openChatInViewer(charAvatar, char?.name || "", fileName);
-    });
-    menu.querySelector(".rename-chat-item")?.addEventListener("click", async () => {
-      closeChatFolderMenu();
-      await renameChatPrompt(charAvatar, fileName);
-    });
-    menu.querySelector(".remind-add-item")?.addEventListener("click", async () => {
-      closeChatFolderMenu();
-      await addRemindPrompt(charAvatar, fileName);
-    });
-    menu.querySelectorAll(".folder-menu-item:not(.rename-chat-item):not(.remind-add-item):not(.view-chat-item)").forEach((item) => {
-      item.addEventListener("click", async () => {
-        const folderId = item.dataset.folderId;
-        if (folderId) {
-          storage.setChatFolder(charAvatar, fileName, folderId);
-          const folder = folders.find((f) => f.id === folderId);
-          showToast(`\u{1F4C1} ${folder?.name || "\uD3F4\uB354"}\uB85C \uC774\uB3D9`, "success");
-        } else {
-          storage.setChatFolder(charAvatar, fileName, null);
-          showToast("\uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
+    if (parentOf.size === 0 && Object.keys(getAllFingerprints(avatar) || {}).length === 0) {
+      return null;
+    }
+    let root = self;
+    const seen = /* @__PURE__ */ new Set([root]);
+    while (parentOf.has(root)) {
+      const next = parentOf.get(root);
+      if (seen.has(next)) break;
+      seen.add(next);
+      root = next;
+    }
+    const children = /* @__PURE__ */ new Map();
+    for (const [c, p] of parentOf) {
+      if (!children.has(p)) children.set(p, []);
+      children.get(p).push(c);
+    }
+    const family = /* @__PURE__ */ new Set([root]);
+    const queue = [root];
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const child of children.get(cur) || []) {
+        if (!family.has(child)) {
+          family.add(child);
+          queue.push(child);
         }
-        closeChatFolderMenu();
-        await refreshCurrentChatList();
-      });
-    });
-    setTimeout(() => {
-      listeners.add("chatFolderMenu", document, "click", closeFolderMenuOnClickOutside);
-    }, 10);
-  }
-  function closeFolderMenuOnClickOutside(e) {
-    if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
-      closeChatFolderMenu();
-    }
-  }
-  function closeChatFolderMenu() {
-    if (activeFolderMenu) {
-      activeFolderMenu.remove();
-      activeFolderMenu = null;
-    }
-    listeners.clear("chatFolderMenu");
-  }
-  async function addRemindPrompt(charAvatar, fileName) {
-    const cleanName = fileName.replace(/\.jsonl$/i, "");
-    const rangeInput = await showPrompt(
-      "\uC800\uC7A5\uD560 \uBA54\uC2DC\uC9C0 \uBC94\uC704\uB97C \uC785\uB825\uD558\uC138\uC694. (\uBA54\uC2DC\uC9C0 \uBC88\uD638 \uAE30\uC900)\n\uC608: 120-130 / 120 (\uD55C \uBA54\uC2DC\uC9C0) / \uBE44\uC6B0\uBA74 \uC804\uCCB4",
-      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00",
-      ""
-    );
-    if (rangeInput === null) return;
-    let start = null;
-    let end = null;
-    const trimmed = rangeInput.trim();
-    if (trimmed) {
-      const match = trimmed.match(/^(\d+)\s*[-~]\s*(\d+)$/) || trimmed.match(/^(\d+)$/);
-      if (!match) {
-        showToast("\uBC94\uC704 \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC608: 120-130", "error");
-        return;
       }
-      start = parseInt(match[1], 10);
-      end = match[2] !== void 0 ? parseInt(match[2], 10) : start;
-      if (end < start) [start, end] = [end, start];
     }
-    const note = await showPrompt(
-      "\uBA54\uBAA8\uB97C \uB0A8\uACA8\uC8FC\uC138\uC694. (\uC65C \uC88B\uC558\uB294\uC9C0, \uC5B4\uB5A4 \uC7A5\uBA74\uC778\uC9C0)",
-      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uBA54\uBAA8",
-      ""
-    );
-    if (note === null) return;
-    const context = api.getContext();
-    const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
-    remindStore.add({
-      avatar: charAvatar,
-      charName: char?.name || charAvatar.replace(/\.[^.]+$/, ""),
-      fileName: cleanName,
-      start,
-      end,
-      note: note.trim()
-    });
-    const rangeText = start !== null ? ` (#${start}~#${end})` : "";
-    showToast(`\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uC800\uC7A5\uB428${rangeText}
-\uBCF4\uAD00\uD568 \uD0ED\uC5D0\uC11C \uB2E4\uC2DC \uBCFC \uC218 \uC788\uC5B4\uC694.`, "success");
+    family.add(self);
+    return family;
   }
-  async function renameChatPrompt(charAvatar, fileName) {
-    const currentName = fileName.replace(/\.jsonl$/i, "");
-    const context = api.getContext();
-    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
-    if (currentChatFile === currentName) {
-      showToast("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC740 \uC774\uB984\uC744 \uBC14\uAFC0 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.\n\uB2E4\uB978 \uCC44\uD305\uC73C\uB85C \uC774\uB3D9 \uD6C4 \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "warning");
-      return;
-    }
-    const input = await showPrompt("\uC0C8 \uCC44\uD305 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.", "\u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30", currentName);
-    if (input === null) return;
-    const newName = input.trim().replace(/\.jsonl$/i, "");
-    if (!newName || newName === currentName) return;
-    if (/[\\/:*?"<>|]/.test(newName)) {
-      showToast('\uD30C\uC77C\uBA85\uC5D0 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uB294 \uBB38\uC790\uAC00 \uC788\uC2B5\uB2C8\uB2E4: \\ / : * ? " < > |', "error");
-      return;
-    }
-    const chats = cache.get("chats", charAvatar);
-    if (Array.isArray(chats) && chats.some((c) => (c.file_name || "").replace(/\.jsonl$/i, "") === newName)) {
-      showToast("\uAC19\uC740 \uC774\uB984\uC758 \uCC44\uD305\uC774 \uC774\uBBF8 \uC788\uC2B5\uB2C8\uB2E4.", "error");
-      return;
-    }
-    const token = operationLock.acquire("renameChat", 1e4);
-    if (!token) {
-      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
-      return;
-    }
-    try {
-      const appliedName = await api.renameChat(charAvatar, currentName, newName);
-      if (appliedName) {
-        storage.renameChatKey(charAvatar, currentName, appliedName);
-        remindStore.renameChat(charAvatar, currentName, appliedName);
-        highlightStore.renameChat(charAvatar, currentName, appliedName);
-        const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
-        if (char && char.chat === currentName) {
-          char.chat = appliedName;
-          api.saveLastChatPointer(char.avatar, char.name, appliedName);
-        }
-        showToast(`\uC774\uB984 \uBCC0\uACBD: "${appliedName}"`, "success");
-        await refreshCurrentChatList(true);
-      } else {
-        showToast("\uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
-      }
-    } catch (e) {
-      console.error("[ChatList] Rename failed:", e);
-      showToast("\uC774\uB984 \uBCC0\uACBD \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
-    } finally {
-      operationLock.release(token);
-    }
-  }
+
+  // src/ui/sessions/chatSessionMenu.js
+  init_notifications();
 
   // src/ui/chatList/batch.js
   init_notifications();
+
+  // src/ui/sessions/sessionPicker.js
+  init_textUtils();
+  init_notifications();
+
+  // src/ui/sessions/sessionOverlay.js
+  init_textUtils();
+  var DIALOG_GROUP = "sessionDialog";
+  var POPUP_GROUP = "sessionPopup";
+  var dialog = null;
+  var popup = null;
+  function host() {
+    return document.getElementById("chat-lobby-container") || document.body;
+  }
+  function closeSessionDialog() {
+    if (!dialog) return;
+    const { el, onClose } = dialog;
+    dialog = null;
+    listeners.clear(DIALOG_GROUP);
+    el.remove();
+    if (typeof onClose === "function") {
+      try {
+        onClose();
+      } catch (e) {
+        console.warn("[Sessions] dialog onClose failed:", e);
+      }
+    }
+  }
+  function openSessionDialog({ title, className = "", bodyHtml = "", footerHtml = "", onClose = null }) {
+    closeSessionDialog();
+    closeSessionPopup();
+    const backdrop = document.createElement("div");
+    backdrop.className = "session-dialog-backdrop";
+    backdrop.innerHTML = `
+        <div class="session-dialog ${escapeHtml(className)}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+            <div class="session-dialog-header">
+                <h3>${escapeHtml(title)}</h3>
+                <button type="button" class="session-dialog-x" data-sd-close aria-label="\uB2EB\uAE30">\u2715</button>
+            </div>
+            <div class="session-dialog-body">${bodyHtml}</div>
+            <div class="session-dialog-footer">${footerHtml}</div>
+        </div>
+    `;
+    host().appendChild(backdrop);
+    dialog = { el: backdrop, onClose };
+    let downOnBackdrop = false;
+    listeners.add(DIALOG_GROUP, backdrop, "pointerdown", (e) => {
+      downOnBackdrop = e.target === backdrop;
+    });
+    listeners.add(DIALOG_GROUP, backdrop, "click", (e) => {
+      if (e.target === backdrop && downOnBackdrop) {
+        closeSessionDialog();
+        return;
+      }
+      if (e.target.closest?.("[data-sd-close]")) closeSessionDialog();
+    });
+    return {
+      el: backdrop,
+      body: backdrop.querySelector(".session-dialog-body"),
+      footer: backdrop.querySelector(".session-dialog-footer"),
+      close: closeSessionDialog
+    };
+  }
+  function onDialog(target, type, handler, options) {
+    listeners.add(DIALOG_GROUP, target, type, handler, options);
+  }
+  function closeSessionPopup() {
+    if (!popup) return;
+    popup.el.remove();
+    popup = null;
+    listeners.clear(POPUP_GROUP);
+  }
+  function openSessionPopup(anchor, items) {
+    const sameAnchor = popup?.anchor === anchor;
+    closeSessionPopup();
+    if (sameAnchor || !anchor || !items?.length) return;
+    const menu = document.createElement("div");
+    menu.className = "session-popup";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = items.map((item, i) => `
+        <button type="button" role="menuitem" class="session-popup-item ${item.danger ? "danger" : ""}" data-popup-index="${i}">${escapeHtml(item.label)}</button>
+    `).join("");
+    host().appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const margin = 8;
+    let top = rect.bottom + 4;
+    if (top + menuRect.height > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - menuRect.height - 4);
+    }
+    let left = rect.right - menuRect.width;
+    left = Math.min(Math.max(margin, left), Math.max(margin, window.innerWidth - menuRect.width - margin));
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    popup = { el: menu, anchor };
+    listeners.add(POPUP_GROUP, menu, "click", (e) => {
+      const btn = e.target.closest?.("[data-popup-index]");
+      if (!btn) return;
+      const item = items[Number(btn.dataset.popupIndex)];
+      closeSessionPopup();
+      try {
+        const result = item?.onSelect?.();
+        if (result && typeof result.catch === "function") {
+          result.catch((err) => console.error("[Sessions] popup action failed:", err));
+        }
+      } catch (err) {
+        console.error("[Sessions] popup action failed:", err);
+      }
+    });
+    listeners.add(POPUP_GROUP, document, "pointerdown", (e) => {
+      if (menu.contains(e.target) || anchor.contains(e.target)) return;
+      closeSessionPopup();
+    }, true);
+  }
+  function closeTopSessionLayer() {
+    if (popup) {
+      closeSessionPopup();
+      return true;
+    }
+    if (dialog) {
+      closeSessionDialog();
+      return true;
+    }
+    return false;
+  }
+  function closeAllSessionLayers() {
+    closeSessionPopup();
+    closeSessionDialog();
+  }
+
+  // src/ui/sessions/sessionPicker.js
+  var NAME_MAX_LENGTH = 40;
+  var stripExt3 = (name) => String(name || "").replace(/\.jsonl$/i, "");
+  function openSessionPicker(avatar, fileNames, { onApplied = null } = {}) {
+    const names = [...new Set((fileNames || []).map(stripExt3).filter(Boolean))];
+    if (!avatar || names.length === 0) {
+      showToast("\uC138\uC158\uC5D0 \uB2F4\uC744 \uCC44\uD305\uC744 \uBA3C\uC800 \uC120\uD0DD\uD558\uC138\uC694.", "warning");
+      return;
+    }
+    const sessions = getSessions(avatar);
+    const have = new Map(sessions.map((s) => {
+      const set = new Set(s.chats);
+      return [s.id, names.filter((n) => set.has(n)).length];
+    }));
+    const desired = /* @__PURE__ */ new Map();
+    const newRows = [];
+    const subtitle = names.length === 1 ? escapeHtml(names[0]) : `${names.length}\uAC1C \uCC44\uD305`;
+    const dialog2 = openSessionDialog({
+      title: "\u{1F5C2}\uFE0F \uC138\uC158 \uC9C0\uC815",
+      className: "session-picker",
+      bodyHtml: `
+            <div class="sp-target" title="${names.length === 1 ? escapeHtml(names[0]) : ""}">${subtitle}</div>
+            <div class="sp-hint">\uCCB4\uD06C\uD55C \uC138\uC158\uC5D0 \uB2F4\uAE41\uB2C8\uB2E4. ${names.length > 1 ? "<b>\u2014</b> \uD45C\uC2DC\uB294 \uC120\uD0DD\uD55C \uCC44\uD305 \uC911 \uC77C\uBD80\uB9CC \uB4E4\uC5B4 \uC788\uB2E4\uB294 \uB73B\uC785\uB2C8\uB2E4." : ""}</div>
+            <div class="sp-list"></div>
+            <div class="sp-new-row">
+                <input type="text" class="sp-new-input" maxlength="${NAME_MAX_LENGTH}" placeholder="+ \uC0C8 \uC138\uC158 \uC774\uB984" aria-label="\uC0C8 \uC138\uC158 \uC774\uB984">
+                <button type="button" class="sp-new-add">\uCD94\uAC00</button>
+            </div>
+        `,
+      footerHtml: `
+            <button type="button" class="sd-btn" data-sd-close>\uCDE8\uC18C</button>
+            <button type="button" class="sd-btn primary sp-apply">\uC801\uC6A9</button>
+        `
+    });
+    const list = dialog2.body.querySelector(".sp-list");
+    const input = dialog2.body.querySelector(".sp-new-input");
+    function renderRows() {
+      const rows = sessions.map((s) => {
+        const k = have.get(s.id) || 0;
+        const countText = names.length > 1 ? `<span class="sp-count">${k}/${names.length}</span>` : "";
+        return `
+                <label class="sp-row">
+                    <input type="checkbox" data-sid="${escapeHtml(s.id)}">
+                    <span class="sp-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
+                    ${countText}
+                </label>`;
+      });
+      newRows.forEach((row, i) => {
+        rows.push(`
+                <label class="sp-row sp-new">
+                    <input type="checkbox" data-new="${i}" ${row.checked ? "checked" : ""}>
+                    <span class="sp-name" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</span>
+                    <span class="sp-tag">\uC0C8 \uC138\uC158</span>
+                    <button type="button" class="sp-remove" data-remove-new="${i}" title="\uBE7C\uAE30" aria-label="\uC0C8 \uC138\uC158 \uBE7C\uAE30">\u2715</button>
+                </label>`);
+      });
+      list.innerHTML = rows.length ? rows.join("") : '<div class="sp-empty">\uC544\uC9C1 \uC138\uC158\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uC544\uB798\uC5D0\uC11C \uCCAB \uC138\uC158\uC744 \uB9CC\uB4E4\uC5B4 \uBCF4\uC138\uC694.</div>';
+      sessions.forEach((s) => {
+        const cb = list.querySelector(`input[data-sid="${CSS.escape(s.id)}"]`);
+        if (!cb) return;
+        const k = have.get(s.id) || 0;
+        const want = desired.get(s.id);
+        if (want === "all") {
+          cb.checked = true;
+          cb.indeterminate = false;
+        } else if (want === "none") {
+          cb.checked = false;
+          cb.indeterminate = false;
+        } else if (k === 0) {
+          cb.checked = false;
+          cb.indeterminate = false;
+        } else if (k === names.length) {
+          cb.checked = true;
+          cb.indeterminate = false;
+        } else {
+          cb.checked = false;
+          cb.indeterminate = true;
+        }
+      });
+    }
+    function addNewName(raw) {
+      const name = String(raw || "").trim().slice(0, NAME_MAX_LENGTH);
+      if (!name) return false;
+      const existing = sessions.find((s) => s.name === name);
+      if (existing) {
+        desired.set(existing.id, "all");
+        showToast(`\uC774\uBBF8 \uC788\uB294 \uC138\uC158\uC774\uB77C "${name}"\uC744 \uCCB4\uD06C\uD588\uC2B5\uB2C8\uB2E4.`, "info");
+      } else if (!newRows.some((r) => r.name === name)) {
+        newRows.push({ name, checked: true });
+      }
+      renderRows();
+      return true;
+    }
+    onDialog(list, "change", (e) => {
+      const cb = e.target;
+      if (cb.dataset.sid) {
+        desired.set(cb.dataset.sid, cb.checked ? "all" : "none");
+        cb.indeterminate = false;
+      } else if (cb.dataset.new !== void 0) {
+        const row = newRows[Number(cb.dataset.new)];
+        if (row) row.checked = cb.checked;
+      }
+    });
+    onDialog(list, "click", (e) => {
+      const btn = e.target.closest?.("[data-remove-new]");
+      if (!btn) return;
+      e.preventDefault();
+      newRows.splice(Number(btn.dataset.removeNew), 1);
+      renderRows();
+    });
+    const commitInput = () => {
+      if (addNewName(input.value)) input.value = "";
+      input.focus();
+    };
+    onDialog(dialog2.body.querySelector(".sp-new-add"), "click", commitInput);
+    onDialog(input, "keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) {
+        e.preventDefault();
+        commitInput();
+      }
+    });
+    onDialog(dialog2.footer.querySelector(".sp-apply"), "click", () => {
+      if (input.value.trim()) {
+        addNewName(input.value);
+        input.value = "";
+      }
+      const addIds = [];
+      const removeIds = [];
+      for (const s of sessions) {
+        const k = have.get(s.id) || 0;
+        const want = desired.get(s.id);
+        if (want === "all" && k < names.length) addIds.push(s.id);
+        else if (want === "none" && k > 0) removeIds.push(s.id);
+      }
+      let createdAll = true;
+      for (const row of newRows) {
+        if (!row.checked) continue;
+        const created = createSession(avatar, row.name);
+        if (created) addIds.push(created.id);
+        else createdAll = false;
+      }
+      if (!createdAll) showToast("\uC77C\uBD80 \uC0C8 \uC138\uC158\uC744 \uB9CC\uB4E4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      if (addIds.length === 0 && removeIds.length === 0) {
+        dialog2.close();
+        if (createdAll) showToast("\uBC14\uB010 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.", "info");
+        return;
+      }
+      setChatMembership(avatar, names, { add: addIds, remove: removeIds });
+      dialog2.close();
+      showToast(`\u{1F5C2}\uFE0F \uC138\uC158\uC744 \uC9C0\uC815\uD588\uC2B5\uB2C8\uB2E4. (${addIds.length + removeIds.length}\uAC1C \uC138\uC158\uC5D0 \uBC18\uC601)`, "success");
+      if (typeof onApplied === "function") {
+        try {
+          const result = onApplied();
+          if (result && typeof result.catch === "function") result.catch((err) => console.error("[Sessions] onApplied failed:", err));
+        } catch (err) {
+          console.error("[Sessions] onApplied failed:", err);
+        }
+      }
+    });
+    renderRows();
+    if (sessions.length === 0) input.focus();
+  }
+
+  // src/ui/chatList/batch.js
   function toggleBatchMode() {
     const isActive = store.toggleBatchMode();
     const chatsList = document.getElementById("chat-lobby-chats-list");
@@ -5582,6 +6315,38 @@ ${message}` : message;
       cb.checked = !allChecked;
     });
     updateBatchCount();
+  }
+  function enterBatchModeWithSelection(fileNames) {
+    if (!store.batchModeActive) toggleBatchMode();
+    const strip = (n) => String(n || "").replace(/\.jsonl$/i, "");
+    const wanted = new Set((fileNames || []).map(strip));
+    let selected2 = 0;
+    document.querySelectorAll("#chat-lobby-chats-list .lobby-chat-item").forEach((item) => {
+      const cb = item.querySelector(".chat-select-cb");
+      if (!cb) return;
+      cb.checked = wanted.has(strip(item.dataset.fileName));
+      if (cb.checked) selected2++;
+    });
+    updateBatchCount();
+    return selected2;
+  }
+  async function executeBatchSession() {
+    const avatar = store.currentCharacter?.avatar;
+    const names = Array.from(document.querySelectorAll(".chat-select-cb:checked")).map((cb) => cb.closest(".lobby-chat-item")?.dataset.fileName).filter(Boolean);
+    if (!avatar) {
+      showToast("\uC138\uC158\uC740 \uCE90\uB9AD\uD130 \uCC44\uD305\uC5D0\uC11C\uB9CC \uC4F8 \uC218 \uC788\uC2B5\uB2C8\uB2E4.", "info");
+      return;
+    }
+    if (names.length === 0) {
+      await showAlert("\uC138\uC158\uC5D0 \uB2F4\uC744 \uCC44\uD305\uC744 \uC120\uD0DD\uD558\uC138\uC694.");
+      return;
+    }
+    openSessionPicker(avatar, names, {
+      onApplied: async () => {
+        if (store.batchModeActive) toggleBatchMode();
+        await refreshCurrentChatList();
+      }
+    });
   }
   async function executeBatchMove(targetFolder) {
     if (!targetFolder) {
@@ -5669,6 +6434,7 @@ ${message}` : message;
               data.favorites.splice(favIndex, 1);
             }
             storage.save(data);
+            removeChat(chat.charAvatar, chat.fileName);
           } else {
             failCount++;
           }
@@ -5718,6 +6484,837 @@ ${message}` : message;
     updateBatchCount();
   }
 
+  // src/ui/sessions/chatMemo.js
+  init_textUtils();
+  init_notifications();
+  var MEMO_MAX_LENGTH2 = 2e3;
+  function openChatMemoEditor(avatar, fileName) {
+    const name = String(fileName || "").replace(/\.jsonl$/i, "");
+    if (!avatar || !name) return;
+    const current = getMemo(avatar, name);
+    const dialog2 = openSessionDialog({
+      title: "\u{1F4DD} \uCC44\uD305 \uBA54\uBAA8",
+      className: "chat-memo",
+      bodyHtml: `
+            <div class="memo-target" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+            <textarea class="memo-text" rows="6" maxlength="${MEMO_MAX_LENGTH2}" placeholder="\uC774 \uCC44\uD305\uC5D0 \uB300\uD55C \uBA54\uBAA8 (\uC608: AU \uC124\uC815, \uC5B4\uB514\uAE4C\uC9C0 \uBD24\uB294\uC9C0)" aria-label="\uBA54\uBAA8"></textarea>
+            <div class="memo-counter"></div>
+        `,
+      footerHtml: `
+            ${current ? '<button type="button" class="sd-btn danger memo-clear">\uBA54\uBAA8 \uC9C0\uC6B0\uAE30</button>' : ""}
+            <button type="button" class="sd-btn" data-sd-close>\uCDE8\uC18C</button>
+            <button type="button" class="sd-btn primary memo-save">\uC800\uC7A5</button>
+        `
+    });
+    const textarea = dialog2.body.querySelector(".memo-text");
+    const counter = dialog2.body.querySelector(".memo-counter");
+    textarea.value = current;
+    const updateCounter = () => {
+      counter.textContent = `${textarea.value.length} / ${MEMO_MAX_LENGTH2}`;
+    };
+    onDialog(textarea, "input", updateCounter);
+    const finish = (text, message) => {
+      setMemo(avatar, name, text);
+      dialog2.close();
+      refreshMemoLine(avatar, name);
+      showToast(message, "success");
+    };
+    onDialog(dialog2.footer.querySelector(".memo-save"), "click", () => {
+      const text = textarea.value;
+      finish(text, text.trim() ? "\u{1F4DD} \uBA54\uBAA8\uB97C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4." : "\u{1F4DD} \uBA54\uBAA8\uB97C \uC9C0\uC6E0\uC2B5\uB2C8\uB2E4.");
+    });
+    const clearBtn = dialog2.footer.querySelector(".memo-clear");
+    if (clearBtn) onDialog(clearBtn, "click", () => finish("", "\u{1F4DD} \uBA54\uBAA8\uB97C \uC9C0\uC6E0\uC2B5\uB2C8\uB2E4."));
+    updateCounter();
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }
+
+  // src/ui/sessions/chatSessionMenu.js
+  var stripExt4 = (name) => String(name || "").replace(/\.jsonl$/i, "");
+  function renderSessionMenuItems(avatar) {
+    const inSession = !!getActiveRealSessionId(avatar);
+    return `
+        <div class="folder-menu-item session-menu-item" data-session-menu="assign">\u{1F5C2}\uFE0F \uC138\uC158 \uC9C0\uC815</div>
+        <div class="folder-menu-item session-menu-item" data-session-menu="branch">\u{1F333} \uAC19\uC740 \uBD84\uAE30 \uC804\uCCB4 \uC120\uD0DD</div>
+        <div class="folder-menu-item session-menu-item" data-session-menu="memo">\u{1F4DD} \uBA54\uBAA8</div>
+        ${inSession ? '<div class="folder-menu-item session-menu-item" data-session-menu="remove">\u2796 \uC774 \uC138\uC158\uC5D0\uC11C \uBE7C\uAE30</div>' : ""}
+    `;
+  }
+  function bindSessionMenuItems(menu, avatar, fileName, closeMenu2) {
+    menu.addEventListener("click", (e) => {
+      const item = e.target.closest?.("[data-session-menu]");
+      if (!item) return;
+      closeMenu2();
+      const kind = item.dataset.sessionMenu;
+      if (kind === "assign") {
+        openSessionPicker(avatar, [fileName], { onApplied: () => refreshCurrentChatList() });
+      } else if (kind === "branch") {
+        selectSameBranch(avatar, fileName).catch((err) => console.error("[Sessions] selectSameBranch failed:", err));
+      } else if (kind === "memo") {
+        openChatMemoEditor(avatar, fileName);
+      } else if (kind === "remove") {
+        removeFromActiveSession(avatar, fileName);
+      }
+    });
+  }
+  async function removeFromActiveSession(avatar, fileName) {
+    const sessionId = getActiveRealSessionId(avatar);
+    if (!sessionId) return;
+    const removed = removeChats(avatar, sessionId, [fileName]);
+    showToast(removed > 0 ? "\u2796 \uC774 \uC138\uC158\uC5D0\uC11C \uBE90\uC2B5\uB2C8\uB2E4. (\uCC44\uD305\uC740 \uADF8\uB300\uB85C\uC785\uB2C8\uB2E4)" : "\uC774\uBBF8 \uC774 \uC138\uC158\uC5D0 \uC5C6\uB294 \uCC44\uD305\uC785\uB2C8\uB2E4.", removed > 0 ? "success" : "info");
+    await refreshCurrentChatList();
+  }
+  async function selectSameBranch(avatar, fileName) {
+    const family = getBranchFamily(avatar, fileName);
+    if (family === null) {
+      showToast('\uBD84\uAE30 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.\n\uC815\uB82C\uC744 "\u{1F333} \uBD84\uAE30"\uB85C \uBC14\uAFD4 \uBA3C\uC800 \uBD84\uC11D\uD558\uC138\uC694.', "info", 5e3);
+      return;
+    }
+    const existing = new Set(getCharacterChats(avatar).map((c) => stripExt4(c.file_name || c.fileName)));
+    const members = [...family].filter((n) => existing.has(n));
+    if (members.length <= 1) {
+      showToast("\uC774 \uCC44\uD305\uACFC \uAC19\uC740 \uBD84\uAE30\uC5D0 \uC18D\uD55C \uB2E4\uB978 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.", "info");
+      return;
+    }
+    const view2 = getSessionView();
+    let movedToAll = false;
+    if (view2.mode === "list" && view2.activeId !== SESSION_ALL) {
+      showSession(SESSION_ALL);
+      await refreshCurrentChatList();
+      movedToAll = true;
+    }
+    const selected2 = enterBatchModeWithSelection(members);
+    if (selected2 < members.length) {
+      showToast(`\uAC19\uC740 \uBD84\uAE30 ${members.length}\uAC1C \uC911 ${selected2}\uAC1C\uB97C \uC120\uD0DD\uD588\uC2B5\uB2C8\uB2E4.
+(\uD3F4\uB354 \uD544\uD130\uB85C \uAC00\uB824\uC9C4 \uCC44\uD305\uC740 \uC81C\uC678)`, "info", 5e3);
+    } else if (movedToAll) {
+      showToast(`\uAC19\uC740 \uBD84\uAE30 ${selected2}\uAC1C\uB97C \uC120\uD0DD\uD588\uC2B5\uB2C8\uB2E4. (\uC804\uCCB4 \uCC44\uD305\uC73C\uB85C \uC774\uB3D9\uD588\uC5B4\uC694)`, "success");
+    } else {
+      showToast(`\uAC19\uC740 \uBD84\uAE30 ${selected2}\uAC1C\uB97C \uC120\uD0DD\uD588\uC2B5\uB2C8\uB2E4.`, "success");
+    }
+  }
+
+  // src/ui/chatList/chatMenu.js
+  var activeFolderMenu = null;
+  function showChatFolderMenu(targetBtn, charAvatar, fileName) {
+    if (activeFolderMenu) {
+      const prevBtn = activeFolderMenu._targetBtn;
+      closeChatFolderMenu();
+      if (prevBtn === targetBtn) return;
+    }
+    const data = storage.load();
+    const folders = (data.folders || []).filter((f) => f.id !== "favorites" && f.id !== "uncategorized");
+    const currentFolderId = storage.getChatFolder(charAvatar, fileName);
+    const menu = document.createElement("div");
+    menu.className = "chat-folder-menu";
+    menu.innerHTML = `
+        <div class="folder-menu-item view-chat-item">
+            \u{1F4D6} \uBDF0\uC5B4\uB85C \uAC10\uC0C1
+        </div>
+        <div class="folder-menu-item rename-chat-item">
+            \u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30
+        </div>
+        <div class="folder-menu-item remind-add-item">
+            \u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00
+        </div>
+        ${renderSessionMenuItems(charAvatar)}
+        <div class="folder-menu-title">\uBCF4\uAD00\uD568 \uD3F4\uB354</div>
+        <div class="folder-menu-item ${!currentFolderId || currentFolderId === "uncategorized" ? "active" : ""}" data-folder-id="">
+            \u{1F4E4} \uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70
+        </div>
+        ${folders.map((f) => `
+            <div class="folder-menu-item ${f.id === currentFolderId ? "active" : ""}" data-folder-id="${f.id}">
+                \u{1F4C1} ${escapeHtml(f.name)}
+            </div>
+        `).join("")}
+    `;
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.cssText = `
+        position: fixed;
+        top: ${rect.bottom + 4}px;
+        right: ${window.innerWidth - rect.right}px;
+        z-index: 60000;
+        background: var(--lobby-bg-card, #1a1a2e);
+        border: 1px solid var(--lobby-border, #333);
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        min-width: 150px;
+        max-height: calc(100vh - 16px);
+        overflow-y: auto;
+    `;
+    const lobbyContainer = document.getElementById("chat-lobby-container") || document.body;
+    lobbyContainer.appendChild(menu);
+    activeFolderMenu = menu;
+    activeFolderMenu._targetBtn = targetBtn;
+    const menuHeight = menu.offsetHeight;
+    if (rect.bottom + 4 + menuHeight > window.innerHeight - 8) {
+      menu.style.top = `${Math.max(8, window.innerHeight - 8 - menuHeight)}px`;
+    }
+    bindSessionMenuItems(menu, charAvatar, fileName, closeChatFolderMenu);
+    menu.querySelector(".view-chat-item")?.addEventListener("click", async () => {
+      closeChatFolderMenu();
+      const context = api.getContext();
+      const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
+      await openChatInViewer(charAvatar, char?.name || "", fileName);
+    });
+    menu.querySelector(".rename-chat-item")?.addEventListener("click", async () => {
+      closeChatFolderMenu();
+      await renameChatPrompt(charAvatar, fileName);
+    });
+    menu.querySelector(".remind-add-item")?.addEventListener("click", async () => {
+      closeChatFolderMenu();
+      await addRemindPrompt(charAvatar, fileName);
+    });
+    menu.querySelectorAll(".folder-menu-item:not(.rename-chat-item):not(.remind-add-item):not(.view-chat-item):not(.session-menu-item)").forEach((item) => {
+      item.addEventListener("click", async () => {
+        const folderId = item.dataset.folderId;
+        if (folderId) {
+          storage.setChatFolder(charAvatar, fileName, folderId);
+          const folder = folders.find((f) => f.id === folderId);
+          showToast(`\u{1F4C1} ${folder?.name || "\uD3F4\uB354"}\uB85C \uC774\uB3D9`, "success");
+        } else {
+          storage.setChatFolder(charAvatar, fileName, null);
+          showToast("\uD3F4\uB354\uC5D0\uC11C \uC81C\uAC70\uB428", "success");
+        }
+        closeChatFolderMenu();
+        await refreshCurrentChatList();
+      });
+    });
+    setTimeout(() => {
+      listeners.add("chatFolderMenu", document, "click", closeFolderMenuOnClickOutside);
+    }, 10);
+  }
+  function closeFolderMenuOnClickOutside(e) {
+    if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
+      closeChatFolderMenu();
+    }
+  }
+  function closeChatFolderMenu() {
+    if (activeFolderMenu) {
+      activeFolderMenu.remove();
+      activeFolderMenu = null;
+    }
+    listeners.clear("chatFolderMenu");
+  }
+  async function addRemindPrompt(charAvatar, fileName) {
+    const cleanName2 = fileName.replace(/\.jsonl$/i, "");
+    const rangeInput = await showPrompt(
+      "\uC800\uC7A5\uD560 \uBA54\uC2DC\uC9C0 \uBC94\uC704\uB97C \uC785\uB825\uD558\uC138\uC694. (\uBA54\uC2DC\uC9C0 \uBC88\uD638 \uAE30\uC900)\n\uC608: 120-130 / 120 (\uD55C \uBA54\uC2DC\uC9C0) / \uBE44\uC6B0\uBA74 \uC804\uCCB4",
+      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uCD94\uAC00",
+      ""
+    );
+    if (rangeInput === null) return;
+    let start = null;
+    let end = null;
+    const trimmed = rangeInput.trim();
+    if (trimmed) {
+      const match = trimmed.match(/^(\d+)\s*[-~]\s*(\d+)$/) || trimmed.match(/^(\d+)$/);
+      if (!match) {
+        showToast("\uBC94\uC704 \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC608: 120-130", "error");
+        return;
+      }
+      start = parseInt(match[1], 10);
+      end = match[2] !== void 0 ? parseInt(match[2], 10) : start;
+      if (end < start) [start, end] = [end, start];
+    }
+    const note = await showPrompt(
+      "\uBA54\uBAA8\uB97C \uB0A8\uACA8\uC8FC\uC138\uC694. (\uC65C \uC88B\uC558\uB294\uC9C0, \uC5B4\uB5A4 \uC7A5\uBA74\uC778\uC9C0)",
+      "\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uBA54\uBAA8",
+      ""
+    );
+    if (note === null) return;
+    const context = api.getContext();
+    const char = (context?.characters || []).find((c) => c.avatar === charAvatar);
+    remindStore.add({
+      avatar: charAvatar,
+      charName: char?.name || charAvatar.replace(/\.[^.]+$/, ""),
+      fileName: cleanName2,
+      start,
+      end,
+      note: note.trim()
+    });
+    const rangeText = start !== null ? ` (#${start}~#${end})` : "";
+    showToast(`\u{1F516} \uB9AC\uB9C8\uC778\uB4DC \uC800\uC7A5\uB428${rangeText}
+\uBCF4\uAD00\uD568 \uD0ED\uC5D0\uC11C \uB2E4\uC2DC \uBCFC \uC218 \uC788\uC5B4\uC694.`, "success");
+  }
+  async function renameChatPrompt(charAvatar, fileName) {
+    const currentName = fileName.replace(/\.jsonl$/i, "");
+    const context = api.getContext();
+    const currentChatFile = context?.characters?.[context?.characterId]?.chat;
+    if (currentChatFile === currentName) {
+      showToast("\uD604\uC7AC \uC5F4\uB9B0 \uCC44\uD305\uC740 \uC774\uB984\uC744 \uBC14\uAFC0 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.\n\uB2E4\uB978 \uCC44\uD305\uC73C\uB85C \uC774\uB3D9 \uD6C4 \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.", "warning");
+      return;
+    }
+    const input = await showPrompt("\uC0C8 \uCC44\uD305 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.", "\u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30", currentName);
+    if (input === null) return;
+    const newName = input.trim().replace(/\.jsonl$/i, "");
+    if (!newName || newName === currentName) return;
+    if (/[\\/:*?"<>|]/.test(newName)) {
+      showToast('\uD30C\uC77C\uBA85\uC5D0 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uB294 \uBB38\uC790\uAC00 \uC788\uC2B5\uB2C8\uB2E4: \\ / : * ? " < > |', "error");
+      return;
+    }
+    const chats = cache.get("chats", charAvatar);
+    if (Array.isArray(chats) && chats.some((c) => (c.file_name || "").replace(/\.jsonl$/i, "") === newName)) {
+      showToast("\uAC19\uC740 \uC774\uB984\uC758 \uCC44\uD305\uC774 \uC774\uBBF8 \uC788\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    const token = operationLock.acquire("renameChat", 1e4);
+    if (!token) {
+      showToast("\uB2E4\uB978 \uC791\uC5C5\uC774 \uC9C4\uD589 \uC911\uC785\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    try {
+      const appliedName = await api.renameChat(charAvatar, currentName, newName);
+      if (appliedName) {
+        storage.renameChatKey(charAvatar, currentName, appliedName);
+        remindStore.renameChat(charAvatar, currentName, appliedName);
+        highlightStore.renameChat(charAvatar, currentName, appliedName);
+        renameChat(charAvatar, currentName, appliedName);
+        const char = api.getContext()?.characters?.find((c) => c.avatar === charAvatar);
+        if (char && char.chat === currentName) {
+          char.chat = appliedName;
+          api.saveLastChatPointer(char.avatar, char.name, appliedName);
+        }
+        showToast(`\uC774\uB984 \uBCC0\uACBD: "${appliedName}"`, "success");
+        await refreshCurrentChatList(true);
+      } else {
+        showToast("\uC774\uB984 \uBCC0\uACBD\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      }
+    } catch (e) {
+      console.error("[ChatList] Rename failed:", e);
+      showToast("\uC774\uB984 \uBCC0\uACBD \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.", "error");
+    } finally {
+      operationLock.release(token);
+    }
+  }
+
+  // src/ui/sessions/sessionView.js
+  init_notifications();
+
+  // src/ui/sessions/sessionCards.js
+  init_textUtils();
+  init_notifications();
+
+  // src/ui/sessions/sessionImage.js
+  init_notifications();
+  var FALLBACK_IMAGE = "/img/ai4.png";
+  function getSessionImageSrc(avatar, sessionId) {
+    return sessionId && getSessionImage(sessionId) || charAvatarUrl(avatar);
+  }
+  function bindImageFallback(root) {
+    root.querySelectorAll("img[data-session-img]").forEach((img) => {
+      img.addEventListener("error", () => {
+        if (img.dataset.fellBack) return;
+        img.dataset.fellBack = "1";
+        img.src = FALLBACK_IMAGE;
+      }, { once: true });
+    });
+  }
+  var SESSION_IMAGE_MAX_SIDE = 384;
+  var SESSION_IMAGE_QUALITY = 0.85;
+  async function decodeImage(blob) {
+    if (typeof createImageBitmap === "function") {
+      try {
+        const bitmap = await createImageBitmap(blob);
+        return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close?.() };
+      } catch {
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("\uC774\uBBF8\uC9C0\uB97C \uC77D\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."));
+        img.src = url;
+      });
+      return { source: img, width: img.naturalWidth, height: img.naturalHeight, release: () => URL.revokeObjectURL(url) };
+    } catch (e) {
+      URL.revokeObjectURL(url);
+      throw e;
+    }
+  }
+  async function downscaleToJpegDataUrl(blob) {
+    if (!blob || !String(blob.type || "").startsWith("image/")) {
+      throw new Error("\uC774\uBBF8\uC9C0 \uD30C\uC77C\uC774 \uC544\uB2D9\uB2C8\uB2E4.");
+    }
+    const decoded = await decodeImage(blob);
+    try {
+      const { width, height } = decoded;
+      if (!width || !height) throw new Error("\uC774\uBBF8\uC9C0 \uD06C\uAE30\uB97C \uC54C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.");
+      const scale = Math.min(1, SESSION_IMAGE_MAX_SIDE / Math.max(width, height));
+      const w = Math.max(1, Math.round(width * scale));
+      const h = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(decoded.source, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", SESSION_IMAGE_QUALITY);
+      if (!dataUrl.startsWith("data:image/jpeg")) throw new Error("\uC774\uBBF8\uC9C0\uB97C \uBCC0\uD658\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+      return dataUrl;
+    } finally {
+      decoded.release();
+    }
+  }
+  async function setSessionImageFromFile(sessionId, file) {
+    try {
+      const dataUrl = await downscaleToJpegDataUrl(file);
+      setSessionImage(sessionId, dataUrl);
+      return true;
+    } catch (e) {
+      console.error("[Sessions] Failed to set session image:", e);
+      showToast("\uC774\uBBF8\uC9C0\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uAE30\uC874 \uC774\uBBF8\uC9C0\uB294 \uADF8\uB300\uB85C \uB461\uB2C8\uB2E4.", "error");
+      return false;
+    }
+  }
+  function pickSessionImage(sessionId) {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.style.display = "none";
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        input.remove();
+        resolve(value);
+      };
+      input.addEventListener("change", async () => {
+        const file = input.files && input.files[0];
+        if (!file) return finish(false);
+        const ok = await setSessionImageFromFile(sessionId, file);
+        if (ok) showToast("\uC138\uC158 \uC774\uBBF8\uC9C0\uB97C \uBC14\uAFE8\uC2B5\uB2C8\uB2E4.", "success");
+        finish(ok);
+      }, { once: true });
+      input.addEventListener("cancel", () => finish(false), { once: true });
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  // src/ui/sessions/sessionCards.js
+  function latestTimestamp(chats) {
+    let latest = 0;
+    for (const chat of chats) {
+      const ts = getTimestamp(chat);
+      if (ts > latest) latest = ts;
+    }
+    return latest;
+  }
+  function renderCard({ id, name, count, latest, avatar, real }) {
+    const when = latest ? formatDate(latest) : "";
+    const imgSrc = getSessionImageSrc(avatar, real ? id : null);
+    return `
+        <div class="session-card ${real ? "" : "virtual"}" data-action="session-open" data-session-id="${escapeHtml(id)}" role="button" tabindex="0" title="${escapeHtml(name)}">
+            <div class="session-card-image">
+                <img data-session-img src="${escapeHtml(imgSrc)}" alt="" loading="lazy">
+            </div>
+            <div class="session-card-info">
+                <div class="session-card-name">${escapeHtml(name)}</div>
+                <div class="session-card-meta">${count}\uAC1C${when ? ` \xB7 ${escapeHtml(when)}` : ""}</div>
+            </div>
+            ${real ? `<button type="button" class="session-card-menu" data-action="session-card-menu" data-session-id="${escapeHtml(id)}" title="\uC138\uC158 \uBA54\uB274" aria-label="\uC138\uC158 \uBA54\uB274">\u22EE</button>` : ""}
+        </div>
+    `;
+  }
+  function renderSessionCards(container, avatar, chats) {
+    const total = chats.length;
+    const cards = [{
+      id: SESSION_ALL,
+      name: "\uC804\uCCB4 \uCC44\uD305",
+      count: total,
+      latest: latestTimestamp(chats),
+      avatar,
+      real: false
+    }];
+    for (const session of getSessions(avatar)) {
+      const own = filterChatsBySession(avatar, session.id, chats);
+      cards.push({
+        id: session.id,
+        name: session.name,
+        count: own.length,
+        latest: latestTimestamp(own),
+        avatar,
+        real: true
+      });
+    }
+    const unsorted = filterChatsBySession(avatar, SESSION_UNSORTED, chats);
+    if (unsorted.length >= 1 && unsorted.length < total) {
+      cards.push({
+        id: SESSION_UNSORTED,
+        name: "\uBBF8\uBD84\uB958",
+        count: unsorted.length,
+        latest: latestTimestamp(unsorted),
+        avatar,
+        real: false
+      });
+    }
+    container.innerHTML = `
+        <div class="session-cards">
+            ${cards.map(renderCard).join("")}
+            <button type="button" class="session-card session-card-new" data-action="session-new">
+                <span class="session-card-new-plus">\uFF0B</span>
+                <span>\uC0C8 \uC138\uC158</span>
+            </button>
+        </div>
+    `;
+    bindImageFallback(container);
+    container.querySelector(".session-cards")?.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const card = e.target.closest?.(".session-card[data-action]");
+      if (!card || e.target !== card) return;
+      e.preventDefault();
+      card.click();
+    });
+    container.scrollTop = 0;
+  }
+  function openSessionManageMenu(anchor, avatar, sessionId) {
+    const session = getSession(avatar, sessionId);
+    if (!session) return;
+    const items = [
+      { label: "\u270F\uFE0F \uC774\uB984 \uBC14\uAFB8\uAE30", onSelect: () => renameSessionPrompt(avatar, sessionId) },
+      { label: "\u{1F5BC}\uFE0F \uC774\uBBF8\uC9C0 \uBC14\uAFB8\uAE30", onSelect: () => changeSessionImage(sessionId) }
+    ];
+    if (getSessionImage(sessionId)) {
+      items.push({ label: "\u21A9\uFE0F \uBD07 \uC774\uBBF8\uC9C0\uB85C \uB418\uB3CC\uB9AC\uAE30", onSelect: () => resetSessionImage(sessionId) });
+    }
+    items.push({ label: "\u{1F5D1}\uFE0F \uC138\uC158 \uC0AD\uC81C", danger: true, onSelect: () => deleteSessionConfirm(avatar, sessionId) });
+    openSessionPopup(anchor, items);
+  }
+  async function renameSessionPrompt(avatar, sessionId) {
+    const session = getSession(avatar, sessionId);
+    if (!session) return;
+    const input = await showPrompt("\uC0C8 \uC138\uC158 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.", "\u270F\uFE0F \uC138\uC158 \uC774\uB984 \uBC14\uAFB8\uAE30", session.name);
+    if (input === null) return;
+    if (!renameSession(avatar, sessionId, input)) {
+      showToast("\uC138\uC158 \uC774\uB984\uC740 \uBE44\uC6CC \uB458 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "warning");
+      return;
+    }
+    await refreshCurrentChatList();
+  }
+  async function changeSessionImage(sessionId) {
+    const changed = await pickSessionImage(sessionId);
+    if (changed) await refreshCurrentChatList();
+  }
+  async function resetSessionImage(sessionId) {
+    setSessionImage(sessionId, null);
+    showToast("\uBD07 \uC774\uBBF8\uC9C0\uB85C \uB418\uB3CC\uB838\uC2B5\uB2C8\uB2E4.", "success");
+    await refreshCurrentChatList();
+  }
+  async function deleteSessionConfirm(avatar, sessionId) {
+    const session = getSession(avatar, sessionId);
+    if (!session) return;
+    const confirmed = await showConfirm(
+      `"${session.name}" \uC138\uC158\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?
+
+\uCC44\uD305\uC740 \uC9C0\uC6CC\uC9C0\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC774 \uC138\uC158 \uBB36\uC74C\uB9CC \uC0AC\uB77C\uC9C0\uACE0, \uCC44\uD305\uC740 "\uC804\uCCB4 \uCC44\uD305"\uC5D0 \uADF8\uB300\uB85C \uB0A8\uC2B5\uB2C8\uB2E4.`,
+      "\uC138\uC158 \uC0AD\uC81C",
+      true
+    );
+    if (!confirmed) return;
+    if (!deleteSession(avatar, sessionId)) {
+      showToast("\uC138\uC158\uC744 \uC0AD\uC81C\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    showToast(`"${session.name}" \uC138\uC158\uC744 \uC0AD\uC81C\uD588\uC2B5\uB2C8\uB2E4. \uCC44\uD305\uC740 \uADF8\uB300\uB85C\uC785\uB2C8\uB2E4.`, "success");
+    const view2 = getSessionView();
+    if (view2.mode === "list" && view2.activeId === sessionId) showCards();
+    await refreshCurrentChatList();
+  }
+
+  // src/ui/sessions/sessionBar.js
+  init_textUtils();
+  var BAR_ID = "chat-lobby-session-bar";
+  var START_BTN_ID = "chat-lobby-session-start";
+  var VIRTUAL_NAMES = {
+    [SESSION_ALL]: "\uC804\uCCB4 \uCC44\uD305",
+    [SESSION_UNSORTED]: "\uBBF8\uBD84\uB958"
+  };
+  function renderSessionBar(avatar, sessionId, name, count) {
+    const bar = document.getElementById(BAR_ID);
+    if (!bar) return;
+    const real = isRealSessionId(sessionId);
+    const title = real ? name : VIRTUAL_NAMES[sessionId] || "";
+    const imgSrc = getSessionImageSrc(avatar, real ? sessionId : null);
+    bar.innerHTML = `
+        <button type="button" class="session-bar-back" data-action="session-back" title="\uC138\uC158 \uBAA9\uB85D\uC73C\uB85C">\u2190 \uC138\uC158 \uBAA9\uB85D</button>
+        <div class="session-bar-title">
+            <img class="session-bar-img" data-session-img src="${escapeHtml(imgSrc)}" alt="">
+            <span class="session-bar-name" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+            <span class="session-bar-count">\xB7 ${count}\uAC1C</span>
+        </div>
+        ${real ? `
+        <div class="session-bar-actions">
+            <button type="button" class="session-bar-add" data-action="session-add-chats" title="\uC774 \uC138\uC158\uC5D0 \uB2F4\uC744 \uCC44\uD305 \uACE0\uB974\uAE30">+ \uCC44\uD305 \uB2F4\uAE30</button>
+            <button type="button" class="session-bar-menu" data-action="session-bar-menu" title="\uC138\uC158 \uBA54\uB274" aria-label="\uC138\uC158 \uBA54\uB274">\u22EE</button>
+        </div>` : ""}
+    `;
+    bindImageFallback(bar);
+    bar.style.display = "flex";
+  }
+  function hideSessionBar() {
+    const bar = document.getElementById(BAR_ID);
+    if (!bar) return;
+    bar.style.display = "none";
+    bar.innerHTML = "";
+  }
+  function setSessionStartButtonVisible(visible) {
+    const btn = document.getElementById(START_BTN_ID);
+    if (btn) btn.style.display = visible ? "inline-flex" : "none";
+  }
+
+  // src/ui/sessions/chatPicker.js
+  init_textUtils();
+  init_notifications();
+  var stripExt5 = (name) => String(name || "").replace(/\.jsonl$/i, "");
+  function openChatPicker(avatar, sessionId) {
+    const session = getSession(avatar, sessionId);
+    if (!session) {
+      showToast("\uC138\uC158\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    const chats = [...getCharacterChats(avatar)].sort((a, b) => getTimestamp(b) - getTimestamp(a));
+    const rows = chats.map((chat) => {
+      const name = stripExt5(chat.file_name || chat.fileName);
+      const ts = getTimestamp(chat);
+      return { name, memo: getMemo(avatar, name), when: ts ? formatDate(ts) : "" };
+    }).filter((r) => r.name);
+    const inSession = getSessionChatSet(avatar, sessionId);
+    const original = new Set(rows.filter((r) => inSession.has(r.name)).map((r) => r.name));
+    const selected2 = new Set(original);
+    const dialog2 = openSessionDialog({
+      title: `+ \uCC44\uD305 \uB2F4\uAE30 \u2014 ${session.name}`,
+      className: "chat-picker",
+      bodyHtml: `
+            <input type="text" class="cp-search" placeholder="\u{1F50D} \uC774\uB984/\uBA54\uBAA8 \uAC80\uC0C9" aria-label="\uCC44\uD305 \uAC80\uC0C9">
+            <div class="cp-tools">
+                <button type="button" class="cp-tool" data-cp-all="1">\uBCF4\uC774\uB294 \uAC83 \uBAA8\uB450 \uC120\uD0DD</button>
+                <button type="button" class="cp-tool" data-cp-all="0">\uBCF4\uC774\uB294 \uAC83 \uBAA8\uB450 \uD574\uC81C</button>
+                <span class="cp-count"></span>
+            </div>
+            <div class="cp-list">
+                ${rows.length === 0 ? '<div class="cp-empty">\uB2F4\uC744 \uC218 \uC788\uB294 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>' : rows.map((r, i) => `
+                    <label class="cp-row" data-idx="${i}">
+                        <input type="checkbox" data-idx="${i}" ${selected2.has(r.name) ? "checked" : ""}>
+                        <span class="cp-main">
+                            <span class="cp-name">${escapeHtml(r.name)}</span>
+                            ${r.memo ? `<span class="cp-memo">\u{1F4DD} ${escapeHtml(r.memo.replace(/\s+/g, " "))}</span>` : ""}
+                        </span>
+                        ${r.when ? `<span class="cp-date">${escapeHtml(r.when)}</span>` : ""}
+                    </label>`).join("")}
+            </div>
+            <div class="cp-none" style="display:none;">\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>
+        `,
+      footerHtml: `
+            <button type="button" class="sd-btn" data-sd-close>\uCDE8\uC18C</button>
+            <button type="button" class="sd-btn primary cp-save">\uC800\uC7A5</button>
+        `
+    });
+    const search = dialog2.body.querySelector(".cp-search");
+    const list = dialog2.body.querySelector(".cp-list");
+    const none = dialog2.body.querySelector(".cp-none");
+    const countEl = dialog2.body.querySelector(".cp-count");
+    const rowEls = [...list.querySelectorAll(".cp-row")];
+    const updateCount = () => {
+      countEl.textContent = `${selected2.size}\uAC1C \uC120\uD0DD`;
+    };
+    const visibleRows = () => rowEls.filter((el) => !el.hidden);
+    function applySearch() {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const el of rowEls) {
+        const r = rows[Number(el.dataset.idx)];
+        const hit = !q || r.name.toLowerCase().includes(q) || r.memo.toLowerCase().includes(q);
+        el.hidden = !hit;
+        if (hit) shown++;
+      }
+      none.style.display = rows.length > 0 && shown === 0 ? "block" : "none";
+    }
+    onDialog(list, "change", (e) => {
+      const cb = e.target;
+      const r = rows[Number(cb.dataset.idx)];
+      if (!r) return;
+      if (cb.checked) selected2.add(r.name);
+      else selected2.delete(r.name);
+      updateCount();
+    });
+    onDialog(search, "input", applySearch);
+    onDialog(dialog2.body.querySelector(".cp-tools"), "click", (e) => {
+      const btn = e.target.closest?.("[data-cp-all]");
+      if (!btn) return;
+      const check = btn.dataset.cpAll === "1";
+      for (const el of visibleRows()) {
+        const r = rows[Number(el.dataset.idx)];
+        const cb = el.querySelector("input");
+        cb.checked = check;
+        if (check) selected2.add(r.name);
+        else selected2.delete(r.name);
+      }
+      updateCount();
+    });
+    onDialog(dialog2.footer.querySelector(".cp-save"), "click", async () => {
+      const add = [...selected2].filter((n) => !original.has(n));
+      const remove = [...original].filter((n) => !selected2.has(n));
+      if (add.length === 0 && remove.length === 0) {
+        dialog2.close();
+        showToast("\uBC14\uB010 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.", "info");
+        return;
+      }
+      if (!getSession(avatar, sessionId)) {
+        dialog2.close();
+        showToast("\uC138\uC158\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", "error");
+        return;
+      }
+      const added = add.length ? addChats(avatar, sessionId, add) : 0;
+      const removed = remove.length ? removeChats(avatar, sessionId, remove) : 0;
+      dialog2.close();
+      showToast(`\u{1F5C2}\uFE0F "${session.name}" \uC138\uC158: ${added}\uAC1C \uB2F4\uACE0, ${removed}\uAC1C \uBE90\uC2B5\uB2C8\uB2E4.`, "success");
+      await refreshCurrentChatList();
+    });
+    updateCount();
+    search.focus();
+  }
+
+  // src/ui/sessions/sessionView.js
+  var PANEL_ID = "chat-lobby-chats";
+  function setCardsChrome(on) {
+    document.getElementById(PANEL_ID)?.classList.toggle("session-view-cards", on);
+  }
+  function resetSessionChrome() {
+    setCardsChrome(false);
+    hideSessionBar();
+    setSessionStartButtonVisible(false);
+  }
+  function beginCharacterView(avatar) {
+    try {
+      enterCharacter(avatar);
+      resetSessionChrome();
+    } catch (e) {
+      console.error("[Sessions] beginCharacterView failed:", e);
+    }
+  }
+  function resetSessionView() {
+    closeAllSessionLayers();
+    resetSessionState();
+    resetSessionChrome();
+  }
+  function prepareSessionView(container, avatar, chats) {
+    try {
+      if (!chats.length) {
+        resetSessionChrome();
+        return { handled: false, chats };
+      }
+      enterCharacter(avatar);
+      rememberChats(avatar, chats);
+      const sessionsExist = hasSessions(avatar);
+      let view2 = getSessionView();
+      if (!sessionsExist) {
+        showSession(SESSION_ALL);
+      } else if (view2.mode === "list" && isRealSessionId(view2.activeId) && !getSession(avatar, view2.activeId)) {
+        showCards();
+      }
+      view2 = getSessionView();
+      if (!sessionsExist) {
+        setCardsChrome(false);
+        hideSessionBar();
+        setSessionStartButtonVisible(true);
+        return { handled: false, chats };
+      }
+      setSessionStartButtonVisible(false);
+      if (view2.mode === "cards") {
+        deactivateBatchMode();
+        setCardsChrome(true);
+        hideSessionBar();
+        updateChatCount(chats.length);
+        renderSessionCards(container, avatar, chats);
+        return { handled: true, chats };
+      }
+      setCardsChrome(false);
+      const filtered = filterChatsBySession(avatar, view2.activeId, chats);
+      const session = isRealSessionId(view2.activeId) ? getSession(avatar, view2.activeId) : null;
+      renderSessionBar(avatar, view2.activeId, session?.name || "", filtered.length);
+      if (filtered.length === 0) {
+        updateChatCount(0);
+        container.innerHTML = renderEmptySession(view2.activeId);
+        return { handled: true, chats: filtered };
+      }
+      return { handled: false, chats: filtered };
+    } catch (e) {
+      console.error("[Sessions] Session view failed, falling back to the full list:", e);
+      try {
+        showSession(SESSION_ALL);
+        resetSessionChrome();
+      } catch {
+      }
+      return { handled: false, chats };
+    }
+  }
+  function renderEmptySession(sessionId) {
+    const real = isRealSessionId(sessionId);
+    return `
+        <div class="session-empty-state">
+            <i>${real ? "\u{1F5C2}\uFE0F" : "\u{1F4AC}"}</i>
+            <div>${real ? "\uC774 \uC138\uC158\uC5D0\uB294 \uC544\uC9C1 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4" : "\uBBF8\uBD84\uB958 \uCC44\uD305\uC774 \uC5C6\uC2B5\uB2C8\uB2E4"}</div>
+            ${real ? '<button type="button" class="session-empty-add" data-action="session-add-chats">+ \uCC44\uD305 \uB2F4\uAE30</button>' : ""}
+        </div>
+    `;
+  }
+  async function handleSessionAction(action, el) {
+    const avatar = store.currentCharacter?.avatar;
+    switch (action) {
+      case "session-start":
+        if (avatar) await createSessionFlow(avatar, { enter: true });
+        return true;
+      case "session-new":
+        if (avatar) await createSessionFlow(avatar, { enter: false });
+        return true;
+      case "session-open":
+        if (!avatar) return true;
+        showSession(el.dataset.sessionId || SESSION_ALL);
+        await refreshCurrentChatList();
+        document.getElementById("chat-lobby-chats-list")?.scrollTo?.(0, 0);
+        return true;
+      case "session-back":
+        if (!avatar) return true;
+        showCards();
+        await refreshCurrentChatList();
+        return true;
+      case "session-card-menu":
+        if (avatar) openSessionManageMenu(el, avatar, el.dataset.sessionId);
+        return true;
+      case "session-bar-menu": {
+        const view2 = getSessionView();
+        if (avatar && isRealSessionId(view2.activeId)) openSessionManageMenu(el, avatar, view2.activeId);
+        return true;
+      }
+      case "session-add-chats": {
+        const view2 = getSessionView();
+        if (avatar && isRealSessionId(view2.activeId)) openChatPicker(avatar, view2.activeId);
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+  async function createSessionFlow(avatar, { enter }) {
+    const input = await showPrompt("\uC0C8 \uC138\uC158 \uC774\uB984\uC744 \uC785\uB825\uD558\uC138\uC694.\n\uC608: AU, \uBD84\uAE30, \uAC19\uC740 \uD398\uB974\uC18C\uB098", "\u{1F5C2}\uFE0F \uC0C8 \uC138\uC158", "");
+    if (input === null) return;
+    if (store.currentCharacter?.avatar !== avatar) return;
+    const session = createSession(avatar, input);
+    if (!session) {
+      showToast("\uC138\uC158\uC744 \uB9CC\uB4E4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.", "error");
+      return;
+    }
+    showToast(`\u{1F5C2}\uFE0F "${session.name}" \uC138\uC158\uC744 \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
+    if (enter) showSession(session.id);
+    await refreshCurrentChatList();
+  }
+
   // src/ui/chatList/charChatList.js
   function setChatHandlers(handlers) {
     store.setChatHandlers(handlers);
@@ -5743,6 +7340,7 @@ ${message}` : message;
       return;
     }
     chatsPanel.classList.add("visible");
+    beginCharacterView(character.avatar);
     updateChatHeader(character);
     showFolderBar(true);
     const savedSortOption = storage.getSortOption();
@@ -5803,6 +7401,9 @@ ${message}` : message;
     chatArray = filterValidChats(chatArray);
     const totalChatCount = chatArray.length;
     updateHasChats(totalChatCount);
+    const sessionView = prepareSessionView(container, charAvatar, chatArray);
+    if (sessionView.handled) return;
+    chatArray = sessionView.chats;
     if (chatArray.length === 0) {
       console.debug("[renderChats] No valid chats, showing empty state");
       updateChatCount(0);
@@ -6054,6 +7655,7 @@ ${message}` : message;
       autoAnalyzeTimerId = null;
     }
     deactivateBatchMode();
+    resetSessionView();
     const chatsPanel = document.getElementById("chat-lobby-chats");
     if (chatsPanel) chatsPanel.classList.remove("visible");
     store.setCurrentCharacter(null);
@@ -6483,6 +8085,7 @@ ${message}` : message;
           data.favorites.splice(favIndex, 1);
         }
         storage.save(data);
+        removeChat(charAvatar, fileName);
         cache.invalidate("chats", charAvatar);
         api.repointLastChatAfterDelete(charAvatar, [fileName]);
         if (element) {
@@ -6603,10 +8206,14 @@ ${message}` : message;
       return;
     }
     try {
-      closeLobbyKeepState();
+      const targetSessionId = getActiveRealSessionId(charAvatar);
       const context = api.getContext();
       const currentChar = context?.characters?.[context.characterId];
       const isSameCharacter = currentChar?.avatar === charAvatar;
+      if (isSameCharacter && targetSessionId) {
+        rememberPendingNewChat(charAvatar, targetSessionId);
+      }
+      closeLobbyKeepState();
       cache.invalidate("chats", charAvatar);
       cache.invalidate("chatCounts", charAvatar);
       if (isSameCharacter) {
@@ -6634,6 +8241,9 @@ ${message}` : message;
       if (loadedChar?.avatar === charAvatar && loadedChar.chat === newChatName) {
         console.debug("[ChatHandlers] New chat created directly (single load):", newChatName);
         api.saveLastChatPointer(loadedChar.avatar, loadedChar.name, newChatName);
+        if (targetSessionId && addChats(charAvatar, targetSessionId, [newChatName]) > 0) {
+          showToast(`\u{1F5C2}\uFE0F \uC0C8 \uCC44\uD305\uC744 "${getSession(charAvatar, targetSessionId)?.name || "\uC138\uC158"}" \uC138\uC158\uC5D0 \uB2F4\uC558\uC2B5\uB2C8\uB2E4.`, "success");
+        }
       } else {
         console.warn("[ChatHandlers] New chat pointer was not kept (loaded:", loadedChar?.chat, ")");
       }
@@ -6801,6 +8411,7 @@ ${message}` : message;
         return;
       }
       storage.removeCharacterData(char.avatar);
+      removeCharacter(char.avatar);
       cache.invalidate("characters");
       cache.invalidate("chats", char.avatar);
       showToast(`"${char.name}" \uCE90\uB9AD\uD130\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`, "success");
@@ -8558,11 +10169,15 @@ ${message}` : message;
                             <div class="filter-group-buttons">
                                 <button id="chat-lobby-persona-quick" class="icon-btn persona-quick-btn" data-action="switch-persona" title="\uD038 \uD398\uB974\uC18C\uB098" style="display:none;"><img class="persona-quick-avatar" src="" alt="persona" /></button>
                                 <button id="chat-lobby-branch-refresh" class="icon-btn" data-action="refresh-branches" title="\uBD84\uAE30 \uBD84\uC11D \uC0C8\uB85C\uACE0\uCE68" style="display:none;"><span class="icon">\u{1F50D}</span></button>
+                                <button id="chat-lobby-session-start" class="icon-btn" data-action="session-start" title="\uC774 \uBD07\uC758 \uCC44\uD305\uC744 \uC138\uC158\uC73C\uB85C \uB098\uB204\uAE30" style="display:none;">\u{1F5C2}\uFE0F \uC138\uC158</button>
                                 <button id="chat-lobby-batch-mode" class="icon-btn" data-action="toggle-batch" title="\uBC30\uCE58 \uC120\uD0DD \uBAA8\uB4DC"><span class="icon">\u2611\uFE0F</span></button>
                                 <button id="chat-lobby-folder-manage" class="icon-btn" data-action="open-folder-modal" title="\uD3F4\uB354 \uAD00\uB9AC"><span class="icon">\u{1F4C1}</span></button>
                             </div>
                         </div>
                     </section>
+                    
+                    <!-- \uC138\uC158 \uC904 (\uC138\uC158 \uC548\uC5D0\uC11C \uBAA9\uB85D\uC744 \uBCFC \uB54C\uB9CC \uD45C\uC2DC, \uB0B4\uC6A9\uC740 sessions/sessionBar.js\uAC00 \uCC44\uC6C0) -->
+                    <div id="chat-lobby-session-bar" class="session-bar" style="display:none;"></div>
                     
                     <!-- \uBC30\uCE58 \uBAA8\uB4DC \uD234\uBC14 -->
                     <div id="chat-lobby-batch-toolbar">
@@ -8570,6 +10185,7 @@ ${message}` : message;
                         <button id="batch-select-all-btn" data-action="batch-select-all" title="\uC804\uCCB4 \uC120\uD0DD/\uD574\uC81C">\u2611 \uC804\uCCB4</button>
                         <button id="batch-delete-btn" data-action="batch-delete" title="\uC120\uD0DD\uD55C \uCC44\uD305 \uC0AD\uC81C">\u{1F5D1}\uFE0F \uC0AD\uC81C</button>
                         <button id="batch-move-btn" data-action="open-folder-modal" title="\uC120\uD0DD\uD55C \uCC44\uD305 \uD3F4\uB354 \uC774\uB3D9">\u{1F4C1} \uC774\uB3D9</button>
+                        <button id="batch-session-btn" data-action="batch-session" title="\uC120\uD0DD\uD55C \uCC44\uD305\uC744 \uC138\uC158\uC5D0 \uC9C0\uC815">\u{1F5C2}\uFE0F \uC138\uC158</button>
                         <button id="batch-cancel-btn" data-action="batch-cancel">\uCDE8\uC18C</button>
                     </div>
 
@@ -9662,7 +11278,7 @@ ${message}` : message;
   // src/ui/charBatch.js
   init_textUtils();
   init_notifications();
-  var BAR_ID = "chat-lobby-char-batch-bar";
+  var BAR_ID2 = "chat-lobby-char-batch-bar";
   var active = false;
   var selected = /* @__PURE__ */ new Set();
   function isCharBatchMode() {
@@ -9688,7 +11304,7 @@ ${message}` : message;
     if (active) {
       renderBar();
     } else {
-      document.getElementById(BAR_ID)?.remove();
+      document.getElementById(BAR_ID2)?.remove();
     }
   }
   function toggleCharBatchCard(card) {
@@ -9703,11 +11319,11 @@ ${message}` : message;
     updateBar();
   }
   function renderBar() {
-    document.getElementById(BAR_ID)?.remove();
-    const host = document.getElementById("chat-lobby-left");
-    if (!host) return;
+    document.getElementById(BAR_ID2)?.remove();
+    const host2 = document.getElementById("chat-lobby-left");
+    if (!host2) return;
     const bar = document.createElement("div");
-    bar.id = BAR_ID;
+    bar.id = BAR_ID2;
     bar.innerHTML = `
         <span class="char-batch-count" id="chat-lobby-char-batch-count">0\uAC1C \uC120\uD0DD</span>
         <div class="char-batch-actions">
@@ -9717,12 +11333,12 @@ ${message}` : message;
             <button data-action="toggle-char-batch" title="\uC120\uD0DD \uBAA8\uB4DC \uB05D\uB0B4\uAE30">\u2715</button>
         </div>
     `;
-    host.appendChild(bar);
+    host2.appendChild(bar);
   }
   function updateBar() {
     const count = document.getElementById("chat-lobby-char-batch-count");
     if (count) count.textContent = `${selected.size}\uAC1C \uC120\uD0DD`;
-    const del = document.querySelector(`#${BAR_ID} .char-batch-delete`);
+    const del = document.querySelector(`#${BAR_ID2} .char-batch-delete`);
     if (del) del.disabled = selected.size === 0;
   }
   function charBatchSelectAll() {
@@ -9770,6 +11386,7 @@ ${names}${more}
       const { deleted, failed } = await api.deleteCharacters(avatars);
       for (const avatar of deleted) {
         storage.removeCharacterData(avatar);
+        removeCharacter(avatar);
         cache.invalidate("chats", avatar);
         cache.invalidate("chatCounts", avatar);
         cache.invalidate("messageCounts", avatar);
@@ -12260,14 +13877,14 @@ ${names}${more}
 
   // src/ui/charInfoView.js
   init_textUtils();
-  var PANEL_ID = "chat-lobby-charinfo-panel";
+  var PANEL_ID2 = "chat-lobby-charinfo-panel";
   var openToken = 0;
   function isCharInfoOpen() {
-    return !!document.getElementById(PANEL_ID);
+    return !!document.getElementById(PANEL_ID2);
   }
   function closeCharInfo() {
     openToken++;
-    const panel = document.getElementById(PANEL_ID);
+    const panel = document.getElementById(PANEL_ID2);
     if (!panel) return;
     panel.classList.remove("open");
     setTimeout(() => panel.remove(), 250);
@@ -12290,13 +13907,13 @@ ${names}${more}
   async function openCharInfo(character) {
     if (!character?.avatar) return;
     const token = ++openToken;
-    document.getElementById(PANEL_ID)?.remove();
+    document.getElementById(PANEL_ID2)?.remove();
     const context = api.getContext();
     const characters = context?.characters || [];
     const index = characters.findIndex((c) => c.avatar === character.avatar);
     if (index === -1) return;
     const panel = document.createElement("div");
-    panel.id = PANEL_ID;
+    panel.id = PANEL_ID2;
     panel.className = "charinfo-panel";
     panel.innerHTML = `
         <div class="charinfo-header">
@@ -12428,6 +14045,8 @@ ${names}${more}
       "chatLobby_reminds",
       "chatLobby_highlights",
       "chatLobby_branchCache",
+      SESSIONS_KEY,
+      SESSION_IMAGES_KEY,
       CALENDAR_STORAGE_KEY,
       "chatLobby_calendar_v1_backup"
     ];
@@ -12472,6 +14091,7 @@ ${names}${more}
       const overlay = document.getElementById("chat-lobby-overlay");
       const shouldOpen = overlay?.style.display === "flex";
       await runStep("initPersist", () => initPersist(PERSIST_KEYS));
+      await runStep("migrateFoldersToSessions", () => migrateFoldersToSessions(storage.load()));
       await runStep("renderStDock", renderStDock);
       await runStep("setupSillyTavernEvents", setupSillyTavernEvents);
       await runStep("addLobbyToOptionsMenu", () => addLobbyToOptionsMenu());
@@ -12552,6 +14172,7 @@ ${names}${more}
       }
       const { eventSource, eventTypes } = context;
       const onChatChanged = () => {
+        resolvePendingNewChat();
         if (operationLock.isLocked) {
           console.debug("[ChatLobby] CHAT_CHANGED ignored (operation in progress:", operationLock.currentOp, ")");
           return;
@@ -12595,6 +14216,7 @@ ${names}${more}
             highlightStore.removeByAvatar(eventData.character.avatar);
             forgetAvatarVersion(eventData.character.avatar);
             storage.removeCharacterData(eventData.character.avatar);
+            removeCharacter(eventData.character.avatar);
             console.debug("[ChatLobby] Removed deleted character from caches:", eventData.character.avatar);
           }
           if (isLobbyOpen()) {
@@ -12612,6 +14234,17 @@ ${names}${more}
           }
         },
         onChatChanged,
+        // 채팅 이름 변경/삭제를 세션에 반영 (ST 화면에서 직접 한 경우 포함)
+        onChatRenamed: (data) => {
+          if (data?.avatarId && data.oldFileName && data.newFileName) {
+            renameChat(data.avatarId, data.oldFileName, data.newFileName);
+          }
+        },
+        onChatDeleted: (fileName) => {
+          if (typeof fileName !== "string" || !fileName || api.getContext()?.groupId) return;
+          const avatar = getCurrentCharacterAvatar();
+          if (avatar) removeChat(avatar, fileName);
+        },
         // 🔥 메시지 전송/수신 이벤트 - 로비 밖에서 채팅해도 lastChatCache 갱신
         onMessageSent: () => {
           const context2 = api.getContext();
@@ -12665,6 +14298,12 @@ ${names}${more}
         eventSource.on(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
       }
       eventSource.on(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+      if (eventTypes.CHAT_RENAMED) {
+        eventSource.on(eventTypes.CHAT_RENAMED, eventHandlers.onChatRenamed);
+      }
+      if (eventTypes.CHAT_DELETED) {
+        eventSource.on(eventTypes.CHAT_DELETED, eventHandlers.onChatDeleted);
+      }
       if (eventTypes.MESSAGE_SENT) {
         eventSource.on(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
       }
@@ -12692,6 +14331,8 @@ ${names}${more}
         eventSource.off?.(eventTypes.CHARACTER_EDITED, eventHandlers.onCharacterEdited);
         eventSource.off?.(eventTypes.CHARACTER_ADDED, eventHandlers.onCharacterAdded);
         eventSource.off?.(eventTypes.CHAT_CHANGED, eventHandlers.onChatChanged);
+        eventSource.off?.(eventTypes.CHAT_RENAMED, eventHandlers.onChatRenamed);
+        eventSource.off?.(eventTypes.CHAT_DELETED, eventHandlers.onChatDeleted);
         eventSource.off?.(eventTypes.MESSAGE_SENT, eventHandlers.onMessageSent);
         eventSource.off?.(eventTypes.MESSAGE_RECEIVED, eventHandlers.onMessageReceived);
         eventSource.off?.(eventTypes.USER_MESSAGE_RENDERED, eventHandlers.onMessageSent);
@@ -12717,6 +14358,7 @@ ${names}${more}
         renderChatList(character);
       });
       setGroupSelectHandler((group) => {
+        resetSessionView();
         renderGroupChatList(group);
       });
       setChatHandlers({
@@ -12854,6 +14496,7 @@ ${names}${more}
       }
       store.setLobbyOpen(false);
       store.resetSelection();
+      closeAllSessionLayers();
       closeChatPanel();
       closeCharInfo();
       toggleCharBatchMode(false);
@@ -13135,6 +14778,9 @@ ${names}${more}
         case "batch-select-all":
           batchSelectAll();
           break;
+        case "batch-session":
+          await executeBatchSession();
+          break;
         case "open-folder-modal":
           openFolderModal();
           break;
@@ -13211,6 +14857,9 @@ ${names}${more}
         case "refresh-branches":
           await handleRefreshBranches();
           break;
+        default:
+          await handleSessionAction(action, el);
+          break;
       }
     }
     function toggleHeaderMenu() {
@@ -13221,6 +14870,9 @@ ${names}${more}
     }
     function handleKeydown2(e) {
       if (e.key === "Escape") {
+        if (closeTopSessionLayer()) {
+          return;
+        }
         if (closeTopRemindLayer()) {
           return;
         }

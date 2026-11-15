@@ -14,6 +14,8 @@ import { showToast, showConfirm } from '../ui/notifications.js';
 import { waitFor, waitForCharacterSelect, waitForElement, waitForChatChanged } from '../utils/waitFor.js';
 
 import { startRecentDomObserver } from '../ui/tabView.js';
+import { addChats as addChatsToSession, getSession, removeChat as removeSessionChat, removeCharacter as removeSessionCharacter } from '../data/sessionStore.js';
+import { getActiveRealSessionId, rememberPendingNewChat } from '../ui/sessions/sessionState.js';
 
 // ============================================
 // 채팅 열기
@@ -253,6 +255,9 @@ export async function deleteChat(chatInfo) {
             }
             storage.save(data);
             
+            // 세션 소속/메모도 함께 정리
+            removeSessionChat(charAvatar, fileName);
+            
             // 캐시 무효화
             cache.invalidate('chats', charAvatar);
 
@@ -474,12 +479,24 @@ async function startNewCharacterChat(btn, token = null) {
     }
 
     try {
-        // 로비 닫기 (상태 유지)
-        closeLobbyKeepState();
+        // 세션 안에서 시작하는 새 채팅이면 그 세션에 넣는다 (명세 6절)
+        // ⚠️ 로비를 닫기/캐시를 비우기 전에 읽어야 한다 (닫으면 화면 상태가 초기화되고,
+        //    캐시를 비우면 "이미 있던 채팅"을 알 수 없다)
+        const targetSessionId = getActiveRealSessionId(charAvatar);
 
         const context = api.getContext();
         const currentChar = context?.characters?.[context.characterId];
         const isSameCharacter = currentChar?.avatar === charAvatar;
+
+        // 같은 캐릭터는 ST 버튼이 파일명을 만들어서 이름을 모른다 → 의도만 기억했다가 CHAT_CHANGED에서 처리
+        // ⚠️ 로비를 닫기 전에: 닫으면 화면에 그려 둔 채팅 목록 기억도 지워져서, 캐시가 비어 있을 때
+        //    "이미 있던 채팅"을 알 수 없게 된다
+        if (isSameCharacter && targetSessionId) {
+            rememberPendingNewChat(charAvatar, targetSessionId);
+        }
+
+        // 로비 닫기 (상태 유지)
+        closeLobbyKeepState();
 
         // 새 채팅이 생기므로 목록 캐시 무효화
         cache.invalidate('chats', charAvatar);
@@ -514,6 +531,10 @@ async function startNewCharacterChat(btn, token = null) {
             console.debug('[ChatHandlers] New chat created directly (single load):', newChatName);
             // 다음 실행 때도 이 채팅이 열리도록 chat 필드만 기록
             api.saveLastChatPointer(loadedChar.avatar, loadedChar.name, newChatName);
+            // 파일명을 직접 정했으니 전환이 성공한 지금 바로 세션에 넣는다
+            if (targetSessionId && addChatsToSession(charAvatar, targetSessionId, [newChatName]) > 0) {
+                showToast(`🗂️ 새 채팅을 "${getSession(charAvatar, targetSessionId)?.name || '세션'}" 세션에 담았습니다.`, 'success');
+            }
         } else {
             console.warn('[ChatHandlers] New chat pointer was not kept (loaded:', loadedChar?.chat, ')');
         }
@@ -767,6 +788,7 @@ export async function deleteCharacter() {
 
         // 로비 데이터 정리 (폴더 배정, 즐겨찾기)
         storage.removeCharacterData(char.avatar);
+        removeSessionCharacter(char.avatar);
 
         // 캐시 무효화
         cache.invalidate('characters');

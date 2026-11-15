@@ -10,6 +10,8 @@ import { operationLock } from '../../utils/operationLock.js';
 import { showToast, showAlert, showConfirm } from '../notifications.js';
 import { getFoldersOptionsHTML } from '../templates.js';
 import { refreshCurrentChatList } from './charChatList.js';
+import { removeChat as removeSessionChat } from '../../data/sessionStore.js';
+import { openSessionPicker } from '../sessions/sessionPicker.js';
 
 // ============================================
 // 배치 모드
@@ -65,6 +67,55 @@ export function batchSelectAll() {
     });
     
     updateBatchCount();
+}
+
+/**
+ * 일괄 선택 모드로 들어가면서 주어진 채팅들을 미리 선택 ("같은 분기 전체 선택"용)
+ * 지금 목록에 그려져 있는 채팅만 고를 수 있다.
+ * @param {string[]} fileNames - .jsonl 유무 무관
+ * @returns {number} 실제로 선택된 수
+ */
+export function enterBatchModeWithSelection(fileNames) {
+    if (!store.batchModeActive) toggleBatchMode();
+    
+    const strip = (n) => String(n || '').replace(/\.jsonl$/i, '');
+    const wanted = new Set((fileNames || []).map(strip));
+    let selected = 0;
+    document.querySelectorAll('#chat-lobby-chats-list .lobby-chat-item').forEach(item => {
+        const cb = item.querySelector('.chat-select-cb');
+        if (!cb) return;
+        cb.checked = wanted.has(strip(item.dataset.fileName));
+        if (cb.checked) selected++;
+    });
+    updateBatchCount();
+    return selected;
+}
+
+/**
+ * 선택한 채팅들을 세션에 지정 (세션 선택 창을 연다)
+ */
+export async function executeBatchSession() {
+    const avatar = store.currentCharacter?.avatar;
+    const names = Array.from(document.querySelectorAll('.chat-select-cb:checked'))
+        .map(cb => cb.closest('.lobby-chat-item')?.dataset.fileName)
+        .filter(Boolean);
+    
+    if (!avatar) {
+        showToast('세션은 캐릭터 채팅에서만 쓸 수 있습니다.', 'info');
+        return;
+    }
+    if (names.length === 0) {
+        await showAlert('세션에 담을 채팅을 선택하세요.');
+        return;
+    }
+    
+    openSessionPicker(avatar, names, {
+        onApplied: async () => {
+            // 이동과 마찬가지로 적용이 끝나면 선택 모드를 끝내고 목록을 다시 그린다
+            if (store.batchModeActive) toggleBatchMode();
+            await refreshCurrentChatList();
+        }
+    });
 }
 
 /**
@@ -190,6 +241,8 @@ export async function executeBatchDelete() {
                         data.favorites.splice(favIndex, 1);
                     }
                     storage.save(data);
+                    // 세션 소속/메모도 함께 정리
+                    removeSessionChat(chat.charAvatar, chat.fileName);
                 } else {
                     failCount++;
                 }
