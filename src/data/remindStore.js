@@ -4,6 +4,8 @@
 // 채팅 단위 또는 메시지 범위 단위로 메모와 함께 저장
 // ============================================
 
+import { persistGet, persistSet } from './persist.js';
+
 const STORAGE_KEY = 'chatLobby_reminds';
 const PROGRESS_KEY = 'chatLobby_remindProgress';
 const PROGRESS_MAX_ENTRIES = 150;
@@ -21,31 +23,21 @@ const PROGRESS_MAX_ENTRIES = 150;
  */
 
 class RemindStore {
-    constructor() {
-        /** @type {Remind[]|null} */
-        this._data = null;
-    }
-
-    /** @returns {Remind[]} */
+    /**
+     * 저장 위치: IndexedDB (persist.js). 값을 따로 들고 있지 않고 매번 persist에서 읽는다.
+     */
     _load() {
-        if (this._data) return this._data;
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            this._data = raw ? JSON.parse(raw) : [];
-            if (!Array.isArray(this._data)) this._data = [];
-        } catch (e) {
-            console.warn('[RemindStore] Failed to load:', e);
-            this._data = [];
+        let data = persistGet(STORAGE_KEY, () => []);
+        if (!Array.isArray(data)) {
+            console.warn('[RemindStore] Stored value was not an array, resetting');
+            data = [];
+            persistSet(STORAGE_KEY, data);
         }
-        return this._data;
+        return data;
     }
 
     _save() {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this._data));
-        } catch (e) {
-            console.warn('[RemindStore] Failed to save:', e);
-        }
+        persistSet(STORAGE_KEY, this._load());
     }
 
     /**
@@ -179,8 +171,8 @@ class RemindStore {
     removeByAvatar(avatar) {
         const data = this._load();
         const before = data.length;
-        this._data = data.filter(r => r.avatar !== avatar);
-        if (this._data.length !== before) this._save();
+        const kept = data.filter(r => r.avatar !== avatar);
+        if (kept.length !== before) persistSet(STORAGE_KEY, kept);
     }
 }
 

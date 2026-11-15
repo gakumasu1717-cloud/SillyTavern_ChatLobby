@@ -4,6 +4,8 @@
 // 재방문 시 본문에서 같은 텍스트를 찾아 다시 칠함
 // ============================================
 
+import { persistGet, persistSet } from './persist.js';
+
 const STORAGE_KEY = 'chatLobby_highlights';
 
 /**
@@ -17,30 +19,21 @@ const STORAGE_KEY = 'chatLobby_highlights';
  */
 
 class HighlightStore {
-    constructor() {
-        /** @type {Highlight[]|null} */
-        this._data = null;
-    }
-
+    /**
+     * 저장 위치: IndexedDB (persist.js). 값을 따로 들고 있지 않고 매번 persist에서 읽는다.
+     */
     _load() {
-        if (this._data) return this._data;
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            this._data = raw ? JSON.parse(raw) : [];
-            if (!Array.isArray(this._data)) this._data = [];
-        } catch (e) {
-            console.warn('[HighlightStore] Failed to load:', e);
-            this._data = [];
+        let data = persistGet(STORAGE_KEY, () => []);
+        if (!Array.isArray(data)) {
+            console.warn('[HighlightStore] Stored value was not an array, resetting');
+            data = [];
+            persistSet(STORAGE_KEY, data);
         }
-        return this._data;
+        return data;
     }
 
     _save() {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this._data));
-        } catch (e) {
-            console.warn('[HighlightStore] Failed to save:', e);
-        }
+        persistSet(STORAGE_KEY, this._load());
     }
 
     /**
@@ -105,8 +98,8 @@ class HighlightStore {
     removeByAvatar(avatar) {
         const data = this._load();
         const before = data.length;
-        this._data = data.filter(h => h.avatar !== avatar);
-        if (this._data.length !== before) this._save();
+        const kept = data.filter(h => h.avatar !== avatar);
+        if (kept.length !== before) persistSet(STORAGE_KEY, kept);
     }
 }
 

@@ -156,9 +156,11 @@ async function openViewerWithData(remind) {
                     </div>
                 </div>
                 <div class="remind-viewer-pagrow">
+                    <button class="remind-viewer-btn" id="remind-page-prev10" title="10페이지 앞으로 (Shift+←)">«</button>
                     <button class="remind-viewer-btn" id="remind-page-prev" title="이전 페이지 (범위 앞도 이어서 불러옴)">◀</button>
                     <span class="remind-page-label" id="remind-page-label">-</span>
                     <button class="remind-viewer-btn" id="remind-page-next" title="다음 페이지 (범위 끝나면 이어서 불러옴)">▶</button>
+                    <button class="remind-viewer-btn" id="remind-page-next10" title="10페이지 뒤로 (Shift+→)">»</button>
                 </div>
                 <div class="remind-settings-pop" id="remind-settings-pop" style="display:none;">
                     <div class="remind-set-row">
@@ -233,6 +235,8 @@ async function openViewerWithData(remind) {
     // 페이지네이션 (+범위 연장)
     listeners.add('remindViewer', overlay.querySelector('#remind-page-prev'), 'click', () => changePage(-1));
     listeners.add('remindViewer', overlay.querySelector('#remind-page-next'), 'click', () => changePage(1));
+    listeners.add('remindViewer', overlay.querySelector('#remind-page-prev10'), 'click', () => changePage(-PAGE_JUMP));
+    listeners.add('remindViewer', overlay.querySelector('#remind-page-next10'), 'click', () => changePage(PAGE_JUMP));
     listeners.add('remindViewer', overlay.querySelector('#remind-page-size'), 'change', (e) => {
         uiPrefs.set('viewerPageSize', parseInt(e.target.value, 10) || 0);
         pageIndex = 0;
@@ -493,7 +497,9 @@ function handleViewerKeydown(e) {
     const lb = document.getElementById('remind-lightbox');
     if (lb?.classList.contains('active')) return;
 
-    changePage(e.key === 'ArrowLeft' ? -1 : 1);
+    // Shift+방향키는 10페이지씩
+    const step = e.shiftKey ? PAGE_JUMP : 1;
+    changePage(e.key === 'ArrowLeft' ? -step : step);
 }
 
 // ============================================
@@ -608,40 +614,71 @@ function getTotalPages(rangeLength) {
     return Math.max(1, Math.ceil(rangeLength / pageSize));
 }
 
+/** 건너뛰기 버튼(« »)이 한 번에 넘기는 페이지 수 */
+const PAGE_JUMP = 10;
+
 /**
  * 페이지 이동 + 범위 연장 (이어서 보기)
+ * @param {number} delta - 이동할 페이지 수 (음수 = 앞으로). ±1은 ◀▶, ±PAGE_JUMP는 «»
+ *
+ * 보기 범위 안에서는 pageIndex만 옮기고, 범위 끝을 넘어가는 만큼은 범위를 늘려서 이어 본다.
  */
 function changePage(delta) {
     const data = getCurrentSlice();
-    if (!data || !currentMessages) return;
+    if (!data || !currentMessages || !delta) return;
 
     const total = currentMessages.length;
-    const pageSize = getEffectivePageSize(data.slice.length);
-    const extendChunk = pageSize || 20;
-    const totalPages = getTotalPages(data.slice.length);
+    const rangeLength = data.slice.length;
+    const pageSize = getEffectivePageSize(rangeLength);
+    const chunk = pageSize || 20;
+    const totalPages = getTotalPages(rangeLength);
+    let steps = Math.abs(delta);
+    let moved = false;
+    let extendedTo = null;
 
     if (delta > 0) {
-        if (pageIndex < totalPages - 1) {
-            pageIndex++;
-        } else if (viewEnd < total - 1) {
-            const newEnd = Math.min(total - 1, viewEnd + extendChunk);
-            viewEnd = newEnd;
-            pageIndex++;
-            showToast(`📖 다음 구간 이어 보기 (~#${newEnd})`, 'info', 1500);
-        } else {
-            return;
+        // 1) 범위 안에서 이동
+        const inRange = Math.min(steps, totalPages - 1 - pageIndex);
+        if (inRange > 0) {
+            pageIndex += inRange;
+            steps -= inRange;
+            moved = true;
+        }
+        // 2) 남은 만큼 범위를 뒤로 늘림
+        if (steps > 0 && viewEnd < total - 1) {
+            if (pageSize === 0) {
+                viewEnd = Math.min(total - 1, viewEnd + chunk * steps);
+            } else {
+                // 마지막 페이지가 덜 찬 상태면 첫 한 걸음은 그 페이지를 채우는 데 씀
+                // (그냥 다음 페이지로 넘기면 채워진 부분을 건너뛰게 됨)
+                const lastPagePartial = rangeLength % pageSize !== 0;
+                const targetPage = pageIndex + steps - (lastPagePartial ? 1 : 0);
+                viewEnd = Math.min(total - 1, viewStart + (targetPage + 1) * pageSize - 1);
+                const newTotalPages = Math.ceil((viewEnd - viewStart + 1) / pageSize);
+                pageIndex = Math.min(newTotalPages - 1, targetPage);
+            }
+            extendedTo = `~#${viewEnd}`;
+            moved = true;
         }
     } else {
-        if (pageIndex > 0) {
-            pageIndex--;
-        } else if (viewStart > 0) {
-            const newStart = Math.max(0, viewStart - extendChunk);
-            viewStart = newStart;
-            pageIndex = 0;
-            showToast(`📖 이전 구간 이어 보기 (#${newStart}~)`, 'info', 1500);
-        } else {
-            return;
+        const inRange = Math.min(steps, pageIndex);
+        if (inRange > 0) {
+            pageIndex -= inRange;
+            steps -= inRange;
+            moved = true;
         }
+        // 남은 만큼 범위를 앞으로 늘림 → 늘어난 범위의 첫 페이지가 목표 페이지
+        if (steps > 0 && viewStart > 0) {
+            viewStart = Math.max(0, viewStart - chunk * steps);
+            pageIndex = 0;
+            extendedTo = `#${viewStart}~`;
+            moved = true;
+        }
+    }
+
+    if (!moved) return;
+    if (extendedTo) {
+        showToast(`📖 ${delta > 0 ? '다음' : '이전'} 구간 이어 보기 (${extendedTo})`, 'info', 1500);
     }
 
     renderMessages();
@@ -1118,8 +1155,14 @@ function updatePageControls(totalPages, rangeLength, rangeFrom = 0, rangeTo = 0)
         }
     }
 
-    if (prevBtn) prevBtn.disabled = pageIndex <= 0 && viewStart <= 0;
-    if (nextBtn) nextBtn.disabled = pageIndex >= totalPages - 1 && viewEnd >= total - 1;
+    const atStart = pageIndex <= 0 && viewStart <= 0;
+    const atEnd = pageIndex >= totalPages - 1 && viewEnd >= total - 1;
+    if (prevBtn) prevBtn.disabled = atStart;
+    if (nextBtn) nextBtn.disabled = atEnd;
+    const prev10Btn = document.getElementById('remind-page-prev10');
+    const next10Btn = document.getElementById('remind-page-next10');
+    if (prev10Btn) prev10Btn.disabled = atStart;
+    if (next10Btn) next10Btn.disabled = atEnd;
 }
 
 /**

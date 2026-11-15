@@ -19,7 +19,8 @@ import { openStatsView, closeStatsView, isStatsViewOpen } from './ui/statsView.j
 import { openCalendarView, closeCalendarView } from './ui/calendarView.js';
 import { bindTabEvents, switchTab, injectContextMenuStyles, cacheRecentChatsBeforeOpen, loadRecentChats, startRecentDomObserver, stopRecentDomObserver } from './ui/tabView.js';
 import { lastChatCache } from './data/lastChatCache.js';
-import { loadSnapshots as loadCalendarSnapshots, getLocalDateString, initCalendarStorage } from './data/calendarStorage.js';
+import { loadSnapshots as loadCalendarSnapshots, getLocalDateString, initCalendarStorage, CALENDAR_STORAGE_KEY } from './data/calendarStorage.js';
+import { initPersist } from './data/persist.js';
 import { debounce } from './utils/eventHelpers.js';
 import { waitForElement } from './utils/waitFor.js';
 import { intervalManager } from './utils/intervalManager.js';
@@ -170,6 +171,15 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
     let appReadyHandled = false;
     let appReadyListener = null;
 
+    // IndexedDB(persist.js)에 두는 큰 데이터 키
+    const PERSIST_KEYS = [
+        'chatLobby_reminds',
+        'chatLobby_highlights',
+        'chatLobby_branchCache',
+        CALENDAR_STORAGE_KEY,
+        'chatLobby_calendar_v1_backup',
+    ];
+
     /**
      * 1단계: 로비 셸 마운트 (ST 데이터 불필요)
      * @returns {boolean} 마운트했는지 (이미 초기화됐으면 false)
@@ -234,6 +244,9 @@ import { charAvatarUrl, bumpAvatarVersion, forgetAvatarVersion } from './utils/a
 
         // ★ 각 단계는 서로 독립: 하나가 실패해도 로그만 남기고 다음 단계 진행
         // (순차 체인에서 하나가 터지면 로비가 스켈레톤에 갇히는 것 방지)
+
+        // 큰 데이터(IndexedDB) 먼저 불러오기 - 다른 단계가 저장소를 쓰기 전에
+        await runStep('initPersist', () => initPersist(PERSIST_KEYS));
         await runStep('renderStDock', renderStDock);
         await runStep('setupSillyTavernEvents', setupSillyTavernEvents);
         await runStep('addLobbyToOptionsMenu', () => addLobbyToOptionsMenu());

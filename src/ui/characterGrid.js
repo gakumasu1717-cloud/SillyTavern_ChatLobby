@@ -7,7 +7,7 @@ import { cache } from '../data/cache.js';
 import { storage } from '../data/storage.js';
 import { store } from '../data/store.js';
 import { lastChatCache } from '../data/lastChatCache.js';
-import { saveSnapshot, getLocalDateString, loadSnapshots } from '../data/calendarStorage.js';
+import { saveSnapshot, getLocalDateString, hasCharHistory } from '../data/calendarStorage.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { bindDelegatedTouchClick, debounce } from '../utils/eventHelpers.js';
 import { showToast } from './notifications.js';
@@ -483,6 +483,11 @@ function loadChatCountsAsync(characters, sortOption = 'recent') {
         if (typeof cache.get('chatCounts', card.dataset.charAvatar) === 'number') return;
         countObserver.observe(card);
     });
+
+    // 오늘 채팅한 캐릭터는 스크롤 위치와 상관없이 수를 갱신 (캘린더 기록용)
+    queueChangedTodayCounts(characters);
+    // 불러올 게 없어도 오늘 기록은 남김
+    if (countQueue.length === 0 && countActive === 0) scheduleSnapshot();
 }
 
 /**
@@ -597,62 +602,39 @@ async function loadOneChatCount(avatar) {
 }
 
 /**
- * 🔥 캐시에서 오늘 스냅샷 저장 (필요시 API fallback)
- * loadChatCountsAsync 완료 후 호출됨
+ * 오늘 스냅샷 저장 (메모리에 있는 값만 사용, 네트워크 요청 없음)
+ *
+ * 스냅샷은 "바뀐 캐릭터만" 기록하므로, 지금 수를 아는 캐릭터만 넘기면 된다.
+ * 수를 모르는 캐릭터는 건드리지 않는다 (이전 기록이 그대로 유효).
  */
-async function saveTodaySnapshotFromCache() {
+function saveTodaySnapshotFromCache() {
     try {
-        const today = getLocalDateString();
         const characters = api.getCharacters();
-        
         if (!characters || characters.length === 0) return;
-        
-        // 최근 스냅샷 (오늘 것 / 오늘 이전 최근 7일 중 가장 최근 것)
-        const snapshots = loadSnapshots();
-        const todaySnapshot = snapshots[today] || null;
-        let recentSnapshot = null;
-        const checkDate = new Date();
-        for (let i = 0; i < 7; i++) {
-            checkDate.setDate(checkDate.getDate() - 1);
-            const dateStr = getLocalDateString(checkDate);
-            if (snapshots[dateStr]) {
-                recentSnapshot = snapshots[dateStr];
-                break;
-            }
-        }
 
-        // 캐시에서 데이터 수집
-        // ★ 채팅 수는 이제 화면에 보인 카드만 불러오므로 일부 캐릭터는 값이 없을 수 있음
-        //   → 그런 캐릭터는 오늘/최근 스냅샷의 값을 그대로 써서 합계가 줄어들지 않게 함
-        const byChar = {};
-        let totalMessages = 0;
-        
-        characters.forEach(char => {
-            let msgCount = cache.get('messageCounts', char.avatar);
-            if (typeof msgCount !== 'number') {
-                msgCount = todaySnapshot?.byChar?.[char.avatar]
-                    ?? recentSnapshot?.byChar?.[char.avatar]
-                    ?? 0;
-            }
-            if (msgCount > 0) {
-                byChar[char.avatar] = msgCount;
-                totalMessages += msgCount;
-            }
-        });
-        
-        // lastChatTimes - 오늘 날짜만
-        const lastChatTimes = {};
+        const today = getLocalDateString();
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayStartMs = todayStart.getTime();
 
-        // ⚠️ 네트워크 호출 금지 - 이전 구현은 캐시 미스 캐릭터 전부에 대해
-        // 무제한 병렬 API 호출을 날려 로비 열기 직후 요청 폭주를 일으켰음.
-        // 스냅샷은 메모리에 있는 데이터만으로 계산 (없는 캐릭터는 다음 기회에 채워짐)
-        for (const char of characters) {
-            let lastTime = lastChatCache.get(char.avatar);
+        const counts = {};    // 변경분 계산 대상
+        const backfill = {};  // 기록이 없던 기존 캐릭터 → 기준값에만 추가
+        const lastChatTimes = {};
 
-            // 캐시 미스면 이미 받아둔 채팅 목록에서만 추출 (네트워크 X)
+        for (const char of characters) {
+            const msgCount = cache.get('messageCounts', char.avatar);
+            if (typeof msgCount === 'number') {
+                // 오늘 새로 추가한 캐릭터는 0에서 시작한 것으로 보고 변경분으로 계산
+                const isNewToday = (Number(char.date_added) || 0) >= todayStartMs;
+                if (hasCharHistory(char.avatar) || isNewToday) {
+                    counts[char.avatar] = msgCount;
+                } else {
+                    backfill[char.avatar] = msgCount;
+                }
+            }
+
+            // 오늘 채팅한 캐릭터의 마지막 시각 (메모리 캐시 → 이미 받아둔 채팅 목록 순)
+            let lastTime = lastChatCache.get(char.avatar);
             if (lastTime === 0) {
                 const cachedChats = cache.get('chats', char.avatar);
                 if (Array.isArray(cachedChats) && cachedChats.length > 0) {
@@ -660,38 +642,28 @@ async function saveTodaySnapshotFromCache() {
                     if (lastTime > 0) lastChatCache.set(char.avatar, lastTime);
                 }
             }
+            if (lastTime >= todayStartMs) lastChatTimes[char.avatar] = lastTime;
+        }
 
-            if (lastTime >= todayStartMs) {
-                lastChatTimes[char.avatar] = lastTime;
-            }
-        }
-        
-        // 가장 증가한 캐릭터 찾기 (이전 스냅샷과 비교)
-        let topChar = '';
-        let maxIncrease = -Infinity;
-        
-        const baseByChar = recentSnapshot?.byChar || {};
-        
-        for (const [avatar, msgCount] of Object.entries(byChar)) {
-            const prev = baseByChar[avatar] || 0;
-            const increase = msgCount - prev;
-            if (increase > maxIncrease) {
-                maxIncrease = increase;
-                topChar = avatar;
-            }
-        }
-        
-        // 기준 없으면 메시지 1위
-        if (!topChar) {
-            const sorted = Object.entries(byChar).sort((a, b) => b[1] - a[1]);
-            topChar = sorted[0]?.[0] || '';
-        }
-        
-        saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
-        console.debug('[CharacterGrid] Snapshot saved from cache');
-        
+        saveSnapshot(today, { counts, backfill, lastChatTimes });
+        console.debug('[CharacterGrid] Snapshot saved:', Object.keys(counts).length, 'known,', Object.keys(backfill).length, 'backfilled');
     } catch (e) {
         console.error('[CharacterGrid] Failed to save snapshot:', e);
+    }
+}
+
+/**
+ * 오늘 채팅한 캐릭터의 채팅 수를 화면에 안 보여도 불러오게 함
+ * ("바뀐 봇만 감지": 캐릭터의 date_last_chat이 오늘이면 수가 바뀌었을 수 있음)
+ * @param {Array} characters
+ */
+function queueChangedTodayCounts(characters) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartMs = todayStart.getTime();
+    for (const char of characters) {
+        const last = Math.max(Number(char.date_last_chat) || 0, lastChatCache.get(char.avatar) || 0);
+        if (last >= todayStartMs) enqueueChatCount(char.avatar);
     }
 }
 

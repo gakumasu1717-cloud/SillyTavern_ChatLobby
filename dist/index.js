@@ -2493,31 +2493,139 @@ ${message}` : message;
   // src/ui/chatList.js
   init_notifications();
 
+  // src/data/persist.js
+  var WRITE_DELAY_MS = 400;
+  var cache2 = /* @__PURE__ */ new Map();
+  var dirty = /* @__PURE__ */ new Set();
+  var touchedBeforeInit = /* @__PURE__ */ new Set();
+  var initialized = false;
+  var writeTimer = null;
+  var flushBound = false;
+  function lf() {
+    return typeof window !== "undefined" && window.localforage || null;
+  }
+  function readLocalStorage(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.warn("[Persist] Corrupt localStorage value ignored:", key);
+      return null;
+    }
+  }
+  function removeLocalStorage(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+    }
+  }
+  function persistGet(key, makeDefault) {
+    if (cache2.has(key)) return cache2.get(key);
+    const value = readLocalStorage(key) ?? makeDefault();
+    cache2.set(key, value);
+    return value;
+  }
+  function persistSet(key, value) {
+    cache2.set(key, value);
+    dirty.add(key);
+    if (!initialized) touchedBeforeInit.add(key);
+    scheduleWrite();
+  }
+  function persistRemove(key) {
+    cache2.delete(key);
+    dirty.delete(key);
+    removeLocalStorage(key);
+    const store2 = lf();
+    if (store2) store2.removeItem(key).catch(() => {
+    });
+  }
+  function scheduleWrite() {
+    if (writeTimer) clearTimeout(writeTimer);
+    writeTimer = setTimeout(flushPersist, WRITE_DELAY_MS);
+    bindFlushEvents();
+  }
+  async function flushPersist() {
+    if (writeTimer) {
+      clearTimeout(writeTimer);
+      writeTimer = null;
+    }
+    const keys = [...dirty];
+    dirty.clear();
+    const store2 = lf();
+    await Promise.all(keys.map(async (key) => {
+      const value = cache2.get(key);
+      try {
+        if (store2) {
+          await store2.setItem(key, value);
+        } else {
+          localStorage.setItem(key, JSON.stringify(value));
+        }
+      } catch (e) {
+        console.error("[Persist] Save failed:", key, e);
+        dirty.add(key);
+      }
+    }));
+  }
+  function bindFlushEvents() {
+    if (flushBound || typeof window === "undefined") return;
+    flushBound = true;
+    const flush = () => {
+      if (dirty.size > 0) flushPersist();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flush();
+    });
+  }
+  async function initPersist(keys) {
+    const store2 = lf();
+    if (!store2) {
+      console.warn("[Persist] window.localforage not found, staying on localStorage");
+      initialized = true;
+      return;
+    }
+    await Promise.all(keys.map(async (key) => {
+      try {
+        const stored = await store2.getItem(key);
+        if (stored !== null && stored !== void 0) {
+          if (touchedBeforeInit.has(key)) {
+            console.warn("[Persist] Change made before init was discarded:", key);
+            dirty.delete(key);
+          }
+          cache2.set(key, stored);
+          removeLocalStorage(key);
+          return;
+        }
+        const legacy = cache2.has(key) ? cache2.get(key) : readLocalStorage(key);
+        if (legacy === null || legacy === void 0) return;
+        await store2.setItem(key, legacy);
+        const check = await store2.getItem(key);
+        if (check !== null && check !== void 0) {
+          cache2.set(key, legacy);
+          removeLocalStorage(key);
+          console.info("[Persist] Migrated localStorage \u2192 IndexedDB:", key);
+        }
+      } catch (e) {
+        console.warn("[Persist] Init failed for key, keeping localStorage copy:", key, e);
+      }
+    }));
+    initialized = true;
+    touchedBeforeInit.clear();
+  }
+
   // src/data/branchCache.js
   var STORAGE_KEY3 = "chatLobby_branchCache";
   var FINGERPRINT_MESSAGE_COUNT = 10;
-  var cacheData = null;
   function loadCache() {
-    if (cacheData) return cacheData;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY3);
-      if (stored) {
-        cacheData = JSON.parse(stored);
-      }
-    } catch (e) {
-      console.warn("[BranchCache] Failed to load cache:", e);
+    let data = persistGet(STORAGE_KEY3, () => ({ version: 1, characters: {} }));
+    if (!data || data.version !== 1 || typeof data.characters !== "object") {
+      data = { version: 1, characters: {} };
+      persistSet(STORAGE_KEY3, data);
     }
-    if (!cacheData || cacheData.version !== 1) {
-      cacheData = { version: 1, characters: {} };
-    }
-    return cacheData;
+    return data;
   }
   function saveCache() {
-    try {
-      localStorage.setItem(STORAGE_KEY3, JSON.stringify(cacheData));
-    } catch (e) {
-      console.warn("[BranchCache] Failed to save cache:", e);
-    }
+    persistSet(STORAGE_KEY3, loadCache());
   }
   function hashString(str) {
     let h1 = 5381;
@@ -2549,13 +2657,13 @@ ${message}` : message;
   }
   function setFingerprintBatch(charAvatar, entries) {
     if (!entries || entries.length === 0) return;
-    const cache2 = loadCache();
-    if (!cache2.characters[charAvatar]) {
-      cache2.characters[charAvatar] = { fingerprints: {}, branches: {} };
+    const cache3 = loadCache();
+    if (!cache3.characters[charAvatar]) {
+      cache3.characters[charAvatar] = { fingerprints: {}, branches: {} };
     }
     const now = Date.now();
     for (const { fileName, hash, length } of entries) {
-      cache2.characters[charAvatar].fingerprints[fileName] = {
+      cache3.characters[charAvatar].fingerprints[fileName] = {
         hash,
         length,
         lastUpdated: now
@@ -2565,12 +2673,12 @@ ${message}` : message;
   }
   function setBranchInfoBatch(charAvatar, entries) {
     if (!entries || entries.length === 0) return;
-    const cache2 = loadCache();
-    if (!cache2.characters[charAvatar]) {
-      cache2.characters[charAvatar] = { fingerprints: {}, branches: {} };
+    const cache3 = loadCache();
+    if (!cache3.characters[charAvatar]) {
+      cache3.characters[charAvatar] = { fingerprints: {}, branches: {} };
     }
     for (const { fileName, parentChat, branchPoint, depth } of entries) {
-      cache2.characters[charAvatar].branches[fileName] = {
+      cache3.characters[charAvatar].branches[fileName] = {
         parentChat,
         branchPoint,
         depth
@@ -2579,16 +2687,16 @@ ${message}` : message;
     saveCache();
   }
   function getAllBranches(charAvatar) {
-    const cache2 = loadCache();
-    return cache2.characters[charAvatar]?.branches || {};
+    const cache3 = loadCache();
+    return cache3.characters[charAvatar]?.branches || {};
   }
   function getAllFingerprints(charAvatar) {
-    const cache2 = loadCache();
-    return cache2.characters[charAvatar]?.fingerprints || {};
+    const cache3 = loadCache();
+    return cache3.characters[charAvatar]?.fingerprints || {};
   }
   function clearCharacterCache(charAvatar) {
-    const cache2 = loadCache();
-    delete cache2.characters[charAvatar];
+    const cache3 = loadCache();
+    delete cache3.characters[charAvatar];
     saveCache();
     console.debug("[BranchCache] Cleared cache for:", charAvatar);
   }
@@ -3103,28 +3211,20 @@ ${message}` : message;
   var PROGRESS_KEY = "chatLobby_remindProgress";
   var PROGRESS_MAX_ENTRIES = 150;
   var RemindStore = class {
-    constructor() {
-      this._data = null;
-    }
-    /** @returns {Remind[]} */
+    /**
+     * 저장 위치: IndexedDB (persist.js). 값을 따로 들고 있지 않고 매번 persist에서 읽는다.
+     */
     _load() {
-      if (this._data) return this._data;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY4);
-        this._data = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(this._data)) this._data = [];
-      } catch (e) {
-        console.warn("[RemindStore] Failed to load:", e);
-        this._data = [];
+      let data = persistGet(STORAGE_KEY4, () => []);
+      if (!Array.isArray(data)) {
+        console.warn("[RemindStore] Stored value was not an array, resetting");
+        data = [];
+        persistSet(STORAGE_KEY4, data);
       }
-      return this._data;
+      return data;
     }
     _save() {
-      try {
-        localStorage.setItem(STORAGE_KEY4, JSON.stringify(this._data));
-      } catch (e) {
-        console.warn("[RemindStore] Failed to save:", e);
-      }
+      persistSet(STORAGE_KEY4, this._load());
     }
     /**
      * 전체 목록 (최신순)
@@ -3245,8 +3345,8 @@ ${message}` : message;
     removeByAvatar(avatar) {
       const data = this._load();
       const before = data.length;
-      this._data = data.filter((r) => r.avatar !== avatar);
-      if (this._data.length !== before) this._save();
+      const kept = data.filter((r) => r.avatar !== avatar);
+      if (kept.length !== before) persistSet(STORAGE_KEY4, kept);
     }
   };
   var remindStore = new RemindStore();
@@ -3254,27 +3354,20 @@ ${message}` : message;
   // src/data/highlightStore.js
   var STORAGE_KEY5 = "chatLobby_highlights";
   var HighlightStore = class {
-    constructor() {
-      this._data = null;
-    }
+    /**
+     * 저장 위치: IndexedDB (persist.js). 값을 따로 들고 있지 않고 매번 persist에서 읽는다.
+     */
     _load() {
-      if (this._data) return this._data;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY5);
-        this._data = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(this._data)) this._data = [];
-      } catch (e) {
-        console.warn("[HighlightStore] Failed to load:", e);
-        this._data = [];
+      let data = persistGet(STORAGE_KEY5, () => []);
+      if (!Array.isArray(data)) {
+        console.warn("[HighlightStore] Stored value was not an array, resetting");
+        data = [];
+        persistSet(STORAGE_KEY5, data);
       }
-      return this._data;
+      return data;
     }
     _save() {
-      try {
-        localStorage.setItem(STORAGE_KEY5, JSON.stringify(this._data));
-      } catch (e) {
-        console.warn("[HighlightStore] Failed to save:", e);
-      }
+      persistSet(STORAGE_KEY5, this._load());
     }
     /**
      * 특정 메시지의 하이라이트 목록
@@ -3333,8 +3426,8 @@ ${message}` : message;
     removeByAvatar(avatar) {
       const data = this._load();
       const before = data.length;
-      this._data = data.filter((h) => h.avatar !== avatar);
-      if (this._data.length !== before) this._save();
+      const kept = data.filter((h) => h.avatar !== avatar);
+      if (kept.length !== before) persistSet(STORAGE_KEY5, kept);
     }
   };
   var highlightStore = new HighlightStore();
@@ -3984,9 +4077,11 @@ ${message}` : message;
                     </div>
                 </div>
                 <div class="remind-viewer-pagrow">
+                    <button class="remind-viewer-btn" id="remind-page-prev10" title="10\uD398\uC774\uC9C0 \uC55E\uC73C\uB85C (Shift+\u2190)">\xAB</button>
                     <button class="remind-viewer-btn" id="remind-page-prev" title="\uC774\uC804 \uD398\uC774\uC9C0 (\uBC94\uC704 \uC55E\uB3C4 \uC774\uC5B4\uC11C \uBD88\uB7EC\uC634)">\u25C0</button>
                     <span class="remind-page-label" id="remind-page-label">-</span>
                     <button class="remind-viewer-btn" id="remind-page-next" title="\uB2E4\uC74C \uD398\uC774\uC9C0 (\uBC94\uC704 \uB05D\uB098\uBA74 \uC774\uC5B4\uC11C \uBD88\uB7EC\uC634)">\u25B6</button>
+                    <button class="remind-viewer-btn" id="remind-page-next10" title="10\uD398\uC774\uC9C0 \uB4A4\uB85C (Shift+\u2192)">\xBB</button>
                 </div>
                 <div class="remind-settings-pop" id="remind-settings-pop" style="display:none;">
                     <div class="remind-set-row">
@@ -4053,6 +4148,8 @@ ${message}` : message;
     });
     listeners.add("remindViewer", overlay.querySelector("#remind-page-prev"), "click", () => changePage(-1));
     listeners.add("remindViewer", overlay.querySelector("#remind-page-next"), "click", () => changePage(1));
+    listeners.add("remindViewer", overlay.querySelector("#remind-page-prev10"), "click", () => changePage(-PAGE_JUMP));
+    listeners.add("remindViewer", overlay.querySelector("#remind-page-next10"), "click", () => changePage(PAGE_JUMP));
     listeners.add("remindViewer", overlay.querySelector("#remind-page-size"), "change", (e) => {
       uiPrefs.set("viewerPageSize", parseInt(e.target.value, 10) || 0);
       pageIndex = 0;
@@ -4247,7 +4344,8 @@ ${message}` : message;
     if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
     const lb = document.getElementById("remind-lightbox");
     if (lb?.classList.contains("active")) return;
-    changePage(e.key === "ArrowLeft" ? -1 : 1);
+    const step = e.shiftKey ? PAGE_JUMP : 1;
+    changePage(e.key === "ArrowLeft" ? -step : step);
   }
   function toggleSettingsPop() {
     const pop = document.getElementById("remind-settings-pop");
@@ -4327,35 +4425,55 @@ ${message}` : message;
     if (pageSize === 0) return 1;
     return Math.max(1, Math.ceil(rangeLength / pageSize));
   }
+  var PAGE_JUMP = 10;
   function changePage(delta) {
     const data = getCurrentSlice();
-    if (!data || !currentMessages) return;
+    if (!data || !currentMessages || !delta) return;
     const total = currentMessages.length;
-    const pageSize = getEffectivePageSize(data.slice.length);
-    const extendChunk = pageSize || 20;
-    const totalPages = getTotalPages(data.slice.length);
+    const rangeLength = data.slice.length;
+    const pageSize = getEffectivePageSize(rangeLength);
+    const chunk = pageSize || 20;
+    const totalPages = getTotalPages(rangeLength);
+    let steps = Math.abs(delta);
+    let moved = false;
+    let extendedTo = null;
     if (delta > 0) {
-      if (pageIndex < totalPages - 1) {
-        pageIndex++;
-      } else if (viewEnd < total - 1) {
-        const newEnd = Math.min(total - 1, viewEnd + extendChunk);
-        viewEnd = newEnd;
-        pageIndex++;
-        showToast(`\u{1F4D6} \uB2E4\uC74C \uAD6C\uAC04 \uC774\uC5B4 \uBCF4\uAE30 (~#${newEnd})`, "info", 1500);
-      } else {
-        return;
+      const inRange = Math.min(steps, totalPages - 1 - pageIndex);
+      if (inRange > 0) {
+        pageIndex += inRange;
+        steps -= inRange;
+        moved = true;
+      }
+      if (steps > 0 && viewEnd < total - 1) {
+        if (pageSize === 0) {
+          viewEnd = Math.min(total - 1, viewEnd + chunk * steps);
+        } else {
+          const lastPagePartial = rangeLength % pageSize !== 0;
+          const targetPage = pageIndex + steps - (lastPagePartial ? 1 : 0);
+          viewEnd = Math.min(total - 1, viewStart + (targetPage + 1) * pageSize - 1);
+          const newTotalPages = Math.ceil((viewEnd - viewStart + 1) / pageSize);
+          pageIndex = Math.min(newTotalPages - 1, targetPage);
+        }
+        extendedTo = `~#${viewEnd}`;
+        moved = true;
       }
     } else {
-      if (pageIndex > 0) {
-        pageIndex--;
-      } else if (viewStart > 0) {
-        const newStart = Math.max(0, viewStart - extendChunk);
-        viewStart = newStart;
-        pageIndex = 0;
-        showToast(`\u{1F4D6} \uC774\uC804 \uAD6C\uAC04 \uC774\uC5B4 \uBCF4\uAE30 (#${newStart}~)`, "info", 1500);
-      } else {
-        return;
+      const inRange = Math.min(steps, pageIndex);
+      if (inRange > 0) {
+        pageIndex -= inRange;
+        steps -= inRange;
+        moved = true;
       }
+      if (steps > 0 && viewStart > 0) {
+        viewStart = Math.max(0, viewStart - chunk * steps);
+        pageIndex = 0;
+        extendedTo = `#${viewStart}~`;
+        moved = true;
+      }
+    }
+    if (!moved) return;
+    if (extendedTo) {
+      showToast(`\u{1F4D6} ${delta > 0 ? "\uB2E4\uC74C" : "\uC774\uC804"} \uAD6C\uAC04 \uC774\uC5B4 \uBCF4\uAE30 (${extendedTo})`, "info", 1500);
     }
     renderMessages();
     scheduleProgressSave();
@@ -4724,8 +4842,14 @@ ${message}` : message;
         label.textContent = `#${rangeFrom}~#${rangeTo} (${pageIndex + 1}/${totalPages})`;
       }
     }
-    if (prevBtn) prevBtn.disabled = pageIndex <= 0 && viewStart <= 0;
-    if (nextBtn) nextBtn.disabled = pageIndex >= totalPages - 1 && viewEnd >= total - 1;
+    const atStart = pageIndex <= 0 && viewStart <= 0;
+    const atEnd = pageIndex >= totalPages - 1 && viewEnd >= total - 1;
+    if (prevBtn) prevBtn.disabled = atStart;
+    if (nextBtn) nextBtn.disabled = atEnd;
+    const prev10Btn = document.getElementById("remind-page-prev10");
+    const next10Btn = document.getElementById("remind-page-next10");
+    if (prev10Btn) prev10Btn.disabled = atStart;
+    if (next10Btn) next10Btn.disabled = atEnd;
   }
   function hydrateOneIframe(iframe) {
     const b64 = iframe.getAttribute("data-remind-html");
@@ -9240,148 +9364,245 @@ ${message}` : message;
   }
 
   // src/data/calendarStorage.js
-  var STORAGE_KEY7 = "chatLobby_calendar";
-  var CURRENT_VERSION = 1;
-  var _snapshotsCache = null;
-  var _initialized = false;
-  var _saveTimer = null;
-  function lf() {
-    return typeof window !== "undefined" && window.localforage || null;
+  var CALENDAR_STORAGE_KEY = "chatLobby_calendar";
+  var BACKUP_KEY = "chatLobby_calendar_v1_backup";
+  var CURRENT_VERSION = 2;
+  var BACKUP_KEEP_MS = 30 * 24 * 60 * 60 * 1e3;
+  var countIndex = null;
+  function emptyData() {
+    return { version: CURRENT_VERSION, base: null, snapshots: {} };
   }
-  function _safeRemoveLegacy() {
-    try {
-      localStorage.removeItem(STORAGE_KEY7);
-    } catch (e) {
+  function loadData() {
+    let data = persistGet(CALENDAR_STORAGE_KEY, emptyData);
+    if (!data || typeof data !== "object") {
+      data = emptyData();
+      persistSet(CALENDAR_STORAGE_KEY, data);
+    } else if (data.version !== CURRENT_VERSION) {
+      data = migrateFromV1(data);
+      persistSet(CALENDAR_STORAGE_KEY, data);
+      countIndex = null;
     }
+    if (!data.snapshots || typeof data.snapshots !== "object") data.snapshots = {};
+    return data;
   }
-  function _loadFromLocalStorageSync() {
+  function saveData(data) {
+    countIndex = null;
+    persistSet(CALENDAR_STORAGE_KEY, data);
+  }
+  function migrateFromV1(old) {
+    const oldSnaps = old && typeof old.snapshots === "object" && old.snapshots || {};
+    const dates = Object.keys(oldSnaps).sort();
+    const result = emptyData();
+    if (dates.length === 0) return result;
     try {
-      const data = localStorage.getItem(STORAGE_KEY7);
-      if (data) {
-        const parsed = JSON.parse(data);
-        return parsed.snapshots || {};
+      persistSet(BACKUP_KEY, { savedAt: Date.now(), data: old });
+    } catch {
+    }
+    const running = {};
+    let runningTotal = 0;
+    dates.forEach((date, i) => {
+      const snap = oldSnaps[date] || {};
+      const byChar = snap.byChar && typeof snap.byChar === "object" ? snap.byChar : {};
+      const changed = {};
+      for (const [avatar, raw] of Object.entries(byChar)) {
+        const count = Number(raw) || 0;
+        const prev = running[avatar] ?? 0;
+        if (count !== prev) {
+          runningTotal += count - prev;
+          running[avatar] = count;
+          if (i > 0) changed[avatar] = count;
+        }
       }
-    } catch (e) {
-      console.error("[Calendar] localStorage load failed:", e);
-    }
-    return {};
+      if (i === 0) {
+        result.base = { date, byChar: { ...running } };
+      }
+      result.snapshots[date] = {
+        total: runningTotal,
+        topChar: snap.topChar || "",
+        changed,
+        lastChatTimes: snap.lastChatTimes && typeof snap.lastChatTimes === "object" ? snap.lastChatTimes : {}
+      };
+    });
+    console.info("[Calendar] Converted", dates.length, "snapshots to change-only format");
+    return result;
   }
   function getLocalDateString(date = /* @__PURE__ */ new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
   async function initCalendarStorage() {
-    if (_initialized) return;
-    const store2 = lf();
-    try {
-      if (store2) {
-        const lfData = await store2.getItem(STORAGE_KEY7);
-        const lfSnaps = lfData && lfData.snapshots ? lfData.snapshots : null;
-        let lsSnaps = null;
-        try {
-          const legacy = localStorage.getItem(STORAGE_KEY7);
-          if (legacy) lsSnaps = JSON.parse(legacy).snapshots || null;
-        } catch (e) {
-          console.warn("[Calendar] Corrupt localStorage residue ignored");
-        }
-        if (lfSnaps && lsSnaps) {
-          _snapshotsCache = { ...lsSnaps, ...lfSnaps };
-          await store2.setItem(STORAGE_KEY7, { version: CURRENT_VERSION, snapshots: _snapshotsCache });
-          _safeRemoveLegacy();
-          console.info("[Calendar] Merged residual localStorage into localforage (lf priority)");
-        } else if (!lfSnaps && lsSnaps) {
-          _snapshotsCache = lsSnaps;
-          await store2.setItem(STORAGE_KEY7, { version: CURRENT_VERSION, snapshots: lsSnaps });
-          _safeRemoveLegacy();
-          console.info("[Calendar] Migrated localStorage \u2192 localforage(IndexedDB)");
-        } else {
-          _snapshotsCache = lfSnaps || {};
-          if (!lsSnaps && localStorage.getItem(STORAGE_KEY7)) _safeRemoveLegacy();
-        }
-      } else {
-        console.warn("[Calendar] window.localforage not found, using localStorage");
-        _snapshotsCache = _loadFromLocalStorageSync();
-      }
-    } catch (e) {
-      console.warn("[Calendar] init failed, fallback to localStorage:", e);
-      _snapshotsCache = _loadFromLocalStorageSync();
-    }
-    _initialized = true;
+    loadData();
     try {
       cleanOldSnapshots();
+      const backup = persistGet(BACKUP_KEY, () => null);
+      if (backup?.savedAt && Date.now() - backup.savedAt > BACKUP_KEEP_MS) {
+        persistRemove(BACKUP_KEY);
+      }
     } catch (e) {
+      console.warn("[Calendar] Cleanup failed:", e);
     }
   }
-  function _persist() {
-    if (_saveTimer) clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => {
-      _saveTimer = null;
-      const payload = { version: CURRENT_VERSION, snapshots: _snapshotsCache || {} };
-      const store2 = lf();
-      try {
-        if (store2) {
-          store2.setItem(STORAGE_KEY7, payload).catch((e) => {
-            console.error("[Calendar] localforage persist failed:", e);
-          });
-        } else {
-          localStorage.setItem(STORAGE_KEY7, JSON.stringify(payload));
-        }
-      } catch (e) {
-        console.error("[Calendar] persist failed:", e);
-      }
-    }, 500);
-  }
-  function loadSnapshots(_forceRefresh = false) {
-    if (_snapshotsCache !== null) return _snapshotsCache;
-    _snapshotsCache = _loadFromLocalStorageSync();
-    return _snapshotsCache;
+  function loadSnapshots() {
+    return loadData().snapshots;
   }
   function getSnapshot(date) {
-    const snapshots = loadSnapshots();
-    return snapshots[date] || null;
+    return loadData().snapshots[date] || null;
+  }
+  function buildIndex() {
+    const data = loadData();
+    const index = /* @__PURE__ */ new Map();
+    const push = (avatar, date, count) => {
+      let list = index.get(avatar);
+      if (!list) {
+        list = [];
+        index.set(avatar, list);
+      }
+      list.push([date, count]);
+    };
+    if (data.base?.byChar) {
+      for (const [avatar, count] of Object.entries(data.base.byChar)) {
+        push(avatar, "", Number(count) || 0);
+      }
+    }
+    for (const date of Object.keys(data.snapshots).sort()) {
+      const changed = data.snapshots[date]?.changed;
+      if (!changed) continue;
+      for (const [avatar, count] of Object.entries(changed)) {
+        push(avatar, date, Number(count) || 0);
+      }
+    }
+    return index;
+  }
+  function getIndex() {
+    if (!countIndex) countIndex = buildIndex();
+    return countIndex;
+  }
+  function getCharCount(avatar, date, inclusive = true) {
+    const list = getIndex().get(avatar);
+    if (!list || list.length === 0) return 0;
+    let lo = 0;
+    let hi = list.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = lo + hi >> 1;
+      const d = list[mid][0];
+      const ok = inclusive ? d <= date : d < date;
+      if (ok) {
+        found = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return found === -1 ? 0 : list[found][1];
+  }
+  function hasCharHistory(avatar) {
+    return getIndex().has(avatar);
+  }
+  function getFullByChar(date) {
+    const result = {};
+    for (const avatar of getIndex().keys()) {
+      const count = getCharCount(avatar, date);
+      if (count > 0) result[avatar] = count;
+    }
+    return result;
   }
   function cleanOldSnapshots() {
-    const snapshots = loadSnapshots();
+    const data = loadData();
     const twoYearsAgo = /* @__PURE__ */ new Date();
     twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
     const cutoff = getLocalDateString(twoYearsAgo);
-    let deleted = 0;
-    for (const date of Object.keys(snapshots)) {
-      if (date < cutoff) {
-        delete snapshots[date];
-        deleted++;
+    const oldDates = Object.keys(data.snapshots).filter((d) => d < cutoff).sort();
+    if (oldDates.length === 0) return;
+    if (!data.base) data.base = { date: oldDates[0], byChar: {} };
+    for (const date of oldDates) {
+      Object.assign(data.base.byChar, data.snapshots[date]?.changed || {});
+      data.base.date = date;
+      delete data.snapshots[date];
+    }
+    console.debug("[Calendar] Folded", oldDates.length, "old snapshots into base");
+    saveData(data);
+  }
+  function saveSnapshot(date, { counts = {}, backfill = {}, topChar = "", lastChatTimes = {}, isBaseline = false } = {}) {
+    const jan1 = `${(/* @__PURE__ */ new Date()).getFullYear()}-01-01`;
+    if (!isBaseline && date < jan1) return null;
+    const data = loadData();
+    const cleanCounts = sanitizeCounts(counts);
+    if (!data.base) {
+      Object.assign(cleanCounts, sanitizeCounts(backfill));
+      data.base = { date, byChar: { ...cleanCounts } };
+      data.snapshots[date] = {
+        total: Object.values(cleanCounts).reduce((a, b) => a + b, 0),
+        topChar: topChar || topOf(cleanCounts),
+        changed: {},
+        lastChatTimes: { ...lastChatTimes }
+      };
+      saveData(data);
+      return data.snapshots[date];
+    }
+    let backfilled = false;
+    for (const [avatar, count] of Object.entries(sanitizeCounts(backfill))) {
+      if (!getIndex().has(avatar) && !(avatar in cleanCounts)) {
+        data.base.byChar[avatar] = count;
+        backfilled = true;
       }
     }
-    if (deleted > 0) {
-      console.debug("[Calendar] Deleted", deleted, "old snapshots (2+ years)");
-      _persist();
+    if (backfilled) countIndex = null;
+    const existing = data.snapshots[date];
+    const changed = { ...existing?.changed || {} };
+    const increases = {};
+    for (const [avatar, count] of Object.entries(cleanCounts)) {
+      const before = getCharCount(avatar, date, false);
+      if (count !== before) {
+        changed[avatar] = count;
+        increases[avatar] = count - before;
+      } else {
+        delete changed[avatar];
+      }
     }
+    const prevTotal = totalBefore(data, date);
+    let delta = 0;
+    for (const [avatar, count] of Object.entries(changed)) {
+      delta += count - getCharCount(avatar, date, false);
+    }
+    data.snapshots[date] = {
+      total: prevTotal + delta,
+      topChar: topChar || topOf(increases) || existing?.topChar || "",
+      changed,
+      lastChatTimes: { ...existing?.lastChatTimes || {}, ...lastChatTimes }
+    };
+    saveData(data);
+    return data.snapshots[date];
   }
-  function saveSnapshot(date, total, topChar, byChar = {}, lastChatTimes = {}, isBaseline = false) {
-    const thisYear = (/* @__PURE__ */ new Date()).getFullYear();
-    const jan1 = `${thisYear}-01-01`;
-    if (!isBaseline && date < jan1) return;
-    const snapshots = loadSnapshots();
-    const existingTimes = snapshots[date]?.lastChatTimes || {};
-    const mergedLastChatTimes = { ...existingTimes, ...lastChatTimes };
-    snapshots[date] = { total, topChar, byChar, lastChatTimes: mergedLastChatTimes };
-    _persist();
+  function sanitizeCounts(counts) {
+    const clean = {};
+    for (const [avatar, raw] of Object.entries(counts || {})) {
+      const count = Number(raw);
+      if (avatar && Number.isFinite(count) && count >= 0) clean[avatar] = count;
+    }
+    return clean;
+  }
+  function totalBefore(data, date) {
+    let best = null;
+    for (const d of Object.keys(data.snapshots)) {
+      if (d < date && (best === null || d > best)) best = d;
+    }
+    if (best !== null) return data.snapshots[best].total || 0;
+    return Object.values(data.base?.byChar || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+  }
+  function topOf(map) {
+    let top = "";
+    let max = 0;
+    for (const [avatar, value] of Object.entries(map)) {
+      if (value > max) {
+        max = value;
+        top = avatar;
+      }
+    }
+    return top;
   }
   function clearAllSnapshots() {
-    _snapshotsCache = {};
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
-    const store2 = lf();
-    try {
-      if (store2) store2.removeItem(STORAGE_KEY7).catch(() => {
-      });
-    } catch (e) {
-    }
-    try {
-      localStorage.removeItem(STORAGE_KEY7);
-    } catch (e) {
-    }
+    countIndex = null;
+    persistSet(CALENDAR_STORAGE_KEY, emptyData());
   }
 
   // src/ui/characterGrid.js
@@ -9676,6 +9897,8 @@ ${message}` : message;
       if (typeof cache.get("chatCounts", card.dataset.charAvatar) === "number") return;
       countObserver.observe(card);
     });
+    queueChangedTodayCounts(characters);
+    if (countQueue.length === 0 && countActive === 0) scheduleSnapshot();
   }
   function observeNewCards(container) {
     if (!countObserver) return;
@@ -9761,40 +9984,27 @@ ${message}` : message;
       }
     }
   }
-  async function saveTodaySnapshotFromCache() {
+  function saveTodaySnapshotFromCache() {
     try {
-      const today = getLocalDateString();
       const characters = api.getCharacters();
       if (!characters || characters.length === 0) return;
-      const snapshots = loadSnapshots();
-      const todaySnapshot = snapshots[today] || null;
-      let recentSnapshot = null;
-      const checkDate = /* @__PURE__ */ new Date();
-      for (let i = 0; i < 7; i++) {
-        checkDate.setDate(checkDate.getDate() - 1);
-        const dateStr = getLocalDateString(checkDate);
-        if (snapshots[dateStr]) {
-          recentSnapshot = snapshots[dateStr];
-          break;
-        }
-      }
-      const byChar = {};
-      let totalMessages = 0;
-      characters.forEach((char) => {
-        let msgCount = cache.get("messageCounts", char.avatar);
-        if (typeof msgCount !== "number") {
-          msgCount = todaySnapshot?.byChar?.[char.avatar] ?? recentSnapshot?.byChar?.[char.avatar] ?? 0;
-        }
-        if (msgCount > 0) {
-          byChar[char.avatar] = msgCount;
-          totalMessages += msgCount;
-        }
-      });
-      const lastChatTimes = {};
+      const today = getLocalDateString();
       const todayStart = /* @__PURE__ */ new Date();
       todayStart.setHours(0, 0, 0, 0);
       const todayStartMs = todayStart.getTime();
+      const counts = {};
+      const backfill = {};
+      const lastChatTimes = {};
       for (const char of characters) {
+        const msgCount = cache.get("messageCounts", char.avatar);
+        if (typeof msgCount === "number") {
+          const isNewToday = (Number(char.date_added) || 0) >= todayStartMs;
+          if (hasCharHistory(char.avatar) || isNewToday) {
+            counts[char.avatar] = msgCount;
+          } else {
+            backfill[char.avatar] = msgCount;
+          }
+        }
         let lastTime = lastChatCache.get(char.avatar);
         if (lastTime === 0) {
           const cachedChats = cache.get("chats", char.avatar);
@@ -9803,29 +10013,21 @@ ${message}` : message;
             if (lastTime > 0) lastChatCache.set(char.avatar, lastTime);
           }
         }
-        if (lastTime >= todayStartMs) {
-          lastChatTimes[char.avatar] = lastTime;
-        }
+        if (lastTime >= todayStartMs) lastChatTimes[char.avatar] = lastTime;
       }
-      let topChar = "";
-      let maxIncrease = -Infinity;
-      const baseByChar = recentSnapshot?.byChar || {};
-      for (const [avatar, msgCount] of Object.entries(byChar)) {
-        const prev = baseByChar[avatar] || 0;
-        const increase = msgCount - prev;
-        if (increase > maxIncrease) {
-          maxIncrease = increase;
-          topChar = avatar;
-        }
-      }
-      if (!topChar) {
-        const sorted = Object.entries(byChar).sort((a, b) => b[1] - a[1]);
-        topChar = sorted[0]?.[0] || "";
-      }
-      saveSnapshot(today, totalMessages, topChar, byChar, lastChatTimes);
-      console.debug("[CharacterGrid] Snapshot saved from cache");
+      saveSnapshot(today, { counts, backfill, lastChatTimes });
+      console.debug("[CharacterGrid] Snapshot saved:", Object.keys(counts).length, "known,", Object.keys(backfill).length, "backfilled");
     } catch (e) {
       console.error("[CharacterGrid] Failed to save snapshot:", e);
+    }
+  }
+  function queueChangedTodayCounts(characters) {
+    const todayStart = /* @__PURE__ */ new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartMs = todayStart.getTime();
+    for (const char of characters) {
+      const last = Math.max(Number(char.date_last_chat) || 0, lastChatCache.get(char.avatar) || 0);
+      if (last >= todayStartMs) enqueueChatCount(char.avatar);
     }
   }
   function isFavoriteChar(char) {
@@ -11049,18 +11251,18 @@ ${message}` : message;
     if (!characters || !Array.isArray(characters)) return false;
     return characters.some((c) => c.avatar === avatar);
   }
-  function findValidTopChar(snapshot) {
+  function findValidTopChar(snapshot, date) {
     if (!snapshot) return null;
     if (snapshot.topChar && isCharacterExists(snapshot.topChar)) {
       return snapshot.topChar;
     }
-    if (snapshot.byChar && typeof snapshot.byChar === "object") {
-      const sortedChars = Object.entries(snapshot.byChar).sort((a, b) => b[1] - a[1]);
-      for (const [avatar, msgCount] of sortedChars) {
-        if (isCharacterExists(avatar)) {
-          return avatar;
-        }
-      }
+    const changedChars = Object.keys(snapshot.changed || {}).map((avatar) => [avatar, getCharCount(avatar, date) - getCharCount(avatar, date, false)]).sort((a, b) => b[1] - a[1]);
+    for (const [avatar] of changedChars) {
+      if (isCharacterExists(avatar)) return avatar;
+    }
+    const sortedChars = Object.entries(getFullByChar(date)).sort((a, b) => b[1] - a[1]);
+    for (const [avatar] of sortedChars) {
+      if (isCharacterExists(avatar)) return avatar;
     }
     return null;
   }
@@ -11270,7 +11472,7 @@ ${message}` : message;
       }
     });
     const topChar = rankings[0]?.avatar || "";
-    saveSnapshot(yesterday, totalMessages, topChar, byChar, lastChatTimes, true);
+    saveSnapshot(yesterday, { counts: byChar, topChar, lastChatTimes, isBaseline: true });
   }
   function findRecentSnapshot(beforeDate, maxDays = 7) {
     const snapshots = loadSnapshots();
@@ -11311,15 +11513,15 @@ ${message}` : message;
       const isToday = date === today;
       const hasData = !!snapshot;
       let contentHtml = "";
-      const validTopChar = hasData ? findValidTopChar(snapshot) : null;
+      const validTopChar = hasData ? findValidTopChar(snapshot, date) : null;
       if (hasData && validTopChar) {
         const avatarUrl = charAvatarUrl(validTopChar);
         const charName = validTopChar.replace(/\.[^/.]+$/, "");
         const currentDate = new Date(THIS_YEAR, currentMonth, day);
         const recentData = findRecentSnapshot(currentDate);
         const prevSnapshot = recentData?.snapshot;
-        const prevCharMsgs = prevSnapshot?.byChar?.[validTopChar] || 0;
-        const todayCharMsgs = snapshot.byChar?.[validTopChar] || 0;
+        const prevCharMsgs = getCharCount(validTopChar, date, false);
+        const todayCharMsgs = getCharCount(validTopChar, date);
         const charIncrease = todayCharMsgs - prevCharMsgs;
         const prevTotal = prevSnapshot?.total || 0;
         const todayTotal = snapshot.total || 0;
@@ -12029,6 +12231,13 @@ ${message}` : message;
     }
     let appReadyHandled = false;
     let appReadyListener = null;
+    const PERSIST_KEYS = [
+      "chatLobby_reminds",
+      "chatLobby_highlights",
+      "chatLobby_branchCache",
+      CALENDAR_STORAGE_KEY,
+      "chatLobby_calendar_v1_backup"
+    ];
     function mountShell() {
       if (window._chatLobbyInitialized) {
         console.warn("[ChatLobby] Already initialized, skipping duplicate init");
@@ -12069,6 +12278,7 @@ ${message}` : message;
       console.info("[ChatLobby] SillyTavern ready, loading data");
       const overlay = document.getElementById("chat-lobby-overlay");
       const shouldOpen = overlay?.style.display === "flex";
+      await runStep("initPersist", () => initPersist(PERSIST_KEYS));
       await runStep("renderStDock", renderStDock);
       await runStep("setupSillyTavernEvents", setupSillyTavernEvents);
       await runStep("addLobbyToOptionsMenu", () => addLobbyToOptionsMenu());

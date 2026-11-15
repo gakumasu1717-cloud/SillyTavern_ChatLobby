@@ -4,7 +4,7 @@
 
 import { api } from '../api/sillyTavern.js';
 import { cache } from '../data/cache.js';
-import { loadSnapshots, getSnapshot, saveSnapshot, getLocalDateString, clearAllSnapshots } from '../data/calendarStorage.js';
+import { loadSnapshots, getSnapshot, saveSnapshot, getLocalDateString, clearAllSnapshots, getCharCount, getFullByChar } from '../data/calendarStorage.js';
 import { lastChatCache } from '../data/lastChatCache.js';
 import { escapeHtml } from '../utils/textUtils.js';
 import { charAvatarUrl } from '../utils/avatarUrl.js';
@@ -35,9 +35,10 @@ function isCharacterExists(avatar) {
  * 스냅샷에서 실제 존재하는 top 캐릭터 찾기
  * topChar가 삭제되었으면 byChar에서 다음 순위 찾기
  * @param {object} snapshot - 스냅샷 데이터
+ * @param {string} date - 스냅샷 날짜 (YYYY-MM-DD)
  * @returns {string|null} 존재하는 캐릭터 avatar 또는 null
  */
-function findValidTopChar(snapshot) {
+function findValidTopChar(snapshot, date) {
     if (!snapshot) return null;
     
     // 1순위: 기록된 topChar가 존재하면 그대로 사용
@@ -45,16 +46,19 @@ function findValidTopChar(snapshot) {
         return snapshot.topChar;
     }
     
-    // 2순위: byChar에서 메시지 수 기준으로 존재하는 캐릭터 찾기
-    if (snapshot.byChar && typeof snapshot.byChar === 'object') {
-        const sortedChars = Object.entries(snapshot.byChar)
-            .sort((a, b) => b[1] - a[1]); // 메시지 수 내림차순
-        
-        for (const [avatar, msgCount] of sortedChars) {
-            if (isCharacterExists(avatar)) {
-                return avatar;
-            }
-        }
+    // 2순위: 그날 수가 바뀐 캐릭터 중 가장 많이 늘어난 존재하는 캐릭터
+    const changedChars = Object.keys(snapshot.changed || {})
+        .map(avatar => [avatar, getCharCount(avatar, date) - getCharCount(avatar, date, false)])
+        .sort((a, b) => b[1] - a[1]);
+    for (const [avatar] of changedChars) {
+        if (isCharacterExists(avatar)) return avatar;
+    }
+
+    // 3순위: 그날 기준 메시지 수가 가장 많은 존재하는 캐릭터
+    const sortedChars = Object.entries(getFullByChar(date))
+        .sort((a, b) => b[1] - a[1]); // 메시지 수 내림차순
+    for (const [avatar] of sortedChars) {
+        if (isCharacterExists(avatar)) return avatar;
     }
     
     // 존재하는 캐릭터 없음
@@ -356,7 +360,7 @@ async function saveBaselineSnapshot() {
     const topChar = rankings[0]?.avatar || '';
     
     // 어제 날짜로 저장 (베이스라인 - 작년도 허용)
-    saveSnapshot(yesterday, totalMessages, topChar, byChar, lastChatTimes, true);
+    saveSnapshot(yesterday, { counts: byChar, topChar, lastChatTimes, isBaseline: true });
 }
 
 /**
@@ -419,7 +423,7 @@ function renderCalendar() {
         let contentHtml = '';
         
         // 실제 존재하는 top 캐릭터 찾기 (삭제된 경우 fallback)
-        const validTopChar = hasData ? findValidTopChar(snapshot) : null;
+        const validTopChar = hasData ? findValidTopChar(snapshot, date) : null;
         
         if (hasData && validTopChar) {
             const avatarUrl = charAvatarUrl(validTopChar);
@@ -431,8 +435,9 @@ function renderCalendar() {
             const prevSnapshot = recentData?.snapshot;
             
             // 캐릭터 증감량 (validTopChar 기준)
-            const prevCharMsgs = prevSnapshot?.byChar?.[validTopChar] || 0;
-            const todayCharMsgs = snapshot.byChar?.[validTopChar] || 0;
+            // 그날 값 - 그날 이전의 가장 최근 값
+            const prevCharMsgs = getCharCount(validTopChar, date, false);
+            const todayCharMsgs = getCharCount(validTopChar, date);
             const charIncrease = todayCharMsgs - prevCharMsgs;
             
             // 전체 증감량

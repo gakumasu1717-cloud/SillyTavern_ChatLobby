@@ -3,6 +3,8 @@
 // Timelines 확장 방식 참고: fingerprint 기반 분기점 감지
 // ============================================
 
+import { persistGet, persistSet } from './persist.js';
+
 const STORAGE_KEY = 'chatLobby_branchCache';
 const FINGERPRINT_MESSAGE_COUNT = 10; // 앞 10개 메시지로 fingerprint (빠른 그룹핑용)
 
@@ -31,39 +33,24 @@ const FINGERPRINT_MESSAGE_COUNT = 10; // 앞 10개 메시지로 fingerprint (빠
  * }
  */
 
-let cacheData = null;
-
 /**
  * 캐시 로드
+ * 저장 위치: IndexedDB (persist.js). 채팅마다 지문이 쌓여 커지는 데이터라 localStorage에서 옮김
  */
 function loadCache() {
-    if (cacheData) return cacheData;
-    
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            cacheData = JSON.parse(stored);
-        }
-    } catch (e) {
-        console.warn('[BranchCache] Failed to load cache:', e);
+    let data = persistGet(STORAGE_KEY, () => ({ version: 1, characters: {} }));
+    if (!data || data.version !== 1 || typeof data.characters !== 'object') {
+        data = { version: 1, characters: {} };
+        persistSet(STORAGE_KEY, data);
     }
-    
-    if (!cacheData || cacheData.version !== 1) {
-        cacheData = { version: 1, characters: {} };
-    }
-    
-    return cacheData;
+    return data;
 }
 
 /**
  * 캐시 저장
  */
 function saveCache() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheData));
-    } catch (e) {
-        console.warn('[BranchCache] Failed to save cache:', e);
-    }
+    persistSet(STORAGE_KEY, loadCache());
 }
 
 /**
